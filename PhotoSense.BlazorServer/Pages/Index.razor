@@ -1,0 +1,86 @@
+@page "/"
+@inject PhotoSense.Application.Scanning.Interfaces.IDuplicateGroupingService DuplicateService
+@inject PhotoSense.Application.Photos.Interfaces.IPhotoQueryService PhotoQuery
+@inject PhotoSense.Core.Domain.Services.IPhotoDeletionService Deleter
+
+<h3>Duplicate Photos</h3>
+
+@if (duplicateGroups is null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (duplicateGroups.Count == 0)
+{
+    <p>No duplicates found.</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead>
+        <tr><th>Hash</th><th>Count</th><th>Files</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+        @foreach (var g in duplicateGroups)
+        {
+            <tr>
+                <td>@g.Hash</td>
+                <td>@g.Photos.Count</td>
+                <td>
+                    @foreach (var p in g.Photos)
+                    {
+                        <div>
+                            <input type="checkbox" @onchange="e => ToggleSelection(p.Id.Value, e.Value as bool?)" /> @p.FileName
+                        </div>
+                    }
+                </td>
+                <td>
+                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteSelectedAsync(g.Hash)">Delete Selected</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@if (!string.IsNullOrWhiteSpace(status))
+{
+    <div class="alert alert-info">@status</div>
+}
+
+@code {
+    private IReadOnlyList<PhotoSense.Core.Domain.DTOs.DuplicateGroup>? duplicateGroups;
+    private HashSet<Guid> selected = new();
+    private string? status;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private void ToggleSelection(Guid id, bool? value)
+    {
+        if (value == true) selected.Add(id); else selected.Remove(id);
+    }
+
+    private async Task DeleteSelectedAsync(string hash)
+    {
+        var toDelete = duplicateGroups?.FirstOrDefault(g => g.Hash == hash)?.Photos.Where(p => selected.Contains(p.Id.Value)).ToList();
+        if (toDelete is null || toDelete.Count == 0)
+        {
+            status = "No photos selected."; return;
+        }
+        foreach (var p in toDelete)
+        {
+            await Deleter.DeleteAsync(p.Id, deleteFile: false);
+            selected.Remove(p.Id.Value);
+        }
+        status = $"Deleted {toDelete.Count} metadata entries.";
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        duplicateGroups = await DuplicateService.GetDuplicateGroupsAsync();
+        StateHasChanged();
+    }
+}
