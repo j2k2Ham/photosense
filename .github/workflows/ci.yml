@@ -53,16 +53,20 @@ jobs:
       - name: Enforce coverage thresholds (Line >= 60% / Branch >= 60%)
         if: success()
         run: |
+          set -e
           thresholdLine=0.60
-            thresholdBranch=0.60
-          summary=coverage/report/Summary.xml
-          if [ ! -f "$summary" ]; then
-            echo "Coverage summary not found: $summary"; exit 1
+          thresholdBranch=0.60
+          coverageXml=PhotoSense.Tests/coverage/coverage.opencover.xml
+          if [ ! -f "$coverageXml" ]; then
+            echo "Coverage file not found: $coverageXml"; ls -R PhotoSense.Tests || true; exit 1
           fi
-          linePct=$(grep -oP 'linecoverage="\K[0-9.]+' "$summary" | head -1)
-          branchPct=$(grep -oP 'branchcoverage="\K[0-9.]+' "$summary" | head -1)
-          if [ -z "$linePct" ]; then echo "Could not extract line coverage"; exit 1; fi
-          if [ -z "$branchPct" ]; then echo "Could not extract branch coverage"; exit 1; fi
+          # Extract sequence (line) and branch coverage from OpenCover XML summary attributes
+          linePct=$(grep -oP 'sequenceCoverage="\K[0-9.]+' "$coverageXml" | head -1)
+          branchPct=$(grep -oP 'branchCoverage="\K[0-9.]+' "$coverageXml" | head -1)
+          if [ -z "$linePct" ] || [ -z "$branchPct" ]; then
+            echo "Could not extract coverage metrics. Dumping first 40 lines:";
+            head -40 "$coverageXml"; exit 1;
+          fi
           echo "Line coverage: $linePct% (threshold: $(awk -v t=$thresholdLine 'BEGIN{print t*100}'))"
           echo "Branch coverage: $branchPct% (threshold: $(awk -v t=$thresholdBranch 'BEGIN{print t*100}'))"
           awk -v p=$linePct -v t=$thresholdLine 'BEGIN{ exit (p/100 < t) }' || { echo "Line coverage below threshold"; exit 1; }
