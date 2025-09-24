@@ -25,4 +25,20 @@ public class DuplicateGroupingServiceTests
         Assert.Equal("H1", groups[0].Hash);
         Assert.Equal(2, groups[0].Photos.Count);
     }
+
+    [Fact]
+    public async Task Returns_Empty_When_All_Singletons_Or_Null_Hashes()
+    {
+        var repo = new Mock<IPhotoRepository>();
+        var photos = new List<Photo>
+        {
+            new() { SourcePath = "p1", FileName = "f1", FileSizeBytes = 1, ContentHash = "H1", Set = PhotoSet.Primary },
+            new() { SourcePath = "p2", FileName = "f2", FileSizeBytes = 1, ContentHash = "H2", Set = PhotoSet.Primary },
+            new() { SourcePath = "p3", FileName = "f3", FileSizeBytes = 1, ContentHash = null, Set = PhotoSet.Primary }
+        };
+        repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(photos);
+        var svc = new DuplicateGroupingService(repo.Object);
+        var groups = await svc.GetDuplicateGroupsAsync();
+        Assert.Empty(groups);
+    }
 }
