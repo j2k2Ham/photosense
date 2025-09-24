@@ -10,7 +10,6 @@ namespace PhotoSense.Benchmarks;
 public class NearDuplicateBenchmarks
 {
     private NearDuplicateService _service = null!;
-    private int _n = 0;
 
     [Params(200, 400)] public int N;
 
