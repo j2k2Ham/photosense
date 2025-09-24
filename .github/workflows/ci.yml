@@ -44,7 +44,7 @@ jobs:
         run: |
           dotnet tool restore
           # Search recursively for any opencover file produced under test project directories.
-          dotnet tool run reportgenerator -reports:**/coverage/coverage.opencover.xml -targetdir:coverage/report -reporttypes:HtmlSummary;lcov
+          dotnet tool run reportgenerator "-reports:**/coverage/coverage.opencover.xml" -targetdir:coverage/report -reporttypes:HtmlSummary;lcov
         if: always()
 
       - name: Upload Test Results
