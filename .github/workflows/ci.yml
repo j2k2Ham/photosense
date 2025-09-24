@@ -50,20 +50,23 @@ jobs:
           dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover.xml" -targetdir:coverage/report -reporttypes:HtmlSummary;lcov;XmlSummary || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
-      - name: Enforce coverage threshold (Line >= 60%)
-        if: success() # only run if previous (non-always) steps succeeded; report step runs always
+      - name: Enforce coverage thresholds (Line >= 60% / Branch >= 60%)
+        if: success()
         run: |
-          threshold=0.60
+          thresholdLine=0.60
+            thresholdBranch=0.60
           summary=coverage/report/Summary.xml
           if [ ! -f "$summary" ]; then
             echo "Coverage summary not found: $summary"; exit 1
           fi
-          pct=$(grep -oP 'linecoverage="\K[0-9.]+' "$summary" | head -1)
-          if [ -z "$pct" ]; then
-            echo "Could not extract line coverage from $summary"; exit 1
-          fi
-            echo "Line coverage: $pct% (threshold: $(awk -v t=$threshold 'BEGIN{print t*100}'))"
-          awk -v p=$pct -v t=$threshold 'BEGIN{ exit (p/100 < t) }' || { echo "Coverage below threshold"; exit 1; }
+          linePct=$(grep -oP 'linecoverage="\K[0-9.]+' "$summary" | head -1)
+          branchPct=$(grep -oP 'branchcoverage="\K[0-9.]+' "$summary" | head -1)
+          if [ -z "$linePct" ]; then echo "Could not extract line coverage"; exit 1; fi
+          if [ -z "$branchPct" ]; then echo "Could not extract branch coverage"; exit 1; fi
+          echo "Line coverage: $linePct% (threshold: $(awk -v t=$thresholdLine 'BEGIN{print t*100}'))"
+          echo "Branch coverage: $branchPct% (threshold: $(awk -v t=$thresholdBranch 'BEGIN{print t*100}'))"
+          awk -v p=$linePct -v t=$thresholdLine 'BEGIN{ exit (p/100 < t) }' || { echo "Line coverage below threshold"; exit 1; }
+          awk -v p=$branchPct -v t=$thresholdBranch 'BEGIN{ exit (p/100 < t) }' || { echo "Branch coverage below threshold"; exit 1; }
 
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
