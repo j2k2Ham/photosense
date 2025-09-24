@@ -1,4 +1,4 @@
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;

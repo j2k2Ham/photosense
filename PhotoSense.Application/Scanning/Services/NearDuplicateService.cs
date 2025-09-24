@@ -1,6 +1,7 @@
-using PhotoSense.Core.Domain.DTOs;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Application.Scanning.Services;
 
@@ -18,7 +19,7 @@ public class NearDuplicateService : INearDuplicateService
         foreach (var photo in withP)
         {
             if (!visited.Add(photo.Id.Value)) continue;
-            var cluster = new List<PhotoSense.Core.Domain.Entities.Photo> { photo };
+            var cluster = new List<Photo> { photo };
             foreach (var other in withP)
             {
                 if (other.Id == photo.Id || visited.Contains(other.Id.Value)) continue;

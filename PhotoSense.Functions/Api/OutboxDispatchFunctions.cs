@@ -1,7 +1,7 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System.Net;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Functions.Api;
 

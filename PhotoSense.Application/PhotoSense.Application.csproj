@@ -5,6 +5,6 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PhotoSense.Core\PhotoSense.Core.csproj" />
+    <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
   </ItemGroup>
 </Project>

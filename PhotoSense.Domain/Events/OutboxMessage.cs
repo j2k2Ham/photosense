@@ -1,4 +1,4 @@
-namespace PhotoSense.Core.Domain.Events;
+﻿namespace PhotoSense.Domain.Events;
 
 public sealed class OutboxMessage
 {

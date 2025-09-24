@@ -1,6 +1,6 @@
-using PhotoSense.Core.Domain.Events;
+﻿using PhotoSense.Domain.Events;
 
-namespace PhotoSense.Core.Domain.Services;
+namespace PhotoSense.Domain.Services;
 
 public interface IOutboxStore
 {

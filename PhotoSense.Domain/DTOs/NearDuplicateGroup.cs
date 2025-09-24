@@ -1,5 +1,5 @@
-using PhotoSense.Core.Domain.Entities;
+using PhotoSense.Domain.Entities;
 
-namespace PhotoSense.Core.Domain.DTOs;
+namespace PhotoSense.Domain.DTOs;
 
 public sealed record NearDuplicateGroup(string RepresentativeHash, IReadOnlyList<Photo> Photos);

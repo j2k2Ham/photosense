@@ -1,7 +1,8 @@
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Core.Domain.ValueObjects;
-using PhotoSense.Core.Domain.Events;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
+using PhotoSense.Domain.Events;
+using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Infrastructure.Deletion;
 

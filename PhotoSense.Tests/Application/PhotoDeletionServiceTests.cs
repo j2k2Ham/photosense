@@ -1,8 +1,8 @@
 using Moq;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.ValueObjects;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Deletion;
 using Xunit;
 

@@ -1,5 +1,5 @@
 using LiteDB;
-using PhotoSense.Core.Domain.Events;
+using PhotoSense.Domain.Events;
 using PhotoSense.Infrastructure.Events;
 using Xunit;
 

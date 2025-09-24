@@ -1,6 +1,6 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
-using PhotoSense.Core.Domain.Repositories;
+using PhotoSense.Domain.Repositories;
 using PhotoSense.Application.Scanning.Interfaces;
 using System.Net;
 

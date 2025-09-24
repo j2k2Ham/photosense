@@ -1,6 +1,6 @@
 ﻿using System.Text.Json;
-using PhotoSense.Core.Domain.Events;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Events;
+using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Infrastructure.Events;
 

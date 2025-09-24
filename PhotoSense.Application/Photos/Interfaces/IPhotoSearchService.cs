@@ -1,4 +1,4 @@
-using PhotoSense.Core.Domain.Entities;
+using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Application.Photos.Interfaces;
 

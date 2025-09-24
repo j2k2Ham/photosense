@@ -1,5 +1,5 @@
 using PhotoSense.Infrastructure.Metadata;
-using PhotoSense.Core.Domain.Entities;
+using PhotoSense.Domain.Entities;
 using Xunit;
 
 namespace PhotoSense.Tests.Infrastructure.Metadata;

@@ -1,7 +1,7 @@
 using PhotoSense.Application.Photos.Interfaces;
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.ValueObjects;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Photos.Services;
 

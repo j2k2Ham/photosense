@@ -1,8 +1,8 @@
 using Moq;
 using PhotoSense.Application.Photos.Services;
 using PhotoSense.Application.Photos.Interfaces;
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Repositories;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
 using Xunit;
 
 namespace PhotoSense.Tests.Application;

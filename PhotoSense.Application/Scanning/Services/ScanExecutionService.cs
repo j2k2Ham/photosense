@@ -1,7 +1,7 @@
 using PhotoSense.Application.Scanning.Interfaces;
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Application.Scanning.Services;
 

@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Infrastructure.Hashing;
 

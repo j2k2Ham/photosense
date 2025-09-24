@@ -1,4 +1,4 @@
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Services;
 using System.Collections.Concurrent;
 
 namespace PhotoSense.Infrastructure.Events;

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Persistence;
 using PhotoSense.Infrastructure.Hashing;
 using PhotoSense.Infrastructure.Metadata;
@@ -12,9 +12,9 @@ using PhotoSense.Infrastructure.Events;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
-using PhotoSense.Core.Configuration;
 using PhotoSense.Application.Scanning;
 using LiteDB;
+using PhotoSense.Core.Configuration;
 
 var host = new HostBuilder()
     .ConfigureAppConfiguration(cfg =>
@@ -26,6 +26,7 @@ var host = new HostBuilder()
     .ConfigureServices((ctx, s) =>
     {
         s.Configure<PhotoStorageOptions>(ctx.Configuration.GetSection("PhotoStorage"));
+        s.Configure<MessagingOptions>(ctx.Configuration.GetSection("Messaging"));
         s.AddSingleton<LiteDatabase>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;

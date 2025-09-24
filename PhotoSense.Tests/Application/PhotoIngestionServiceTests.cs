@@ -1,8 +1,8 @@
 using Moq;
 using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Core.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.Entities;
 using Xunit;
 
 namespace PhotoSense.Tests.Application;
@@ -18,7 +18,7 @@ public class PhotoIngestionServiceTests
         var svc = new PhotoIngestionService(repo.Object, hash.Object, meta.Object);
         var result = await svc.IngestAsync("nonexistent.xyz", PhotoSet.Primary);
         Assert.False(result);
-        repo.Verify(r => r.AddOrUpdateAsync(It.IsAny<PhotoSense.Core.Domain.Entities.Photo>(), It.IsAny<CancellationToken>()), Times.Never);
+        repo.Verify(r => r.AddOrUpdateAsync(It.IsAny<Photo>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

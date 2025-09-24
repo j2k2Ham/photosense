@@ -1,4 +1,4 @@
-using PhotoSense.Core.Domain.DTOs;
+using PhotoSense.Domain.DTOs;
 
 namespace PhotoSense.Application.Scanning.Interfaces;
 

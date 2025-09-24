@@ -1,8 +1,8 @@
 using Moq;
 using PhotoSense.Infrastructure.Deletion;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Core.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.Entities;
 using Xunit;
 
 namespace PhotoSense.Tests.Application;

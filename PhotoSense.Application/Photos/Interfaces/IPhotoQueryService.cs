@@ -1,5 +1,5 @@
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.ValueObjects;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Photos.Interfaces;
 

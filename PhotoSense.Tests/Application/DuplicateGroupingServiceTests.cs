@@ -1,7 +1,7 @@
 using Moq;
 using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Repositories;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
 using Xunit;
 
 namespace PhotoSense.Tests.Application;

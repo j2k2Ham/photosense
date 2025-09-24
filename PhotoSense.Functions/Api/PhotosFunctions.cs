@@ -1,8 +1,8 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System.Net;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Core.Domain.ValueObjects;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Application.Photos.Interfaces;
 using System.Web;
 using PhotoSense.Application.Scanning.Interfaces;

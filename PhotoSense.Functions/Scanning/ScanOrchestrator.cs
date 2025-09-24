@@ -1,8 +1,8 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
-using PhotoSense.Core.Domain.Entities;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
+using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Functions.Scanning;
 

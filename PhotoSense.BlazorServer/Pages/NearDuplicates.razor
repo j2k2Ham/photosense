@@ -1,5 +1,5 @@
 @page "/near"
-@inject PhotoSense.Core.Domain.Services.INearDuplicateService NearDupService
+@inject PhotoSense.Domain.Services.INearDuplicateService NearDupService
 
 <h3>Near Duplicate Photos</h3>
 
@@ -34,7 +34,7 @@ else
 }
 
 @code {
-    private IReadOnlyList<PhotoSense.Core.Domain.DTOs.NearDuplicateGroup>? groups;
+    private IReadOnlyList<PhotoSense.Domain.DTOs.NearDuplicateGroup>? groups;
 
     protected override async Task OnInitializedAsync()
     {

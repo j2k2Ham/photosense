@@ -1,6 +1,6 @@
 using Moq;
-using PhotoSense.Core.Domain.Events;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Events;
+using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Events;
 using Xunit;
 

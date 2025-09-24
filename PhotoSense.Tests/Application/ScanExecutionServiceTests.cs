@@ -1,9 +1,9 @@
 using Moq;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Application.Scanning.Interfaces;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Core.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.Entities;
 using Xunit;
 
 namespace PhotoSense.Tests.Application;
@@ -27,7 +27,7 @@ public class ScanExecutionServiceTests
         try
         {
             await svc.ProcessAsync(new []{ tmp1, tmp2 }, PhotoSet.Primary, "inst");
-            repo.Verify(r => r.AddOrUpdateAsync(It.IsAny<PhotoSense.Core.Domain.Entities.Photo>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+            repo.Verify(r => r.AddOrUpdateAsync(It.IsAny<Photo>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
             progress.Verify(p => p.IncrementProcessed("inst", true), Times.Exactly(2));
         }
         finally { File.Delete(tmp1); File.Delete(tmp2); }

@@ -1,7 +1,7 @@
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Hashing;
 using PhotoSense.Infrastructure.Metadata;
 using PhotoSense.Infrastructure.Persistence;

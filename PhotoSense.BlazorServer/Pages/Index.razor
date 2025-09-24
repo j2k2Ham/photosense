@@ -1,7 +1,7 @@
 @page "/"
 @inject PhotoSense.Application.Scanning.Interfaces.IDuplicateGroupingService DuplicateService
 @inject PhotoSense.Application.Photos.Interfaces.IPhotoQueryService PhotoQuery
-@inject PhotoSense.Core.Domain.Services.IPhotoDeletionService Deleter
+@inject PhotoSense.Domain.Services.IPhotoDeletionService Deleter
 @inject NavigationManager Nav
 
 <h3>Duplicate Photos</h3>
@@ -49,7 +49,7 @@ else
 }
 
 @code {
-    private IReadOnlyList<PhotoSense.Core.Domain.DTOs.DuplicateGroup>? duplicateGroups;
+    private IReadOnlyList<PhotoSense.Domain.DTOs.DuplicateGroup>? duplicateGroups;
     private HashSet<Guid> selected = new();
     private string? status;
 

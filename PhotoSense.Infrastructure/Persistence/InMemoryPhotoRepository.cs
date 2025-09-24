@@ -1,6 +1,6 @@
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.ValueObjects;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.ValueObjects;
 using System.Collections.Concurrent;
 
 namespace PhotoSense.Infrastructure.Persistence;

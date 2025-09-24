@@ -1,5 +1,5 @@
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Services;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Services;
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif;
 

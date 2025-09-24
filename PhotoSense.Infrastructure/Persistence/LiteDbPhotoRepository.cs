@@ -1,7 +1,7 @@
 using LiteDB;
-using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Repositories;
-using PhotoSense.Core.Domain.ValueObjects;
+using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Infrastructure.Persistence;
 
@@ -86,7 +86,6 @@ public class LiteDbPhotoRepository : IPhotoRepository, IDisposable
         {
             var entity = new Photo
             {
-                Id = new PhotoId(Id),
                 SourcePath = SourcePath,
                 FileName = FileName,
                 FileSizeBytes = FileSizeBytes,

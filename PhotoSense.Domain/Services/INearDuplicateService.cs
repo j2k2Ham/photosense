@@ -1,6 +1,6 @@
-using PhotoSense.Core.Domain.DTOs;
+﻿using PhotoSense.Domain.DTOs;
 
-namespace PhotoSense.Core.Domain.Services;
+namespace PhotoSense.Domain.Services;
 
 public interface INearDuplicateService
 {
