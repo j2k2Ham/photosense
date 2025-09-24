@@ -9,8 +9,8 @@
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.5" />
     <PackageReference Include="MetadataExtractor" Version="2.8.1" />
-    <PackageReference Include="LiteDB" Version="5.0.21" />
+    <PackageReference Include="LiteDB" Version="5.0.17" />
   </ItemGroup>
 </Project>

@@ -9,8 +9,11 @@ using PhotoSense.Infrastructure.Events;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
+using PhotoSense.Domain.Configuration;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Configure<PhotoStorageOptions>(builder.Configuration.GetSection("PhotoStorage"));
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();

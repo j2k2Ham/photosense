@@ -12,33 +12,30 @@ using PhotoSense.Infrastructure.Events;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
+using PhotoSense.Domain.Configuration;
 using PhotoSense.Application.Scanning;
 using LiteDB;
-using PhotoSense.Core.Configuration;
+using Microsoft.Extensions.Options; // added for IValidateOptions
 
-var host = new HostBuilder()
-    .ConfigureAppConfiguration(cfg =>
+namespace PhotoSense.Functions;
+
+public static class DependencyInjection
+{
+    public static IServiceCollection AddPhotoSenseCore(this IServiceCollection s, IConfiguration cfg)
     {
-        cfg.AddJsonFile("appsettings.json", optional: true)
-           .AddEnvironmentVariables();
-    })
-    .ConfigureFunctionsWorkerDefaults()
-    .ConfigureServices((ctx, s) =>
-    {
-        s.Configure<PhotoStorageOptions>(ctx.Configuration.GetSection("PhotoStorage"));
-        s.Configure<MessagingOptions>(ctx.Configuration.GetSection("Messaging"));
+        s.Configure<PhotoStorageOptions>(cfg.GetSection("PhotoStorage"));
+        s.Configure<MessagingOptions>(cfg.GetSection("Messaging"));
+        s.AddSingleton<IValidateOptions<PhotoStorageOptions>, PhotoStorageOptionsValidator>();
         s.AddSingleton<LiteDatabase>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
             return new LiteDatabase(opts.DatabasePath);
         });
-
         s.AddSingleton<IPhotoRepository>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
             return new LiteDbPhotoRepository(opts.DatabasePath);
         });
-
         s.AddSingleton<IImageHashingService, PerceptualHashingService>();
         s.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
         s.AddSingleton<IDuplicateGroupingService, DuplicateGroupingService>();
@@ -51,7 +48,27 @@ var host = new HostBuilder()
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
         s.AddSingleton<IScanProgressStore, InMemoryScanProgressStore>();
         s.AddSingleton<IScanExecutionService, ScanExecutionService>();
-    })
-    .Build();
+        return s;
+    }
+}
 
-await host.RunAsync();
+public class Program
+{
+    public static async Task Main(string[] args)
+    {
+        var host = new HostBuilder()
+            .ConfigureAppConfiguration(cfg =>
+            {
+                cfg.AddJsonFile("appsettings.json", optional: true)
+                   .AddEnvironmentVariables();
+            })
+            .ConfigureFunctionsWorkerDefaults()
+            .ConfigureServices((ctx, s) =>
+            {
+                s.AddPhotoSenseCore(ctx.Configuration);
+            })
+            .Build();
+
+        await host.RunAsync();
+    }
+}

@@ -1,4 +1,4 @@
-namespace PhotoSense.Core.Configuration;
+namespace PhotoSense.Domain.Configuration;
 
 public class PhotoStorageOptions
 {

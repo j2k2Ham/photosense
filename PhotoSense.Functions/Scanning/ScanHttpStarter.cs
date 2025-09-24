@@ -3,7 +3,7 @@ using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.DurableTask.Client;
 using System.Net;
 using Microsoft.Extensions.Options;
-using PhotoSense.Core.Configuration;
+using PhotoSense.Domain.Configuration;
 
 namespace PhotoSense.Functions.Scanning;
 
