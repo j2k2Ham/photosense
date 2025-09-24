@@ -47,7 +47,7 @@ jobs:
         run: |
           dotnet tool restore
           echo "Listing coverage files" && ls -R . | grep coverage || true
-          dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" || echo "Report generation failed (will succeed once coverage file exists)"
+          dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
       - name: Enforce coverage thresholds (Line >= 60% / Branch >= 60%)
