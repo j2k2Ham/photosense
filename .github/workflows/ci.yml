@@ -26,22 +26,22 @@ jobs:
         run: dotnet build PhotoSense.sln --configuration Release --no-restore /warnaserror
 
       - name: Test with coverage
+        # Removed trailing backslashes because YAML folded style (>-) already joins lines with spaces;
+        # backslashes were being treated as extra project arguments leading to MSB1008.
         run: >-
-          dotnet test PhotoSense.sln \
-          --configuration Release \
-          /p:CollectCoverage=true \
-          /p:CoverletOutput=./coverage/ \
-          /p:CoverletOutputFormat=opencover,lcov \
-          /p:Exclude="[PhotoSense.Tests]*" \
+          dotnet test PhotoSense.sln
+          --configuration Release
+          /p:CollectCoverage=true
+          /p:CoverletOutput=./coverage/
+          /p:CoverletOutputFormat=opencover,lcov
+          /p:Exclude="[PhotoSense.Tests]*"
           --logger "trx;LogFileName=test-results.trx"
 
       - name: ReportGenerator (HTML)
-        run: >-
-          dotnet tool restore && \
-          dotnet tool run reportgenerator \
-          -reports:coverage/coverage.opencover.xml \
-          -targetdir:coverage/report \
-          -reporttypes:HtmlSummary
+        # Use literal block to run two commands sequentially without stray backslashes.
+        run: |
+          dotnet tool restore
+          dotnet tool run reportgenerator -reports:coverage/coverage.opencover.xml -targetdir:coverage/report -reporttypes:HtmlSummary
         if: always()
 
       - name: Upload Test Results
