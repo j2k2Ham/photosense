@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.Tests", "PhotoSe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.Domain", "PhotoSense.Domain\PhotoSense.Domain.csproj", "{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.Benchmarks", "PhotoSense.Benchmarks\PhotoSense.Benchmarks.csproj", "{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
