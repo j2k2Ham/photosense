@@ -10,11 +10,12 @@ public class ScanRequestPublisherTests
     public async Task Publish_Then_Dequeue_Succeeds()
     {
         var publisher = new ScanRequestPublisher();
-        var evt = new ScanRequestedEvent("inst","path", true);
+        var correlation = Guid.NewGuid();
+        var evt = new ScanRequestedEvent(correlation, "p1", "p2", DateTime.UtcNow);
         await publisher.PublishAsync(evt);
         var ok = ScanRequestPublisher.TryDequeue(out var dequeued);
         Assert.True(ok);
-        Assert.Equal(evt.InstanceId, dequeued.InstanceId);
+        Assert.Equal(correlation, dequeued.CorrelationId);
     }
 
     [Fact]
