@@ -50,12 +50,12 @@ jobs:
           dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
-      - name: Enforce coverage thresholds (Line >= 60% / Branch >= 60%)
+      - name: Enforce coverage thresholds (Line >= 90% / Branch >= 85%)
         if: success()
         run: |
           set -e
-          thresholdLine=0.60
-          thresholdBranch=0.60
+          thresholdLine=0.90
+          thresholdBranch=0.85
           coverageXml=PhotoSense.Tests/coverage/coverage.opencover.xml
           if [ ! -f "$coverageXml" ]; then
             echo "Coverage file not found: $coverageXml"; ls -R PhotoSense.Tests || true; exit 1
