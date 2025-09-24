@@ -27,17 +27,20 @@ jobs:
 
       - name: Test with coverage
         run: >-
-          dotnet test PhotoSense.sln
+          dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj
           --configuration Release
-          --collect:"XPlat Code Coverage"
+          /p:CollectCoverage=true
+          /p:CoverletOutput=../coverage/
+          /p:CoverletOutputFormat=opencover
+          /p:Exclude="[xunit.*]*,[Moq]*,[PhotoSense.Tests]*"
           --logger "trx;LogFileName=test-results.trx"
 
       - name: ReportGenerator (HTML)
         # Use literal block to run two commands sequentially without stray backslashes.
         run: |
           dotnet tool restore
-          # Use cobertura output produced by XPlat collector under TestResults directory
-          dotnet tool run reportgenerator "-reports:**/TestResults/*/coverage.cobertura.xml" -targetdir:coverage/report -reporttypes:HtmlSummary;lcov
+          echo "Listing coverage files" && ls -R . | grep coverage || true
+          dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover.xml" -targetdir:coverage/report -reporttypes:HtmlSummary;lcov
         if: always()
 
       - name: Upload Test Results
