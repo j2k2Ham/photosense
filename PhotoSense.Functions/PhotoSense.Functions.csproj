@@ -19,4 +19,4 @@
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
     <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
   </ItemGroup>
-</Project></Project></Project>
+</Project>
