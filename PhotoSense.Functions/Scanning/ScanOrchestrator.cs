@@ -1,59 +1,53 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
-using PhotoSense.Core.Domain.Repositories;
 using PhotoSense.Core.Domain.Entities;
-using PhotoSense.Core.Domain.Services;
-using PhotoSense.Infrastructure.Scanning;
+using PhotoSense.Application.Scanning.Interfaces;
+using PhotoSense.Application.Scanning.Services;
 
 namespace PhotoSense.Functions.Scanning;
 
+public record CountLocationRequest(string Path, bool Recursive);
+public record ProcessLocationRequest(string Path, PhotoSet Set, bool Recursive, string InstanceId);
+
 public class ScanOrchestrator
 {
-    private readonly IPhotoRepository _repo;
-    private readonly IImageHashingService _hashing;
-    private readonly IPhotoMetadataExtractor _metadata;
+    private readonly IScanProgressStore _progress;
+    private readonly IScanExecutionService _exec;
 
-    public ScanOrchestrator(IPhotoRepository repo, IImageHashingService hashing, IPhotoMetadataExtractor metadata)
+    public ScanOrchestrator(IScanProgressStore progress, IScanExecutionService exec)
     {
-        _repo = repo; _hashing = hashing; _metadata = metadata;
+        _progress = progress;
+        _exec = exec;
     }
 
     [Function(nameof(RunScanAsync))]
     public async Task RunScanAsync([OrchestrationTrigger] TaskOrchestrationContext ctx)
     {
         var input = ctx.GetInput<(string primary, string secondary, bool recursive)>();
-        if (input == default) return;
+        var instanceId = ctx.InstanceId;
+        _progress.ScanStarted(instanceId);
+        if (input == default) { _progress.ScanCompleted(instanceId); return; }
 
         var (primary, secondary, recursive) = input;
-        await ctx.CallActivityAsync(nameof(ScanLocationActivity), (primary, PhotoSet.Primary, recursive));
-        await ctx.CallActivityAsync(nameof(ScanLocationActivity), (secondary, PhotoSet.Secondary, recursive));
+
+        var primaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(primary, recursive));
+        var secondaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(secondary, recursive));
+        _progress.SetTotals(instanceId, primaryTotal, secondaryTotal);
+
+        await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(primary, PhotoSet.Primary, recursive, instanceId));
+        await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(secondary, PhotoSet.Secondary, recursive, instanceId));
+
+        _progress.ScanCompleted(instanceId);
     }
 
-    [Function(nameof(ScanLocationActivity))]
-    public async Task ScanLocationActivity([ActivityTrigger] (string path, PhotoSet set, bool recursive) payload)
+    [Function(nameof(CountLocationActivity))]
+    public int CountLocationActivity([ActivityTrigger] CountLocationRequest req)
+        => ScanExecutionService.EnumerateFiles(req.Path, req.Recursive).Count();
+
+    [Function(nameof(ProcessLocationActivity))]
+    public async Task ProcessLocationActivity([ActivityTrigger] ProcessLocationRequest req)
     {
-        var (path, set, recursive) = payload;
-        foreach (var file in FileSystemImageEnumerator.Enumerate(path, recursive))
-        {
-            await using var fs = File.OpenRead(file);
-            var hash = await _hashing.ComputeHashAsync(fs);
-            fs.Position = 0;
-            var perceptual = await _hashing.ComputePerceptualHashAsync(fs);
-            fs.Position = 0;
-            var photo = new Photo
-            {
-                SourcePath = file,
-                FileName = Path.GetFileName(file),
-                FileSizeBytes = fs.Length,
-                ContentHash = hash,
-                PerceptualHash = perceptual,
-                Set = set
-            };
-            fs.Position = 0;
-            await _metadata.ExtractAsync(photo, fs);
-            await _repo.AddOrUpdateAsync(photo);
-        }
+        var files = ScanExecutionService.EnumerateFiles(req.Path, req.Recursive).ToList();
+        await _exec.ProcessAsync(files, req.Set, req.InstanceId);
     }
 }

@@ -9,18 +9,17 @@ using PhotoSense.Infrastructure.Events;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
-builder.Services.AddSingleton<IPhotoRepository, InMemoryPhotoRepository>();
+builder.Services.AddSingleton<IPhotoRepository>(_ => new LiteDbPhotoRepository());
 builder.Services.AddSingleton<IImageHashingService, PerceptualHashingService>();
 builder.Services.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
 builder.Services.AddSingleton<IDuplicateGroupingService, DuplicateGroupingService>();
+builder.Services.AddSingleton<INearDuplicateService, NearDuplicateService>();
 builder.Services.AddSingleton<IScanRequestPublisher, ScanRequestPublisher>();
 builder.Services.AddSingleton<IIntegrationEventPublisher, InMemoryIntegrationEventPublisher>();
 builder.Services.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();

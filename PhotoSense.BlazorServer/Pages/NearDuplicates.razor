@@ -1,0 +1,43 @@
+@page "/near"
+@inject PhotoSense.Core.Domain.Services.INearDuplicateService NearDupService
+
+<h3>Near Duplicate Photos</h3>
+
+@if (groups is null)
+{
+    <em>Loading...</em>
+}
+else if (groups.Count == 0)
+{
+    <p>No near duplicates within threshold.</p>
+}
+else
+{
+    <table class="table table-sm">
+        <thead><tr><th>Representative Hash</th><th>Count</th><th>Files</th></tr></thead>
+        <tbody>
+        @foreach (var g in groups)
+        {
+            <tr>
+                <td>@g.RepresentativeHash</td>
+                <td>@g.Photos.Count</td>
+                <td>
+                    @foreach (var p in g.Photos)
+                    {
+                        <div>@p.FileName (@p.PerceptualHash)</div>
+                    }
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private IReadOnlyList<PhotoSense.Core.Domain.DTOs.NearDuplicateGroup>? groups;
+
+    protected override async Task OnInitializedAsync()
+    {
+        groups = await NearDupService.GetNearDuplicatesAsync();
+    }
+}

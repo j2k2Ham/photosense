@@ -1,0 +1,24 @@
+Run tests with coverage:
+
+dotnet test --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+Or using coverlet.msbuild (already using coverlet.collector):
+
+dotnet test /p:CollectCoverage=true /p:CoverletOutput=./coverage/ /p:CoverletOutputFormat=lcov,opencover
+
+To view lcov report (install ReportGenerator):
+
+dotnet tool install -g dotnet-reportgenerator-globaltool
+reportgenerator -reports:coverage/coverage.info -targetdir:coverage/report
+
+Filter examples:
+Include only application & core:
+  /p:Include="[PhotoSense.Core]*,[PhotoSense.Application]*"
+Exclude tests & generated:
+  /p:Exclude="[xunit.*]*,[PhotoSense.Tests]*"
+
+Branch coverage:
+  /p:CollectCoverage=true /p:CoverletOutput=./coverage/ /p:CoverletOutputFormat=lcov,opencover /p:UseSourceLink=true /p:MergeWith="" /p:IncludeTestAssembly=false /p:SkipAutoProps=true /p:ExcludeByAttribute="Obsolete,GeneratedCodeAttribute,CompilerGeneratedAttribute"
+
+Sample full command:
+  dotnet test PhotoSense.sln /p:CollectCoverage=true /p:CoverletOutput=./coverage/ /p:CoverletOutputFormat=opencover /p:Exclude="[PhotoSense.Tests]*" /p:SkipAutoProps=true

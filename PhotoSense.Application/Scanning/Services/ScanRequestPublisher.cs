@@ -8,11 +8,21 @@ namespace PhotoSense.Application.Scanning.Services;
 public class ScanRequestPublisher : IScanRequestPublisher
 {
     private static readonly ConcurrentQueue<ScanRequestedEvent> _queue = new();
+
     public Task PublishAsync(ScanRequestedEvent evt, CancellationToken ct = default)
     {
         _queue.Enqueue(evt);
         return Task.CompletedTask;
     }
 
-    public static bool TryDequeue(out ScanRequestedEvent evt) => _queue.TryDequeue(out evt);
+    public static bool TryDequeue(out ScanRequestedEvent evt)
+    {
+        if (_queue.TryDequeue(out var e))
+        {
+            evt = e;
+            return true;
+        }
+        evt = default!; // explicitly assign to satisfy nullable analysis
+        return false;
+    }
 }

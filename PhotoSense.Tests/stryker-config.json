@@ -1,0 +1,25 @@
+{
+  "$schema": "https://raw.githubusercontent.com/stryker-mutator/stryker-net/master/src/Stryker.Core/Stryker.Core/Schema/stryker.schema.json",
+  "logLevel": "info",
+  "reporters": [ "html", "progress", "dashboard" ],
+  "projectName": "PhotoSense",
+  "solution": "../PhotoSense.sln",
+  "mutate": [
+    "../PhotoSense.Core/**/*.cs",
+    "../PhotoSense.Application/**/*.cs",
+    "../PhotoSense.Infrastructure/**/*.cs"
+  ],
+  "ignoreMethods": [ "ToString" ],
+  "thresholds": {
+    "high": 80,
+    "low": 60,
+    "break": 50
+  },
+  "since": {
+    "enabled": false
+  },
+  "coverageAnalysis": "perTest",
+  "concurrency": 0,
+  "timeoutMS": 10000,
+  "languageVersion": "preview"
+}

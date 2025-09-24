@@ -2,11 +2,16 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.DurableTask.Client;
 using System.Net;
+using Microsoft.Extensions.Options;
+using PhotoSense.Core.Configuration;
 
 namespace PhotoSense.Functions.Scanning;
 
 public class ScanHttpStarter
 {
+    private readonly IOptions<PhotoStorageOptions> _options;
+    public ScanHttpStarter(IOptions<PhotoStorageOptions> options) => _options = options;
+
     [Function("StartPhotoScan")]
     public async Task<HttpResponseData> StartAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "scan/start")] HttpRequestData req,
@@ -14,6 +19,8 @@ public class ScanHttpStarter
     {
         var body = await new StreamReader(req.Body).ReadToEndAsync();
         var (primary, secondary, recursive) = ParseBody(body);
+        primary = string.IsNullOrWhiteSpace(primary) ? _options.Value.PrimaryPath : primary;
+        secondary = string.IsNullOrWhiteSpace(secondary) ? _options.Value.SecondaryPath : secondary;
         var instanceId = await client.ScheduleNewOrchestrationInstanceAsync(nameof(ScanOrchestrator.RunScanAsync), (primary, secondary, recursive));
         var response = req.CreateResponse(HttpStatusCode.Accepted);
         await response.WriteStringAsync(instanceId);
@@ -26,14 +33,14 @@ public class ScanHttpStarter
         {
             using var doc = System.Text.Json.JsonDocument.Parse(body);
             var root = doc.RootElement;
-            var primary = root.GetProperty("primary").GetString() ?? string.Empty;
-            var secondary = root.GetProperty("secondary").GetString() ?? string.Empty;
+            var primary = root.TryGetProperty("primary", out var p) ? p.GetString() ?? "" : "";
+            var secondary = root.TryGetProperty("secondary", out var s) ? s.GetString() ?? "" : "";
             var recursive = root.TryGetProperty("recursive", out var r) && r.GetBoolean();
             return (primary, secondary, recursive);
         }
         catch
         {
-            return (string.Empty, string.Empty, true);
+            return ("", "", true);
         }
     }
 }

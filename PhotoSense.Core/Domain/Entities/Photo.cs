@@ -22,10 +22,9 @@ public class Photo
         if (!string.IsNullOrWhiteSpace(category) && !_categories.Contains(category, StringComparer.OrdinalIgnoreCase))
             _categories.Add(category);
     }
-    internal void LoadCategories(IEnumerable<string> categories)
+    public void LoadCategories(IEnumerable<string> categories)
     {
         _categories.Clear();
-        foreach (var c in categories)
-            AddCategory(c);
+        _categories.AddRange(categories);
     }
 }
