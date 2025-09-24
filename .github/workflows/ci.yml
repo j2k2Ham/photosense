@@ -32,8 +32,10 @@ jobs:
           dotnet test PhotoSense.sln
           --configuration Release
           /p:CollectCoverage=true
+          # Output folder will be inside each test project; we later glob for reports.
           /p:CoverletOutput=./coverage/
-          /p:CoverletOutputFormat=opencover,lcov
+          # Use a single format (opencover). We'll generate lcov via ReportGenerator.
+          /p:CoverletOutputFormat=opencover
           /p:Exclude="[PhotoSense.Tests]*"
           --logger "trx;LogFileName=test-results.trx"
 
@@ -41,7 +43,8 @@ jobs:
         # Use literal block to run two commands sequentially without stray backslashes.
         run: |
           dotnet tool restore
-          dotnet tool run reportgenerator -reports:coverage/coverage.opencover.xml -targetdir:coverage/report -reporttypes:HtmlSummary
+          # Search recursively for any opencover file produced under test project directories.
+          dotnet tool run reportgenerator -reports:**/coverage/coverage.opencover.xml -targetdir:coverage/report -reporttypes:HtmlSummary;lcov
         if: always()
 
       - name: Upload Test Results
