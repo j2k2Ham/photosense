@@ -16,9 +16,8 @@
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Timer" Version="4.3.1" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PhotoSense.Core\PhotoSense.Core.csproj" />
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
     <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
   </ItemGroup>
-</Project>
+</Project></Project>
