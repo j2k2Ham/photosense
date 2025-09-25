@@ -19,6 +19,7 @@ export interface PhotoDto {
   longitude?: number;
   set: 'Primary' | 'Secondary';
   categories?: string[];
+  kept?: boolean;
 }
 
 export interface ScanProgressSnapshotDto {

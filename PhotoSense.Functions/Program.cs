@@ -17,6 +17,7 @@ using PhotoSense.Application.Scanning;
 using PhotoSense.Infrastructure.Scanning;
 using LiteDB;
 using Microsoft.Extensions.Options; // added for IValidateOptions
+using PhotoSense.Functions.Scanning;
 
 namespace PhotoSense.Functions;
 
@@ -37,6 +38,11 @@ public static class DependencyInjection
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
             return new LiteDbPhotoRepository(opts.DatabasePath);
         });
+        s.AddSingleton<IAuditRepository>(sp =>
+        {
+            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
+            return new LiteDbAuditRepository(opts.DatabasePath);
+        });
         s.AddSingleton<IImageHashingService, PerceptualHashingService>();
         s.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
         s.AddSingleton<IDuplicateGroupingService, DuplicateGroupingService>();
@@ -55,7 +61,7 @@ public static class DependencyInjection
     }
 }
 
-public class Program
+public static class Program
 {
     public static async Task Main(string[] args)
     {
@@ -71,7 +77,6 @@ public class Program
                 s.AddPhotoSenseCore(ctx.Configuration);
             })
             .Build();
-
         await host.RunAsync();
     }
 }

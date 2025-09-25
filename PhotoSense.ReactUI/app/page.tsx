@@ -5,7 +5,7 @@ import { DuplicateGrid } from '../components/DuplicateGrid';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { LogsPanel } from '../components/LogsPanel';
-import { useDuplicateGroups, useScanProgress, connectLogStream } from '../lib/apiClient';
+import { useDuplicateGroups, useScanProgress, connectLogStream, keepPhoto, movePhoto } from '../lib/apiClient';
 import type { PhotoDto } from '../types';
 
 export default function HomePage() {
@@ -15,7 +15,8 @@ export default function HomePage() {
   const [nearMode, setNearMode] = useState(false);
   const [threshold, setThreshold] = useState(12);
   const [page, setPage] = useState(1);
-  const dupes = useDuplicateGroups(filter, nearMode, threshold, page);
+  const [hideKept, setHideKept] = useState(false);
+  const dupes = useDuplicateGroups(filter, nearMode, threshold, page, hideKept);
   const progress = useScanProgress(instanceId);
   const [logs, setLogs] = useState<string[]>(["Ready."]);
   React.useEffect(()=>{
@@ -47,8 +48,23 @@ export default function HomePage() {
                   <input type="number" min={1} max={dupes.data.totalPages} value={page} onChange={e=>{ const v = parseInt(e.target.value)||1; setPage(Math.min(Math.max(1,v), dupes.data!.totalPages)); }} className="w-16 bg-neutral-800 border border-neutral-700 rounded px-1 h-6 text-[11px]" />
                 )}
               </div>
-              <button className="btn-secondary h-6 px-2">Keep Best</button>
-              <button className="btn-secondary h-6 px-2">Move Others</button>
+              <label className="flex items-center gap-1 text-neutral-400"><input type="checkbox" checked={hideKept} onChange={e=>{setHideKept(e.target.checked); setPage(1);}} /> Hide kept</label>
+              <button className="btn-secondary h-6 px-2" onClick={()=>{
+                if (!dupes.data) return;
+                // Keep first photo in each group
+                dupes.data.items.forEach(g=>{ if (g.photos.length>0 && !g.photos[0].kept) keepPhoto(g.photos[0].id); });
+              }}>Keep Best</button>
+              <button className="btn-secondary h-6 px-2" onClick={async ()=>{
+                if (!dupes.data) return;
+                const target = prompt('Target folder for others');
+                if (!target) return;
+                for (const g of dupes.data.items){
+                  const photos = g.photos;
+                  if (photos.length<=1) continue;
+                  const others = photos.slice(1);
+                  for (const p of others){ await movePhoto(p.id, target); }
+                }
+              }}>Move Others</button>
             </div>
             <DuplicateGrid groups={(dupes.data?.items as any) || ([] as any)} onSelect={p=>setSelected(p)} />
           </div>

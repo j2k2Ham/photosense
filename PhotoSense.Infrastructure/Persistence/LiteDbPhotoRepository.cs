@@ -5,7 +5,7 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Infrastructure.Persistence;
 
-public class LiteDbPhotoRepository : IPhotoRepository, IDisposable
+public sealed class LiteDbPhotoRepository : IPhotoRepository, IDisposable
 {
     private readonly LiteDatabase _db;
     private readonly ILiteCollection<PhotoDocument> _col;
@@ -51,7 +51,7 @@ public class LiteDbPhotoRepository : IPhotoRepository, IDisposable
 
     public void Dispose() => _db.Dispose();
 
-    private class PhotoDocument
+    private sealed class PhotoDocument
     {
         public Guid Id { get; set; }
         public string SourcePath { get; set; } = default!;
@@ -65,6 +65,7 @@ public class LiteDbPhotoRepository : IPhotoRepository, IDisposable
         public double? Longitude { get; set; }
         public int Set { get; set; }
         public List<string> Categories { get; set; } = new();
+    public bool IsKept { get; set; }
 
         public static PhotoDocument From(Photo p) => new()
         {
@@ -79,7 +80,8 @@ public class LiteDbPhotoRepository : IPhotoRepository, IDisposable
             Latitude = p.Latitude,
             Longitude = p.Longitude,
             Set = (int)p.Set,
-            Categories = p.Categories.ToList()
+            Categories = p.Categories.ToList(),
+            IsKept = p.IsKept
         };
 
         public Photo ToEntity()
@@ -95,7 +97,8 @@ public class LiteDbPhotoRepository : IPhotoRepository, IDisposable
                 CameraModel = CameraModel,
                 Latitude = Latitude,
                 Longitude = Longitude,
-                Set = (PhotoSet)Set
+                Set = (PhotoSet)Set,
+                IsKept = IsKept
             };
             entity.LoadCategories(Categories);
             return entity;

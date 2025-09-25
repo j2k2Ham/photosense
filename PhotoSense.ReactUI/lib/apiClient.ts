@@ -17,8 +17,8 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export function useDuplicateGroups(filter: string, near: boolean, threshold: number, page: number) {
-  const key = `${API_BASE}/scan/groups?near=${near}&threshold=${threshold}&page=${page}&q=${encodeURIComponent(filter||'')}`;
+export function useDuplicateGroups(filter: string, near: boolean, threshold: number, page: number, hideKept: boolean) {
+  const key = `${API_BASE}/scan/groups?near=${near}&threshold=${threshold}&page=${page}&hideKept=${hideKept}&q=${encodeURIComponent(filter||'')}`;
   return useSWR<GroupPage>(key, json, { refreshInterval: 5000 });
 }
 

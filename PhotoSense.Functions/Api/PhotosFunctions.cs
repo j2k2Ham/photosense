@@ -78,9 +78,11 @@ public class PhotosFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "photos/{id:guid}")] HttpRequestData req,
         string id,
         IPhotoDeletionService deleter,
-        IScanLogSink? logSink)
+        IScanLogSink? logSink,
+        IAuditRepository audit)
     {
         var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         var physical = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("physical") == "true";
         if (!Guid.TryParse(id, out var gid))
         {
@@ -90,6 +92,7 @@ public class PhotosFunctions
         }
         await deleter.DeleteAsync(new PhotoId(gid), physical);
         logSink?.Log("audit","Info",$"Deleted photo {gid} physical={physical}");
+        await audit.AddAsync(new AuditEntry { Action = "Delete", PhotoId = gid.ToString(), Details = physical?"physical":"logical" });
         resp.StatusCode = HttpStatusCode.NoContent;
         return resp;
     }
@@ -131,9 +134,11 @@ public class PhotosFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/keep")] HttpRequestData req,
         string id,
         IPhotoRepository repo,
-        IScanLogSink? logSink)
+        IScanLogSink? logSink,
+        IAuditRepository audit)
     {
         var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
         var photo = await repo.GetAsync(new PhotoId(gid));
         if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
@@ -142,6 +147,7 @@ public class PhotosFunctions
             photo.IsKept = true;
             await repo.AddOrUpdateAsync(photo);
             logSink?.Log("audit","Info",$"Kept photo {gid}");
+            await audit.AddAsync(new AuditEntry { Action = "Keep", PhotoId = gid.ToString(), Details = "" });
         }
         resp.StatusCode = HttpStatusCode.NoContent;
         return resp;
@@ -153,9 +159,11 @@ public class PhotosFunctions
         string id,
         IPhotoQueryService query,
         IPhotoRepository repo,
-        IScanLogSink? logSink)
+        IScanLogSink? logSink,
+        IAuditRepository audit)
     {
         var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
         var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var target = qs.Get("target");
@@ -184,6 +192,7 @@ public class PhotosFunctions
             };
             await repo.AddOrUpdateAsync(updated);
             logSink?.Log("audit","Info",$"Moved photo {gid} to {target}");
+            await audit.AddAsync(new AuditEntry { Action = "Move", PhotoId = gid.ToString(), Details = target });
             resp.StatusCode = HttpStatusCode.NoContent;
         }
         catch (Exception ex)
@@ -192,5 +201,15 @@ public class PhotosFunctions
             await resp.WriteStringAsync(ex.Message);
         }
         return resp;
+    }
+
+    private static bool Authorize(HttpRequestData req)
+    {
+        // Simple API key check (e.g., x-api-key header). For production replace with proper auth.
+        if (!req.Headers.TryGetValues("x-api-key", out var vals)) return false;
+        var key = vals.FirstOrDefault();
+        var expected = Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY");
+        if (string.IsNullOrEmpty(expected)) return true; // if not set, allow
+        return key == expected;
     }
 }

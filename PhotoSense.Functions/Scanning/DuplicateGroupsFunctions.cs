@@ -107,7 +107,32 @@ public class DuplicateGroupsFunctions
         int page = int.TryParse(q.Get("page"), out var p) ? Math.Max(1, p) : 1;
         int pageSize = int.TryParse(q.Get("pageSize"), out var ps) ? Math.Clamp(ps, 1, 200) : 100;
         var text = q.Get("q");
+        var hideKept = q.Get("hideKept") == "true";
         var payload = await _facade.BuildAsync(near, threshold, text, page, pageSize, CancellationToken.None);
+        if (hideKept)
+        {
+            // filter kept client-side in payload (simple projection)
+            var itemsProp = payload.GetType().GetProperty("items")?.GetValue(payload) as IEnumerable<object>;
+            if (itemsProp != null)
+            {
+                var filtered = itemsProp.Select(it => new {
+                    key = it.GetType().GetProperty("key")?.GetValue(it),
+                    perceptual = it.GetType().GetProperty("perceptual")?.GetValue(it),
+                    distance = it.GetType().GetProperty("distance")?.GetValue(it),
+                    photos = ((IEnumerable<object>)it.GetType().GetProperty("photos")!.GetValue(it)!).Where(p => !(bool?)(p.GetType().GetProperty("kept")?.GetValue(p)) ?? true).ToList()
+                }).Where(g=>g.photos.Any()).ToList();
+                var respObj = new {
+                    mode = payload.GetType().GetProperty("mode")?.GetValue(payload),
+                    threshold = payload.GetType().GetProperty("threshold")?.GetValue(payload),
+                    page = payload.GetType().GetProperty("page")?.GetValue(payload),
+                    pageSize = payload.GetType().GetProperty("pageSize")?.GetValue(payload),
+                    total = filtered.Count,
+                    totalPages = (int)Math.Ceiling(filtered.Count / (double)(payload.GetType().GetProperty("pageSize")?.GetValue(payload) ?? 1)),
+                    items = filtered
+                };
+                payload = respObj;
+            }
+        }
         var resp = req.CreateResponse(HttpStatusCode.OK);
         // Compute weak ETag for basic caching
         try

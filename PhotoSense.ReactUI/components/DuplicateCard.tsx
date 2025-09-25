@@ -12,10 +12,12 @@ export function DuplicateCard({ group, onSelect }: Props) {
     label = 'NEAR';
     if (group.distance != null) label = `NEAR ${group.distance}`;
   }
+  const kept = first.kept;
   return (
-    <button type="button" className="relative group cursor-pointer text-left" onClick={()=>onSelect(first)}>
+    <button type="button" className={clsx("relative group cursor-pointer text-left border rounded-md p-0", kept?"border-emerald-500":"border-transparent")} onClick={()=>onSelect(first)}>
       <div className="aspect-square w-full rounded-md bg-neutral-700 flex items-center justify-center text-xs text-neutral-400">IMG</div>
       <div className={clsx('absolute top-1 left-1', badgeClass)}>{label}</div>
+      {kept && <div className="absolute top-1 right-1 badge-kept">KEPT</div>}
       <div className="mt-1 text-[11px] leading-tight line-clamp-2 text-neutral-300">
         {first.fileName}<br/><span className="text-neutral-500">{(first.fileSizeBytes/1024/1024).toFixed(1)} MB</span>
       </div>
