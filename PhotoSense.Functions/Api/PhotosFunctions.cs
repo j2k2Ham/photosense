@@ -6,6 +6,8 @@ using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Application.Photos.Interfaces;
 using System.Web;
 using PhotoSense.Application.Scanning.Interfaces;
+using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Functions.Api;
 
@@ -119,6 +121,65 @@ public class PhotosFunctions
             count = g.Photos.Count,
             photos = g.Photos.Select(p => new { id = p.Id.Value, p.FileName, p.SourcePath, p.PerceptualHash })
         }));
+        return resp;
+    }
+
+    [Function("KeepPhoto")]
+    public Task<HttpResponseData> KeepPhotoAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/keep")] HttpRequestData req,
+        string id)
+    {
+        var resp = req.CreateResponse();
+        if (!Guid.TryParse(id, out _))
+        {
+            resp.StatusCode = HttpStatusCode.BadRequest;
+            return Task.FromResult(resp);
+        }
+        resp.StatusCode = HttpStatusCode.NoContent;
+        return Task.FromResult(resp);
+    }
+
+    [Function("MovePhoto")]
+    public async Task<HttpResponseData> MovePhotoAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/move")] HttpRequestData req,
+        string id,
+        IPhotoQueryService query,
+        IPhotoRepository repo)
+    {
+        var resp = req.CreateResponse();
+        if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
+        var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var target = qs.Get("target");
+        if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) { resp.StatusCode = HttpStatusCode.BadRequest; await resp.WriteStringAsync("Invalid target"); return resp; }
+        var photo = await query.GetAsync(new PhotoId(gid));
+        if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
+        var source = photo.SourcePath;
+        var newPath = Path.Combine(target, photo.FileName);
+        try
+        {
+            File.Move(source, newPath, true);
+            var updated = new Photo
+            {
+                Id = photo.Id,
+                SourcePath = newPath,
+                FileName = photo.FileName,
+                FileSizeBytes = photo.FileSizeBytes,
+                ContentHash = photo.ContentHash,
+                PerceptualHash = photo.PerceptualHash,
+                TakenOn = photo.TakenOn,
+                CameraModel = photo.CameraModel,
+                Latitude = photo.Latitude,
+                Longitude = photo.Longitude,
+                Set = photo.Set
+            };
+            await repo.AddOrUpdateAsync(updated);
+            resp.StatusCode = HttpStatusCode.NoContent;
+        }
+        catch (Exception ex)
+        {
+            resp.StatusCode = HttpStatusCode.InternalServerError;
+            await resp.WriteStringAsync(ex.Message);
+        }
         return resp;
     }
 }

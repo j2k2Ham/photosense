@@ -22,10 +22,20 @@ export function useDuplicateGroups(filter: string, near: boolean, threshold: num
 }
 
 export function connectLogStream(onLine: (l: string)=>void) {
-  const es = new EventSource(`${API_BASE.replace(/\/api$/,'')}/api/scan/logs/stream`);
+  const es = new EventSource(`${API_BASE.replace(/\/api$/,'')}/api/scan/logs/stream?follow=true`);
   es.onmessage = e => { if (e.data) onLine(e.data); };
   es.onerror = () => { es.close(); };
   return () => es.close();
+}
+
+export async function keepPhoto(id: string){
+  await fetch(`${API_BASE}/photos/${id}/keep`, { method: 'POST' });
+}
+export async function movePhoto(id: string, target: string){
+  await fetch(`${API_BASE}/photos/${id}/move?target=${encodeURIComponent(target)}`, { method: 'POST' });
+}
+export async function deletePhoto(id: string){
+  await fetch(`${API_BASE}/photos/${id}`, { method: 'DELETE' });
 }
 
 export function useScanProgress(instanceId?: string) {

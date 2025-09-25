@@ -5,6 +5,8 @@ using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace PhotoSense.Functions.Scanning;
 
@@ -106,6 +108,24 @@ public class DuplicateGroupsFunctions
         var text = q.Get("q");
         var payload = await _facade.BuildAsync(near, threshold, text, page, pageSize, CancellationToken.None);
         var resp = req.CreateResponse(HttpStatusCode.OK);
+        // Compute weak ETag for basic caching
+        try
+        {
+            var itemsProp = payload.GetType().GetProperty("items")?.GetValue(payload) as IEnumerable<object>;
+            var sb = new StringBuilder();
+            if (itemsProp != null)
+            {
+                foreach (var it in itemsProp.Take(5))
+                {
+                    var keyVal = it.GetType().GetProperty("key")?.GetValue(it)?.ToString();
+                    if (keyVal != null) sb.Append(keyVal).Append('|');
+                }
+            }
+            using var md5 = MD5.Create();
+            var hash = Convert.ToHexString(md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString())));
+            resp.Headers.Add("ETag", $"W/\"{(near?"near":"exact")}-{page}-{hash}\"");
+        }
+        catch { /* non-fatal */ }
         await resp.WriteAsJsonAsync(payload);
         return resp;
     }
@@ -120,9 +140,14 @@ public class ScanLogsStubFunction
         var snap = progress.GetLatest();
         var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
         var resp = req.CreateResponse(HttpStatusCode.OK);
+        DateTime? since = null;
+        var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var sinceRaw = qs.Get("since");
+    if (DateTime.TryParse(sinceRaw, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsed)) since = parsed.ToUniversalTime();
         var lines = string.IsNullOrWhiteSpace(id)
             ? new List<object>()
-            : sink.GetRecent(id).Select(l => (object)new { l.ts, l.level, l.message }).ToList();
+            : sink.GetRecent(id).Where(l => !since.HasValue || l.ts > since.Value)
+                .Select(l => (object)new { l.ts, l.level, l.message }).ToList();
         await resp.WriteAsJsonAsync(lines);
         return resp;
     }
@@ -136,8 +161,27 @@ public class ScanLogsStubFunction
         var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", "text/event-stream");
         if (string.IsNullOrWhiteSpace(id)) { await resp.WriteStringAsync("event: message\ndata: No active scan\n\n"); return resp; }
+        var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        bool follow = bool.TryParse(qs.Get("follow"), out var f) && f;
         var recent = sink.GetRecent(id).Select(l => $"event: log\ndata: {l.ts:o} {l.level} {l.message}\n\n");
         await resp.WriteStringAsync(string.Join(string.Empty, recent));
+        if (follow)
+        {
+            var start = DateTime.UtcNow;
+            var lastCount = sink.GetRecent(id).Count;
+            while (DateTime.UtcNow - start < TimeSpan.FromSeconds(30))
+            {
+                await Task.Delay(2000);
+                var nowLogs = sink.GetRecent(id);
+                if (nowLogs.Count > lastCount)
+                {
+                    foreach (var l in nowLogs.Skip(lastCount))
+                        await resp.WriteStringAsync($"event: log\ndata: {l.ts:o} {l.level} {l.message}\n\n");
+                    lastCount = nowLogs.Count;
+                }
+            }
+            await resp.WriteStringAsync("event: end\ndata: stream closed\n\n");
+        }
         return resp;
     }
 }
