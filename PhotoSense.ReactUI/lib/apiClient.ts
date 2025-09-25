@@ -1,6 +1,12 @@
 import useSWR from 'swr';
 import type { DuplicateGroupDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
 
+interface GroupPage {
+  mode: 'exact' | 'near';
+  page: number; pageSize: number; total: number; totalPages: number; threshold?: number;
+  items: DuplicateGroupDto[];
+}
+
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
 
@@ -12,7 +18,14 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function useDuplicateGroups(filter: string, near: boolean, threshold: number, page: number) {
   const key = `${API_BASE}/scan/groups?near=${near}&threshold=${threshold}&page=${page}&q=${encodeURIComponent(filter||'')}`;
-  return useSWR<any>(key, json, { refreshInterval: 4000 });
+  return useSWR<GroupPage>(key, json, { refreshInterval: 5000 });
+}
+
+export function connectLogStream(onLine: (l: string)=>void) {
+  const es = new EventSource(`${API_BASE.replace(/\/api$/,'')}/api/scan/logs/stream`);
+  es.onmessage = e => { if (e.data) onLine(e.data); };
+  es.onerror = () => { es.close(); };
+  return () => es.close();
 }
 
 export function useScanProgress(instanceId?: string) {

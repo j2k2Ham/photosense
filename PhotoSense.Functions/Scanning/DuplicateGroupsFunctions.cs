@@ -113,15 +113,19 @@ public class DuplicateGroupsFunctions
 
 public class ScanLogsStubFunction
 {
-    [Function("GetScanLogs")] // GET /api/scan/logs
+    // Simple JSON list endpoint retained
+    [Function("GetScanLogs")] 
     public async Task<HttpResponseData> GetLogs([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs")] HttpRequestData req)
+    { var resp = req.CreateResponse(HttpStatusCode.OK); await resp.WriteAsJsonAsync(new[]{new{ts=DateTime.UtcNow,level="Info",message="No active scan."}}); return resp; }
+
+    // Basic SSE stream; in production you might bridge to SignalR or Service Bus
+    [Function("GetScanLogsStream")] // GET /api/scan/logs/stream
+    public async Task<HttpResponseData> GetLogsStream([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/stream")] HttpRequestData req)
     {
-        var resp = req.CreateResponse(HttpStatusCode.OK);
-        var now = DateTime.UtcNow;
-        await resp.WriteAsJsonAsync(new[] {
-            new { ts = now.AddSeconds(-5), level = "Info", message = "Scan subsystem idle." },
-            new { ts = now.AddSeconds(-1), level = "Info", message = "No active scan." }
-        });
+        var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", "text/event-stream");
+        var lines = new[]{"event: message\n" + $"data: Log stream started {DateTime.UtcNow:o}\n\n"};
+        await resp.WriteStringAsync(string.Join(string.Empty, lines));
         return resp;
     }
 }

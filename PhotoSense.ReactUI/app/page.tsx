@@ -5,7 +5,7 @@ import { DuplicateGrid } from '../components/DuplicateGrid';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { LogsPanel } from '../components/LogsPanel';
-import { useDuplicateGroups, useScanProgress } from '../lib/apiClient';
+import { useDuplicateGroups, useScanProgress, connectLogStream } from '../lib/apiClient';
 import type { PhotoDto } from '../types';
 
 export default function HomePage() {
@@ -17,7 +17,11 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const dupes = useDuplicateGroups(filter, nearMode, threshold, page);
   const progress = useScanProgress(instanceId);
-  const [logs] = useState<string[]>(["Ready."]); // placeholder; could be fed by websocket later.
+  const [logs, setLogs] = useState<string[]>(["Ready."]);
+  React.useEffect(()=>{
+    const dispose = connectLogStream(line => setLogs(l=>[...l.slice(-199), line]));
+    return dispose;
+  },[]);
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -32,11 +36,18 @@ export default function HomePage() {
         <div className="flex flex-1 gap-3 overflow-hidden">
           <div className="panel flex-1 flex flex-col overflow-hidden">
             <div className="text-[11px] px-3 py-2 border-b border-neutral-700 flex items-center gap-4">
-              <span>Groups: {dupes.data?.items ? dupes.data.items.length : (dupes.data?.length ?? 0)}</span>
+              <span>Groups: {dupes.data?.items ? dupes.data.items.length : (dupes.data as any)?.length ?? 0}</span>
+              {dupes.data && (
+                <span className="text-neutral-500">Page {dupes.data.page}/{dupes.data.totalPages} • Total {dupes.data.total}</span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="btn-secondary h-6 px-2">Prev</button>
+                <button disabled={!dupes.data || page>=dupes.data.totalPages} onClick={()=>setPage(p=>dupes.data? Math.min(dupes.data.totalPages, p+1):p)} className="btn-secondary h-6 px-2">Next</button>
+              </div>
               <button className="btn-secondary h-6 px-2">Keep Best</button>
               <button className="btn-secondary h-6 px-2">Move Others</button>
             </div>
-            <DuplicateGrid groups={dupes.data || []} onSelect={p=>setSelected(p)} />
+            <DuplicateGrid groups={(dupes.data?.items as any) || ([] as any)} onSelect={p=>setSelected(p)} />
           </div>
           <div className="w-80 flex flex-col gap-3 shrink-0">
             <PreviewPanel photo={selected} />

@@ -12,5 +12,6 @@
   },
   "Messaging": {
     "OutboxIntervalSeconds": 5
-  }
+  },
+  "AllowedCorsOrigins": "http://localhost:3000"
 }
