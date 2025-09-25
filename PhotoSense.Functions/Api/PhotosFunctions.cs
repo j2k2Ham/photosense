@@ -13,6 +13,16 @@ namespace PhotoSense.Functions.Api;
 
 public class PhotosFunctions
 {
+    [Function("GetAudit")]
+    public async Task<HttpResponseData> GetAuditAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "audit")] HttpRequestData req,
+        IAuditRepository audit)
+    {
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        var items = await audit.RecentAsync();
+        await resp.WriteAsJsonAsync(items.Select(a => new { a.UtcTimestamp, a.Action, a.PhotoId, a.Details }));
+        return resp;
+    }
     [Function("GetPhotos")]
     public async Task<HttpResponseData> GetPhotosAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos")] HttpRequestData req,

@@ -10,7 +10,7 @@ public class LogsFilterTests
     public async Task Since_Filter_Works()
     {
         var sink = new InMemoryScanLogSink();
-        sink.Log("x","Info","A");
+    sink.Log("x","Info","A");
         var mid = DateTime.UtcNow;
         await Task.Delay(10);
         sink.Log("x","Info","B");

@@ -21,7 +21,7 @@ public class ScanGroupingFacadeTests
             new("hash2", new List<Photo>{ new(){ SourcePath="c", FileName="c", FileSizeBytes=1, Set=PhotoSet.Primary, ContentHash="hash2"}, new(){ SourcePath="d", FileName="d", FileSizeBytes=1, Set=PhotoSet.Primary, ContentHash="hash2"}})
         });
     var facade = new ScanGroupingFacade(dups.Object, near.Object);
-        var result = await facade.BuildAsync(false, 12, null, 1, 1, default);
+    var result = await facade.BuildAsync(false, 12, null, false, 1, 1, default);
         Assert.Equal(1, (int)result.GetType().GetProperty("page")!.GetValue(result)!);
         Assert.Equal(1, (int)result.GetType().GetProperty("pageSize")!.GetValue(result)!);
     }
@@ -35,7 +35,7 @@ public class ScanGroupingFacadeTests
         var p2 = new Photo{ SourcePath="b", FileName="b", FileSizeBytes=1, Set=PhotoSet.Primary, PerceptualHash=new string('b',32)};
         nearSvc.Setup(n => n.GetNearDuplicatesAsync(12, default)).ReturnsAsync(new List<PhotoSense.Domain.DTOs.NearDuplicateGroup>{ new(new string('a',32), new List<Photo>{p1,p2}) });
     var facade = new ScanGroupingFacade(dups.Object, nearSvc.Object);
-        var result = await facade.BuildAsync(true, 12, null, 1, 10, default);
+    var result = await facade.BuildAsync(true, 12, null, false, 1, 10, default);
     var itemsObj = result.GetType().GetProperty("items")!.GetValue(result)!;
     Assert.NotNull(itemsObj);
     }

@@ -16,13 +16,16 @@ public sealed class ScanGroupingFacade
     private readonly INearDuplicateService _near;
     public ScanGroupingFacade(IDuplicateGroupingService dups, INearDuplicateService near) { _dups = dups; _near = near; }
 
-    public async Task<object> BuildAsync(bool near, int threshold, string? q, int page, int pageSize, CancellationToken ct)
+    public async Task<object> BuildAsync(bool near, int threshold, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
     {
         if (!near)
         {
             var groups = await _dups.GetDuplicateGroupsAsync(ct);
             if (!string.IsNullOrWhiteSpace(q))
                 groups = groups.Where(g => g.Photos.Any(p => p.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (hideKept)
+                groups = groups.Select(g => new PhotoSense.Domain.DTOs.DuplicateGroup(g.Hash, g.Photos.Where(p=>!p.IsKept).ToList()))
+                               .Where(g=>g.Photos.Count>0).ToList();
             var total = groups.Count;
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
             return new
@@ -45,6 +48,9 @@ public sealed class ScanGroupingFacade
             var groups = await _near.GetNearDuplicatesAsync(threshold, ct);
             if (!string.IsNullOrWhiteSpace(q))
                 groups = groups.Where(g => g.Photos.Any(p => p.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (hideKept)
+                groups = groups.Select(g => new PhotoSense.Domain.DTOs.NearDuplicateGroup(g.RepresentativeHash, g.Photos.Where(p=>!p.IsKept).ToList()))
+                               .Where(g=>g.Photos.Count>0).ToList();
             var total = groups.Count;
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
             return new
@@ -108,31 +114,7 @@ public class DuplicateGroupsFunctions
         int pageSize = int.TryParse(q.Get("pageSize"), out var ps) ? Math.Clamp(ps, 1, 200) : 100;
         var text = q.Get("q");
         var hideKept = q.Get("hideKept") == "true";
-        var payload = await _facade.BuildAsync(near, threshold, text, page, pageSize, CancellationToken.None);
-        if (hideKept)
-        {
-            // filter kept client-side in payload (simple projection)
-            var itemsProp = payload.GetType().GetProperty("items")?.GetValue(payload) as IEnumerable<object>;
-            if (itemsProp != null)
-            {
-                var filtered = itemsProp.Select(it => new {
-                    key = it.GetType().GetProperty("key")?.GetValue(it),
-                    perceptual = it.GetType().GetProperty("perceptual")?.GetValue(it),
-                    distance = it.GetType().GetProperty("distance")?.GetValue(it),
-                    photos = ((IEnumerable<object>)it.GetType().GetProperty("photos")!.GetValue(it)!).Where(p => !(bool?)(p.GetType().GetProperty("kept")?.GetValue(p)) ?? true).ToList()
-                }).Where(g=>g.photos.Any()).ToList();
-                var respObj = new {
-                    mode = payload.GetType().GetProperty("mode")?.GetValue(payload),
-                    threshold = payload.GetType().GetProperty("threshold")?.GetValue(payload),
-                    page = payload.GetType().GetProperty("page")?.GetValue(payload),
-                    pageSize = payload.GetType().GetProperty("pageSize")?.GetValue(payload),
-                    total = filtered.Count,
-                    totalPages = (int)Math.Ceiling(filtered.Count / (double)(payload.GetType().GetProperty("pageSize")?.GetValue(payload) ?? 1)),
-                    items = filtered
-                };
-                payload = respObj;
-            }
-        }
+        var payload = await _facade.BuildAsync(near, threshold, text, hideKept, page, pageSize, CancellationToken.None);
         var resp = req.CreateResponse(HttpStatusCode.OK);
         // Compute weak ETag for basic caching
         try
