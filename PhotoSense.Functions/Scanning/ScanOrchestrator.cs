@@ -30,12 +30,17 @@ public class ScanOrchestrator
 
         var (primary, secondary, recursive) = input;
 
-        var primaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(primary, recursive));
-        var secondaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(secondary, recursive));
+        int primaryTotal = 0, secondaryTotal = 0;
+        if (!string.IsNullOrWhiteSpace(primary))
+            primaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(primary, recursive));
+        if (!string.IsNullOrWhiteSpace(secondary))
+            secondaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(secondary, recursive));
         _progress.SetTotals(instanceId, primaryTotal, secondaryTotal);
 
-        await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(primary, PhotoSet.Primary, recursive, instanceId));
-        await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(secondary, PhotoSet.Secondary, recursive, instanceId));
+        if (!string.IsNullOrWhiteSpace(primary))
+            await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(primary, PhotoSet.Primary, recursive, instanceId));
+        if (!string.IsNullOrWhiteSpace(secondary))
+            await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(secondary, PhotoSet.Secondary, recursive, instanceId));
 
         _progress.ScanCompleted(instanceId);
     }
