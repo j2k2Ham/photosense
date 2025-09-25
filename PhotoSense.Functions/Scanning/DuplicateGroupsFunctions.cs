@@ -87,7 +87,8 @@ public sealed class ScanGroupingFacade
         perceptualHash = p.PerceptualHash,
         takenOn = p.TakenOn,
         cameraModel = p.CameraModel,
-        set = p.Set.ToString()
+        set = p.Set.ToString(),
+        kept = p.IsKept
     };
 }
 

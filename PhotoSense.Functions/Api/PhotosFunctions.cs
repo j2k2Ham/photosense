@@ -5,9 +5,9 @@ using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Application.Photos.Interfaces;
 using System.Web;
-using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
+using PhotoSense.Application.Scanning.Interfaces;
 
 namespace PhotoSense.Functions.Api;
 
@@ -77,7 +77,8 @@ public class PhotosFunctions
     public async Task<HttpResponseData> DeletePhotoAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "photos/{id:guid}")] HttpRequestData req,
         string id,
-        IPhotoDeletionService deleter)
+        IPhotoDeletionService deleter,
+        IScanLogSink? logSink)
     {
         var resp = req.CreateResponse();
         var physical = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("physical") == "true";
@@ -88,6 +89,7 @@ public class PhotosFunctions
             return resp;
         }
         await deleter.DeleteAsync(new PhotoId(gid), physical);
+        logSink?.Log("audit","Info",$"Deleted photo {gid} physical={physical}");
         resp.StatusCode = HttpStatusCode.NoContent;
         return resp;
     }
@@ -125,18 +127,24 @@ public class PhotosFunctions
     }
 
     [Function("KeepPhoto")]
-    public Task<HttpResponseData> KeepPhotoAsync(
+    public async Task<HttpResponseData> KeepPhotoAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/keep")] HttpRequestData req,
-        string id)
+        string id,
+        IPhotoRepository repo,
+        IScanLogSink? logSink)
     {
         var resp = req.CreateResponse();
-        if (!Guid.TryParse(id, out _))
+        if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
+        var photo = await repo.GetAsync(new PhotoId(gid));
+        if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
+        if (!photo.IsKept)
         {
-            resp.StatusCode = HttpStatusCode.BadRequest;
-            return Task.FromResult(resp);
+            photo.IsKept = true;
+            await repo.AddOrUpdateAsync(photo);
+            logSink?.Log("audit","Info",$"Kept photo {gid}");
         }
         resp.StatusCode = HttpStatusCode.NoContent;
-        return Task.FromResult(resp);
+        return resp;
     }
 
     [Function("MovePhoto")]
@@ -144,7 +152,8 @@ public class PhotosFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/move")] HttpRequestData req,
         string id,
         IPhotoQueryService query,
-        IPhotoRepository repo)
+        IPhotoRepository repo,
+        IScanLogSink? logSink)
     {
         var resp = req.CreateResponse();
         if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
@@ -170,9 +179,11 @@ public class PhotosFunctions
                 CameraModel = photo.CameraModel,
                 Latitude = photo.Latitude,
                 Longitude = photo.Longitude,
-                Set = photo.Set
+                Set = photo.Set,
+                IsKept = photo.IsKept
             };
             await repo.AddOrUpdateAsync(updated);
+            logSink?.Log("audit","Info",$"Moved photo {gid} to {target}");
             resp.StatusCode = HttpStatusCode.NoContent;
         }
         catch (Exception ex)

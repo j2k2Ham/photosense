@@ -1,4 +1,5 @@
-import useSWR from 'swr';
+import useSWR, { mutate } from 'swr';
+import * as signalR from '@microsoft/signalr';
 import type { DuplicateGroupDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
 
 interface GroupPage {
@@ -22,20 +23,45 @@ export function useDuplicateGroups(filter: string, near: boolean, threshold: num
 }
 
 export function connectLogStream(onLine: (l: string)=>void) {
-  const es = new EventSource(`${API_BASE.replace(/\/api$/,'')}/api/scan/logs/stream?follow=true`);
-  es.onmessage = e => { if (e.data) onLine(e.data); };
-  es.onerror = () => { es.close(); };
-  return () => es.close();
+  // Try SignalR first
+  const baseRoot = API_BASE.replace(/\/api$/,'');
+  let disposed = false;
+  (async () => {
+    try {
+      const r = await fetch(`${baseRoot}/api/negotiate`, { method: 'POST' });
+      if (!r.ok) throw new Error('negotiate failed');
+      const info = await r.json();
+      const conn = new signalR.HubConnectionBuilder()
+        .withUrl(info.url, { accessTokenFactory: () => info.accessToken })
+        .withAutomaticReconnect()
+        .build();
+      conn.on('log', (_instanceId: string, ts: string, level: string, msg: string) => {
+        onLine(`${ts} ${level} ${msg}`);
+      });
+      await conn.start();
+      if (disposed) await conn.stop();
+    } catch {
+      if (disposed) return;
+      const es = new EventSource(`${baseRoot}/api/scan/logs/stream?follow=true`);
+      es.onmessage = e => { if (e.data) onLine(e.data); };
+      es.onerror = () => { es.close(); };
+      if (disposed) es.close();
+    }
+  })();
+  return () => { disposed = true; };
 }
 
 export async function keepPhoto(id: string){
   await fetch(`${API_BASE}/photos/${id}/keep`, { method: 'POST' });
+  mutate((key:string)=> key?.includes('/scan/groups'));
 }
 export async function movePhoto(id: string, target: string){
   await fetch(`${API_BASE}/photos/${id}/move?target=${encodeURIComponent(target)}`, { method: 'POST' });
+  mutate((key:string)=> key?.includes('/scan/groups'));
 }
 export async function deletePhoto(id: string){
   await fetch(`${API_BASE}/photos/${id}`, { method: 'DELETE' });
+  mutate((key:string)=> key?.includes('/scan/groups'));
 }
 
 export function useScanProgress(instanceId?: string) {

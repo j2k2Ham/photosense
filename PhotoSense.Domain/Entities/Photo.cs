@@ -15,6 +15,8 @@ public class Photo
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public PhotoSet Set { get; init; }
+    // User decision flags
+    public bool IsKept { get; set; }
     public IReadOnlyCollection<string> Categories => _categories.AsReadOnly();
     private readonly List<string> _categories = new();
     public void AddCategory(string category)
