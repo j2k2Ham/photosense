@@ -25,7 +25,7 @@ Both UIs rely on the *same* domain/application layers. Communication contracts a
 
 ## Running the React UI
 
-```
+```bash
 cd PhotoSense.ReactUI
 npm install
 npm run dev
@@ -33,8 +33,8 @@ npm run dev
 
 Environment vars:
 
-```
-NEXT_PUBLIC_API_BASE=http://localhost:7071/api   # Azure Functions / API base
+```bash
+export NEXT_PUBLIC_API_BASE=http://localhost:7071/api   # Azure Functions / API base
 ```
 
 > For local experimentation before the HTTP API exists, the UI uses mock polling (empty lists). Implement the following endpoints in Functions / Blazor to back the UI:
@@ -65,7 +65,7 @@ Because UIs are isolated projects with no code-level coupling to each other, dep
 
 Run tests (with coverage) from repo root:
 
-```
+```bash
 dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
 ```
 
