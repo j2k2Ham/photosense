@@ -22,5 +22,6 @@
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
     <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
+    <ProjectReference Include="..\PhotoSense.Functions\PhotoSense.Functions.csproj" />
   </ItemGroup>
 </Project>

@@ -10,9 +10,9 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export function useDuplicateGroups(filter: string, near: boolean) {
-  const key = `${API_BASE}/scan/groups?near=${near}&q=${encodeURIComponent(filter||'')}`;
-  return useSWR<DuplicateGroupDto[]>(key, json, { refreshInterval: 4000 });
+export function useDuplicateGroups(filter: string, near: boolean, threshold: number, page: number) {
+  const key = `${API_BASE}/scan/groups?near=${near}&threshold=${threshold}&page=${page}&q=${encodeURIComponent(filter||'')}`;
+  return useSWR<any>(key, json, { refreshInterval: 4000 });
 }
 
 export function useScanProgress(instanceId?: string) {

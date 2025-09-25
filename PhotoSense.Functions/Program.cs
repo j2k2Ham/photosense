@@ -40,6 +40,7 @@ public static class DependencyInjection
         s.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
         s.AddSingleton<IDuplicateGroupingService, DuplicateGroupingService>();
         s.AddSingleton<INearDuplicateService, NearDuplicateService>();
+    s.AddSingleton<ScanGroupingFacade>();
         s.AddSingleton<IScanRequestPublisher, ScanRequestPublisher>();
         s.AddSingleton<IOutboxStore, LiteDbOutboxStore>();
         s.AddSingleton<IIntegrationEventPublisher, OutboxIntegrationEventPublisher>();
