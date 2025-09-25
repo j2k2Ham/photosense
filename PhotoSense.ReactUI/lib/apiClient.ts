@@ -11,8 +11,10 @@ interface GroupPage {
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
 
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth enforced
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(init?.headers||{}) } });
+  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(API_KEY? {'x-api-key':API_KEY}:{}), ...(init?.headers||{}) } });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -52,24 +54,24 @@ export function connectLogStream(onLine: (l: string)=>void) {
 }
 
 export async function keepPhoto(id: string){
-  await fetch(`${API_BASE}/photos/${id}/keep`, { method: 'POST' });
+  await fetch(`${API_BASE}/photos/${id}/keep`, { method: 'POST', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
   mutate((key:string)=> key?.includes('/scan/groups'));
 }
 export async function movePhoto(id: string, target: string){
-  await fetch(`${API_BASE}/photos/${id}/move?target=${encodeURIComponent(target)}`, { method: 'POST' });
+  await fetch(`${API_BASE}/photos/${id}/move?target=${encodeURIComponent(target)}`, { method: 'POST', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
   mutate((key:string)=> key?.includes('/scan/groups'));
 }
 export async function deletePhoto(id: string){
-  await fetch(`${API_BASE}/photos/${id}`, { method: 'DELETE' });
+  await fetch(`${API_BASE}/photos/${id}`, { method: 'DELETE', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
   mutate((key:string)=> key?.includes('/scan/groups'));
 }
 
 export async function bulkKeepBest(){
-  await fetch(`${API_BASE}/photos/bulk/keep-best`, { method: 'POST' });
+  await fetch(`${API_BASE}/photos/bulk/keep-best`, { method: 'POST', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
   mutate((key:string)=> key?.includes('/scan/groups'));
 }
 export async function bulkMoveOthers(target: string){
-  await fetch(`${API_BASE}/photos/bulk/move-others`, { method: 'POST', body: JSON.stringify({ target }), headers:{'Content-Type':'application/json'} });
+  await fetch(`${API_BASE}/photos/bulk/move-others`, { method: 'POST', body: JSON.stringify({ target }), headers:{'Content-Type':'application/json', ...(API_KEY? {'x-api-key':API_KEY}:{})} });
   mutate((key:string)=> key?.includes('/scan/groups'));
 }
 

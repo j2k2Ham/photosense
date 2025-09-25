@@ -23,11 +23,13 @@ public sealed class ScanGroupingFacade
             var groups = await _dups.GetDuplicateGroupsAsync(ct);
             if (!string.IsNullOrWhiteSpace(q))
                 groups = groups.Where(g => g.Photos.Any(p => p.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+            var unfilteredTotal = groups.Count; // before hide-kept filtering
             if (hideKept)
-                groups = groups.Select(g => new PhotoSense.Domain.DTOs.DuplicateGroup(g.Hash, g.Photos.Where(p=>!p.IsKept).ToList()))
-                               .Where(g=>g.Photos.Count>0).ToList();
-            var unfilteredTotal = groups.Count;
-            var total = groups.Count;
+            {
+                groups = groups.Select(g => new PhotoSense.Domain.DTOs.DuplicateGroup(g.Hash, g.Photos.Where(p => !p.IsKept).ToList()))
+                               .Where(g => g.Photos.Count > 0).ToList();
+            }
+            var total = groups.Count; // after filtering
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
             return new
             {
@@ -50,11 +52,13 @@ public sealed class ScanGroupingFacade
             var groups = await _near.GetNearDuplicatesAsync(threshold, ct);
             if (!string.IsNullOrWhiteSpace(q))
                 groups = groups.Where(g => g.Photos.Any(p => p.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
+            var unfilteredTotal = groups.Count; // pre hide-kept
             if (hideKept)
-                groups = groups.Select(g => new PhotoSense.Domain.DTOs.NearDuplicateGroup(g.RepresentativeHash, g.Photos.Where(p=>!p.IsKept).ToList()))
-                               .Where(g=>g.Photos.Count>0).ToList();
-            var unfilteredTotal = groups.Count;
-            var total = groups.Count;
+            {
+                groups = groups.Select(g => new PhotoSense.Domain.DTOs.NearDuplicateGroup(g.RepresentativeHash, g.Photos.Where(p => !p.IsKept).ToList()))
+                               .Where(g => g.Photos.Count > 0).ToList();
+            }
+            var total = groups.Count; // post filtering
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
             return new
             {
