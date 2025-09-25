@@ -115,17 +115,29 @@ public class ScanLogsStubFunction
 {
     // Simple JSON list endpoint retained
     [Function("GetScanLogs")] 
-    public async Task<HttpResponseData> GetLogs([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs")] HttpRequestData req)
-    { var resp = req.CreateResponse(HttpStatusCode.OK); await resp.WriteAsJsonAsync(new[]{new{ts=DateTime.UtcNow,level="Info",message="No active scan."}}); return resp; }
+    public async Task<HttpResponseData> GetLogs([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/{instanceId?}")] HttpRequestData req, string? instanceId, IScanLogSink sink, IScanProgressStore progress)
+    {
+        var snap = progress.GetLatest();
+        var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        var lines = string.IsNullOrWhiteSpace(id)
+            ? new List<object>()
+            : sink.GetRecent(id).Select(l => (object)new { l.ts, l.level, l.message }).ToList();
+        await resp.WriteAsJsonAsync(lines);
+        return resp;
+    }
 
     // Basic SSE stream; in production you might bridge to SignalR or Service Bus
     [Function("GetScanLogsStream")] // GET /api/scan/logs/stream
-    public async Task<HttpResponseData> GetLogsStream([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/stream")] HttpRequestData req)
+    public async Task<HttpResponseData> GetLogsStream([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/stream/{instanceId?}")] HttpRequestData req, string? instanceId, IScanLogSink sink, IScanProgressStore progress)
     {
+        var snap = progress.GetLatest();
+        var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
         var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", "text/event-stream");
-        var lines = new[]{"event: message\n" + $"data: Log stream started {DateTime.UtcNow:o}\n\n"};
-        await resp.WriteStringAsync(string.Join(string.Empty, lines));
+        if (string.IsNullOrWhiteSpace(id)) { await resp.WriteStringAsync("event: message\ndata: No active scan\n\n"); return resp; }
+        var recent = sink.GetRecent(id).Select(l => $"event: log\ndata: {l.ts:o} {l.level} {l.message}\n\n");
+        await resp.WriteStringAsync(string.Join(string.Empty, recent));
         return resp;
     }
 }

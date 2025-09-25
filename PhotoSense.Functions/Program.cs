@@ -14,6 +14,7 @@ using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Application.Scanning;
+using PhotoSense.Infrastructure.Scanning;
 using LiteDB;
 using Microsoft.Extensions.Options; // added for IValidateOptions
 
@@ -48,7 +49,8 @@ public static class DependencyInjection
         s.AddSingleton<IPhotoQueryService, PhotoQueryService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
         s.AddSingleton<IScanProgressStore, InMemoryScanProgressStore>();
-        s.AddSingleton<IScanExecutionService, ScanExecutionService>();
+    s.AddSingleton<IScanExecutionService, ScanExecutionService>();
+    s.AddSingleton<IScanLogSink, InMemoryScanLogSink>();
         return s;
     }
 }

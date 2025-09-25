@@ -11,9 +11,10 @@ public class ScanExecutionService : IScanExecutionService
     private readonly IImageHashingService _hash;
     private readonly IPhotoMetadataExtractor _meta;
     private readonly IScanProgressStore _progress;
+    private readonly IScanLogSink? _log;
 
-    public ScanExecutionService(IPhotoRepository repo, IImageHashingService hash, IPhotoMetadataExtractor meta, IScanProgressStore progress)
-    { _repo = repo; _hash = hash; _meta = meta; _progress = progress; }
+    public ScanExecutionService(IPhotoRepository repo, IImageHashingService hash, IPhotoMetadataExtractor meta, IScanProgressStore progress, IScanLogSink? log = null)
+    { _repo = repo; _hash = hash; _meta = meta; _progress = progress; _log = log; }
 
     public Task<int> CountAsync(string path, bool recursive)
     {
@@ -23,7 +24,8 @@ public class ScanExecutionService : IScanExecutionService
 
     public async Task ProcessAsync(IEnumerable<string> files, PhotoSet set, string instanceId, CancellationToken ct = default)
     {
-        foreach (var file in files)
+        int i = 0; var list = files.ToList();
+        foreach (var file in list)
         {
             ct.ThrowIfCancellationRequested();
             await using var fs = File.OpenRead(file);
@@ -44,6 +46,7 @@ public class ScanExecutionService : IScanExecutionService
             await _meta.ExtractAsync(photo, fs, ct);
             await _repo.AddOrUpdateAsync(photo, ct);
             _progress.IncrementProcessed(instanceId, set == PhotoSet.Primary);
+            if (++i % 10 == 0) _log?.Log(instanceId, "Info", $"Processed {i}/{list.Count} files ({Path.GetFileName(file)})");
         }
     }
 

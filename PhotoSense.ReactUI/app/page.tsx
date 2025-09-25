@@ -43,6 +43,9 @@ export default function HomePage() {
               <div className="ml-auto flex items-center gap-2">
                 <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="btn-secondary h-6 px-2">Prev</button>
                 <button disabled={!dupes.data || page>=dupes.data.totalPages} onClick={()=>setPage(p=>dupes.data? Math.min(dupes.data.totalPages, p+1):p)} className="btn-secondary h-6 px-2">Next</button>
+                {dupes.data && (
+                  <input type="number" min={1} max={dupes.data.totalPages} value={page} onChange={e=>{ const v = parseInt(e.target.value)||1; setPage(Math.min(Math.max(1,v), dupes.data!.totalPages)); }} className="w-16 bg-neutral-800 border border-neutral-700 rounded px-1 h-6 text-[11px]" />
+                )}
               </div>
               <button className="btn-secondary h-6 px-2">Keep Best</button>
               <button className="btn-secondary h-6 px-2">Move Others</button>
