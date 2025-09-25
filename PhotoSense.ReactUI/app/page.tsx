@@ -5,7 +5,8 @@ import { DuplicateGrid } from '../components/DuplicateGrid';
 import { PreviewPanel } from '../components/PreviewPanel';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { LogsPanel } from '../components/LogsPanel';
-import { useDuplicateGroups, useScanProgress, connectLogStream, keepPhoto, movePhoto } from '../lib/apiClient';
+import { useDuplicateGroups, useScanProgress, connectLogStream, keepPhoto, movePhoto, bulkKeepBest, bulkMoveOthers } from '../lib/apiClient';
+import { useToasts, Toaster } from '../components/Toaster';
 import type { PhotoDto } from '../types';
 
 export default function HomePage() {
@@ -19,6 +20,7 @@ export default function HomePage() {
   const dupes = useDuplicateGroups(filter, nearMode, threshold, page, hideKept);
   const progress = useScanProgress(instanceId);
   const [logs, setLogs] = useState<string[]>(["Ready."]);
+  const { toasts, push, remove } = useToasts();
   React.useEffect(()=>{
     const dispose = connectLogStream(line => setLogs(l=>[...l.slice(-199), line]));
     return dispose;
@@ -39,7 +41,7 @@ export default function HomePage() {
             <div className="text-[11px] px-3 py-2 border-b border-neutral-700 flex items-center gap-4">
               <span>Groups: {dupes.data?.items ? dupes.data.items.length : (dupes.data as any)?.length ?? 0}</span>
               {dupes.data && (
-                <span className="text-neutral-500">Page {dupes.data.page}/{dupes.data.totalPages} • Total {dupes.data.total}</span>
+                <span className="text-neutral-500">Page {dupes.data.page}/{dupes.data.totalPages} • Total {dupes.data.total}{dupes.data.unfilteredTotal && dupes.data.unfilteredTotal!==dupes.data.total ? ` (from ${dupes.data.unfilteredTotal})`:''}</span>
               )}
               <div className="ml-auto flex items-center gap-2">
                 <button disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="btn-secondary h-6 px-2">Prev</button>
@@ -49,21 +51,12 @@ export default function HomePage() {
                 )}
               </div>
               <label className="flex items-center gap-1 text-neutral-400"><input type="checkbox" checked={hideKept} onChange={e=>{setHideKept(e.target.checked); setPage(1);}} /> Hide kept</label>
-              <button className="btn-secondary h-6 px-2" onClick={()=>{
-                if (!dupes.data) return;
-                // Keep first photo in each group
-                dupes.data.items.forEach(g=>{ if (g.photos.length>0 && !g.photos[0].kept) keepPhoto(g.photos[0].id); });
-              }}>Keep Best</button>
+              <button className="btn-secondary h-6 px-2" onClick={async ()=>{ await bulkKeepBest(); push('Bulk: kept best photos','success'); }}>Keep Best</button>
               <button className="btn-secondary h-6 px-2" onClick={async ()=>{
-                if (!dupes.data) return;
                 const target = prompt('Target folder for others');
                 if (!target) return;
-                for (const g of dupes.data.items){
-                  const photos = g.photos;
-                  if (photos.length<=1) continue;
-                  const others = photos.slice(1);
-                  for (const p of others){ await movePhoto(p.id, target); }
-                }
+                await bulkMoveOthers(target);
+                push('Bulk: moved others','success');
               }}>Move Others</button>
             </div>
             <DuplicateGrid groups={(dupes.data?.items as any) || ([] as any)} onSelect={p=>setSelected(p)} />
@@ -74,6 +67,7 @@ export default function HomePage() {
             <LogsPanel lines={logs} />
           </div>
         </div>
+        <Toaster toasts={toasts} remove={remove} />
       </div>
     </div>
   );

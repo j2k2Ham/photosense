@@ -4,7 +4,7 @@ import type { DuplicateGroupDto, ScanProgressSnapshotDto, StartScanRequest } fro
 
 interface GroupPage {
   mode: 'exact' | 'near';
-  page: number; pageSize: number; total: number; totalPages: number; threshold?: number;
+  page: number; pageSize: number; total: number; totalPages: number; threshold?: number; unfilteredTotal?: number;
   items: DuplicateGroupDto[];
 }
 
@@ -61,6 +61,15 @@ export async function movePhoto(id: string, target: string){
 }
 export async function deletePhoto(id: string){
   await fetch(`${API_BASE}/photos/${id}`, { method: 'DELETE' });
+  mutate((key:string)=> key?.includes('/scan/groups'));
+}
+
+export async function bulkKeepBest(){
+  await fetch(`${API_BASE}/photos/bulk/keep-best`, { method: 'POST' });
+  mutate((key:string)=> key?.includes('/scan/groups'));
+}
+export async function bulkMoveOthers(target: string){
+  await fetch(`${API_BASE}/photos/bulk/move-others`, { method: 'POST', body: JSON.stringify({ target }), headers:{'Content-Type':'application/json'} });
   mutate((key:string)=> key?.includes('/scan/groups'));
 }
 

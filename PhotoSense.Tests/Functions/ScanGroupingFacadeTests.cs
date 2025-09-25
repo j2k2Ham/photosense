@@ -1,3 +1,4 @@
+// removed stray line introduced by edit
 using Xunit;
 using Moq;
 using PhotoSense.Application.Scanning.Interfaces;

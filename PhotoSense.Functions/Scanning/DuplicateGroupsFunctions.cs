@@ -26,6 +26,7 @@ public sealed class ScanGroupingFacade
             if (hideKept)
                 groups = groups.Select(g => new PhotoSense.Domain.DTOs.DuplicateGroup(g.Hash, g.Photos.Where(p=>!p.IsKept).ToList()))
                                .Where(g=>g.Photos.Count>0).ToList();
+            var unfilteredTotal = groups.Count;
             var total = groups.Count;
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
             return new
@@ -33,6 +34,7 @@ public sealed class ScanGroupingFacade
                 mode = "exact",
                 page,
                 pageSize,
+                unfilteredTotal,
                 total,
                 totalPages = (int)Math.Ceiling(total / (double)pageSize),
                 items = pageItems.Select(g => new
@@ -51,6 +53,7 @@ public sealed class ScanGroupingFacade
             if (hideKept)
                 groups = groups.Select(g => new PhotoSense.Domain.DTOs.NearDuplicateGroup(g.RepresentativeHash, g.Photos.Where(p=>!p.IsKept).ToList()))
                                .Where(g=>g.Photos.Count>0).ToList();
+            var unfilteredTotal = groups.Count;
             var total = groups.Count;
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
             return new
@@ -59,6 +62,7 @@ public sealed class ScanGroupingFacade
                 threshold,
                 page,
                 pageSize,
+                unfilteredTotal,
                 total,
                 totalPages = (int)Math.Ceiling(total / (double)pageSize),
                 items = pageItems.Select(g => new

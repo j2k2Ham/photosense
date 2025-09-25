@@ -19,6 +19,7 @@ public class PhotosFunctions
         IAuditRepository audit)
     {
         var resp = req.CreateResponse(HttpStatusCode.OK);
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         var items = await audit.RecentAsync();
         await resp.WriteAsJsonAsync(items.Select(a => new { a.UtcTimestamp, a.Action, a.PhotoId, a.Details }));
         return resp;
@@ -221,5 +222,96 @@ public class PhotosFunctions
         var expected = Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY");
         if (string.IsNullOrEmpty(expected)) return true; // if not set, allow
         return key == expected;
+    }
+
+    [Function("BulkKeepBest")]
+    public async Task<HttpResponseData> BulkKeepBestAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/keep-best")] HttpRequestData req,
+        IDuplicateGroupingService groups,
+        IPhotoRepository repo,
+        IAuditRepository audit,
+        IScanLogSink? log)
+    {
+        var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
+        var dupGroups = await groups.GetDuplicateGroupsAsync();
+        int changed = 0;
+        foreach (var g in dupGroups)
+        {
+            var best = g.Photos.FirstOrDefault(p=>!p.IsKept);
+            if (best != null)
+            {
+                best.IsKept = true;
+                await repo.AddOrUpdateAsync(best);
+                await audit.AddAsync(new AuditEntry{ Action="KeepBest", PhotoId=best.Id.ToString(), Details=g.Hash });
+                log?.Log("audit","Info",$"Bulk keep-best {best.Id}");
+                changed++;
+            }
+        }
+        resp.StatusCode = HttpStatusCode.OK;
+        await resp.WriteAsJsonAsync(new { kept = changed });
+        return resp;
+    }
+
+    [Function("BulkMoveOthers")]
+    public async Task<HttpResponseData> BulkMoveOthersAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/move-others")] HttpRequestData req,
+        IDuplicateGroupingService groups,
+        IPhotoRepository repo,
+        IAuditRepository audit,
+        IScanLogSink? log)
+    {
+        var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
+        string body = await new StreamReader(req.Body).ReadToEndAsync();
+        string? target = null;
+        if (!string.IsNullOrWhiteSpace(body))
+        {
+            try { var json = System.Text.Json.JsonDocument.Parse(body); if (json.RootElement.TryGetProperty("target", out var t)) target = t.GetString(); } catch { }
+        }
+        target ??= System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("target");
+        if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) { resp.StatusCode = HttpStatusCode.BadRequest; await resp.WriteStringAsync("Missing or invalid target"); return resp; }
+        var dupGroups = await groups.GetDuplicateGroupsAsync();
+        int moved = 0;
+        foreach (var g in dupGroups)
+        {
+            var photos = g.Photos.ToList();
+            if (photos.Count <= 1) continue;
+            var keep = photos.First();
+            foreach (var other in photos.Skip(1))
+            {
+                try
+                {
+                    var newPath = Path.Combine(target, other.FileName);
+                    File.Move(other.SourcePath, newPath, true);
+                    var updated = new Photo
+                    {
+                        Id = other.Id,
+                        SourcePath = newPath,
+                        FileName = other.FileName,
+                        FileSizeBytes = other.FileSizeBytes,
+                        ContentHash = other.ContentHash,
+                        PerceptualHash = other.PerceptualHash,
+                        TakenOn = other.TakenOn,
+                        CameraModel = other.CameraModel,
+                        Latitude = other.Latitude,
+                        Longitude = other.Longitude,
+                        Set = other.Set,
+                        IsKept = other.IsKept
+                    };
+                    await repo.AddOrUpdateAsync(updated);
+                    await audit.AddAsync(new AuditEntry{ Action="Move", PhotoId=other.Id.ToString(), Details=newPath });
+                    log?.Log("audit","Info",$"Bulk moved {other.Id} -> {newPath}");
+                    moved++;
+                }
+                catch (Exception ex)
+                {
+                    log?.Log("audit","Error",$"Bulk move failed {other.Id}: {ex.Message}");
+                }
+            }
+        }
+        resp.StatusCode = HttpStatusCode.OK;
+        await resp.WriteAsJsonAsync(new { moved });
+        return resp;
     }
 }
