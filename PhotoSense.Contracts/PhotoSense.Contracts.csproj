@@ -3,5 +3,27 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+
+    <!-- NuGet package metadata -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>PhotoSense.Contracts</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>PhotoSense Team</Authors>
+    <Company>PhotoSense</Company>
+    <Description>Shared contract DTOs for PhotoSense duplicate and near-duplicate photo grouping APIs.</Description>
+    <PackageTags>photos;duplicates;dedupe;contracts;dto</PackageTags>
+    <RepositoryUrl>https://github.com/your-org/photosense</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/your-org/photosense</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Ensure README is packed -->
+    <None Include="..\README.md" Pack="true" PackagePath="/" Link="README.md" />
+  </ItemGroup>
 </Project>

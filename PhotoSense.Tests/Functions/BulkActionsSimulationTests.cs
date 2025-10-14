@@ -2,6 +2,7 @@ using Xunit;
 using Moq;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Functions.Scanning;
+using PhotoSense.Contracts.Duplicates;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 using System.Collections.Generic;
@@ -22,7 +23,7 @@ public class BulkActionsSimulationTests
         p1.IsKept = true;
         var facade = new ScanGroupingFacade(dups.Object, near.Object);
     var result = await facade.BuildAsync(false, 12, null, true, 1, 10, default); // hideKept removes p1, leaving group with p2
-    var page = Assert.IsType<ExactDuplicateGroupsPageDto>(result);
+    var page = Assert.IsType<PhotoSense.Contracts.Duplicates.ExactDuplicateGroupsPageDto>(result);
     var first = page.Items[0];
     Assert.Single(first.Photos);
     }

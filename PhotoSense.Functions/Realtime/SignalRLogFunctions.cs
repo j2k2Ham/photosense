@@ -1,6 +1,9 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+// SignalR extension temporarily disabled; wrap references in conditional compilation.
+#if ENABLE_SIGNALR
 using Microsoft.Azure.Functions.Worker.SignalRService;
+#endif
 using System.Net;
 using PhotoSense.Infrastructure.Scanning;
 
@@ -8,6 +11,7 @@ namespace PhotoSense.Functions.Realtime;
 
 public static class SignalRLogFunctions
 {
+#if ENABLE_SIGNALR
     [Function("NegotiateScanLogs")]
     public static async Task<HttpResponseData> Negotiate(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", "get", Route = "negotiate")] HttpRequestData req,
@@ -18,7 +22,6 @@ public static class SignalRLogFunctions
         return resp;
     }
 
-    // Timer flush to push any pending log lines to clients
     [Function("BroadcastScanLogs")]
     public static async Task Broadcast(
         [TimerTrigger("*/5 * * * * *")] TimerInfo timer,
@@ -36,4 +39,5 @@ public static class SignalRLogFunctions
             });
         }
     }
+#endif
 }

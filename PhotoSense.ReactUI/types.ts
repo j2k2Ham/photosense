@@ -1,10 +1,24 @@
 // Shared DTO-type definitions aligned with backend Domain / Application contracts.
-export interface DuplicateGroupDto {
+export interface BaseDuplicateGroupDto {
   key: string;
   photos: PhotoDto[];
-  perceptual?: boolean;
-  distance?: number; // for near duplicates
 }
+export interface ExactDuplicateGroupDto extends BaseDuplicateGroupDto {
+  perceptual: false;
+}
+export interface NearDuplicateGroupDto extends BaseDuplicateGroupDto {
+  perceptual: true;
+  distance: number; // guaranteed for near
+}
+export type DuplicateGroupDto = ExactDuplicateGroupDto | NearDuplicateGroupDto;
+
+export interface ExactGroupsPageDto {
+  mode: 'exact'; page: number; pageSize: number; total: number; totalPages: number; unfilteredTotal: number; items: ExactDuplicateGroupDto[];
+}
+export interface NearGroupsPageDto {
+  mode: 'near'; threshold: number; page: number; pageSize: number; total: number; totalPages: number; unfilteredTotal: number; items: NearDuplicateGroupDto[];
+}
+export type GroupsPageDto = ExactGroupsPageDto | NearGroupsPageDto;
 
 export interface PhotoDto {
   id: string;

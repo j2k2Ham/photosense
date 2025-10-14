@@ -1,12 +1,8 @@
 import useSWR, { mutate } from 'swr';
 import * as signalR from '@microsoft/signalr';
-import type { DuplicateGroupDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
+import type { GroupsPageDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
 
-interface GroupPage {
-  mode: 'exact' | 'near';
-  page: number; pageSize: number; total: number; totalPages: number; threshold?: number; unfilteredTotal?: number;
-  items: DuplicateGroupDto[];
-}
+// GroupsPageDto type imported; no local interface needed.
 
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
@@ -21,7 +17,7 @@ async function json<T>(url: string, init?: RequestInit): Promise<T> {
 
 export function useDuplicateGroups(filter: string, near: boolean, threshold: number, page: number, hideKept: boolean) {
   const key = `${API_BASE}/scan/groups?near=${near}&threshold=${threshold}&page=${page}&hideKept=${hideKept}&q=${encodeURIComponent(filter||'')}`;
-  return useSWR<GroupPage>(key, json, { refreshInterval: 5000 });
+  return useSWR<GroupsPageDto>(key, json, { refreshInterval: 5000 });
 }
 
 export function connectLogStream(onLine: (l: string)=>void) {

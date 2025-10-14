@@ -7,7 +7,7 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
 using System.Security.Cryptography;
 using System.Text;
-using PhotoSense.Contracts.Duplicates; // for shared duplicate group DTOs
+using D = PhotoSense.Contracts.Duplicates; // alias for shared duplicate group DTOs
 
 namespace PhotoSense.Functions.Scanning;
 
@@ -17,7 +17,7 @@ public sealed class ScanGroupingFacade
     private readonly INearDuplicateService _near;
     public ScanGroupingFacade(IDuplicateGroupingService dups, INearDuplicateService near) { _dups = dups; _near = near; }
 
-    public async Task<DuplicateGroupsPageDto> BuildAsync(bool near, int threshold, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
+    public async Task<D.DuplicateGroupsPageDto> BuildAsync(bool near, int threshold, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
     {
         if (!near)
         {
@@ -32,8 +32,8 @@ public sealed class ScanGroupingFacade
             }
             var total = groups.Count; // after filtering
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            var items = pageItems.Select(g => new ExactGroupItemDto(g.Hash, g.Photos.Select(MapPhoto).ToList())).ToList();
-            return new ExactDuplicateGroupsPageDto(page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
+            var items = pageItems.Select(g => new D.ExactGroupItemDto(g.Hash, g.Photos.Select(MapPhoto).ToList())).ToList();
+            return new D.ExactDuplicateGroupsPageDto(page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
         }
         else
         {
@@ -48,12 +48,12 @@ public sealed class ScanGroupingFacade
             }
             var total = groups.Count; // post filtering
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            var items = pageItems.Select(g => new NearGroupItemDto(
+            var items = pageItems.Select(g => new D.NearGroupItemDto(
                 g.RepresentativeHash,
                 g.Photos.Select(MapPhoto).ToList(),
                 g.Photos.Max(p => Hamming(g.RepresentativeHash, p.PerceptualHash ?? g.RepresentativeHash))
             )).ToList();
-            return new NearDuplicateGroupsPageDto(threshold, page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
+            return new D.NearDuplicateGroupsPageDto(threshold, page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
         }
     }
 
@@ -68,9 +68,9 @@ public sealed class ScanGroupingFacade
         return d;
     }
 
-    private static PhotoItemDto MapPhoto(PhotoSense.Domain.Entities.Photo p) => new()
+    private static D.PhotoItemDto MapPhoto(PhotoSense.Domain.Entities.Photo p) => new()
     {
-        Id = p.Id?.Value,
+    Id = p.Id.Value,
         FileName = p.FileName,
         SourcePath = p.SourcePath,
         FileSizeBytes = p.FileSizeBytes,
@@ -104,19 +104,11 @@ public class DuplicateGroupsFunctions
         // Compute weak ETag for basic caching
         try
         {
-            var itemsProp = payload.GetType().GetProperty("items")?.GetValue(payload) as IEnumerable<object>;
             var sb = new StringBuilder();
-            if (itemsProp != null)
-            {
-                foreach (var it in itemsProp.Take(5))
-                {
-                    var keyVal = it.GetType().GetProperty("key")?.GetValue(it)?.ToString();
-                    if (keyVal != null) sb.Append(keyVal).Append('|');
-                }
-            }
+            foreach (var it in payload.Items.Take(5)) sb.Append(it.Key).Append('|');
             using var md5 = MD5.Create();
             var hash = Convert.ToHexString(md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString())));
-            resp.Headers.Add("ETag", $"W/\"{(near?"near":"exact")}-{page}-{hash}\"");
+            resp.Headers.Add("ETag", $"W/\"{payload.Mode}-{page}-{hash}\"");
         }
         catch { /* non-fatal */ }
         await resp.WriteAsJsonAsync(payload);
