@@ -1,10 +1,10 @@
 {
-  "timestamp": "2025-10-14T13:08:01.9740984-04:00",
+  "timestamp": "2025-10-14T13:32:33.2590348-04:00",
   "functionsUrl": "http://localhost:7071",
   "reactUrl": "http://localhost:3000",
   "includeBlazor": false,
   "usedDotNetFunctions": false,
-  "pid": 9640,
-  "diagnostics": true,
+  "pid": 1436,
+  "diagnostics": false,
   "health": {}
 }
