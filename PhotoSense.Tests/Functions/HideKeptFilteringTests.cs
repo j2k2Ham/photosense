@@ -19,10 +19,9 @@ public class HideKeptFilteringTests
         var other = new Photo { SourcePath="b", FileName="b", FileSizeBytes=1, Set=PhotoSet.Primary, ContentHash="h1"};
         dups.Setup(d => d.GetDuplicateGroupsAsync(default)).ReturnsAsync(new List<PhotoSense.Domain.DTOs.DuplicateGroup>{ new("h1", new List<Photo>{ keptPhoto, other }) });
         var facade = new ScanGroupingFacade(dups.Object, near.Object);
-        var result = await facade.BuildAsync(false, 12, null, true, 1, 10, default);
-        var items = (IEnumerable<object>)result.GetType().GetProperty("items")!.GetValue(result)!;
-        var first = items.First();
-        var photos = (IEnumerable<object>)first.GetType().GetProperty("photos")!.GetValue(first)!;
-        Assert.Single(photos); // kept removed
+    var result = await facade.BuildAsync(false, 12, null, true, 1, 10, default);
+    var page = Assert.IsType<ExactDuplicateGroupsPageDto>(result);
+    var first = page.Items[0];
+    Assert.Single(first.Photos); // kept removed
     }
 }

@@ -23,8 +23,9 @@ public class ScanGroupingFacadeTests
         });
     var facade = new ScanGroupingFacade(dups.Object, near.Object);
     var result = await facade.BuildAsync(false, 12, null, false, 1, 1, default);
-        Assert.Equal(1, (int)result.GetType().GetProperty("page")!.GetValue(result)!);
-        Assert.Equal(1, (int)result.GetType().GetProperty("pageSize")!.GetValue(result)!);
+        var exact = Assert.IsType<ExactDuplicateGroupsPageDto>(result);
+        Assert.Equal(1, exact.Page);
+        Assert.Equal(1, exact.PageSize);
     }
 
     [Fact]
@@ -37,7 +38,7 @@ public class ScanGroupingFacadeTests
         nearSvc.Setup(n => n.GetNearDuplicatesAsync(12, default)).ReturnsAsync(new List<PhotoSense.Domain.DTOs.NearDuplicateGroup>{ new(new string('a',32), new List<Photo>{p1,p2}) });
     var facade = new ScanGroupingFacade(dups.Object, nearSvc.Object);
     var result = await facade.BuildAsync(true, 12, null, false, 1, 10, default);
-    var itemsObj = result.GetType().GetProperty("items")!.GetValue(result)!;
-    Assert.NotNull(itemsObj);
+    var nearPage = Assert.IsType<NearDuplicateGroupsPageDto>(result);
+    Assert.True(nearPage.Items.Count > 0);
     }
 }

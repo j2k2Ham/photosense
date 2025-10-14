@@ -7,6 +7,7 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
 using System.Security.Cryptography;
 using System.Text;
+using PhotoSense.Contracts.Duplicates; // for shared duplicate group DTOs
 
 namespace PhotoSense.Functions.Scanning;
 
@@ -16,7 +17,7 @@ public sealed class ScanGroupingFacade
     private readonly INearDuplicateService _near;
     public ScanGroupingFacade(IDuplicateGroupingService dups, INearDuplicateService near) { _dups = dups; _near = near; }
 
-    public async Task<object> BuildAsync(bool near, int threshold, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
+    public async Task<DuplicateGroupsPageDto> BuildAsync(bool near, int threshold, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
     {
         if (!near)
         {
@@ -31,21 +32,8 @@ public sealed class ScanGroupingFacade
             }
             var total = groups.Count; // after filtering
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            return new
-            {
-                mode = "exact",
-                page,
-                pageSize,
-                unfilteredTotal,
-                total,
-                totalPages = (int)Math.Ceiling(total / (double)pageSize),
-                items = pageItems.Select(g => new
-                {
-                    key = g.Hash,
-                    photos = g.Photos.Select(MapPhoto).ToList(),
-                    perceptual = false
-                })
-            };
+            var items = pageItems.Select(g => new ExactGroupItemDto(g.Hash, g.Photos.Select(MapPhoto).ToList())).ToList();
+            return new ExactDuplicateGroupsPageDto(page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
         }
         else
         {
@@ -60,23 +48,12 @@ public sealed class ScanGroupingFacade
             }
             var total = groups.Count; // post filtering
             var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            return new
-            {
-                mode = "near",
-                threshold,
-                page,
-                pageSize,
-                unfilteredTotal,
-                total,
-                totalPages = (int)Math.Ceiling(total / (double)pageSize),
-                items = pageItems.Select(g => new
-                {
-                    key = g.RepresentativeHash,
-                    photos = g.Photos.Select(MapPhoto).ToList(),
-                    perceptual = true,
-                    distance = g.Photos.Max(p => Hamming(g.RepresentativeHash, p.PerceptualHash ?? g.RepresentativeHash))
-                })
-            };
+            var items = pageItems.Select(g => new NearGroupItemDto(
+                g.RepresentativeHash,
+                g.Photos.Select(MapPhoto).ToList(),
+                g.Photos.Max(p => Hamming(g.RepresentativeHash, p.PerceptualHash ?? g.RepresentativeHash))
+            )).ToList();
+            return new NearDuplicateGroupsPageDto(threshold, page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
         }
     }
 
@@ -91,18 +68,18 @@ public sealed class ScanGroupingFacade
         return d;
     }
 
-    private static object MapPhoto(PhotoSense.Domain.Entities.Photo p) => new
+    private static PhotoItemDto MapPhoto(PhotoSense.Domain.Entities.Photo p) => new()
     {
-        id = p.Id,
-        fileName = p.FileName,
-        sourcePath = p.SourcePath,
-        fileSizeBytes = p.FileSizeBytes,
-        contentHash = p.ContentHash,
-        perceptualHash = p.PerceptualHash,
-        takenOn = p.TakenOn,
-        cameraModel = p.CameraModel,
-        set = p.Set.ToString(),
-        kept = p.IsKept
+        Id = p.Id?.Value,
+        FileName = p.FileName,
+        SourcePath = p.SourcePath,
+        FileSizeBytes = p.FileSizeBytes,
+        ContentHash = p.ContentHash,
+        PerceptualHash = p.PerceptualHash,
+        TakenOn = p.TakenOn,
+        CameraModel = p.CameraModel,
+        Set = p.Set.ToString(),
+        Kept = p.IsKept
     };
 }
 

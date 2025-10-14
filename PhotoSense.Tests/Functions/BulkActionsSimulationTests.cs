@@ -21,10 +21,9 @@ public class BulkActionsSimulationTests
         // simulate bulk keep best by setting first kept then rebuild
         p1.IsKept = true;
         var facade = new ScanGroupingFacade(dups.Object, near.Object);
-        var result = await facade.BuildAsync(false, 12, null, true, 1, 10, default); // hideKept removes p1, leaving group with p2
-        var items = (IEnumerable<object>)result.GetType().GetProperty("items")!.GetValue(result)!;
-        var first = items.First();
-        var photos = (IEnumerable<object>)first.GetType().GetProperty("photos")!.GetValue(first)!;
-        Assert.Single(photos);
+    var result = await facade.BuildAsync(false, 12, null, true, 1, 10, default); // hideKept removes p1, leaving group with p2
+    var page = Assert.IsType<ExactDuplicateGroupsPageDto>(result);
+    var first = page.Items[0];
+    Assert.Single(first.Photos);
     }
 }
