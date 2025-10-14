@@ -20,13 +20,17 @@ export function useDuplicateGroups(filter: string, near: boolean, threshold: num
   return useSWR<GroupsPageDto>(key, json, { refreshInterval: 5000 });
 }
 
+/**
+ * Deprecated. Prefer useScanLogs hook in useScanLogs.ts which handles SignalR vs REST polling.
+ * Kept for backward compatibility for any existing components.
+ */
 export function connectLogStream(onLine: (l: string)=>void) {
-  // Try SignalR first
   const baseRoot = API_BASE.replace(/\/api$/,'');
   let disposed = false;
   (async () => {
     try {
-      const r = await fetch(`${baseRoot}/api/negotiate`, { method: 'POST' });
+      // Updated negotiate route path to match backend (scan/logs/negotiate)
+      const r = await fetch(`${baseRoot}/api/scan/logs/negotiate`, { method: 'POST' });
       if (!r.ok) throw new Error('negotiate failed');
       const info = await r.json();
       const conn = new signalR.HubConnectionBuilder()
@@ -40,10 +44,21 @@ export function connectLogStream(onLine: (l: string)=>void) {
       if (disposed) await conn.stop();
     } catch {
       if (disposed) return;
-      const es = new EventSource(`${baseRoot}/api/scan/logs/stream?follow=true`);
-      es.onmessage = e => { if (e.data) onLine(e.data); };
-      es.onerror = () => { es.close(); };
-      if (disposed) es.close();
+      // Fallback to simple polling REST endpoint as SSE stream not implemented.
+      const poll = async () => {
+        if (disposed) return;
+        try {
+          const res = await fetch(`${baseRoot}/api/scan/logs?limit=200`);
+          if (res.ok) {
+            const json = await res.json();
+            for (const i of json.items ?? []) {
+              onLine(`${i.timestamp} ${i.level} ${i.message}`);
+            }
+          }
+        } catch {/* ignore */}
+        if (!disposed) setTimeout(poll, 1500);
+      };
+      poll();
     }
   })();
   return () => { disposed = true; };

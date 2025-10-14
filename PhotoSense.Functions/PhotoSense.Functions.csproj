@@ -5,6 +5,7 @@
     <OutputType>Exe</OutputType>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);ENABLE_SIGNALR</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="host.json" />

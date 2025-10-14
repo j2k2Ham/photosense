@@ -25,4 +25,9 @@
     <ProjectReference Include="..\PhotoSense.Functions\PhotoSense.Functions.csproj" />
     <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Exclude deprecated integration test that relied on complex Azure Functions abstractions -->
+    <Compile Remove="Functions\GetScanLogsFunctionTests.cs" />
+    <None Include="Functions\GetScanLogsFunctionTests.cs" />
+  </ItemGroup>
 </Project>

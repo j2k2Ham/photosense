@@ -76,6 +76,40 @@
 			"command": "host start",
 			"isBackground": true,
 			"problemMatcher": "$func-dotnet-watch"
+		},
+		{
+			"label": "build:solution",
+			"type": "shell",
+			"command": "dotnet build PhotoSense.sln",
+			"group": "build",
+			"problemMatcher": ["$msCompile"],
+			"presentation": { "reveal": "silent", "panel": "dedicated" }
+		},
+		{
+			"label": "run:react",
+			"type": "shell",
+			"command": "npm run dev",
+			"options": { "cwd": "${workspaceFolder}/PhotoSense.ReactUI" },
+			"problemMatcher": []
+		},
+		{
+			"label": "run:functions (core tools)",
+			"type": "shell",
+			"command": "func start --csharp --port 7071 --script-root PhotoSense.Functions/bin/Debug/net8.0",
+			"dependsOn": ["build:solution"],
+			"problemMatcher": []
+		},
+		{
+			"label": "run:functions+react",
+			"type": "shell",
+			"command": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1 -Open",
+			"problemMatcher": []
+		},
+		{
+			"label": "dev:start",
+			"type": "shell",
+			"command": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1 -Open",
+			"problemMatcher": []
 		}
 	]
 }
