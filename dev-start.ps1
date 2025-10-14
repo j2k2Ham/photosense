@@ -45,7 +45,15 @@ param(
   [int]$FunctionsPort = 7071,
   [switch]$UseWatch,
   [switch]$Open,
-  [switch]$IncludeBlazor
+  [switch]$IncludeBlazor,
+  [switch]$ForceUnlock,
+  [switch]$UseDotNetFunctions,
+  [int]$FunctionsRetry = 2,
+  [int]$ReactBasePort = 3000,
+  [int]$ReactPortScan = 10,
+  [switch]$Diagnostics,
+  [int]$HealthRetry = 5,
+  [int]$HealthIntervalMs = 800
 )
 
 $ErrorActionPreference = 'Stop'
@@ -85,7 +93,59 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
 if($Clean){ Write-Section 'Cleaning solution'; dotnet clean PhotoSense.sln }
-if(-not $NoBuild){ Write-Section 'Building solution'; dotnet build PhotoSense.sln | Out-Null }
+
+# Enhancement B: Optionally kill stale Blazor processes holding file locks
+if($ForceUnlock){
+  Write-Section 'Force unlocking stale processes (Blazor/React)'
+  # Kill Blazor hosts
+  Get-Process | Where-Object { $_.ProcessName -like 'PhotoSense.BlazorServer*' -or ($_.ProcessName -eq 'dotnet' -and $_.MainWindowTitle -like '*Blazor*') } | ForEach-Object {
+    try { Write-Host "Killing Blazor PID $($_.Id) ($($_.ProcessName))" -ForegroundColor DarkYellow; Stop-Process -Id $_.Id -Force } catch { Write-Warning "Failed to kill PID $($_.Id): $($_.Exception.Message)" }
+  }
+  # Kill Node processes occupying common React ports
+  function Get-PortPids($port){
+    try {
+      if(Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue){
+        Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -ErrorAction SilentlyContinue
+      } else {
+        netstat -ano | Select-String -Pattern ":$port\s" | ForEach-Object { ($_ -split '\s+')[-1] } | Where-Object { $_ -match '^\d+$' } | Select-Object -Unique
+      }
+    } catch { @() }
+  }
+  for($p=$ReactBasePort; $p -lt ($ReactBasePort + $ReactPortScan); $p++){
+    $pids = Get-PortPids $p
+    foreach($portPid in $pids){
+      try {
+        $proc = Get-Process -Id $portPid -ErrorAction SilentlyContinue
+        if($proc -and ($proc.ProcessName -like 'node*' -or $proc.ProcessName -eq 'cmd' -or $proc.ProcessName -eq 'pwsh')){
+          Write-Host "Killing process $portPid holding port $p ($($proc.ProcessName))" -ForegroundColor DarkYellow
+          Stop-Process -Id $portPid -Force
+        }
+      } catch { }
+    }
+  }
+}
+
+# Enhancement C: Build subset unless Blazor explicitly requested
+if(-not $NoBuild){
+  if($IncludeBlazor){
+    Write-Section 'Building full solution (including Blazor)'
+    dotnet build PhotoSense.sln
+  } else {
+    Write-Section 'Building core projects (excluding Blazor)'
+    $projects = @(
+      'PhotoSense.Domain/PhotoSense.Domain.csproj',
+      'PhotoSense.Contracts/PhotoSense.Contracts.csproj',
+      'PhotoSense.Application/PhotoSense.Application.csproj',
+      'PhotoSense.Infrastructure/PhotoSense.Infrastructure.csproj',
+      'PhotoSense.Functions/PhotoSense.Functions.csproj',
+      'PhotoSense.ReactUI/PhotoSense.ReactUI.csproj'  # placeholder if we add a backend build for shared TS generation later
+    ) | Where-Object { Test-Path $_ }
+    foreach($p in $projects){
+      Write-Host "-> building $p" -ForegroundColor Gray
+      dotnet build $p
+    }
+  }
+}
 
 # Ensure photo storage directories exist (paths from local.settings.json PhotoStorage section)
 $photoRoot = Join-Path $root 'PhotoSense.Functions'
@@ -96,9 +156,44 @@ $null = New-Item -ItemType Directory -Force -Path $secondary | Out-Null
 
 Write-Section 'Starting services'
 
-# Functions
-$funcCmd = "func start --csharp --port $FunctionsPort --script-root $photoRoot/bin/Debug/net8.0"
-$funcProc = Start-ProcessLogged -Name 'FUNC' -Command $funcCmd -WorkingDirectory $photoRoot -Color Yellow
+function Get-FreePort([int]$start,[int]$count){
+  for($p=$start; $p -lt ($start+$count); $p++){
+    $listener = $null
+    try {
+      $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback,$p)
+      $listener.Start(); $listener.Stop(); return $p
+    } catch { if($listener){ try { $listener.Stop() } catch {} } }
+  }
+  throw "No free port in range $start - $(($start+$count-1))"
+}
+
+# Determine React port before launching Next.js to avoid its auto-increment log spam
+$reactPort = Get-FreePort -start $ReactBasePort -count $ReactPortScan
+
+# Functions start logic with retry & fallback
+function Start-FunctionsHost {
+  param([int]$attempt)
+  if($UseDotNetFunctions){
+    Write-Host "Starting Functions via dotnet run (attempt $attempt)" -ForegroundColor Yellow
+    return Start-ProcessLogged -Name 'FUNC' -Command "dotnet run --no-build --project $photoRoot/PhotoSense.Functions.csproj -- --port $FunctionsPort" -WorkingDirectory $photoRoot -Color Yellow
+  } else {
+    Write-Host "Starting Functions via Core Tools (attempt $attempt)" -ForegroundColor Yellow
+    return Start-ProcessLogged -Name 'FUNC' -Command "func start --csharp --port $FunctionsPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
+  }
+}
+
+$funcProc = $null
+for($a=1; $a -le ([math]::Max(1,$FunctionsRetry+1)); $a++){
+  $funcProc = Start-FunctionsHost -attempt $a
+  Start-Sleep -Milliseconds 700
+  if(-not $funcProc.HasExited){ break }
+  Write-Warning "Functions host exited immediately (attempt $a)."
+  if(-not $UseDotNetFunctions -and $a -eq 1){
+    Write-Host 'Falling back to dotnet run for Functions...' -ForegroundColor DarkYellow
+    $UseDotNetFunctions = $true
+  }
+}
+if($funcProc -and $funcProc.HasExited){ throw "Failed to start Functions host after retries." }
 
 # React UI
 $reactDir = Join-Path $root 'PhotoSense.ReactUI'
@@ -108,6 +203,7 @@ if(!(Test-Path (Join-Path $reactDir 'node_modules'))){
   npm install | Out-Null
   Pop-Location
 }
+$env:PORT = $reactPort
 $reactProc = Start-ProcessLogged -Name 'WEB' -Command 'npm run dev' -WorkingDirectory $reactDir -Color Green
 
 # Optional Blazor
@@ -138,7 +234,7 @@ if($IncludeBlazor){
 
 Write-Section 'Startup summary'
 Write-Host "Functions:  http://localhost:$FunctionsPort" -ForegroundColor Yellow
-Write-Host 'React UI:   http://localhost:3000' -ForegroundColor Green
+Write-Host ("React UI:   http://localhost:{0}" -f $reactPort) -ForegroundColor Green
 if($IncludeBlazor){
   if($httpsPort -or $httpPort){
     Write-Host ("Blazor:     https://localhost:{0}  (http://localhost:{1})" -f $httpsPort,$httpPort) -ForegroundColor Magenta
@@ -149,7 +245,66 @@ if($IncludeBlazor){
 
 Write-Host "Press Ctrl+C to stop both." -ForegroundColor Cyan
 
-if($Open){ Start-Process 'http://localhost:3000' | Out-Null }
+if($Open){ Start-Process ("http://localhost:{0}" -f $reactPort) | Out-Null }
+
+# Emit JSON startup summary
+$summary = [pscustomobject]@{
+  timestamp = (Get-Date).ToString('o')
+  functionsUrl = "http://localhost:$FunctionsPort"
+  reactUrl = "http://localhost:$reactPort"
+  includeBlazor = [bool]$IncludeBlazor
+  usedDotNetFunctions = [bool]$UseDotNetFunctions
+  pid = $PID
+  diagnostics = [bool]$Diagnostics
+  health = @{}
+}
+$summaryPath = Join-Path $root '.dev-start-summary.json'
+$summary | ConvertTo-Json -Depth 4 | Out-File -FilePath $summaryPath -Encoding utf8
+Write-Host "Wrote summary: $summaryPath" -ForegroundColor Cyan
+
+# Health checks (simple pings)
+function Test-Url($url){
+  try { (Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 5).StatusCode } catch { 0 }
+}
+
+function Update-SummaryHealth($key,$status){
+  try {
+    $json = Get-Content $summaryPath -Raw | ConvertFrom-Json
+    $json.health[$key] = $status
+    $json | ConvertTo-Json -Depth 6 | Out-File $summaryPath -Encoding utf8
+  } catch {}
+}
+
+Start-Job -ScriptBlock {
+  param($funcUrl,$reactUrl,$summaryPath,$retries,$intervalMs,$diag)
+  function Ping($u){ try { (Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 5).StatusCode } catch { 0 } }
+  $funcStatus = 0; $reactStatus = 0
+  for($i=0; $i -lt $retries; $i++){
+    Start-Sleep -Milliseconds $intervalMs
+    if($funcStatus -eq 0){
+      $funcStatus = Ping "$funcUrl/api/scan/logs"
+      if($funcStatus -eq 0){ $funcStatus = Ping $funcUrl }
+      if($funcStatus -ne 0){
+        if($funcStatus -ge 200 -and $funcStatus -lt 400){ Write-Host "[HEALTH] Functions OK ($funcStatus)" -ForegroundColor Green } else { Write-Host "[HEALTH] Functions FAIL ($funcStatus)" -ForegroundColor Red }
+        if($diag){ Write-Host "[DIAG] Functions attempt $i status $funcStatus" -ForegroundColor DarkCyan }
+        try { $js = Get-Content $summaryPath -Raw | ConvertFrom-Json; $js.health.functions = $funcStatus; $js | ConvertTo-Json -Depth 6 | Out-File $summaryPath -Encoding utf8 } catch {}
+      }
+    }
+    if($reactStatus -eq 0){
+      $reactStatus = Ping $reactUrl
+      if($reactStatus -ne 0){
+        if($reactStatus -ge 200 -and $reactStatus -lt 400){ Write-Host "[HEALTH] React OK ($reactStatus)" -ForegroundColor Green } else { Write-Host "[HEALTH] React FAIL ($reactStatus)" -ForegroundColor Red }
+        if($diag){ Write-Host "[DIAG] React attempt $i status $reactStatus" -ForegroundColor DarkCyan }
+        try { $js = Get-Content $summaryPath -Raw | ConvertFrom-Json; $js.health.react = $reactStatus; $js | ConvertTo-Json -Depth 6 | Out-File $summaryPath -Encoding utf8 } catch {}
+      }
+    }
+    if($funcStatus -ne 0 -and $reactStatus -ne 0){ break }
+  }
+  if($funcStatus -eq 0){ Write-Host '[HEALTH] Functions UNREACHABLE' -ForegroundColor Red }
+  if($reactStatus -eq 0){ Write-Host '[HEALTH] React UNREACHABLE' -ForegroundColor Red }
+} -ArgumentList "http://localhost:$FunctionsPort","http://localhost:$reactPort",$summaryPath,$HealthRetry,$HealthIntervalMs,$Diagnostics | Out-Null
+
+if($Diagnostics){ Write-Host "Diagnostics enabled: retries=$HealthRetry interval=${HealthIntervalMs}ms" -ForegroundColor DarkCyan }
 
 # Graceful shutdown
 $stopping = $false
