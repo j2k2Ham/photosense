@@ -46,6 +46,8 @@ The API the UI uses (Functions host, `http://localhost:7071/api`):
 | `/scan/groups?mode=duplicates\|similar&page=&pageSize=&q=&hideKept=` | GET | Groups: a keeper (the best copy) and the photos matched against it |
 | `/photos/{id}/thumbnail` | GET | Small JPEG preview (cached at scan time); pictures only |
 | `/photos/{id}/image` | GET | The picture for viewing; HEIC and TIFF are converted to JPEG on the fly |
+| `/photos/{id}/video` | GET | The video for the in-app player, sent in pieces of up to 4 MB as the player asks for them (`Range` requests) |
+| `/photos/{id}/open` | POST | Open the file in the default application of the computer the service runs on |
 | `/photos/{id}/keep?kept=true\|false` | POST | Mark a copy to keep (bulk removal skips it) |
 | `/photos/{id}?physical=true` | DELETE | Remove one file, with the sidecars and Live Photo video that belong to it alone |
 | `/photos/bulk/remove-duplicates?group=` | POST | Remove the duplicates of one group, or of all groups |
@@ -66,7 +68,19 @@ Matches are sorted by how certain they are:
 | Same picture | One shot saved again: converted, resized or re-compressed | A 64-bit DCT perceptual hash nominates pairs (compared bit by bit); each pair is then checked directly: same shape, near-identical pixels at 32×32, and the same capture instant when both files record one | Yes |
 | Similar | Burst frames and edited versions | Looks alike but fails a check above | No, review only |
 
-Within a group the keeper is chosen by resolution first, then format (a lossless file, then JPEG because it opens everywhere, then HEIC and others), then intact capture details, JPEG quality, and file size. The format order lives in `PhotoQuality.FormatRank`. Every other member of a group was compared with the keeper itself, never chained through a third photo. The thresholds live in `PhotoMatcher` with the measurements they came from.
+Within a group the keeper is chosen by resolution first, then format, then intact capture details, JPEG quality, and file size. The order lives in `PhotoRanking`, which also words the reason shown in the review screen. Every other member of a group was compared with the keeper itself, never chained through a third photo. The thresholds live in `PhotoMatcher` with the measurements they came from.
+
+### HEIC or JPEG
+
+When the same picture exists at the same resolution as both a HEIC and a JPEG, the JPEG is kept, because it opens on anything. A lossless file (PNG, TIFF, BMP) is kept ahead of either.
+
+To keep the HEIC instead, set `PhotoStorage__KeepFormat` to `CameraOriginal` (under `Values` in `PhotoSense.Functions/local.settings.json`, or as an environment variable) and restart the service. The HEIC is the file the phone wrote, the JPEG a conversion made from it, and the HEIC is usually about half the size. The default is `WidelyCompatible`. Nothing needs scanning again; the choice is applied when groups are worked out.
+
+PhotoSense shows HEIC pictures itself, whatever the computer can open. Outside it, Windows opens HEIC files only once the free "HEIF Image Extensions" and the "HEVC Video Extensions" are installed from the Microsoft Store; without both, Photos and Explorer previews show nothing. macOS and iOS open them as they are.
+
+### Looking at a file before deciding
+
+Clicking a picture or a thumbnail opens it in a floating window. A video plays in the page, in the review panel and in the floating window alike. What plays there depends on the browser: MP4 and most iPhone MOV files do; where one does not, the player says so. Either way **Open in default player** (or **Open in default viewer** for a picture) hands the file to the operating system, as double-clicking it would: the file itself through the Windows shell, `open` on macOS, `xdg-open` on Linux. The program starts on the computer the service runs on, so this is for running PhotoSense on your own machine.
 
 Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path; delete that folder to free the space, or move a file back to restore it. A file is left alone if it, or the copy being kept, changed since the scan.
 
@@ -110,7 +124,9 @@ Run tests (with coverage) from repo root:
 dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
 ```
 
-Coverage thresholds (CI enforced): Line ≥ 90%, Branch ≥ 85%.
+Coverage thresholds (CI enforced): Line ≥ 90%, Branch ≥ 85%. Measured on Windows the .NET code stands at 100% of lines and 100% of branches. Generated code (`*.g.cs`) and the service's start-up class are left out of the measurement.
+
+Some code is shaped so that every branch can be exercised from one operating system: `PhotoPath.Key(path, ignoreCase)`, `ShellSystemViewer.DesktopOf` and `BasicExifMetadataExtractor.Read(photo, directories)` take as an argument what they would otherwise ask the system or a file for. Two guards against a library handing back nothing (`OutboxIntegrationEventPublisher.NameOf`, `MagickImageAnalyzer.Required`) are callable on their own for the same reason.
 
 ## Quick Local Run (Functions + React)
 

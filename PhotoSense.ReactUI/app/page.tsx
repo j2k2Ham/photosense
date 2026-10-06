@@ -8,7 +8,7 @@ import { PhotoWindow } from '../components/PhotoWindow';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { LogsPanel } from '../components/LogsPanel';
-import { useGroups, useScanProgress, connectLogStream, setKept, removePhoto, removeDuplicates } from '../lib/apiClient';
+import { useGroups, useScanProgress, connectLogStream, setKept, removePhoto, removeDuplicates, openInViewer } from '../lib/apiClient';
 import { useToasts, Toaster } from '../components/Toaster';
 import { formatBytes, linkedFiles } from '../lib/format';
 import type { DuplicateGroupDto, GroupMode, PhotoDto } from '../types';
@@ -63,6 +63,7 @@ export default function HomePage() {
   }, [push]);
 
   const toggleKeep = (photo: PhotoDto) => run(() => setKept(photo.id, !photo.kept));
+  const openExternally = (photo: PhotoDto) => run(() => openInViewer(photo.id));
 
   const removeOne = (photo: PhotoDto) => run(async () => {
     const result = await removePhoto(photo.id);
@@ -128,7 +129,7 @@ export default function HomePage() {
             )}
           </div>
 
-          <ReviewPanel group={selected} mode={mode} busy={busy}
+          <ReviewPanel group={selected} mode={mode} busy={busy} onOpenInViewer={openExternally}
             onOpen={member => selected && setOpened({ groupKey: selected.key, memberId: member?.photo.id })}
             onRemoveGroup={group => setPending({ group, count: group.members.filter(m => !m.photo.kept).length, bytes: group.reclaimableBytes })} />
         </div>
@@ -136,7 +137,7 @@ export default function HomePage() {
 
       {windowOpen && openedGroup && (
         <PhotoWindow key={opened?.memberId ?? openedGroup.key} original={openedGroup.keeper} mode={mode} member={openedMember} busy={busy}
-          onClose={() => setOpened(undefined)} onToggleKeep={toggleKeep} onRemove={removeOne} />
+          onClose={() => setOpened(undefined)} onToggleKeep={toggleKeep} onRemove={removeOne} onOpenInViewer={openExternally} />
       )}
 
       {pending && (

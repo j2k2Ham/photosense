@@ -67,4 +67,28 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     [InlineData("IMG_1.AAE", false)]
     public void Knows_Which_Files_It_Scans(string name, bool supported)
         => Assert.Equal(supported, PhotoFileEnumerator.IsSupported(name));
+
+    [Fact]
+    public void A_Folder_That_Goes_Away_While_Being_Listed_Is_Passed_Over()
+    {
+        Touch("first", "a.jpg");
+        Touch("second", "b.jpg");
+        using var files = PhotoFileEnumerator.Enumerate(_root.FullName, recursive: true).GetEnumerator();
+        Assert.True(files.MoveNext());
+        // Both folders are known by now; the one not yet looked in is taken away.
+        var other = Path.GetFileName(files.Current) == "a.jpg" ? "second" : "first";
+        Directory.Delete(Path.Combine(_root.FullName, other), recursive: true);
+        Assert.False(files.MoveNext());
+    }
+
+    [Fact]
+    public void A_Folder_That_May_Not_Be_Read_Is_Passed_Over()
+    {
+        Touch("a.jpg");
+        Touch("private", "b.jpg");
+        Touch("public", "c.jpg");
+        using var denied = TestFiles.DenyAccess(Path.Combine(_root.FullName, "private"));
+        if (denied is null) return; // nothing is out of reach of the account running this
+        Assert.Equal(["a.jpg", "c.jpg"], Names(recursive: true));
+    }
 }

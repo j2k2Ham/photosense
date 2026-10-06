@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Reflection;
 using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Infrastructure.Places;
@@ -21,7 +22,7 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
 
     private readonly Lazy<Index> _index;
 
-    public GeoNamesPlaceResolver() : this(OpenBundledList) { }
+    public GeoNamesPlaceResolver() : this(() => OpenBundledList(typeof(GeoNamesPlaceResolver).Assembly)) { }
 
     /// <param name="openList">Opens tab-separated lines of name, region, country code, latitude, longitude.</param>
     public GeoNamesPlaceResolver(Func<TextReader> openList) => _index = new Lazy<Index>(() => Index.Load(openList));
@@ -52,9 +53,10 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
         return bestKm <= InsideKm ? index.Name[best] : $"Near {index.Name[best]}";
     }
 
-    private static TextReader OpenBundledList()
+    /// <summary>Opens the list built into <paramref name="assembly"/>, saying so plainly when a build left it out.</summary>
+    public static TextReader OpenBundledList(Assembly assembly)
     {
-        var stream = typeof(GeoNamesPlaceResolver).Assembly.GetManifestResourceStream(Resource)
+        var stream = assembly.GetManifestResourceStream(Resource)
             ?? throw new InvalidOperationException($"The place list ({Resource}) is missing from the build.");
         return new StreamReader(new GZipStream(stream, CompressionMode.Decompress));
     }

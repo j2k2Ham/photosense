@@ -15,10 +15,11 @@ interface Props {
   onClose(): void;
   onToggleKeep(photo: PhotoDto): void;
   onRemove(photo: PhotoDto): void;
+  onOpenInViewer(photo: PhotoDto): void;
 }
 
 /** Floating window showing one image file, so a match can be checked by eye before anything is removed. */
-export function PhotoWindow({ original, mode, member, busy, onClose, onToggleKeep, onRemove }: Props) {
+export function PhotoWindow({ original, mode, member, busy, onClose, onToggleKeep, onRemove, onOpenInViewer }: Props) {
   const [showOriginal, setShowOriginal] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const shown = member && !showOriginal ? member.photo : original;
@@ -46,7 +47,7 @@ export function PhotoWindow({ original, mode, member, busy, onClose, onToggleKee
 
         <div className="flex flex-1 min-h-0">
           <div className="flex-1 min-w-0">
-            <PhotoView photo={shown} />
+            <PhotoView photo={shown} onOpenInViewer={onOpenInViewer} />
           </div>
 
           <aside className="w-80 shrink-0 border-l border-neutral-700 p-4 flex flex-col gap-4 overflow-y-auto">
@@ -63,6 +64,12 @@ export function PhotoWindow({ original, mode, member, busy, onClose, onToggleKee
             )}
 
             <div className="mt-auto flex flex-col gap-2">
+              {!shown.isVideo && (
+                <button type="button" disabled={busy} onClick={() => onOpenInViewer(shown)} className="btn-secondary"
+                  title="Opens the file itself in this computer's default picture viewer">
+                  Open in default viewer
+                </button>
+              )}
               {member && !onOriginal && member.match !== 'similar' && (
                 <button type="button" disabled={busy} onClick={() => onToggleKeep(member.photo)} className="btn-secondary">
                   {member.photo.kept ? 'Stop keeping this copy' : 'Keep this copy too'}

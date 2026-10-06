@@ -1,5 +1,6 @@
 using Moq;
 using PhotoSense.Application.Scanning.Interfaces;
+using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
@@ -26,7 +27,7 @@ public class ScanGroupingFacadeTests
         analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis(duplicates, similar ?? []));
         var places = new Mock<IPlaceNameResolver>();
         places.Setup(p => p.Describe(35.2, -80.8)).Returns("Charlotte, North Carolina, US");
-        return new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(places.Object));
+        return new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(places.Object), new PhotoRanking());
     }
 
     [Fact]

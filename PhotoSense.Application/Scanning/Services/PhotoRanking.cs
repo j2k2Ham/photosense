@@ -1,3 +1,4 @@
+using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Application.Scanning.Services;
@@ -7,11 +8,19 @@ namespace PhotoSense.Application.Scanning.Services;
 /// Copies of one shot do not differ in focus or exposure, only in how much of the original survived
 /// resizing and re-encoding, so that is what is ranked.
 /// </summary>
-public static class PhotoQuality
+public sealed class PhotoRanking
 {
-    public static IComparer<Photo> BestFirst { get; } = Comparer<Photo>.Create(Compare);
+    private readonly FormatPreference _preference;
 
-    private static int Compare(Photo a, Photo b)
+    public PhotoRanking(FormatPreference preference = FormatPreference.WidelyCompatible)
+    {
+        _preference = preference;
+        BestFirst = Comparer<Photo>.Create(Compare);
+    }
+
+    public IComparer<Photo> BestFirst { get; }
+
+    private int Compare(Photo a, Photo b)
     {
         int c;
         if ((c = b.PixelCount.CompareTo(a.PixelCount)) != 0) return c;
@@ -27,14 +36,17 @@ public static class PhotoQuality
     }
 
     /// <summary>Why <paramref name="keeper"/> ranks above <paramref name="other"/>, in words for the person reviewing.</summary>
-    public static string WhyKept(Photo keeper, Photo other)
+    public string WhyKept(Photo keeper, Photo other)
     {
         if (keeper.PixelCount != other.PixelCount)
             return $"Higher resolution: {keeper.Width}×{keeper.Height} vs {other.Width}×{other.Height}";
         if (FormatRank(keeper) != FormatRank(other))
-            return FormatRank(keeper) == 3
-                ? $"Lossless format: {keeper.Format} rather than {other.Format}"
+        {
+            if (FormatRank(keeper) == Lossless) return $"Lossless format: {keeper.Format} rather than {other.Format}";
+            return _preference == FormatPreference.CameraOriginal
+                ? $"Camera original: {keeper.Format} rather than a {other.Format} conversion"
                 : $"Opens everywhere: {keeper.Format} rather than {other.Format}";
+        }
         if (keeper.TakenOn.HasValue != other.TakenOn.HasValue) return "Still has its capture date and details";
         if ((keeper.EncodedQuality ?? 0) != (other.EncodedQuality ?? 0))
             return keeper.EncodedQuality is { } qk && other.EncodedQuality is { } qo
@@ -46,14 +58,19 @@ public static class PhotoQuality
         return "Same quality; kept the one with the plainer name";
     }
 
-    // Between copies of one shot at the same resolution: a lossless file first, then the format that opens
-    // everywhere (JPEG) ahead of ones that need extra support (HEIC, WebP).
-    private static int FormatRank(Photo p) => p.Format?.ToUpperInvariant() switch
+    private const int Lossless = 3;
+
+    // Between copies of one shot at the same resolution a lossless file comes first. After that it is a
+    // choice. A camera writes one format, so when a HEIC and a JPEG show the same shot the HEIC is what the
+    // phone recorded and the JPEG is a conversion of it: the HEIC is the better and smaller file, the JPEG
+    // the one that opens on any device.
+    private int FormatRank(Photo p)
     {
-        "PNG" or "TIFF" or "TIF" or "BMP" => 3,
-        "JPEG" or "JPG" => 2,
-        _ => 1
-    };
+        var format = p.Format?.ToUpperInvariant();
+        if (format is "PNG" or "TIFF" or "TIF" or "BMP") return Lossless;
+        var preferred = _preference == FormatPreference.CameraOriginal ? format is "HEIC" or "HEIF" : format is "JPEG" or "JPG";
+        return preferred ? 2 : 1;
+    }
 
     private static int SetRank(Photo p) => p.Set switch { PhotoSet.Primary => 0, PhotoSet.Secondary => 1, _ => 2 };
 

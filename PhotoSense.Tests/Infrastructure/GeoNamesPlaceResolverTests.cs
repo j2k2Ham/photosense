@@ -60,4 +60,14 @@ public class GeoNamesPlaceResolverTests
         Assert.Equal("Near Arctic Town, AA", places.Describe(80.0, 11.0));
         Assert.Equal("Near Arctic Town, AA", places.Describe(80.0, 13.5));
     }
+
+    [Fact]
+    public void A_Build_That_Left_The_Place_List_Out_Says_So()
+    {
+        var error = Assert.Throws<InvalidOperationException>(() => GeoNamesPlaceResolver.OpenBundledList(typeof(GeoNamesPlaceResolverTests).Assembly));
+        Assert.Contains("missing from the build", error.Message);
+
+        using var bundled = GeoNamesPlaceResolver.OpenBundledList(typeof(GeoNamesPlaceResolver).Assembly);
+        Assert.Equal(5, bundled.ReadLine()!.Split('\t').Length);
+    }
 }

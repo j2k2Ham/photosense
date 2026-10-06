@@ -128,4 +128,17 @@ public sealed class FileSystemPhotoDeletionServiceTests : IDisposable
     [Fact]
     public async Task An_Unknown_Id_Is_Reported()
         => Assert.Equal(RemovalOutcome.NotFound, (await _service.DeleteAsync(PhotoSense.Domain.ValueObjects.PhotoId.New(), true)).Outcome);
+
+    [Fact]
+    public async Task A_Record_Without_A_Modified_Time_Is_Checked_By_Size_Alone()
+    {
+        var path = Path.Combine(_root.FullName, "IMG_7.jpg");
+        await File.WriteAllTextAsync(path, "picture");
+        var photo = new Photo { SourcePath = path, FileName = "IMG_7.jpg", FileSizeBytes = new FileInfo(path).Length, ScanRoot = _root.FullName, ContentHash = "picture" };
+        await _repo.AddOrUpdateAsync(photo);
+
+        Assert.True((await _service.DeleteAsync(photo.Id, deleteFile: true)).Succeeded);
+        Assert.False(File.Exists(path));
+        Assert.True(File.Exists(Held("IMG_7.jpg")));
+    }
 }

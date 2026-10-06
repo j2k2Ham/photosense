@@ -1,5 +1,6 @@
 using Moq;
 using PhotoSense.Application.Scanning.Services;
+using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
@@ -11,6 +12,8 @@ namespace PhotoSense.Tests.Application;
 
 public class DuplicateAnalysisServiceTests
 {
+    private static readonly PhotoRanking KeepJpeg = new(FormatPreference.WidelyCompatible);
+
     // Hashes far enough apart that the pictures are never compared.
     private const ulong PictureA = 0x0000000000000000, PictureB = 0xFFFFFFFF00000000, PictureC = 0x00000000FFFFFFFF;
 
@@ -43,10 +46,24 @@ public class DuplicateAnalysisServiceTests
         var heic = Make("IMG_4198.HEIC", taken: Shot, size: 3_000);
         var jpeg = Make("IMG_4198.JPG", contentHash: "J", taken: Shot, format: "JPEG", quality: 94, size: 6_000, signature: Signature(0.1));
         var jpegAgain = Make("IMG_4198 (1).JPG", contentHash: "J", taken: Shot, format: "JPEG", quality: 94, size: 6_000, signature: Signature(0.1));
+        // No preference given: the JPEG is the one kept.
         var group = Assert.Single(DuplicateAnalysisService.Analyze([jpegAgain, heic, jpeg]).Duplicates);
         Assert.Same(jpeg, group.Keeper);
         Assert.Equal(new[] { (jpegAgain, MatchKind.Identical), (heic, MatchKind.SamePicture) }, group.Members.Select(m => (m.Photo, m.Match)));
         Assert.Equal(9_000, group.ReclaimableBytes);
+    }
+
+    [Fact]
+    public void When_Originals_Are_Preferred_The_Camera_Original_Is_Kept_And_Its_Conversions_Go()
+    {
+        var heic = Make("IMG_4198.HEIC", taken: Shot, size: 3_000);
+        var jpeg = Make("IMG_4198.JPG", contentHash: "J", taken: Shot, format: "JPEG", quality: 94, size: 6_000, signature: Signature(0.1));
+        var jpegAgain = Make("IMG_4198 (1).JPG", contentHash: "J", taken: Shot, format: "JPEG", quality: 94, size: 6_000, signature: Signature(0.1));
+        var group = Assert.Single(DuplicateAnalysisService.Analyze([jpegAgain, jpeg, heic], new PhotoRanking(FormatPreference.CameraOriginal)).Duplicates);
+        Assert.Same(heic, group.Keeper);
+        Assert.Equal(new[] { jpeg, jpegAgain }, group.Members.Select(m => m.Photo));
+        Assert.All(group.Members, m => Assert.Equal(MatchKind.SamePicture, m.Match));
+        Assert.Equal(12_000, group.ReclaimableBytes);
     }
 
     [Fact]
@@ -69,7 +86,7 @@ public class DuplicateAnalysisServiceTests
         var heic = Make("IMG_0001.HEIC", taken: Shot);
         var jpeg = Make("IMG_0001.JPG", taken: Shot, format: "JPEG");
         var burst = Make("IMG_0002.HEIC", taken: Shot.AddMilliseconds(100));
-        var analysis = DuplicateAnalysisService.Analyze([jpeg, burst, heic]);
+        var analysis = DuplicateAnalysisService.Analyze([jpeg, burst, heic], KeepJpeg);
         Assert.Same(heic, Assert.Single(Assert.Single(analysis.Duplicates).Members).Photo);
         var similar = Assert.Single(analysis.Similar);
         Assert.Same(jpeg, similar.Keeper);
@@ -149,7 +166,7 @@ public class DuplicateAnalysisServiceTests
         var videoA = Video("IMG_1.MOV", folder: "a", contentHash: "M", livePhotoId: "live-1");
         var videoB = Video("IMG_1.MOV", folder: "b", contentHash: "M", livePhotoId: "LIVE-1");
 
-        var analysis = DuplicateAnalysisService.Analyze([videoA, heic, videoB, jpeg]);
+        var analysis = DuplicateAnalysisService.Analyze([videoA, heic, videoB, jpeg], KeepJpeg);
 
         // Matched on their own, one video would be removed as a copy of the other, and the other would
         // then leave with the HEIC it belongs to: both gone.
@@ -186,7 +203,7 @@ public class DuplicateAnalysisServiceTests
         var repo = new InMemoryPhotoRepository();
         await repo.AddOrUpdateAsync(Make("a.jpg", contentHash: "A"));
         await repo.AddOrUpdateAsync(Make("b.jpg", contentHash: "A"));
-        var service = new DuplicateAnalysisService(repo);
+        var service = new DuplicateAnalysisService(repo, KeepJpeg);
 
         var first = await service.GetAsync();
         Assert.Single(first.Duplicates);
@@ -207,5 +224,20 @@ public class DuplicateAnalysisServiceTests
         await service.GetAsync();
         await service.GetAsync();
         repo.Verify(r => r.GetAllAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public void Live_Photo_Halves_Recorded_By_Name_Alone_Are_Still_Paired()
+    {
+        // A scan always records full paths; a record without one must still not stop an analysis.
+        var picture = new Photo { SourcePath = "IMG_1.HEIC", FileName = "IMG_1.HEIC", ContentHash = "P", LivePhotoId = "LIVE-1" };
+        var itsVideo = new Photo { SourcePath = "IMG_1.MOV", FileName = "IMG_1.MOV", ContentHash = "M", LivePhotoId = "LIVE-1" };
+        var pathless = new Photo { SourcePath = "", FileName = "IMG_2.MOV", ContentHash = "N", LivePhotoId = "LIVE-2" };
+        var strayCopy = Video("IMG_1.MOV", folder: "elsewhere", contentHash: "M", livePhotoId: "LIVE-1");
+
+        var analysis = DuplicateAnalysisService.Analyze([picture, itsVideo, pathless, strayCopy]);
+
+        Assert.Empty(analysis.Duplicates); // the video beside its picture is not matched on its own
+        Assert.Empty(analysis.Similar);
     }
 }

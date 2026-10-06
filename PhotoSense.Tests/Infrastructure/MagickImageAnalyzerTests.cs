@@ -131,6 +131,14 @@ public class MagickImageAnalyzerTests
     }
 
     [Fact]
+    public void An_Image_That_Yields_No_Pixels_Is_Refused()
+    {
+        var pixels = new byte[] { 1, 2, 3 };
+        Assert.Same(pixels, MagickImageAnalyzer.Required(pixels));
+        Assert.Equal("Image has no pixel data", Assert.Throws<InvalidOperationException>(() => MagickImageAnalyzer.Required(null)).Message);
+    }
+
+    [Fact]
     public async Task What_Is_Not_An_Image_Is_Refused()
     {
         await Assert.ThrowsAnyAsync<MagickException>(() => _analyzer.AnalyzeAsync(new MemoryStream("not an image at all"u8.ToArray())));
@@ -200,5 +208,26 @@ public class MagickImageAnalyzerTests
         Assert.Equal(new DateTime(2024, 4, 7, 17, 35, 59), photo.TakenOn);
         Assert.Null(photo.Latitude);
         Assert.Null(photo.Longitude);
+    }
+
+    [Fact]
+    public async Task A_Picture_With_An_Unusable_Colour_Profile_Is_Read_As_It_Is()
+    {
+        using var picture = Picture(6, 400, 300);
+        var plain = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg));
+
+        // A profile that announces RGB and then holds nothing a conversion could be made from.
+        var unusable = ColorProfiles.SRGB.ToByteArray()!;
+        Array.Clear(unusable, 128, unusable.Length - 128);
+        using var tagged = picture.Clone();
+        tagged.SetProfile(new ColorProfile(unusable));
+        var encoded = Encode(tagged, MagickFormat.Jpeg);
+        using (var reread = new MagickImage(encoded.ToArray()))
+            Assert.NotNull(reread.GetColorProfile());
+
+        var analysed = await _analyzer.AnalyzeAsync(encoded);
+
+        Assert.InRange(Difference(plain.Signature, analysed.Signature), 0, PhotoMatcher.SameDifference);
+        Assert.Equal(plain.PerceptualHash, analysed.PerceptualHash);
     }
 }

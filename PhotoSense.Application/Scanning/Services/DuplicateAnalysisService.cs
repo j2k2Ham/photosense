@@ -9,10 +9,15 @@ namespace PhotoSense.Application.Scanning.Services;
 public class DuplicateAnalysisService : IDuplicateAnalysisService
 {
     private readonly IPhotoRepository _repo;
+    private readonly PhotoRanking _ranking;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private (long Version, DuplicateAnalysis Analysis)? _cached;
 
-    public DuplicateAnalysisService(IPhotoRepository repo) => _repo = repo;
+    public DuplicateAnalysisService(IPhotoRepository repo, PhotoRanking? ranking = null)
+    {
+        _repo = repo;
+        _ranking = ranking ?? new PhotoRanking();
+    }
 
     public async Task<DuplicateAnalysis> GetAsync(CancellationToken ct = default)
     {
@@ -22,15 +27,17 @@ public class DuplicateAnalysisService : IDuplicateAnalysisService
             // The version is read first: a change made while analysing leaves the cache stale, never wrongly fresh.
             var version = _repo.Version;
             if (_cached is { } cached && cached.Version == version) return cached.Analysis;
-            var analysis = Analyze(await _repo.GetAllAsync(ct));
+            var analysis = Analyze(await _repo.GetAllAsync(ct), _ranking);
             _cached = (version, analysis);
             return analysis;
         }
         finally { _gate.Release(); }
     }
 
-    public static DuplicateAnalysis Analyze(IReadOnlyList<Photo> photos)
+    public static DuplicateAnalysis Analyze(IReadOnlyList<Photo> photos, PhotoRanking? ranking = null)
     {
+        var bestFirst = (ranking ?? new PhotoRanking()).BestFirst;
+
         // A Live Photo's video belongs to its picture and goes wherever the picture goes. Matched on its own
         // it could be removed as a copy in one folder while its twin is removed with its picture in another.
         var livePictures = photos.Where(p => !p.IsVideo && p.LivePhotoId is not null).Select(LivePhotoKey).ToHashSet();
@@ -40,8 +47,8 @@ public class DuplicateAnalysisService : IDuplicateAnalysisService
             .Where(p => !string.IsNullOrWhiteSpace(p.ContentHash))
             .Where(p => !(p.IsVideo && p.LivePhotoId is not null && livePictures.Contains(LivePhotoKey(p))))
             .GroupBy(p => p.ContentHash!, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new Unit(g.OrderBy(p => p, PhotoQuality.BestFirst).ToList()))
-            .OrderBy(u => u.Best, PhotoQuality.BestFirst)
+            .Select(g => new Unit(g.OrderBy(p => p, bestFirst).ToList()))
+            .OrderBy(u => u.Best, bestFirst)
             .ToList();
 
         var links = FindLinks(units);
@@ -96,7 +103,11 @@ public class DuplicateAnalysisService : IDuplicateAnalysisService
 
     // Both halves of a Live Photo sit in one folder, share a name and carry the same identifier.
     private static (string Folder, string Item, string Id) LivePhotoKey(Photo p)
-        => (PhotoPath.Key(Path.GetDirectoryName(p.SourcePath) ?? string.Empty), PhotoNaming.ItemOf(p.FileName), p.LivePhotoId!.ToUpperInvariant());
+    {
+        // A record holding a bare file name has no folder to spell out in full.
+        var folder = Path.GetDirectoryName(p.SourcePath);
+        return (string.IsNullOrEmpty(folder) ? string.Empty : PhotoPath.Key(folder), PhotoNaming.ItemOf(p.FileName), p.LivePhotoId!.ToUpperInvariant());
+    }
 
     // Every pair of pictures whose hashes are close, checked directly. links[i] holds the pictures matched with i.
     private static List<(int Other, PhotoMatcher.Verdict Verdict)>[] FindLinks(List<Unit> units)

@@ -20,13 +20,18 @@ public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
         try
         {
             imageStream.Position = 0;
-            var directories = ImageMetadataReader.ReadMetadata(imageStream);
-            photo.LivePhotoId = LivePhotoLink.ReadId(directories, photo.IsVideo);
-            if (photo.IsVideo) ReadVideo(photo, directories);
-            else ReadPicture(photo, directories);
+            Read(photo, ImageMetadataReader.ReadMetadata(imageStream));
         }
         catch { /* swallow - metadata optional */ }
         return Task.CompletedTask;
+    }
+
+    /// <summary>Records on the photo what the directories read from its file say about it.</summary>
+    public static void Read(Photo photo, IReadOnlyList<Directory> directories)
+    {
+        photo.LivePhotoId = LivePhotoLink.ReadId(directories, photo.IsVideo);
+        if (photo.IsVideo) ReadVideo(photo, directories);
+        else ReadPicture(photo, directories);
     }
 
     private static void ReadPicture(Photo photo, IReadOnlyList<Directory> directories)
@@ -66,14 +71,15 @@ public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
         if (movie?.GetObject(QuickTimeMovieHeaderDirectory.TagDuration) is TimeSpan duration && duration > TimeSpan.Zero)
             photo.DurationSeconds = duration.TotalSeconds;
 
-        // The picture track is the one with a size; sound and data tracks report none.
-        var track = directories.OfType<QuickTimeTrackHeaderDirectory>()
-            .FirstOrDefault(t => t.TryGetInt32(QuickTimeTrackHeaderDirectory.TagWidth, out var w) && w > 0);
-        if (track != null && track.TryGetInt32(QuickTimeTrackHeaderDirectory.TagWidth, out var width) && track.TryGetInt32(QuickTimeTrackHeaderDirectory.TagHeight, out var height))
+        foreach (var track in directories.OfType<QuickTimeTrackHeaderDirectory>())
         {
+            // The picture track is the one with a size; sound and data tracks report none.
+            if (!track.TryGetInt32(QuickTimeTrackHeaderDirectory.TagWidth, out var width) || width <= 0) continue;
+            if (!track.TryGetInt32(QuickTimeTrackHeaderDirectory.TagHeight, out var height) || height <= 0) continue;
             // A phone held upright records sideways and notes the turn.
             var sideways = track.TryGetDouble(QuickTimeTrackHeaderDirectory.TagRotation, out var rotation) && Math.Abs(Math.Abs(rotation) % 180 - 90) < 1;
             (photo.Width, photo.Height) = sideways ? (height, width) : (width, height);
+            break;
         }
 
         var meta = directories.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault();

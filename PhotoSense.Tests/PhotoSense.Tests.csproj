@@ -2,6 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
+    <!-- Coverage counts the code in this repository, not what the Functions SDK's source generators emit. -->
+    <ExcludeByFile>**/*.g.cs</ExcludeByFile>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

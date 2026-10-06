@@ -17,7 +17,8 @@ public class ScanProgressByInstanceFunction
     {
         var snap = _progress.Get(instanceId);
         var resp = req.CreateResponse(HttpStatusCode.OK);
-        if (snap.InstanceId == string.Empty)
+        // The store answers for any id; one it has never heard of has no start time.
+        if (snap.StartedUtc == default)
         {
             resp.StatusCode = HttpStatusCode.NotFound;
             return resp;

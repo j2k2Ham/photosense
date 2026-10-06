@@ -48,11 +48,13 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
 
         // Stretched to a square on purpose: aspect ratio is checked separately, and a fixed grid lets two signatures be compared cell by cell.
         image.Resize(new MagickGeometry(SignatureEdge, SignatureEdge) { IgnoreAspectRatio = true });
-        var signature = image.GetPixels().ToByteArray(PixelMapping.RGB)
-            ?? throw new InvalidOperationException("Image has no pixel data");
+        var signature = Required(image.GetPixels().ToByteArray(PixelMapping.RGB));
 
         return new ImageAnalysis(width, height, format, quality, PerceptualHash(signature), signature, ToJpeg(thumbnail, 82));
     }
+
+    /// <summary>The pixels read from an image; the decoder hands back none for an image it could not unpack.</summary>
+    public static byte[] Required(byte[]? pixels) => pixels ?? throw new InvalidOperationException("Image has no pixel data");
 
     private static MagickImage Load(Stream imageStream, int neededEdge)
     {

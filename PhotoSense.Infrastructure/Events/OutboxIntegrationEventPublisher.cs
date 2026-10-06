@@ -14,10 +14,13 @@ public class OutboxIntegrationEventPublisher : IIntegrationEventPublisher
     {
         var message = new OutboxMessage
         {
-            Type = typeof(T).FullName ?? typeof(T).Name,
+            Type = NameOf(typeof(T)),
             Payload = JsonSerializer.Serialize(evt),
             OccurredUtc = DateTime.UtcNow
         };
         return _outbox.AddAsync(message, ct);
     }
+
+    /// <summary>The name an event is filed under: its full name, or its short one for a type that has no full name.</summary>
+    public static string NameOf(Type type) => type.FullName ?? type.Name;
 }

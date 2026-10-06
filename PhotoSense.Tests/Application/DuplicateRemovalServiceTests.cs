@@ -216,4 +216,36 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
             => a is not null && b is not null && (a.Removed, a.Bytes, a.Skipped, a.Companions) == (b.Removed, b.Bytes, b.Skipped, b.Companions) && a.Problems.SequenceEqual(b.Problems);
         public int GetHashCode(BulkRemovalResult r) => r.Removed;
     }
+
+    [Fact]
+    public async Task A_Kept_Photo_Is_Judged_Unchanged_By_Its_Size_And_By_Its_Time_Where_One_Was_Recorded()
+    {
+        // No modified time on record for the photo being kept: its size alone says it is still the same file.
+        var path = Path.Combine(_root.FullName, "IMG_1.jpg");
+        await File.WriteAllTextAsync(path, "AAAA");
+        var keeper = new Photo { SourcePath = path, FileName = "IMG_1.jpg", FileSizeBytes = 4, ScanRoot = _root.FullName, ContentHash = "AAAA", Set = PhotoSet.Primary };
+        await _repo.AddOrUpdateAsync(keeper);
+        var copy = await AddAsync("IMG_1 (1).jpg", "AAAA");
+
+        var result = await _service.RemoveDuplicatesAsync();
+
+        Assert.Equal((1, 0), (result.Removed, result.Skipped));
+        Assert.True(File.Exists(path));
+        Assert.False(File.Exists(copy.SourcePath));
+    }
+
+    [Fact]
+    public async Task Leaves_Copies_Alone_When_The_Photo_Being_Kept_Was_Saved_Again_At_The_Same_Size()
+    {
+        var keeper = await AddAsync("IMG_1.jpg", "AAAA");
+        var copy = await AddAsync("IMG_1 (1).jpg", "AAAA");
+        await File.WriteAllTextAsync(keeper.SourcePath, "BBBB");
+        File.SetLastWriteTimeUtc(keeper.SourcePath, keeper.FileModifiedUtc!.Value.AddMinutes(5));
+
+        var result = await _service.RemoveDuplicatesAsync();
+
+        Assert.Equal((0, 1), (result.Removed, result.Skipped));
+        Assert.True(File.Exists(copy.SourcePath));
+        Assert.StartsWith("Kept photo is missing or has changed", Assert.Single(result.Problems));
+    }
 }

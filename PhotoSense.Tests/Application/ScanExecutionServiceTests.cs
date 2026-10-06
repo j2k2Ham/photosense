@@ -325,6 +325,75 @@ public sealed class ScanExecutionServiceTests : IDisposable
         Assert.Equal(100, _progress.Get("many").OverallPercent);
     }
 
+
+    [Fact]
+    public async Task A_File_Touched_Without_Changing_Size_Is_Read_Again()
+    {
+        var path = Write("a.jpg", "picture a");
+        await ScanAsync();
+        File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(5));
+
+        var summary = await ScanAsync(instance: "again");
+
+        Assert.Equal((1, 0), (summary.Analyzed, summary.Unchanged));
+        Assert.Equal(File.GetLastWriteTimeUtc(path), Assert.Single(await _repo.GetAllAsync()).FileModifiedUtc);
+    }
+
+    [Fact]
+    public async Task A_Record_Without_A_Modified_Time_Is_Read_Again()
+    {
+        var path = Write("a.jpg", "picture a");
+        await _repo.AddOrUpdateAsync(new Photo
+        {
+            SourcePath = path, FileName = "a.jpg", FileSizeBytes = new FileInfo(path).Length,
+            ContentHash = "RECORDED-BEFORE", AnalysisVersion = ScanExecutionService.AnalysisVersion
+        });
+
+        var summary = await ScanAsync();
+
+        Assert.Equal((1, 0), (summary.Analyzed, summary.Unchanged));
+        var photo = Assert.Single(await _repo.GetAllAsync());
+        Assert.Equal(new FileInfo(path).LastWriteTimeUtc, photo.FileModifiedUtc);
+        Assert.NotEqual("RECORDED-BEFORE", photo.ContentHash);
+    }
+
+    [Fact]
+    public async Task A_Video_That_Vanishes_As_The_Scan_Starts_Is_Counted_Unreadable()
+    {
+        var gone = Write("a.mov", "same size AAAA");
+        Write("b.mov", "same size BBBB");
+        // The folder has been listed by the time the totals are reported; the file goes just after.
+        var progress = new Mock<IScanProgressStore>();
+        progress.Setup(p => p.SetTotals(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>())).Callback(() => File.Delete(gone));
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, progress.Object, _log.Object, parallelism: 1);
+
+        var summary = await service.RunAsync(new ScanRequest(_root.FullName, null, true), "scan");
+
+        Assert.Equal(new ScanSummary(Total: 2, Analyzed: 1, Unchanged: 0, Unreadable: 1, Pruned: 0), summary);
+        var remaining = Assert.Single(await _repo.GetAllAsync());
+        Assert.Equal("b.mov", remaining.FileName);
+        Assert.Null(remaining.ContentHash); // with the other gone, nothing shares its size
+    }
+
+    [Fact]
+    public async Task Scans_The_Same_With_Nowhere_To_Log()
+    {
+        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, parallelism: 1);
+        var missing = Path.Combine(_root.FullName, "no-such-folder");
+        Assert.Equal(new ScanSummary(0, 0, 0, 0, 0), await quiet.RunAsync(new ScanRequest(missing, null, true), "typo"));
+
+        for (int i = 0; i < 98; i++) Write($"{i}.jpg", $"picture {i}");
+        Write("broken.heic", FakeAnalyzer.Undecodable);
+        var locked = Write("locked.jpg", "another picture");
+        ScanSummary summary;
+        using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true), "quiet");
+
+        Assert.Equal(new ScanSummary(Total: 100, Analyzed: 98, Unchanged: 0, Unreadable: 2, Pruned: 0), summary);
+        Assert.Equal(100, _progress.Get("quiet").OverallPercent);
+        _log.VerifyNoOtherCalls();
+    }
+
     private sealed class FakeAnalyzer : IImageAnalyzer
     {
         public const string Undecodable = "not an image";

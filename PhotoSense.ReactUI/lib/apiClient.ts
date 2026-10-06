@@ -31,6 +31,12 @@ const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && 
 
 export const thumbnailUrl = (id: string) => `${API_BASE}/photos/${id}/thumbnail`;
 export const imageUrl = (id: string) => `${API_BASE}/photos/${id}/image`;
+export const videoUrl = (id: string) => `${API_BASE}/photos/${id}/video`;
+
+/** Opens the file in the default viewer or player of the machine the server runs on. */
+export async function openInViewer(id: string){
+  await send(`${API_BASE}/photos/${id}/open`, 'POST');
+}
 
 export function useGroups(mode: GroupMode, filter: string, page: number, hideKept: boolean) {
   const key = `${API_BASE}/scan/groups?mode=${mode}&page=${page}&hideKept=${hideKept}&q=${encodeURIComponent(filter||'')}`;

@@ -24,6 +24,13 @@ public class PhotosFunctions
         [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".png"] = "image/png", [".gif"] = "image/gif", [".webp"] = "image/webp", [".bmp"] = "image/bmp"
     };
 
+    // What a browser is told a video is. A QuickTime file holds the same streams as an MP4 and browsers
+    // that refuse "video/quicktime" outright will play it when it is called MP4.
+    private static readonly Dictionary<string, string> VideoFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".mp4"] = "video/mp4", [".m4v"] = "video/mp4", [".mov"] = "video/mp4", [".3gp"] = "video/3gpp"
+    };
+
     private readonly IPhotoRepository _repo;
     private readonly IPhotoSearchService _search;
     private readonly IPhotoDeletionService _deleter;
@@ -33,12 +40,14 @@ public class PhotosFunctions
     private readonly IAuditRepository _audit;
     private readonly IScanLogSink _log;
     private readonly PhotoDtoMapper _mapper;
+    private readonly ISystemViewer _viewer;
 
     // Services arrive through the constructor: this Functions model does not pass them as method parameters.
     public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IPhotoDeletionService deleter, IDuplicateRemovalService remover,
-        IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper)
+        IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper, ISystemViewer viewer)
     {
         _mapper = mapper;
+        _viewer = viewer;
         _repo = repo; _search = search; _deleter = deleter; _remover = remover;
         _thumbnails = thumbnails; _analyzer = analyzer; _audit = audit; _log = log;
     }
@@ -133,8 +142,10 @@ public class PhotosFunctions
             if (BrowserFormats.TryGetValue(Path.GetExtension(photo.SourcePath), out var contentType))
                 return await ImageResponseAsync(req, await File.ReadAllBytesAsync(photo.SourcePath), contentType, photo.ContentHash);
 
-            await using var stream = File.OpenRead(photo.SourcePath);
-            return await ImageResponseAsync(req, await _analyzer.RenderJpegAsync(stream, ReviewImageEdge), "image/jpeg", photo.ContentHash);
+            byte[] jpeg;
+            await using (var stream = File.OpenRead(photo.SourcePath))
+                jpeg = await _analyzer.RenderJpegAsync(stream, ReviewImageEdge);
+            return await ImageResponseAsync(req, jpeg, "image/jpeg", photo.ContentHash);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -142,6 +153,63 @@ public class PhotosFunctions
             await failed.WriteStringAsync($"This file could not be shown: {ex.Message}");
             return failed;
         }
+    }
+
+    [Function("GetPhotoVideo")] // GET /api/photos/{id}/video, a piece at a time
+    public async Task<HttpResponseData> GetVideoAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos/{id:guid}/video")] HttpRequestData req,
+        string id)
+    {
+        var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
+        if (photo is null || !photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
+
+        await using var file = new FileStream(photo.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var requested = req.Headers.TryGetValues("Range", out var values) ? values.FirstOrDefault() : null;
+        if (ByteRange.Parse(requested, file.Length) is not { } range)
+        {
+            var unsatisfiable = req.CreateResponse(HttpStatusCode.RequestedRangeNotSatisfiable);
+            unsatisfiable.Headers.Add("Content-Range", $"bytes */{file.Length}");
+            return unsatisfiable;
+        }
+
+        var piece = new byte[range.Length];
+        file.Position = range.Start;
+        await file.ReadExactlyAsync(piece);
+
+        var resp = req.CreateResponse(HttpStatusCode.PartialContent);
+        resp.Headers.Add("Content-Type", VideoFormats.GetValueOrDefault(Path.GetExtension(photo.SourcePath), "application/octet-stream"));
+        resp.Headers.Add("Accept-Ranges", "bytes");
+        resp.Headers.Add("Content-Range", range.ContentRange(file.Length));
+        await resp.Body.WriteAsync(piece);
+        return resp;
+    }
+
+    [Function("OpenPhoto")] // POST /api/photos/{id}/open
+    public async Task<HttpResponseData> OpenPhotoAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/open")] HttpRequestData req,
+        string id)
+    {
+        var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
+        var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
+        if (photo is null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
+        try
+        {
+            // Opens on the machine this service runs on, which is the machine that holds the photos.
+            _viewer.Open(photo.SourcePath);
+            resp.StatusCode = HttpStatusCode.NoContent;
+        }
+        catch (FileNotFoundException)
+        {
+            await resp.WriteStringAsync("The file is no longer there. Scan again.");
+            resp.StatusCode = HttpStatusCode.NotFound;
+        }
+        catch (InvalidOperationException ex)
+        {
+            await resp.WriteStringAsync(ex.Message);
+            resp.StatusCode = HttpStatusCode.InternalServerError;
+        }
+        return resp;
     }
 
     // A file's bytes never change under the same content hash, so the browser may keep what it was sent.
@@ -244,8 +312,10 @@ public class PhotosFunctions
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
+        // No group, or a blank one, means every group.
         var group = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("group");
-        var result = await _remover.RemoveDuplicatesAsync(string.IsNullOrWhiteSpace(group) ? null : group);
+        if (string.IsNullOrWhiteSpace(group)) group = null;
+        var result = await _remover.RemoveDuplicatesAsync(group);
         _log.Log("audit", "Info", $"Removed {result.Removed} duplicates ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
         await _audit.AddAsync(new AuditEntry { Action = "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}" });
         await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems });

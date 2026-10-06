@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
@@ -91,5 +92,27 @@ public class PhotoIdentityTests
     {
         Assert.True(new RemovalResult(RemovalOutcome.Removed, "held").Succeeded);
         Assert.All(new[] { RemovalOutcome.NotFound, RemovalOutcome.Changed, RemovalOutcome.Failed }, o => Assert.False(new RemovalResult(o).Succeeded));
+    }
+
+    [Fact]
+    public void Case_Matters_In_A_Path_Only_Where_The_File_System_Says_So()
+    {
+        Assert.True(PhotoPath.IgnoresCase(os => os == OSPlatform.Windows));
+        Assert.True(PhotoPath.IgnoresCase(os => os == OSPlatform.OSX));
+        Assert.False(PhotoPath.IgnoresCase(os => os == OSPlatform.Linux));
+
+        var path = Path.Combine(Path.GetTempPath(), "Album", "IMG_1.jpg");
+        Assert.Equal(PhotoPath.Key(path, ignoreCase: true), PhotoPath.Key(path.ToUpperInvariant(), ignoreCase: true));
+        Assert.NotEqual(PhotoPath.Key(path, ignoreCase: false), PhotoPath.Key(path.ToUpperInvariant(), ignoreCase: false));
+        Assert.Equal(Path.GetFullPath(path), PhotoPath.Key(path, ignoreCase: false));
+        Assert.True(PhotoPath.ComparerFor(ignoreCase: true).Equals("a.jpg", "A.JPG"));
+        Assert.False(PhotoPath.ComparerFor(ignoreCase: false).Equals("a.jpg", "A.JPG"));
+    }
+
+    [Fact]
+    public void A_Database_Path_With_No_Folder_Puts_Thumbnails_In_The_Working_Folder()
+    {
+        var top = Path.GetPathRoot(Path.GetTempPath())!;
+        Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), "photosense-thumbnails"), new PhotoStorageOptions { DatabasePath = top }.ResolveThumbnailPath());
     }
 }

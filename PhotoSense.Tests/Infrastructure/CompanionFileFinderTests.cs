@@ -181,4 +181,8 @@ public sealed class CompanionFileFinderTests : IDisposable
         var info = new FileInfo(path);
         return new Photo { SourcePath = path, FileName = info.Name, FileSizeBytes = info.Length, FileModifiedUtc = info.LastWriteTimeUtc, ScanRoot = _root.FullName, ContentHash = info.Name };
     }
+
+    [Fact]
+    public void What_Is_Not_Inside_A_Folder_Has_No_Companions()
+        => Assert.Empty(_finder.FindFor(Path.GetPathRoot(_root.FullName)!));
 }

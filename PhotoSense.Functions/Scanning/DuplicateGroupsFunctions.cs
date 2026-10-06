@@ -42,7 +42,8 @@ public sealed class ScanGroupingFacade
 {
     private readonly IDuplicateAnalysisService _analysis;
     private readonly PhotoDtoMapper _mapper;
-    public ScanGroupingFacade(IDuplicateAnalysisService analysis, PhotoDtoMapper mapper) { _analysis = analysis; _mapper = mapper; }
+    private readonly PhotoRanking _ranking;
+    public ScanGroupingFacade(IDuplicateAnalysisService analysis, PhotoDtoMapper mapper, PhotoRanking ranking) { _analysis = analysis; _mapper = mapper; _ranking = ranking; }
 
     /// <param name="similar">False for duplicates (safe to remove in bulk), true for look-alikes (review only).</param>
     /// <param name="hideKept">Leave out groups in which every member has been marked to keep.</param>
@@ -79,7 +80,7 @@ public sealed class ScanGroupingFacade
         {
             Photo = _mapper.Map(m.Photo),
             Match = m.Match switch { MatchKind.Identical => "identical", MatchKind.SamePicture => "samePicture", _ => "similar" },
-            KeeperReason = m.Match == MatchKind.Identical ? "Identical file" : PhotoQuality.WhyKept(g.Keeper, m.Photo)
+            KeeperReason = m.Match == MatchKind.Identical ? "Identical file" : _ranking.WhyKept(g.Keeper, m.Photo)
         }).ToList()
     };
 }
@@ -111,6 +112,10 @@ public class ScanLogsStubFunction
     private readonly IScanLogSink _sink;
     private readonly IScanProgressStore _progress;
     public ScanLogsStubFunction(IScanLogSink sink, IScanProgressStore progress) { _sink = sink; _progress = progress; }
+
+    /// <summary>How long a followed stream stays open, and how often it looks for new lines.</summary>
+    public TimeSpan FollowFor { get; init; } = TimeSpan.FromSeconds(30);
+    public TimeSpan PollEvery { get; init; } = TimeSpan.FromSeconds(2);
 
     // Simple JSON list endpoint retained
     [Function("GetScanLogsByInstance")]
@@ -148,9 +153,9 @@ public class ScanLogsStubFunction
         {
             var start = DateTime.UtcNow;
             var lastCount = _sink.GetRecent(id).Count;
-            while (DateTime.UtcNow - start < TimeSpan.FromSeconds(30))
+            while (DateTime.UtcNow - start < FollowFor)
             {
-                await Task.Delay(2000);
+                await Task.Delay(PollEvery);
                 var nowLogs = _sink.GetRecent(id);
                 if (nowLogs.Count > lastCount)
                 {

@@ -9,6 +9,7 @@ using PhotoSense.Infrastructure.Imaging;
 using PhotoSense.Infrastructure.Metadata;
 using PhotoSense.Infrastructure.Places;
 using PhotoSense.Infrastructure.Thumbnails;
+using PhotoSense.Infrastructure.Viewing;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Infrastructure.Events;
@@ -44,6 +45,7 @@ public static class DependencyInjection
         s.AddSingleton<IThumbnailStore>(sp =>
             new FileSystemThumbnailStore(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()));
         s.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
+        s.AddSingleton(sp => new PhotoRanking(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value.KeepFormat));
         s.AddSingleton<IDuplicateAnalysisService, DuplicateAnalysisService>();
         s.AddSingleton<IDuplicateRemovalService, DuplicateRemovalService>();
         s.AddSingleton<IPlaceNameResolver, GeoNamesPlaceResolver>();
@@ -53,6 +55,7 @@ public static class DependencyInjection
         s.AddSingleton<IOutboxStore, LiteDbOutboxStore>();
         s.AddSingleton<IIntegrationEventPublisher, OutboxIntegrationEventPublisher>();
         s.AddSingleton<ICompanionFileFinder, CompanionFileFinder>();
+        s.AddSingleton<ISystemViewer, ShellSystemViewer>();
         s.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
         s.AddSingleton<IPhotoQueryService, PhotoQueryService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
@@ -66,6 +69,8 @@ public static class DependencyInjection
     }
 }
 
+// Starts the Functions worker process; there is nothing here to exercise without the Functions host.
+[System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 public static class Program
 {
     public static async Task Main(string[] args)

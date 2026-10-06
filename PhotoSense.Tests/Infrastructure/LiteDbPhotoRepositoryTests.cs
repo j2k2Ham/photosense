@@ -113,4 +113,12 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
         repo.Dispose(); // a shared database stays open for its other users
         Assert.Equal(2, shared.GetCollection("photos").Count());
     }
+
+    [Fact]
+    public async Task An_Unknown_Id_Or_Path_Finds_Nothing()
+    {
+        using var repo = new LiteDbPhotoRepository(_db);
+        Assert.Null(await repo.GetAsync(PhotoId.New()));
+        Assert.Null(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "never-scanned.jpg")));
+    }
 }

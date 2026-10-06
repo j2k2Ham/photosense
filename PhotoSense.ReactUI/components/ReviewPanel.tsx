@@ -1,5 +1,5 @@
 import React from 'react';
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode } from '../types';
+import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto } from '../types';
 import { formatBytes } from '../lib/format';
 import { DuplicateStrip } from './DuplicateStrip';
 import { PhotoDetails } from './PhotoDetails';
@@ -12,10 +12,11 @@ interface Props {
   /** Opens the floating window on a copy, or on the original when no member is given. */
   onOpen(member?: GroupMemberDto): void;
   onRemoveGroup(group: DuplicateGroupDto): void;
+  onOpenInViewer(photo: PhotoDto): void;
 }
 
 /** The best copy shown as the original, with every photo matched against it underneath. */
-export function ReviewPanel({ group, mode, busy, onOpen, onRemoveGroup }: Props) {
+export function ReviewPanel({ group, mode, busy, onOpen, onRemoveGroup, onOpenInViewer }: Props) {
   if (!group) return <div className="panel flex-1 flex items-center justify-center text-sm text-neutral-500">Select a group to review</div>;
   const original = group.keeper;
   const removable = group.members.filter(m => !m.photo.kept).length;
@@ -30,9 +31,14 @@ export function ReviewPanel({ group, mode, busy, onOpen, onRemoveGroup }: Props)
         </span>
       </div>
 
-      <button type="button" onClick={() => onOpen()} title="Open this file" className="flex-1 min-h-0 cursor-zoom-in">
-        <PhotoView photo={original} />
-      </button>
+      {original.isVideo ? (
+        // A player has its own controls, so it is not wrapped in a button.
+        <div className="flex-1 min-h-0"><PhotoView photo={original} onOpenInViewer={onOpenInViewer} /></div>
+      ) : (
+        <button type="button" onClick={() => onOpen()} title="Open this file" className="flex-1 min-h-0 cursor-zoom-in">
+          <PhotoView photo={original} onOpenInViewer={onOpenInViewer} />
+        </button>
+      )}
 
       <div className="px-4 py-3 border-t border-neutral-700">
         <PhotoDetails photo={original} />

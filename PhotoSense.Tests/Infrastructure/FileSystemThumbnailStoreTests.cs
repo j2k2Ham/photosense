@@ -48,4 +48,16 @@ public sealed class FileSystemThumbnailStoreTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => store.GetAsync(key));
         await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(key, [1]));
     }
+
+    [Fact]
+    public async Task A_Thumbnail_Whose_Place_Is_Already_Taken_Leaves_No_Temporary_File_Behind()
+    {
+        // A folder under the thumbnail's name stands in for an identical thumbnail saved between the check and the move.
+        var store = new FileSystemThumbnailStore(_root.FullName);
+        Directory.CreateDirectory(Path.Combine(_root.FullName, Hash[..2], Hash + ".jpg"));
+
+        await store.SaveAsync(Hash, [1, 2, 3]);
+
+        Assert.Empty(Directory.GetFiles(_root.FullName, "*", SearchOption.AllDirectories));
+    }
 }
