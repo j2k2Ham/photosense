@@ -1,8 +1,6 @@
 @page "/"
-@inject PhotoSense.Application.Scanning.Interfaces.IDuplicateGroupingService DuplicateService
-@inject PhotoSense.Application.Photos.Interfaces.IPhotoQueryService PhotoQuery
+@inject PhotoSense.Application.Scanning.Interfaces.IDuplicateAnalysisService Analysis
 @inject PhotoSense.Domain.Services.IPhotoDeletionService Deleter
-@inject NavigationManager Nav
 
 <h3>Duplicate Photos</h3>
 
@@ -18,24 +16,24 @@ else
 {
     <table class="table table-sm">
         <thead>
-        <tr><th>Hash</th><th>Count</th><th>Files</th><th>Actions</th></tr>
+        <tr><th>Kept</th><th>Count</th><th>Duplicates</th><th>Actions</th></tr>
         </thead>
         <tbody>
         @foreach (var g in duplicateGroups)
         {
             <tr>
-                <td>@g.Hash</td>
-                <td>@g.Photos.Count</td>
+                <td>@g.Keeper.FileName</td>
+                <td>@g.Members.Count</td>
                 <td>
-                    @foreach (var p in g.Photos)
+                    @foreach (var m in g.Members)
                     {
                         <div>
-                            <input type="checkbox" @onchange="e => ToggleSelection(p.Id.Value, e.Value as bool?)" /> @p.FileName
+                            <input type="checkbox" @onchange="e => ToggleSelection(m.Photo.Id.Value, e.Value as bool?)" /> @m.Photo.FileName (@m.Match)
                         </div>
                     }
                 </td>
                 <td>
-                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteSelectedAsync(g.Hash)">Delete Selected</button>
+                    <button class="btn btn-danger btn-sm" @onclick="() => DeleteSelectedAsync(g.Key)">Delete Selected</button>
                 </td>
             </tr>
         }
@@ -63,9 +61,9 @@ else
         if (value == true) selected.Add(id); else selected.Remove(id);
     }
 
-    private async Task DeleteSelectedAsync(string hash)
+    private async Task DeleteSelectedAsync(string key)
     {
-        var toDelete = duplicateGroups?.FirstOrDefault(g => g.Hash == hash)?.Photos.Where(p => selected.Contains(p.Id.Value)).ToList();
+        var toDelete = duplicateGroups?.FirstOrDefault(g => g.Key == key)?.Members.Select(m => m.Photo).Where(p => selected.Contains(p.Id.Value)).ToList();
         if (toDelete is null || toDelete.Count == 0)
         {
             status = "No photos selected."; return;
@@ -81,7 +79,7 @@ else
 
     private async Task LoadAsync()
     {
-        duplicateGroups = await DuplicateService.GetDuplicateGroupsAsync();
+        duplicateGroups = (await Analysis.GetAsync()).Duplicates;
         StateHasChanged();
     }
 }

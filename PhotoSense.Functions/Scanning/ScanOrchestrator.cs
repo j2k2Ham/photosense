@@ -1,53 +1,28 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.DurableTask;
 using PhotoSense.Application.Scanning.Interfaces;
-using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Functions.Scanning;
 
-public record CountLocationRequest(string Path, bool Recursive);
-public record ProcessLocationRequest(string Path, PhotoSet Set, bool Recursive, string InstanceId);
+public record RunScanInput(ScanRequest Request, string InstanceId);
 
 public class ScanOrchestrator
 {
-    private readonly IScanProgressStore _progress;
     private readonly IScanExecutionService _exec;
 
-    public ScanOrchestrator(IScanProgressStore progress, IScanExecutionService exec)
-    {
-        _progress = progress;
-        _exec = exec;
-    }
+    public ScanOrchestrator(IScanExecutionService exec) => _exec = exec;
 
     [Function(nameof(RunScanAsync))]
     public async Task RunScanAsync([OrchestrationTrigger] TaskOrchestrationContext ctx)
     {
-        var input = ctx.GetInput<(string primary, string secondary, bool recursive)>();
-        var instanceId = ctx.InstanceId;
-        _progress.ScanStarted(instanceId);
-        if (input == default) { _progress.ScanCompleted(instanceId); return; }
-
-        var (primary, secondary, recursive) = input;
-
-        var primaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(primary, recursive));
-        var secondaryTotal = await ctx.CallActivityAsync<int>(nameof(CountLocationActivity), new CountLocationRequest(secondary, recursive));
-        _progress.SetTotals(instanceId, primaryTotal, secondaryTotal);
-
-        await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(primary, PhotoSet.Primary, recursive, instanceId));
-        await ctx.CallActivityAsync(nameof(ProcessLocationActivity), new ProcessLocationRequest(secondary, PhotoSet.Secondary, recursive, instanceId));
-
-        _progress.ScanCompleted(instanceId);
+        var request = ctx.GetInput<ScanRequest>();
+        if (request is null) return;
+        // The whole scan is one activity: an orchestrator is replayed after every step, so it must not
+        // report progress itself, and pruning needs to know every file both folders held.
+        await ctx.CallActivityAsync<ScanSummary>(nameof(RunScanActivity), new RunScanInput(request, ctx.InstanceId));
     }
 
-    [Function(nameof(CountLocationActivity))]
-    public int CountLocationActivity([ActivityTrigger] CountLocationRequest req)
-        => ScanExecutionService.EnumerateFiles(req.Path, req.Recursive).Count();
-
-    [Function(nameof(ProcessLocationActivity))]
-    public async Task ProcessLocationActivity([ActivityTrigger] ProcessLocationRequest req)
-    {
-        var files = ScanExecutionService.EnumerateFiles(req.Path, req.Recursive).ToList();
-        await _exec.ProcessAsync(files, req.Set, req.InstanceId);
-    }
+    [Function(nameof(RunScanActivity))]
+    public Task<ScanSummary> RunScanActivity([ActivityTrigger] RunScanInput input)
+        => _exec.RunAsync(input.Request, input.InstanceId);
 }

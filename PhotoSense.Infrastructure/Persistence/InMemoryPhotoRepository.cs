@@ -8,16 +8,29 @@ namespace PhotoSense.Infrastructure.Persistence;
 public class InMemoryPhotoRepository : IPhotoRepository
 {
     private readonly ConcurrentDictionary<PhotoId, Photo> _store = new();
+    private readonly object _writeLock = new();
+    private long _version;
+
+    public long Version => Interlocked.Read(ref _version);
 
     public Task AddOrUpdateAsync(Photo photo, CancellationToken ct = default)
     {
-        _store[photo.Id] = photo;
+        var key = PhotoPath.Key(photo.SourcePath);
+        lock (_writeLock)
+        {
+            // A file has one record: a different record for the same path is replaced, not joined.
+            foreach (var other in _store.Values.Where(p => p.Id != photo.Id && PhotoPath.Key(p.SourcePath) == key).ToList())
+                _store.TryRemove(other.Id, out _);
+            _store[photo.Id] = photo;
+        }
+        Interlocked.Increment(ref _version);
         return Task.CompletedTask;
     }
 
     public Task DeleteAsync(PhotoId id, CancellationToken ct = default)
     {
         _store.TryRemove(id, out _);
+        Interlocked.Increment(ref _version);
         return Task.CompletedTask;
     }
 
@@ -28,6 +41,12 @@ public class InMemoryPhotoRepository : IPhotoRepository
     {
         _store.TryGetValue(id, out var photo);
         return Task.FromResult(photo);
+    }
+
+    public Task<Photo?> GetByPathAsync(string path, CancellationToken ct = default)
+    {
+        var key = PhotoPath.Key(path);
+        return Task.FromResult(_store.Values.FirstOrDefault(p => PhotoPath.Key(p.SourcePath) == key));
     }
 
     public Task<IReadOnlyList<Photo>> GetByHashAsync(string hash, CancellationToken ct = default)

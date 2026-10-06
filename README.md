@@ -9,7 +9,7 @@ Cross-platform photo duplicate & near-duplicate detection.
 | `PhotoSense.Domain` | Core entities, value objects & services abstractions |
 | `PhotoSense.Application` | Application use-cases / orchestration (scanning, grouping) |
 | `PhotoSense.Infrastructure` | Persistence, hashing & metadata extraction implementations |
-| `PhotoSense.Functions` | (Planned) Azure Functions HTTP endpoints / background processing |
+| `PhotoSense.Functions` | Azure Functions HTTP endpoints / background scan |
 | `PhotoSense.BlazorServer` | Existing Blazor Server UI (legacy / secondary) |
 | `PhotoSense.ReactUI` | New Next.js (React) web client (primary UI) |
 | `PhotoSense.Tests` | Automated test suite (unit + perf) |
@@ -37,13 +37,54 @@ Environment vars:
 export NEXT_PUBLIC_API_BASE=http://localhost:7071/api   # Azure Functions / API base
 ```
 
-> For local experimentation before the HTTP API exists, the UI uses mock polling (empty lists). Implement the following endpoints in Functions / Blazor to back the UI:
+The API the UI uses (Functions host, `http://localhost:7071/api`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/scan/start` | POST | Start a scan; returns `{ instanceId }` |
-| `/scan/groups` | GET | Returns duplicate/near-duplicate groups |
-| `/scan/progress/{instanceId}` | GET | Returns current `ScanProgressSnapshot` |
+| `/scan/start` | POST | Start a scan. Body `{ primaryLocation, secondaryLocation?, recursive }`; returns `{ instanceId }`, or 400 `{ error }` when a folder is not found on the server |
+| `/scan/progress/{instanceId}` | GET | Current `ScanProgressSnapshot` |
+| `/scan/groups?mode=duplicates\|similar&page=&pageSize=&q=&hideKept=` | GET | Groups: a keeper (the best copy) and the photos matched against it |
+| `/photos/{id}/thumbnail` | GET | Small JPEG preview (cached at scan time); pictures only |
+| `/photos/{id}/image` | GET | The picture for viewing; HEIC and TIFF are converted to JPEG on the fly |
+| `/photos/{id}/keep?kept=true\|false` | POST | Mark a copy to keep (bulk removal skips it) |
+| `/photos/{id}?physical=true` | DELETE | Remove one file, with the sidecars and Live Photo video that belong to it alone |
+| `/photos/bulk/remove-duplicates?group=` | POST | Remove the duplicates of one group, or of all groups |
+
+Requests that change or remove photos must carry the `x-photosense-client` header (the React client sends it). Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
+
+## How duplicates are found
+
+A scan reads every picture (JPEG, PNG, GIF, BMP, TIFF, WebP, HEIC/HEIF) and video (MOV, MP4, M4V, 3GP) under the chosen folders and keeps one record per file path, so scanning again never makes a file a duplicate of itself. Unchanged files are skipped on later scans.
+
+Videos are matched only as identical files and are never decoded. Identical files have identical sizes, so a video is read in full only when another video has exactly its size; the rest are recorded from their headers alone.
+
+Matches are sorted by how certain they are:
+
+| Tier | What it is | How it is decided | Removed in bulk |
+|------|------------|-------------------|-----------------|
+| Identical file | Same bytes (pictures and videos) | SHA-256 of the file | Yes |
+| Same picture | One shot saved again: converted, resized or re-compressed | A 64-bit DCT perceptual hash nominates pairs (compared bit by bit); each pair is then checked directly: same shape, near-identical pixels at 32×32, and the same capture instant when both files record one | Yes |
+| Similar | Burst frames and edited versions | Looks alike but fails a check above | No, review only |
+
+Within a group the keeper is chosen by resolution first, then format (a lossless file, then JPEG because it opens everywhere, then HEIC and others), then intact capture details, JPEG quality, and file size. The format order lives in `PhotoQuality.FormatRank`. Every other member of a group was compared with the keeper itself, never chained through a third photo. The thresholds live in `PhotoMatcher` with the measurements they came from.
+
+Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path; delete that folder to free the space, or move a file back to restore it. A file is left alone if it, or the copy being kept, changed since the scan.
+
+### Sidecars and Live Photos
+
+An iPhone item can be several files: `IMG_1234.HEIC` (the picture), `IMG_1234.MOV` (its Live Photo video), `IMG_E1234.HEIC` (an edited version) and `IMG_1234.AAE` / `IMG_O1234.AAE` (the record of the edits). When a picture is removed, the files that belonged to it alone go with it:
+
+- Nothing goes while another picture of the same item stays in the folder (the other format, or the edited version).
+- A video goes only if it carries the same Live Photo identifier as the picture. The name is not enough: unrelated videos do end up with the same number as a picture.
+- Sidecars go once no picture or video of the item is left.
+
+A Live Photo's video is also left out of duplicate matching while its picture is beside it, so it can only ever leave together with that picture.
+
+### Place names
+
+Where a picture was taken is shown as the nearest town ("Buxton, North Carolina, US", or "Near Anaconda, Montana, US" when the town is more than 3 km away; nothing beyond 80 km). The lookup uses a list bundled with the application, so positions are never sent anywhere. The list is an extract of [GeoNames](https://www.geonames.org/) data, licensed CC BY 4.0; see `PhotoSense.Infrastructure/Places/README.md`.
+
+Decoding is done with Magick.NET. iPhone HEIC files decode slowly (about a second each), so a first scan of a few thousand photos takes several minutes.
 
 ## Adding New API Fields
 
@@ -86,6 +127,8 @@ Use the PowerShell helper script to spin up the Azure Functions host and the Rea
 
 Creates local photo folders under `PhotoSense.Functions/photos/primary` & `.../secondary` if missing. Press Ctrl+C to stop all processes.
 
+The scan runs as a Durable Functions activity, which needs the Azurite storage emulator. The script starts it when nothing is listening on port 10000 and `azurite` is on PATH (`npm install -g azurite`); `docker compose -f docker-compose.azurite.yml up` works too.
+
 ## VS Code Tasks
 
 Common tasks are defined in `.vscode/tasks.json`:
@@ -121,6 +164,8 @@ There are two mechanisms for consuming scan log lines:
 
 1. REST Polling (always on): `GET /api/scan/logs` returns and drains queued log events.
 2. SignalR (optional): Behind `ENABLE_SIGNALR`, a negotiation endpoint `POST|GET /api/scan/logs/negotiate` plus a timer-driven broadcast (`BroadcastScanLogs`) attempts to push logs to hub `scanlogs` every 5s.
+
+The broadcast is switched off in `local.settings.json` (`AzureWebJobs.BroadcastScanLogs.Disabled`). Without an Azure SignalR connection string it fails every 5 seconds and throws away the log lines it took from the queue, so the polling endpoint would show only some of them. Remove that setting once `AzureSignalRConnectionString` is configured.
 
 If the SignalR broadcast build fails (API drift in extension package), the REST polling endpoint remains a stable fallback. The broadcast currently uses a tentative `[SignalROutput]` pattern returning an array of message objects `{ target, arguments }`.
 

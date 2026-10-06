@@ -2,7 +2,9 @@ import React from 'react';
 import type { ScanProgressSnapshotDto } from '../types';
 
 export function ProgressPanel({ progress }: { progress?: ScanProgressSnapshotDto }) {
-  const p = progress?.overallPercent ?? 0;
+  // Until the files have been counted there is nothing to be a percentage of.
+  const counted = !!progress && (!!progress.completedUtc || progress.primaryTotal + progress.secondaryTotal > 0);
+  const p = counted ? progress.overallPercent : 0;
   return (
     <div className="panel p-3 flex flex-col gap-2">
       <div className="text-xs font-semibold">Scan Progress</div>

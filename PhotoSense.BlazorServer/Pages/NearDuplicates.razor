@@ -1,7 +1,7 @@
 @page "/near"
-@inject PhotoSense.Domain.Services.INearDuplicateService NearDupService
+@inject PhotoSense.Application.Scanning.Interfaces.IDuplicateAnalysisService Analysis
 
-<h3>Near Duplicate Photos</h3>
+<h3>Similar Photos (review only)</h3>
 
 @if (groups is null)
 {
@@ -9,22 +9,22 @@
 }
 else if (groups.Count == 0)
 {
-    <p>No near duplicates within threshold.</p>
+    <p>No similar photos found.</p>
 }
 else
 {
     <table class="table table-sm">
-        <thead><tr><th>Representative Hash</th><th>Count</th><th>Files</th></tr></thead>
+        <thead><tr><th>Best</th><th>Count</th><th>Files</th></tr></thead>
         <tbody>
         @foreach (var g in groups)
         {
             <tr>
-                <td>@g.RepresentativeHash</td>
-                <td>@g.Photos.Count</td>
+                <td>@g.Keeper.FileName</td>
+                <td>@g.Members.Count</td>
                 <td>
-                    @foreach (var p in g.Photos)
+                    @foreach (var m in g.Members)
                     {
-                        <div>@p.FileName (@p.PerceptualHash)</div>
+                        <div>@m.Photo.FileName</div>
                     }
                 </td>
             </tr>
@@ -34,10 +34,10 @@ else
 }
 
 @code {
-    private IReadOnlyList<PhotoSense.Domain.DTOs.NearDuplicateGroup>? groups;
+    private IReadOnlyList<PhotoSense.Domain.DTOs.DuplicateGroup>? groups;
 
     protected override async Task OnInitializedAsync()
     {
-        groups = await NearDupService.GetNearDuplicatesAsync();
+        groups = (await Analysis.GetAsync()).Similar;
     }
 }

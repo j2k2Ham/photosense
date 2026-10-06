@@ -170,6 +170,20 @@ function Get-FreePort([int]$start,[int]$count){
 # Determine React port before launching Next.js to avoid its auto-increment log spam
 $reactPort = Get-FreePort -start $ReactBasePort -count $ReactPortScan
 
+# Scans run as a Durable Functions activity, which keeps its state in the storage emulator.
+$azuriteProc = $null
+$storageUp = $false
+try { $probe = [System.Net.Sockets.TcpClient]::new(); $probe.Connect('127.0.0.1', 10000); $probe.Close(); $storageUp = $true } catch { }
+if(-not $storageUp){
+  if(Get-Command azurite -ErrorAction SilentlyContinue){
+    Write-Host 'Starting Azurite storage emulator' -ForegroundColor DarkGray
+    $azuriteProc = Start-ProcessLogged -Name 'AZURITE' -Command "azurite --silent --location `"$root\.azurite`"" -WorkingDirectory $root -Color DarkGray
+    Start-Sleep -Seconds 2
+  } else {
+    Write-Warning 'Azurite is not running and is not on PATH, so scans will not start. Install it with: npm install -g azurite'
+  }
+}
+
 # Functions start logic with retry & fallback
 function Start-FunctionsHost {
   param([int]$attempt)
@@ -178,7 +192,8 @@ function Start-FunctionsHost {
     return Start-ProcessLogged -Name 'FUNC' -Command "dotnet run --no-build --project $photoRoot/PhotoSense.Functions.csproj -- --port $FunctionsPort" -WorkingDirectory $photoRoot -Color Yellow
   } else {
     Write-Host "Starting Functions via Core Tools (attempt $attempt)" -ForegroundColor Yellow
-    return Start-ProcessLogged -Name 'FUNC' -Command "func start --csharp --port $FunctionsPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
+    # No --csharp: that flag makes Core Tools use its in-process host, which cannot load this isolated-worker app.
+    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
   }
 }
 
@@ -313,7 +328,7 @@ $handler = {
   if($stopping){ return }
   $script:stopping = $true
   Write-Host "`nStopping processes..." -ForegroundColor Cyan
-  foreach($p in @($funcProc,$reactProc,$blazorProc)){
+  foreach($p in @($funcProc,$reactProc,$blazorProc,$azuriteProc)){
     if($p -and -not $p.HasExited){
       try { $p.Kill() } catch { }
     }

@@ -8,26 +8,55 @@ using System.Web;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Application.Scanning.Interfaces;
+using PhotoSense.Contracts.Duplicates;
+using PhotoSense.Functions.Scanning;
 
 namespace PhotoSense.Functions.Api;
 
 public class PhotosFunctions
 {
+    // Largest edge of the picture sent to the review window when the original cannot be shown by a browser.
+    private const int ReviewImageEdge = 2560;
+
+    // Formats a browser displays as they are; anything else (HEIC, TIFF) is converted to JPEG for viewing.
+    private static readonly Dictionary<string, string> BrowserFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        [".jpg"] = "image/jpeg", [".jpeg"] = "image/jpeg", [".png"] = "image/png", [".gif"] = "image/gif", [".webp"] = "image/webp", [".bmp"] = "image/bmp"
+    };
+
+    private readonly IPhotoRepository _repo;
+    private readonly IPhotoSearchService _search;
+    private readonly IPhotoDeletionService _deleter;
+    private readonly IDuplicateRemovalService _remover;
+    private readonly IThumbnailStore _thumbnails;
+    private readonly IImageAnalyzer _analyzer;
+    private readonly IAuditRepository _audit;
+    private readonly IScanLogSink _log;
+    private readonly PhotoDtoMapper _mapper;
+
+    // Services arrive through the constructor: this Functions model does not pass them as method parameters.
+    public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IPhotoDeletionService deleter, IDuplicateRemovalService remover,
+        IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper)
+    {
+        _mapper = mapper;
+        _repo = repo; _search = search; _deleter = deleter; _remover = remover;
+        _thumbnails = thumbnails; _analyzer = analyzer; _audit = audit; _log = log;
+    }
+
     [Function("GetAudit")]
     public async Task<HttpResponseData> GetAuditAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "audit")] HttpRequestData req,
-        IAuditRepository audit)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "audit")] HttpRequestData req)
     {
         var resp = req.CreateResponse(HttpStatusCode.OK);
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        var items = await audit.RecentAsync();
+        var items = await _audit.RecentAsync();
         await resp.WriteAsJsonAsync(items.Select(a => new { a.UtcTimestamp, a.Action, a.PhotoId, a.Details }));
         return resp;
     }
+
     [Function("GetPhotos")]
     public async Task<HttpResponseData> GetPhotosAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos")] HttpRequestData req,
-        IPhotoSearchService search)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos")] HttpRequestData req)
     {
         var qs = HttpUtility.ParseQueryString(req.Url.Query);
         int page = int.TryParse(qs.Get("page"), out var p) ? p : 1;
@@ -36,26 +65,14 @@ public class PhotosFunctions
         var hash = qs.Get("hash");
         var phash = qs.Get("phash");
         var set = qs.Get("set");
-        var result = await search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set));
+        var result = await _search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set));
         var resp = req.CreateResponse(HttpStatusCode.OK);
         await resp.WriteAsJsonAsync(new {
             result.Page,
             result.PageSize,
             result.TotalCount,
             result.TotalPages,
-            items = result.Items.Select(p => new {
-                id = p.Id.Value,
-                p.FileName,
-                p.SourcePath,
-                p.FileSizeBytes,
-                p.ContentHash,
-                p.PerceptualHash,
-                p.TakenOn,
-                p.CameraModel,
-                p.Latitude,
-                p.Longitude,
-                set = p.Set.ToString()
-            })
+            items = result.Items.Select(_mapper.Map)
         });
         return resp;
     }
@@ -63,102 +80,128 @@ public class PhotosFunctions
     [Function("GetPhotoById")]
     public async Task<HttpResponseData> GetPhotoAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos/{id:guid}")] HttpRequestData req,
-        string id,
-        IPhotoQueryService query)
+        string id)
     {
         var resp = req.CreateResponse();
-        if (!Guid.TryParse(id, out var gid))
-        {
-            resp.StatusCode = HttpStatusCode.BadRequest;
-            await resp.WriteStringAsync("Invalid id");
-            return resp;
-        }
-        var photo = await query.GetAsync(new PhotoId(gid));
+        var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null)
         {
             resp.StatusCode = HttpStatusCode.NotFound;
             return resp;
         }
-        resp.StatusCode = HttpStatusCode.OK;
-        await resp.WriteAsJsonAsync(photo);
+        await resp.WriteAsJsonAsync(_mapper.Map(photo));
+        return resp;
+    }
+
+    [Function("GetPhotoThumbnail")]
+    public async Task<HttpResponseData> GetThumbnailAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos/{id:guid}/thumbnail")] HttpRequestData req,
+        string id)
+    {
+        var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
+        // Videos are never decoded, so they have no picture to show.
+        if (photo?.ContentHash is null || photo.IsVideo) return req.CreateResponse(HttpStatusCode.NotFound);
+
+        var jpeg = await _thumbnails.GetAsync(photo.ContentHash);
+        if (jpeg is null)
+        {
+            // The cache was cleared since the scan: make the thumbnail again from the file.
+            try
+            {
+                await using var stream = File.OpenRead(photo.SourcePath);
+                jpeg = (await _analyzer.AnalyzeAsync(stream)).ThumbnailJpeg;
+                await _thumbnails.SaveAsync(photo.ContentHash, jpeg);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return req.CreateResponse(HttpStatusCode.NotFound);
+            }
+        }
+        return await ImageResponseAsync(req, jpeg, "image/jpeg", photo.ContentHash);
+    }
+
+    [Function("GetPhotoImage")]
+    public async Task<HttpResponseData> GetImageAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos/{id:guid}/image")] HttpRequestData req,
+        string id)
+    {
+        var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
+        if (photo is null || photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
+
+        try
+        {
+            if (BrowserFormats.TryGetValue(Path.GetExtension(photo.SourcePath), out var contentType))
+                return await ImageResponseAsync(req, await File.ReadAllBytesAsync(photo.SourcePath), contentType, photo.ContentHash);
+
+            await using var stream = File.OpenRead(photo.SourcePath);
+            return await ImageResponseAsync(req, await _analyzer.RenderJpegAsync(stream, ReviewImageEdge), "image/jpeg", photo.ContentHash);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            var failed = req.CreateResponse(HttpStatusCode.UnprocessableEntity);
+            await failed.WriteStringAsync($"This file could not be shown: {ex.Message}");
+            return failed;
+        }
+    }
+
+    // A file's bytes never change under the same content hash, so the browser may keep what it was sent.
+    private static async Task<HttpResponseData> ImageResponseAsync(HttpRequestData req, byte[] bytes, string contentType, string? contentHash)
+    {
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        resp.Headers.Add("Content-Type", contentType);
+        resp.Headers.Add("Cache-Control", "private, max-age=86400");
+        if (contentHash is not null) resp.Headers.Add("ETag", $"\"{contentHash}\"");
+        await resp.Body.WriteAsync(bytes);
         return resp;
     }
 
     [Function("DeletePhoto")]
     public async Task<HttpResponseData> DeletePhotoAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "photos/{id:guid}")] HttpRequestData req,
-        string id,
-        IPhotoDeletionService deleter,
-        IScanLogSink? logSink,
-        IAuditRepository audit)
+        string id)
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         var physical = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("physical") == "true";
-        if (!Guid.TryParse(id, out var gid))
+        var gid = Guid.Parse(id);
+        var result = await _deleter.DeleteAsync(new PhotoId(gid), physical);
+        switch (result.Outcome)
         {
-            resp.StatusCode = HttpStatusCode.BadRequest;
-            await resp.WriteStringAsync("Invalid id");
-            return resp;
+            case RemovalOutcome.NotFound:
+                resp.StatusCode = HttpStatusCode.NotFound;
+                return resp;
+            case RemovalOutcome.Changed:
+                await resp.WriteStringAsync("The file has changed since it was scanned, so it was left alone. Scan again.");
+                resp.StatusCode = HttpStatusCode.Conflict;
+                return resp;
+            case RemovalOutcome.Failed:
+                await resp.WriteStringAsync($"The file could not be moved: {result.Error}");
+                resp.StatusCode = HttpStatusCode.InternalServerError;
+                return resp;
         }
-        await deleter.DeleteAsync(new PhotoId(gid), physical);
-        logSink?.Log("audit","Info",$"Deleted photo {gid} physical={physical}");
-        await audit.AddAsync(new AuditEntry { Action = "Delete", PhotoId = gid.ToString(), Details = physical?"physical":"logical" });
-        resp.StatusCode = HttpStatusCode.NoContent;
+        _log.Log("audit","Info",$"Removed photo {gid} physical={physical}");
+        await _audit.AddAsync(new AuditEntry { Action = "Delete", PhotoId = gid.ToString(), Details = result.HeldAt is null ? "logical" : $"moved to {result.HeldAt} with {result.Companions.Count} linked files" });
+        await resp.WriteAsJsonAsync(new { heldAt = result.HeldAt, companions = result.Companions.Count });
         return resp;
     }
 
-    [Function("GetDuplicateGroups")]
-    public async Task<HttpResponseData> GetDuplicateGroupsAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "duplicates")] HttpRequestData req,
-        IDuplicateGroupingService dups)
-    {
-        var groups = await dups.GetDuplicateGroupsAsync();
-        var resp = req.CreateResponse(HttpStatusCode.OK);
-        await resp.WriteAsJsonAsync(groups.Select(g => new
-        {
-            g.Hash,
-            count = g.Photos.Count,
-            photos = g.Photos.Select(p => new { id = p.Id.Value, p.FileName, p.SourcePath })
-        }));
-        return resp;
-    }
-
-    [Function("GetNearDuplicateGroups")]
-    public async Task<HttpResponseData> GetNearDuplicateGroupsAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "near-duplicates")] HttpRequestData req,
-        INearDuplicateService near)
-    {
-        var groups = await near.GetNearDuplicatesAsync();
-        var resp = req.CreateResponse(HttpStatusCode.OK);
-        await resp.WriteAsJsonAsync(groups.Select(g => new
-        {
-            g.RepresentativeHash,
-            count = g.Photos.Count,
-            photos = g.Photos.Select(p => new { id = p.Id.Value, p.FileName, p.SourcePath, p.PerceptualHash })
-        }));
-        return resp;
-    }
-
-    [Function("KeepPhoto")]
+    [Function("KeepPhoto")] // POST /api/photos/{id}/keep  (add ?kept=false to undo)
     public async Task<HttpResponseData> KeepPhotoAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/keep")] HttpRequestData req,
-        string id,
-        IPhotoRepository repo,
-        IScanLogSink? logSink,
-        IAuditRepository audit)
+        string id)
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
-        var photo = await repo.GetAsync(new PhotoId(gid));
+        var gid = Guid.Parse(id);
+        var kept = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("kept") != "false";
+        var photo = await _repo.GetAsync(new PhotoId(gid));
         if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
-        if (!photo.IsKept)
+        if (photo.IsKept != kept)
         {
-            photo.IsKept = true;
-            await repo.AddOrUpdateAsync(photo);
-            logSink?.Log("audit","Info",$"Kept photo {gid}");
-            await audit.AddAsync(new AuditEntry { Action = "Keep", PhotoId = gid.ToString(), Details = "" });
+            photo.IsKept = kept;
+            await _repo.AddOrUpdateAsync(photo);
+            _log.Log("audit","Info",$"{(kept ? "Kept" : "Unkept")} photo {gid}");
+            await _audit.AddAsync(new AuditEntry { Action = kept ? "Keep" : "Unkeep", PhotoId = gid.ToString(), Details = "" });
         }
         resp.StatusCode = HttpStatusCode.NoContent;
         return resp;
@@ -167,151 +210,48 @@ public class PhotosFunctions
     [Function("MovePhoto")]
     public async Task<HttpResponseData> MovePhotoAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/{id:guid}/move")] HttpRequestData req,
-        string id,
-        IPhotoQueryService query,
-        IPhotoRepository repo,
-        IScanLogSink? logSink,
-        IAuditRepository audit)
+        string id)
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        if (!Guid.TryParse(id, out var gid)) { resp.StatusCode = HttpStatusCode.BadRequest; return resp; }
+        var gid = Guid.Parse(id);
         var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         var target = qs.Get("target");
         if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) { resp.StatusCode = HttpStatusCode.BadRequest; await resp.WriteStringAsync("Invalid target"); return resp; }
-        var photo = await query.GetAsync(new PhotoId(gid));
+        var photo = await _repo.GetAsync(new PhotoId(gid));
         if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
-        var source = photo.SourcePath;
         var newPath = Path.Combine(target, photo.FileName);
         try
         {
-            File.Move(source, newPath, true);
-            var updated = new Photo
-            {
-                Id = photo.Id,
-                SourcePath = newPath,
-                FileName = photo.FileName,
-                FileSizeBytes = photo.FileSizeBytes,
-                ContentHash = photo.ContentHash,
-                PerceptualHash = photo.PerceptualHash,
-                TakenOn = photo.TakenOn,
-                CameraModel = photo.CameraModel,
-                Latitude = photo.Latitude,
-                Longitude = photo.Longitude,
-                Set = photo.Set,
-                IsKept = photo.IsKept
-            };
-            await repo.AddOrUpdateAsync(updated);
-            logSink?.Log("audit","Info",$"Moved photo {gid} to {target}");
-            await audit.AddAsync(new AuditEntry { Action = "Move", PhotoId = gid.ToString(), Details = target });
+            // No overwrite: a file already at the target is someone else's picture.
+            File.Move(photo.SourcePath, newPath);
+            await _repo.AddOrUpdateAsync(photo.MovedTo(newPath));
+            _log.Log("audit","Info",$"Moved photo {gid} to {target}");
+            await _audit.AddAsync(new AuditEntry { Action = "Move", PhotoId = gid.ToString(), Details = target });
             resp.StatusCode = HttpStatusCode.NoContent;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            resp.StatusCode = HttpStatusCode.InternalServerError;
             await resp.WriteStringAsync(ex.Message);
+            resp.StatusCode = HttpStatusCode.Conflict;
         }
+        return resp;
+    }
+
+    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group)
+    public async Task<HttpResponseData> RemoveDuplicatesAsync(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/remove-duplicates")] HttpRequestData req)
+    {
+        var resp = req.CreateResponse();
+        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
+        var group = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("group");
+        var result = await _remover.RemoveDuplicatesAsync(string.IsNullOrWhiteSpace(group) ? null : group);
+        _log.Log("audit", "Info", $"Removed {result.Removed} duplicates ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
+        await _audit.AddAsync(new AuditEntry { Action = "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}" });
+        await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems });
         return resp;
     }
 
     private static bool Authorize(HttpRequestData req)
-    {
-        // Simple API key check (e.g., x-api-key header). For production replace with proper auth.
-        if (!req.Headers.TryGetValues("x-api-key", out var vals)) return false;
-        var key = vals.FirstOrDefault();
-        var expected = Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY");
-        if (string.IsNullOrEmpty(expected)) return true; // if not set, allow
-        return key == expected;
-    }
-
-    [Function("BulkKeepBest")]
-    public async Task<HttpResponseData> BulkKeepBestAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/keep-best")] HttpRequestData req,
-        IDuplicateGroupingService groups,
-        IPhotoRepository repo,
-        IAuditRepository audit,
-        IScanLogSink? log)
-    {
-        var resp = req.CreateResponse();
-        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        var dupGroups = await groups.GetDuplicateGroupsAsync();
-        int changed = 0;
-        foreach (var g in dupGroups)
-        {
-            var best = g.Photos.FirstOrDefault(p=>!p.IsKept);
-            if (best != null)
-            {
-                best.IsKept = true;
-                await repo.AddOrUpdateAsync(best);
-                await audit.AddAsync(new AuditEntry{ Action="KeepBest", PhotoId=best.Id.ToString(), Details=g.Hash });
-                log?.Log("audit","Info",$"Bulk keep-best {best.Id}");
-                changed++;
-            }
-        }
-        resp.StatusCode = HttpStatusCode.OK;
-        await resp.WriteAsJsonAsync(new { kept = changed });
-        return resp;
-    }
-
-    [Function("BulkMoveOthers")]
-    public async Task<HttpResponseData> BulkMoveOthersAsync(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/move-others")] HttpRequestData req,
-        IDuplicateGroupingService groups,
-        IPhotoRepository repo,
-        IAuditRepository audit,
-        IScanLogSink? log)
-    {
-        var resp = req.CreateResponse();
-        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        string body = await new StreamReader(req.Body).ReadToEndAsync();
-        string? target = null;
-        if (!string.IsNullOrWhiteSpace(body))
-        {
-            try { var json = System.Text.Json.JsonDocument.Parse(body); if (json.RootElement.TryGetProperty("target", out var t)) target = t.GetString(); } catch { }
-        }
-        target ??= System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("target");
-        if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) { resp.StatusCode = HttpStatusCode.BadRequest; await resp.WriteStringAsync("Missing or invalid target"); return resp; }
-        var dupGroups = await groups.GetDuplicateGroupsAsync();
-        int moved = 0;
-        foreach (var g in dupGroups)
-        {
-            var photos = g.Photos.ToList();
-            if (photos.Count <= 1) continue;
-            var keep = photos.First();
-            foreach (var other in photos.Skip(1))
-            {
-                try
-                {
-                    var newPath = Path.Combine(target, other.FileName);
-                    File.Move(other.SourcePath, newPath, true);
-                    var updated = new Photo
-                    {
-                        Id = other.Id,
-                        SourcePath = newPath,
-                        FileName = other.FileName,
-                        FileSizeBytes = other.FileSizeBytes,
-                        ContentHash = other.ContentHash,
-                        PerceptualHash = other.PerceptualHash,
-                        TakenOn = other.TakenOn,
-                        CameraModel = other.CameraModel,
-                        Latitude = other.Latitude,
-                        Longitude = other.Longitude,
-                        Set = other.Set,
-                        IsKept = other.IsKept
-                    };
-                    await repo.AddOrUpdateAsync(updated);
-                    await audit.AddAsync(new AuditEntry{ Action="Move", PhotoId=other.Id.ToString(), Details=newPath });
-                    log?.Log("audit","Info",$"Bulk moved {other.Id} -> {newPath}");
-                    moved++;
-                }
-                catch (Exception ex)
-                {
-                    log?.Log("audit","Error",$"Bulk move failed {other.Id}: {ex.Message}");
-                }
-            }
-        }
-        resp.StatusCode = HttpStatusCode.OK;
-        await resp.WriteAsJsonAsync(new { moved });
-        return resp;
-    }
+        => RequestGuard.Allows(req.Headers, Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY"));
 }

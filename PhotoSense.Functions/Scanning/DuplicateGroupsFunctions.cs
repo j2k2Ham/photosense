@@ -2,84 +2,85 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System.Net;
 using PhotoSense.Application.Scanning.Interfaces;
-using PhotoSense.Domain.Services;
-using PhotoSense.Domain.Repositories;
+using PhotoSense.Application.Scanning.Services;
+using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
-using System.Security.Cryptography;
-using System.Text;
+using PhotoSense.Domain.Services;
 using D = PhotoSense.Contracts.Duplicates; // alias for shared duplicate group DTOs
 
 namespace PhotoSense.Functions.Scanning;
 
-public sealed class ScanGroupingFacade
+/// <summary>Turns a photo record into what the UI shows, including the name of the place it was taken.</summary>
+public sealed class PhotoDtoMapper
 {
-    private readonly IDuplicateGroupingService _dups;
-    private readonly INearDuplicateService _near;
-    public ScanGroupingFacade(IDuplicateGroupingService dups, INearDuplicateService near) { _dups = dups; _near = near; }
+    private readonly IPlaceNameResolver _places;
+    public PhotoDtoMapper(IPlaceNameResolver places) => _places = places;
 
-    public async Task<D.DuplicateGroupsPageDto> BuildAsync(bool near, int threshold, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
+    public D.PhotoItemDto Map(Photo p) => new()
     {
-        if (!near)
-        {
-            var groups = await _dups.GetDuplicateGroupsAsync(ct);
-            if (!string.IsNullOrWhiteSpace(q))
-                groups = groups.Where(g => g.Photos.Any(p => p.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
-            var unfilteredTotal = groups.Count; // before hide-kept filtering
-            if (hideKept)
-            {
-                groups = groups.Select(g => new PhotoSense.Domain.DTOs.DuplicateGroup(g.Hash, g.Photos.Where(p => !p.IsKept).ToList()))
-                               .Where(g => g.Photos.Count > 0).ToList();
-            }
-            var total = groups.Count; // after filtering
-            var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            var items = pageItems.Select(g => new D.ExactGroupItemDto(g.Hash, g.Photos.Select(MapPhoto).ToList())).ToList();
-            return new D.ExactDuplicateGroupsPageDto(page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
-        }
-        else
-        {
-            var groups = await _near.GetNearDuplicatesAsync(threshold, ct);
-            if (!string.IsNullOrWhiteSpace(q))
-                groups = groups.Where(g => g.Photos.Any(p => p.FileName.Contains(q, StringComparison.OrdinalIgnoreCase))).ToList();
-            var unfilteredTotal = groups.Count; // pre hide-kept
-            if (hideKept)
-            {
-                groups = groups.Select(g => new PhotoSense.Domain.DTOs.NearDuplicateGroup(g.RepresentativeHash, g.Photos.Where(p => !p.IsKept).ToList()))
-                               .Where(g => g.Photos.Count > 0).ToList();
-            }
-            var total = groups.Count; // post filtering
-            var pageItems = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-            var items = pageItems.Select(g => new D.NearGroupItemDto(
-                g.RepresentativeHash,
-                g.Photos.Select(MapPhoto).ToList(),
-                g.Photos.Max(p => Hamming(g.RepresentativeHash, p.PerceptualHash ?? g.RepresentativeHash))
-            )).ToList();
-            return new D.NearDuplicateGroupsPageDto(threshold, page, pageSize, unfilteredTotal, total, (int)Math.Ceiling(total / (double)pageSize), items);
-        }
-    }
-
-    private static int Hamming(string a, string b)
-    {
-        if (a.Length != b.Length) return int.MaxValue;
-        int d = 0;
-        for (int i = 0; i < a.Length; i++)
-        {
-            if (a[i] != b[i]) d++;
-        }
-        return d;
-    }
-
-    private static D.PhotoItemDto MapPhoto(PhotoSense.Domain.Entities.Photo p) => new()
-    {
-    Id = p.Id.Value,
+        Id = p.Id.Value,
         FileName = p.FileName,
         SourcePath = p.SourcePath,
+        Folder = Path.GetDirectoryName(p.SourcePath) ?? string.Empty,
         FileSizeBytes = p.FileSizeBytes,
-        ContentHash = p.ContentHash,
-        PerceptualHash = p.PerceptualHash,
+        Width = p.Width,
+        Height = p.Height,
+        Format = p.Format,
+        IsVideo = p.IsVideo,
+        DurationSeconds = p.DurationSeconds,
         TakenOn = p.TakenOn,
         CameraModel = p.CameraModel,
+        Latitude = p.Latitude,
+        Longitude = p.Longitude,
+        PlaceName = p.Latitude is { } latitude && p.Longitude is { } longitude ? _places.Describe(latitude, longitude) : null,
         Set = p.Set.ToString(),
         Kept = p.IsKept
+    };
+}
+
+public sealed class ScanGroupingFacade
+{
+    private readonly IDuplicateAnalysisService _analysis;
+    private readonly PhotoDtoMapper _mapper;
+    public ScanGroupingFacade(IDuplicateAnalysisService analysis, PhotoDtoMapper mapper) { _analysis = analysis; _mapper = mapper; }
+
+    /// <param name="similar">False for duplicates (safe to remove in bulk), true for look-alikes (review only).</param>
+    /// <param name="hideKept">Leave out groups in which every member has been marked to keep.</param>
+    public async Task<D.DuplicateGroupsPageDto> BuildAsync(bool similar, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
+    {
+        var analysis = await _analysis.GetAsync(ct);
+        IEnumerable<DuplicateGroup> groups = similar ? analysis.Similar : analysis.Duplicates;
+        if (!string.IsNullOrWhiteSpace(q))
+            groups = groups.Where(g => g.Members.Select(m => m.Photo).Prepend(g.Keeper).Any(p => p.SourcePath.Contains(q, StringComparison.OrdinalIgnoreCase)));
+        if (hideKept)
+            groups = groups.Where(g => g.Removable.Any());
+
+        var filtered = groups.ToList();
+        var items = filtered.Skip((page - 1) * pageSize).Take(pageSize).Select(MapGroup).ToList();
+        return new D.DuplicateGroupsPageDto
+        {
+            Mode = similar ? "similar" : "duplicates",
+            Page = page,
+            PageSize = pageSize,
+            Total = filtered.Count,
+            TotalPages = (int)Math.Ceiling(filtered.Count / (double)pageSize),
+            RemovableCount = analysis.Duplicates.Sum(g => g.Removable.Count()),
+            ReclaimableBytes = analysis.Duplicates.Sum(g => g.ReclaimableBytes),
+            Items = items
+        };
+    }
+
+    private D.DuplicateGroupDto MapGroup(DuplicateGroup g) => new()
+    {
+        Key = g.Key,
+        Keeper = _mapper.Map(g.Keeper),
+        ReclaimableBytes = g.ReclaimableBytes,
+        Members = g.Members.Select(m => new D.GroupMemberDto
+        {
+            Photo = _mapper.Map(m.Photo),
+            Match = m.Match switch { MatchKind.Identical => "identical", MatchKind.SamePicture => "samePicture", _ => "similar" },
+            KeeperReason = m.Match == MatchKind.Identical ? "Identical file" : PhotoQuality.WhyKept(g.Keeper, m.Photo)
+        }).ToList()
     };
 }
 
@@ -93,24 +94,13 @@ public class DuplicateGroupsFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/groups")] HttpRequestData req)
     {
         var q = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        bool near = bool.TryParse(q.Get("near"), out var n) && n;
-        int threshold = int.TryParse(q.Get("threshold"), out var t) ? Math.Clamp(t, 0, 32) : 12;
+        bool similar = string.Equals(q.Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
         int page = int.TryParse(q.Get("page"), out var p) ? Math.Max(1, p) : 1;
-        int pageSize = int.TryParse(q.Get("pageSize"), out var ps) ? Math.Clamp(ps, 1, 200) : 100;
+        int pageSize = int.TryParse(q.Get("pageSize"), out var ps) ? Math.Clamp(ps, 1, 200) : 50;
         var text = q.Get("q");
         var hideKept = q.Get("hideKept") == "true";
-        var payload = await _facade.BuildAsync(near, threshold, text, hideKept, page, pageSize, CancellationToken.None);
+        var payload = await _facade.BuildAsync(similar, text, hideKept, page, pageSize, CancellationToken.None);
         var resp = req.CreateResponse(HttpStatusCode.OK);
-        // Compute weak ETag for basic caching
-        try
-        {
-            var sb = new StringBuilder();
-            foreach (var it in payload.Items.Take(5)) sb.Append(it.Key).Append('|');
-            using var md5 = MD5.Create();
-            var hash = Convert.ToHexString(md5.ComputeHash(Encoding.UTF8.GetBytes(sb.ToString())));
-            resp.Headers.Add("ETag", $"W/\"{payload.Mode}-{page}-{hash}\"");
-        }
-        catch { /* non-fatal */ }
         await resp.WriteAsJsonAsync(payload);
         return resp;
     }
@@ -118,11 +108,15 @@ public class DuplicateGroupsFunctions
 
 public class ScanLogsStubFunction
 {
+    private readonly IScanLogSink _sink;
+    private readonly IScanProgressStore _progress;
+    public ScanLogsStubFunction(IScanLogSink sink, IScanProgressStore progress) { _sink = sink; _progress = progress; }
+
     // Simple JSON list endpoint retained
-    [Function("GetScanLogs")] 
-    public async Task<HttpResponseData> GetLogs([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/{instanceId?}")] HttpRequestData req, string? instanceId, IScanLogSink sink, IScanProgressStore progress)
+    [Function("GetScanLogsByInstance")]
+    public async Task<HttpResponseData> GetLogs([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/{instanceId?}")] HttpRequestData req, string? instanceId)
     {
-        var snap = progress.GetLatest();
+        var snap = _progress.GetLatest();
         var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
         var resp = req.CreateResponse(HttpStatusCode.OK);
         DateTime? since = null;
@@ -131,7 +125,7 @@ public class ScanLogsStubFunction
     if (DateTime.TryParse(sinceRaw, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var parsed)) since = parsed.ToUniversalTime();
         var lines = string.IsNullOrWhiteSpace(id)
             ? new List<object>()
-            : sink.GetRecent(id).Where(l => !since.HasValue || l.ts > since.Value)
+            : _sink.GetRecent(id).Where(l => !since.HasValue || l.ts > since.Value)
                 .Select(l => (object)new { l.ts, l.level, l.message }).ToList();
         await resp.WriteAsJsonAsync(lines);
         return resp;
@@ -139,25 +133,25 @@ public class ScanLogsStubFunction
 
     // Basic SSE stream; in production you might bridge to SignalR or Service Bus
     [Function("GetScanLogsStream")] // GET /api/scan/logs/stream
-    public async Task<HttpResponseData> GetLogsStream([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/stream/{instanceId?}")] HttpRequestData req, string? instanceId, IScanLogSink sink, IScanProgressStore progress)
+    public async Task<HttpResponseData> GetLogsStream([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/stream/{instanceId?}")] HttpRequestData req, string? instanceId)
     {
-        var snap = progress.GetLatest();
+        var snap = _progress.GetLatest();
         var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
         var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", "text/event-stream");
         if (string.IsNullOrWhiteSpace(id)) { await resp.WriteStringAsync("event: message\ndata: No active scan\n\n"); return resp; }
         var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         bool follow = bool.TryParse(qs.Get("follow"), out var f) && f;
-        var recent = sink.GetRecent(id).Select(l => $"event: log\ndata: {l.ts:o} {l.level} {l.message}\n\n");
+        var recent = _sink.GetRecent(id).Select(l => $"event: log\ndata: {l.ts:o} {l.level} {l.message}\n\n");
         await resp.WriteStringAsync(string.Join(string.Empty, recent));
         if (follow)
         {
             var start = DateTime.UtcNow;
-            var lastCount = sink.GetRecent(id).Count;
+            var lastCount = _sink.GetRecent(id).Count;
             while (DateTime.UtcNow - start < TimeSpan.FromSeconds(30))
             {
                 await Task.Delay(2000);
-                var nowLogs = sink.GetRecent(id);
+                var nowLogs = _sink.GetRecent(id);
                 if (nowLogs.Count > lastCount)
                 {
                     foreach (var l in nowLogs.Skip(lastCount))

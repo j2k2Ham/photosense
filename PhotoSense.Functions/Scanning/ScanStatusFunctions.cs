@@ -8,14 +8,16 @@ namespace PhotoSense.Functions.Scanning;
 
 public class ScanStatusFunctions
 {
+    private readonly IPhotoRepository _repo;
+    private readonly IScanProgressStore _progress;
+    public ScanStatusFunctions(IPhotoRepository repo, IScanProgressStore progress) { _repo = repo; _progress = progress; }
+
     [Function("ScanStatus")]
     public async Task<HttpResponseData> GetStatus(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/status")] HttpRequestData req,
-        IPhotoRepository repo,
-        IScanProgressStore progress)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/status")] HttpRequestData req)
     {
-        var photos = await repo.GetAllAsync();
-        var snap = progress.GetLatest();
+        var photos = await _repo.GetAllAsync();
+        var snap = _progress.GetLatest();
         var resp = req.CreateResponse(HttpStatusCode.OK);
         var payload = new
         {

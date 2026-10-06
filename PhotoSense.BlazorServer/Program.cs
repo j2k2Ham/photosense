@@ -19,12 +19,12 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 
 builder.Services.AddSingleton<IPhotoRepository>(_ => new LiteDbPhotoRepository());
-builder.Services.AddSingleton<IImageHashingService, PerceptualHashingService>();
+builder.Services.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
 builder.Services.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
-builder.Services.AddSingleton<IDuplicateGroupingService, DuplicateGroupingService>();
-builder.Services.AddSingleton<INearDuplicateService, NearDuplicateService>();
+builder.Services.AddSingleton<IDuplicateAnalysisService, DuplicateAnalysisService>();
 builder.Services.AddSingleton<IScanRequestPublisher, ScanRequestPublisher>();
 builder.Services.AddSingleton<IIntegrationEventPublisher, InMemoryIntegrationEventPublisher>();
+builder.Services.AddSingleton<ICompanionFileFinder, CompanionFileFinder>();
 builder.Services.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
 builder.Services.AddSingleton<IPhotoQueryService, PhotoQueryService>();
 

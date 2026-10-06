@@ -1,23 +1,40 @@
 import useSWR, { mutate } from 'swr';
 import * as signalR from '@microsoft/signalr';
-import type { GroupsPageDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
-
-// GroupsPageDto type imported; no local interface needed.
+import type { BulkRemovalResultDto, GroupMode, GroupsPageDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
 
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth enforced
+// The server acts on photos only for requests carrying this header, which other web sites cannot send.
+const authHeaders: Record<string, string> = { 'x-photosense-client': 'web', ...(API_KEY ? { 'x-api-key': API_KEY } : {}) };
+
+// The server answers failures with either plain text or { error }.
+async function failure(res: Response): Promise<Error> {
+  const text = await res.text();
+  try { return new Error(JSON.parse(text).error ?? text); } catch { return new Error(text || `Request failed (${res.status})`); }
+}
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...(API_KEY? {'x-api-key':API_KEY}:{}), ...(init?.headers||{}) } });
-  if (!res.ok) throw new Error(await res.text());
+  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...(init?.headers||{}) } });
+  if (!res.ok) throw await failure(res);
   return res.json();
 }
 
-export function useDuplicateGroups(filter: string, near: boolean, threshold: number, page: number, hideKept: boolean) {
-  const key = `${API_BASE}/scan/groups?near=${near}&threshold=${threshold}&page=${page}&hideKept=${hideKept}&q=${encodeURIComponent(filter||'')}`;
-  return useSWR<GroupsPageDto>(key, json, { refreshInterval: 5000 });
+async function send(url: string, method: 'POST' | 'DELETE'): Promise<Response> {
+  const res = await fetch(url, { method, headers: authHeaders });
+  if (!res.ok) throw await failure(res);
+  return res;
+}
+
+const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && key.includes('/scan/groups'));
+
+export const thumbnailUrl = (id: string) => `${API_BASE}/photos/${id}/thumbnail`;
+export const imageUrl = (id: string) => `${API_BASE}/photos/${id}/image`;
+
+export function useGroups(mode: GroupMode, filter: string, page: number, hideKept: boolean) {
+  const key = `${API_BASE}/scan/groups?mode=${mode}&page=${page}&hideKept=${hideKept}&q=${encodeURIComponent(filter||'')}`;
+  return useSWR<GroupsPageDto>(key, json, { refreshInterval: 5000, keepPreviousData: true });
 }
 
 /**
@@ -64,26 +81,26 @@ export function connectLogStream(onLine: (l: string)=>void) {
   return () => { disposed = true; };
 }
 
-export async function keepPhoto(id: string){
-  await fetch(`${API_BASE}/photos/${id}/keep`, { method: 'POST', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
-  mutate((key:string)=> key?.includes('/scan/groups'));
-}
-export async function movePhoto(id: string, target: string){
-  await fetch(`${API_BASE}/photos/${id}/move?target=${encodeURIComponent(target)}`, { method: 'POST', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
-  mutate((key:string)=> key?.includes('/scan/groups'));
-}
-export async function deletePhoto(id: string){
-  await fetch(`${API_BASE}/photos/${id}`, { method: 'DELETE', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
-  mutate((key:string)=> key?.includes('/scan/groups'));
+/** Marks a photo to keep (bulk removal skips it), or clears the mark. */
+export async function setKept(id: string, kept: boolean){
+  await send(`${API_BASE}/photos/${id}/keep?kept=${kept}`, 'POST');
+  await refreshGroups();
 }
 
-export async function bulkKeepBest(){
-  await fetch(`${API_BASE}/photos/bulk/keep-best`, { method: 'POST', headers: { ...(API_KEY? {'x-api-key':API_KEY}:{}) } });
-  mutate((key:string)=> key?.includes('/scan/groups'));
+/** Moves one file, and the sidecars and Live Photo video that belong to it alone, to the holding folder. */
+export async function removePhoto(id: string): Promise<{ companions: number }> {
+  const res = await send(`${API_BASE}/photos/${id}?physical=true`, 'DELETE');
+  const result = await res.json();
+  await refreshGroups();
+  return result;
 }
-export async function bulkMoveOthers(target: string){
-  await fetch(`${API_BASE}/photos/bulk/move-others`, { method: 'POST', body: JSON.stringify({ target }), headers:{'Content-Type':'application/json', ...(API_KEY? {'x-api-key':API_KEY}:{})} });
-  mutate((key:string)=> key?.includes('/scan/groups'));
+
+/** Moves the duplicates of one group, or of every group, to the holding folder. */
+export async function removeDuplicates(groupKey?: string): Promise<BulkRemovalResultDto> {
+  const res = await send(`${API_BASE}/photos/bulk/remove-duplicates${groupKey ? `?group=${encodeURIComponent(groupKey)}` : ''}`, 'POST');
+  const result = await res.json();
+  await refreshGroups();
+  return result;
 }
 
 export function useScanProgress(instanceId?: string) {

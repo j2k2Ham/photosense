@@ -7,8 +7,8 @@ export function SettingsPanel({ onStarted }: Props) {
   const [primary, setPrimary] = useState('');
   const [secondary, setSecondary] = useState('');
   const [recursive, setRecursive] = useState(true);
-  const [threshold, setThreshold] = useState(12);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
 
@@ -63,15 +63,16 @@ export function SettingsPanel({ onStarted }: Props) {
 
   async function handleScan() {
     setBusy(true);
+    setError(undefined);
     try {
-      const res = await startScan({ primaryLocation: primary, secondaryLocation: secondary || undefined, recursive, hammingThreshold: threshold });
+      const res = await startScan({ primaryLocation: primary.trim(), secondaryLocation: secondary.trim() || undefined, recursive });
       onStarted(res.instanceId);
-    } catch (e) { console.error(e); alert('Failed to start scan'); }
+    } catch (e) { setError(e instanceof TypeError ? 'Cannot reach the PhotoSense server.' : e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
   }
 
   return (
-    <div className="panel p-4 flex flex-col gap-4 w-72 shrink-0 overflow-y-auto">
+    <div className="panel p-4 flex flex-col gap-4">
       <div>
         <label htmlFor="primaryPath" className="block text-xs font-semibold mb-1">Root folder path</label>
         <div className="flex gap-2">
@@ -87,17 +88,14 @@ export function SettingsPanel({ onStarted }: Props) {
           <button type="button" onClick={()=>pickDirectory('secondary')} className="btn-secondary px-2 py-1 text-xs" title="Browse...">…</button>
         </div>
   <input ref={secondaryInputRef} type="file" style={{display:'none'}} multiple onChange={e=>onHiddenDirChange(e,'secondary')} />
-        <p className="mt-1 text-[10px] text-neutral-500 leading-snug">Note: Browsers cannot expose the full local path for security. The picker provides the folder name only; adjust manually if an absolute path is required on the server.</p>
-      </div>
-      <div>
-        <label className="block text-xs font-semibold mb-1">Hamming threshold: {threshold}</label>
-        <input type="range" min={0} max={32} value={threshold} onChange={e=>setThreshold(parseInt(e.target.value))} className="w-full" />
+        <p className="mt-1 text-[10px] text-neutral-500 leading-snug">Type or paste the full path as the server sees it, for example {'C:\\Users\\you\\Pictures'}. The browse button can only fill in a folder name, because browsers do not reveal full paths.</p>
       </div>
       <div className="flex items-center gap-2 text-xs">
         <input id="recursive" type="checkbox" checked={recursive} onChange={e=>setRecursive(e.target.checked)} />
         <label htmlFor="recursive">Recursive</label>
       </div>
-      <button disabled={!primary || busy} onClick={handleScan} className="btn-primary">{busy? 'Starting...' : 'Scan'}</button>
+      <button disabled={!primary.trim() || busy} onClick={handleScan} className="btn-primary">{busy? 'Starting...' : 'Scan'}</button>
+      {error && <p role="alert" className="text-xs text-rose-400 break-words">{error}</p>}
     </div>
   );
 }

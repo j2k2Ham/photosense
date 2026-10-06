@@ -5,6 +5,8 @@ using Xunit;
 
 namespace PhotoSense.Tests.Functions;
 
+// These classes log through one process-wide queue, so they must not run side by side.
+[Collection("ScanLogQueue")]
 public class LogDrainTests
 {
     [Fact]

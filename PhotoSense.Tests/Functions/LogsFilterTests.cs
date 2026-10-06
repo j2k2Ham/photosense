@@ -4,6 +4,8 @@ using System.Linq;
 
 namespace PhotoSense.Tests.Functions;
 
+// These classes log through one process-wide queue, so they must not run side by side.
+[Collection("ScanLogQueue")]
 public class LogsFilterTests
 {
     [Fact]

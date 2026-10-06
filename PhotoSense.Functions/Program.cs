@@ -5,7 +5,10 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Persistence;
 using PhotoSense.Infrastructure.Hashing;
+using PhotoSense.Infrastructure.Imaging;
 using PhotoSense.Infrastructure.Metadata;
+using PhotoSense.Infrastructure.Places;
+using PhotoSense.Infrastructure.Thumbnails;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Infrastructure.Events;
@@ -33,30 +36,32 @@ public static class DependencyInjection
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
             return new LiteDatabase(opts.DatabasePath);
         });
-        s.AddSingleton<IPhotoRepository>(sp =>
-        {
-            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
-            return new LiteDbPhotoRepository(opts.DatabasePath);
-        });
-        s.AddSingleton<IAuditRepository>(sp =>
-        {
-            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
-            return new LiteDbAuditRepository(opts.DatabasePath);
-        });
-        s.AddSingleton<IImageHashingService, PerceptualHashingService>();
+        // Every store shares the one database connection.
+        s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IAuditRepository>(sp => new LiteDbAuditRepository(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
+        s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();
+        s.AddSingleton<IThumbnailStore>(sp =>
+            new FileSystemThumbnailStore(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()));
         s.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
-        s.AddSingleton<IDuplicateGroupingService, DuplicateGroupingService>();
-        s.AddSingleton<INearDuplicateService, NearDuplicateService>();
-    s.AddSingleton<ScanGroupingFacade>();
+        s.AddSingleton<IDuplicateAnalysisService, DuplicateAnalysisService>();
+        s.AddSingleton<IDuplicateRemovalService, DuplicateRemovalService>();
+        s.AddSingleton<IPlaceNameResolver, GeoNamesPlaceResolver>();
+        s.AddSingleton<PhotoDtoMapper>();
+        s.AddSingleton<ScanGroupingFacade>();
         s.AddSingleton<IScanRequestPublisher, ScanRequestPublisher>();
         s.AddSingleton<IOutboxStore, LiteDbOutboxStore>();
         s.AddSingleton<IIntegrationEventPublisher, OutboxIntegrationEventPublisher>();
+        s.AddSingleton<ICompanionFileFinder, CompanionFileFinder>();
         s.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
         s.AddSingleton<IPhotoQueryService, PhotoQueryService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
         s.AddSingleton<IScanProgressStore, InMemoryScanProgressStore>();
-    s.AddSingleton<IScanExecutionService, ScanExecutionService>();
-    s.AddSingleton<IScanLogSink, InMemoryScanLogSink>();
+        s.AddSingleton<IScanLogSink, InMemoryScanLogSink>();
+        s.AddSingleton<IScanExecutionService>(sp => new ScanExecutionService(
+            sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IImageHashingService>(), sp.GetRequiredService<IImageAnalyzer>(),
+            sp.GetRequiredService<IPhotoMetadataExtractor>(), sp.GetRequiredService<IThumbnailStore>(), sp.GetRequiredService<IScanProgressStore>(),
+            sp.GetRequiredService<IScanLogSink>()));
         return s;
     }
 }
