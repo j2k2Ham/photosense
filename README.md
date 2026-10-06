@@ -118,7 +118,11 @@ Because UIs are isolated projects with no code-level coupling to each other, dep
 
 ## Tests & Coverage
 
-Run tests (with coverage) from repo root:
+Both halves are tested to 100% of branches.
+
+### Service (.NET)
+
+From the repo root:
 
 ```bash
 dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
@@ -127,6 +131,20 @@ dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release /p:
 Coverage thresholds (CI enforced): Line ≥ 90%, Branch ≥ 85%. Measured on Windows the .NET code stands at 100% of lines and 100% of branches. Generated code (`*.g.cs`) and the service's start-up class are left out of the measurement.
 
 Some code is shaped so that every branch can be exercised from one operating system: `PhotoPath.Key(path, ignoreCase)`, `ShellSystemViewer.DesktopOf` and `BasicExifMetadataExtractor.Read(photo, directories)` take as an argument what they would otherwise ask the system or a file for. Two guards against a library handing back nothing (`OutboxIntegrationEventPublisher.NameOf`, `MagickImageAnalyzer.Required`) are callable on their own for the same reason.
+
+### UI (React)
+
+From `PhotoSense.ReactUI`:
+
+```bash
+npm test                # once
+npm run test:watch      # again on every change
+npm run test:coverage   # once, with coverage; fails below 100%
+```
+
+The tests are in `PhotoSense.ReactUI/tests`, laid out like the code they cover (`app`, `components`, `lib`). They run in Vitest with Testing Library, against jsdom rather than a real browser, so nothing needs to be running: the service is stood in for by `tests/fixtures.ts` and the log hub by `tests/fakeSignalR.ts`.
+
+Coverage is measured with Istanbul over `app`, `components` and `lib`, and `vitest.config.ts` fails the run when statements, branches, functions or lines fall below 100%. CI runs it as well, before building the UI. Istanbul counts each arm of an `if` or a ternary and each operand of `&&`, `||` and `??` that is reached; `?.` is not counted as a branch. The HTML report is written to `PhotoSense.ReactUI/coverage`.
 
 ## Quick Local Run (Functions + React)
 

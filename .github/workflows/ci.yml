@@ -44,6 +44,10 @@ jobs:
         working-directory: PhotoSense.ReactUI
         run: npm ci
 
+      - name: Test React UI (fails below 100% coverage)
+        working-directory: PhotoSense.ReactUI
+        run: npm run test:coverage
+
       - name: Build React UI
         working-directory: PhotoSense.ReactUI
         run: npm run build

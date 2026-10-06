@@ -16,7 +16,7 @@ async function failure(res: Response): Promise<Error> {
 }
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...(init?.headers||{}) } });
+  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...init?.headers } });
   if (!res.ok) throw await failure(res);
   return res.json();
 }
@@ -50,13 +50,16 @@ export function useGroups(mode: GroupMode, filter: string, page: number, hideKep
 export function connectLogStream(onLine: (l: string)=>void) {
   const baseRoot = API_BASE.replace(/\/api$/,'');
   let disposed = false;
+  let conn: signalR.HubConnection | undefined;
+  let pollTimer: ReturnType<typeof setTimeout> | undefined;
   (async () => {
     try {
       // Updated negotiate route path to match backend (scan/logs/negotiate)
       const r = await fetch(`${baseRoot}/api/scan/logs/negotiate`, { method: 'POST' });
       if (!r.ok) throw new Error('negotiate failed');
       const info = await r.json();
-      const conn = new signalR.HubConnectionBuilder()
+      if (disposed) return;
+      conn = new signalR.HubConnectionBuilder()
         .withUrl(info.url, { accessTokenFactory: () => info.accessToken })
         .withAutomaticReconnect()
         .build();
@@ -64,12 +67,10 @@ export function connectLogStream(onLine: (l: string)=>void) {
         onLine(`${ts} ${level} ${msg}`);
       });
       await conn.start();
-      if (disposed) await conn.stop();
     } catch {
       if (disposed) return;
       // Fallback to simple polling REST endpoint as SSE stream not implemented.
       const poll = async () => {
-        if (disposed) return;
         try {
           const res = await fetch(`${baseRoot}/api/scan/logs?limit=200`);
           if (res.ok) {
@@ -79,12 +80,18 @@ export function connectLogStream(onLine: (l: string)=>void) {
             }
           }
         } catch {/* ignore */}
-        if (!disposed) setTimeout(poll, 1500);
+        // Dismissed while this poll was in flight: it was the last.
+        if (!disposed) pollTimer = setTimeout(poll, 1500);
       };
       poll();
     }
   })();
-  return () => { disposed = true; };
+  return () => {
+    disposed = true;
+    clearTimeout(pollTimer);
+    // A connection that never opened, or has already closed, has nothing left to stop.
+    conn?.stop().catch(() => undefined);
+  };
 }
 
 /** Marks a photo to keep (bulk removal skips it), or clears the mark. */
