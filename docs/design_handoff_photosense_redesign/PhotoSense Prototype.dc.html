@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;height:100%}body{font-family:'DM Sans',system-ui,sans-serif}
+[data-theme="Dark"]{--bg:oklch(0.165 0.006 240);--s1:oklch(0.195 0.007 240);--s2:oklch(0.23 0.008 240);--s3:oklch(0.28 0.009 240);--pop:oklch(0.22 0.008 240);--line:oklch(1 0 0 / 0.08);--t1:oklch(0.96 0.004 240);--t2:oklch(0.76 0.01 240);--t3:oklch(0.64 0.01 240);--stage:oklch(0.125 0.005 240);--brand:oklch(0.74 0.11 200);--on-brand:oklch(0.18 0.02 200);--sel:oklch(0.27 0.016 215);--diff:oklch(0.82 0.13 78 / 0.10);--keep:oklch(0.80 0.13 160);--keep-bg:oklch(0.80 0.13 160 / 0.14);--keep-line:oklch(0.80 0.13 160 / 0.55);--rose:oklch(0.58 0.19 18);--rose-t:oklch(0.80 0.12 18);--rose-line:oklch(0.70 0.16 18 / 0.4);--rose-bg:oklch(0.62 0.19 18 / 0.13);--amber:oklch(0.84 0.13 80);--amber-bg:oklch(0.82 0.13 78 / 0.13);--ident:oklch(0.84 0.09 210);--ident-bg:oklch(0.74 0.11 210 / 0.16);--same:oklch(0.90 0.01 240);--same-bg:oklch(1 0 0 / 0.1);--thL:0.45;--thL2:0.41;--thC:0.07;--shadow:oklch(0 0 0 / 0.5);--scrim:oklch(0.06 0.005 240 / 0.72)}
+[data-theme="Light"]{--bg:oklch(0.975 0.003 240);--s1:oklch(0.997 0.002 240);--s2:oklch(0.955 0.004 240);--s3:oklch(0.91 0.006 240);--pop:oklch(1 0 0);--line:oklch(0.25 0.01 240 / 0.11);--t1:oklch(0.22 0.01 240);--t2:oklch(0.45 0.01 240);--t3:oklch(0.53 0.01 240);--stage:oklch(0.94 0.005 240);--brand:oklch(0.50 0.10 210);--on-brand:#fff;--sel:oklch(0.94 0.025 210);--diff:oklch(0.96 0.05 88);--keep:oklch(0.46 0.11 160);--keep-bg:oklch(0.94 0.05 160);--keep-line:oklch(0.60 0.12 160 / 0.6);--rose:oklch(0.54 0.19 20);--rose-t:oklch(0.48 0.18 20);--rose-line:oklch(0.54 0.19 20 / 0.35);--rose-bg:oklch(0.96 0.03 20);--amber:oklch(0.50 0.11 70);--amber-bg:oklch(0.95 0.06 88);--ident:oklch(0.42 0.09 215);--ident-bg:oklch(0.94 0.035 210);--same:oklch(0.30 0.01 240);--same-bg:oklch(0.25 0.01 240 / 0.08);--thL:0.86;--thL2:0.82;--thC:0.05;--shadow:oklch(0.25 0.02 240 / 0.18);--scrim:oklch(0.25 0.01 240 / 0.4)}
+a{color:var(--brand)}a:hover{color:var(--t1)}
+input::placeholder{color:var(--t3)}
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="height:100vh;min-width:1100px;display:flex;flex-direction:column;background:var(--bg);color:var(--t1);font:400 14px/1.45 'DM Sans',sans-serif;position:relative;overflow:hidden">
+
+<header style="height:64px;flex:none;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid var(--line);position:relative;z-index:30;background:var(--bg)">
+<div style="display:flex;align-items:center;gap:11px;flex:none"><div style="width:26px;height:26px;border-radius:8px;background:var(--brand);display:grid;place-items:center"><div style="width:10px;height:10px;border-radius:50%;border:2px solid var(--on-brand)"></div></div><div style="font-weight:600;font-size:17px;letter-spacing:-0.01em">PhotoSense</div></div>
+<sc-if value="{{ isResults }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;gap:12px;height:40px;padding:0 5px 0 16px;border-radius:999px;border:1px solid var(--line);font-size:13px;color:var(--t2);min-width:0">
+<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b style="color:var(--t1);font-weight:500">{{ chipA }}</b><sc-if value="{{ hasB }}" hint-placeholder-val="{{ true }}"> + <b style="color:var(--t1);font-weight:500">{{ chipB }}</b></sc-if> · {{ chipMeta }}</span>
+<div onClick="{{ goSetup }}" style="height:30px;padding:0 14px;display:flex;align-items:center;border-radius:999px;background:var(--s2);color:var(--t1);font-weight:500;cursor:pointer;white-space:nowrap" style-hover="background:var(--s3)">Change or rescan</div>
+</div>
+</sc-if>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--s2);font-size:13px;color:var(--t2);white-space:nowrap"><div style="width:7px;height:7px;border-radius:50%;background:var(--keep)"></div>Runs on this computer. Nothing is uploaded.</div>
+<sc-if value="{{ hasErrs }}" hint-placeholder-val="{{ false }}"><div onClick="{{ toggleErr }}" style="height:36px;padding:0 14px;display:flex;align-items:center;gap:8px;border-radius:999px;background:var(--rose-bg);border:1px solid var(--rose-line);color:var(--rose-t);font-weight:600;font-size:13px;cursor:pointer;white-space:nowrap"><div style="width:7px;height:7px;border-radius:50%;background:var(--rose)"></div>{{ errLabel }}</div></sc-if>
+<div onClick="{{ toggleMenu }}" title="Menu" style="width:40px;height:40px;flex:none;border-radius:50%;background:{{ menuBtnBg }};border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;box-sizing:border-box" style-hover="background:var(--s3)"><div style="width:16px;height:2px;border-radius:2px;background:var(--t1)"></div><div style="width:16px;height:2px;border-radius:2px;background:var(--t1)"></div><div style="width:16px;height:2px;border-radius:2px;background:var(--t1)"></div></div>
+
+<sc-if value="{{ menuOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:58px;right:24px;width:300px;padding:8px;border-radius:16px;background:var(--pop);border:1px solid var(--line);box-shadow:0 20px 50px var(--shadow);display:flex;flex-direction:column;gap:2px">
+<div style="padding:10px 12px 8px;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3)">Theme</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;padding:4px;margin:0 8px 8px;border-radius:999px;background:var(--s2)">
+<div onClick="{{ setDark }}" style="height:34px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;background:{{ darkBg }};font-weight:{{ darkFw }};cursor:pointer"><div style="width:10px;height:10px;border-radius:50%;background:oklch(0.22 0.01 240);border:1px solid var(--line)"></div>Dark</div>
+<div onClick="{{ setLight }}" style="height:34px;display:flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;background:{{ lightBg }};font-weight:{{ lightFw }};cursor:pointer"><div style="width:10px;height:10px;border-radius:50%;background:oklch(0.97 0.003 240);border:1px solid var(--line)"></div>Light</div>
+</div>
+<div style="height:1px;background:var(--line);margin:4px 8px"></div>
+<div onClick="{{ openErrs }}" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-radius:10px;cursor:pointer" style-hover="background:var(--s2)"><span>Errors</span><span style="font:500 12px 'DM Mono',monospace;color:var(--t3)">{{ errCount }}</span></div>
+<div onClick="{{ goSetup }}" style="padding:10px 12px;border-radius:10px;cursor:pointer" style-hover="background:var(--s2)">Change folders or rescan</div>
+<div style="height:1px;background:var(--line);margin:4px 8px"></div>
+<div style="padding:8px 12px 10px;font-size:12.5px;color:var(--t3)">Removed files are in _PhotoSense_Removed inside each scanned folder.</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ errOpen }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;top:58px;right:24px;width:440px;max-height:480px;border-radius:16px;background:var(--pop);border:1px solid var(--line);box-shadow:0 20px 50px var(--shadow);display:flex;flex-direction:column;overflow:hidden">
+<div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)"><div style="flex:1;font-weight:600;font-size:15px">Errors</div><sc-if value="{{ hasErrs }}" hint-placeholder-val="{{ false }}"><div onClick="{{ clearAll }}" style="height:30px;padding:0 12px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-size:12.5px;cursor:pointer" style-hover="background:var(--s2)">Clear all</div></sc-if></div>
+<div style="overflow:auto;display:flex;flex-direction:column">
+<sc-for list="{{ errs }}" as="e" hint-placeholder-count="0"><div style="display:flex;gap:12px;align-items:flex-start;padding:12px 16px;border-bottom:1px solid var(--line)"><div style="width:8px;height:8px;border-radius:50%;background:var(--rose);margin-top:6px;flex:none"></div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:14px">{{ e.msg }}</div><div style="font-size:12px;color:var(--t3)">{{ e.t }}</div></div><div onClick="{{ e.onClear }}" style="height:28px;padding:0 12px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-size:12.5px;cursor:pointer;flex:none" style-hover="background:var(--s2)">Clear</div></div></sc-for>
+<sc-if value="{{ noErrs }}" hint-placeholder-val="{{ true }}"><div style="padding:28px 16px;text-align:center;color:var(--t3);font-size:13.5px">No errors. Problems stay listed here until you clear them.</div></sc-if>
+</div>
+</div>
+</sc-if>
+</header>
+<sc-if value="{{ anyPop }}" hint-placeholder-val="{{ false }}"><div onClick="{{ closePops }}" style="position:fixed;inset:0;z-index:25"></div></sc-if>
+
+<sc-if value="{{ offline }}" hint-placeholder-val="{{ false }}"><div style="flex:none;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--rose-bg);border-bottom:1px solid var(--rose-line);font-size:14px"><div style="width:8px;height:8px;border-radius:50%;background:var(--rose)"></div><div style="flex:1">The PhotoSense service is not answering, so what is shown here may be out of date.</div><div onClick="{{ retry }}" style="height:32px;padding:0 16px;display:flex;align-items:center;border-radius:999px;background:var(--s1);border:1px solid var(--line);font-weight:500;cursor:pointer">Retry</div></div></sc-if>
+
+<sc-if value="{{ isSetup }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;align-items:center;padding:clamp(32px,8vh,96px) 40px 48px;gap:40px">
+<div style="max-width:900px;text-align:center;display:flex;flex-direction:column;gap:16px;align-items:center">
+<div style="font-weight:600;font-size:clamp(40px,4.2vw,60px);line-height:1.05;letter-spacing:-0.03em">Find duplicate photos and videos</div>
+<div style="font-size:18px;color:var(--t2);max-width:680px;text-wrap:pretty">PhotoSense compares the pictures and videos in your folders, keeps the best copy of each, and lets you check the rest before anything moves.</div>
+</div>
+<div style="width:min(1240px,100%);padding:22px;border-radius:20px;background:var(--s1);border:1px solid var(--line);box-shadow:0 10px 40px var(--shadow);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:16px;align-items:end;box-sizing:border-box">
+<div style="display:flex;flex-direction:column;gap:7px"><div style="font-size:13px;color:var(--t2)">Root folder</div><div style="display:flex;align-items:center;gap:10px;height:50px;padding:0 6px 0 16px;border-radius:12px;background:var(--bg);border:1px solid {{ rootBorder }}"><input value="{{ root }}" onChange="{{ onRoot }}" placeholder="C:\Users\you\Pictures" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--t1);font:400 14px 'DM Mono',monospace"><div onClick="{{ browseRoot }}" style="height:38px;padding:0 16px;display:flex;align-items:center;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-weight:500;cursor:pointer;flex:none" style-hover="background:var(--s3)">Browse</div></div></div>
+<div style="display:flex;flex-direction:column;gap:7px"><div style="font-size:13px;color:var(--t2)">Secondary folder <span style="color:var(--t3)">· optional, for example a backup</span></div><div style="display:flex;align-items:center;gap:10px;height:50px;padding:0 6px 0 16px;border-radius:12px;background:var(--bg);border:1px solid {{ secondBorder }}"><input value="{{ second }}" onChange="{{ onSecond }}" placeholder="Leave empty to scan one folder" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--t1);font:400 14px 'DM Mono',monospace"><div onClick="{{ browseSecond }}" style="height:38px;padding:0 16px;display:flex;align-items:center;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-weight:500;cursor:pointer;flex:none" style-hover="background:var(--s3)">Browse</div></div></div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div onClick="{{ toggleRec }}" style="display:flex;align-items:center;gap:9px;font-size:13.5px;cursor:pointer;user-select:none"><div style="width:18px;height:18px;border-radius:5px;background:{{ recBg }};border:1px solid {{ recBorder }};box-sizing:border-box;color:var(--on-brand);display:grid;place-items:center;font-size:12px;font-weight:700">{{ recMark }}</div>Recursive · include subfolders</div>
+<div onClick="{{ startScan }}" style="height:50px;padding:0 34px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:var(--brand);color:var(--on-brand);font-weight:600;font-size:15px;cursor:pointer;opacity:{{ scanOp }};pointer-events:{{ scanPe }}" style-hover="filter:brightness(1.08)">{{ scanLabel }}</div>
+</div>
+</div>
+<sc-if value="{{ showProg }}" hint-placeholder-val="{{ false }}">
+<div style="width:min(1240px,100%);display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:baseline;gap:18px;flex-wrap:wrap"><div style="font-weight:600;font-size:40px;letter-spacing:-0.02em;font-variant-numeric:tabular-nums">{{ pct }}</div><div style="font-size:15px;color:var(--t2)">{{ filesLine }}</div><sc-for list="{{ folderLines }}" as="f" hint-placeholder-count="2"><div style="font-size:14px;color:var(--t3)">{{ f.name }} <span style="font-family:'DM Mono',monospace;color:var(--t2)">{{ f.count }}</span></div></sc-for><div style="flex:1"></div><div style="font-size:13px;color:var(--t3)">About 13 minutes for 7,000 files</div><div onClick="{{ skip }}" style="font-size:13px;color:var(--t2);text-decoration:underline;text-underline-offset:3px;cursor:pointer">Skip to results (prototype)</div></div>
+<div style="display:grid;grid-template-columns:repeat(30,minmax(0,1fr));gap:6px"><sc-for list="{{ mosaic }}" as="m" hint-placeholder-count="120"><div style="aspect-ratio:1;border-radius:4px;background:{{ m.bg }};opacity:{{ m.op }}"></div></sc-for></div>
+<div style="display:flex;align-items:flex-start;gap:16px;padding-top:4px"><div style="flex:1;display:flex;flex-direction:column;gap:2px;font:400 12.5px/1.6 'DM Mono',monospace"><sc-for list="{{ logTail }}" as="l" hint-placeholder-count="3"><div style="display:flex;gap:12px"><span style="color:var(--t3)">{{ l.t }}</span><span style="color:var(--t2)">{{ l.m }}</span></div></sc-for></div><div onClick="{{ toggleLog }}" style="font-size:13px;color:var(--t2);text-decoration:underline;text-underline-offset:3px;cursor:pointer">{{ logToggleLabel }}</div></div>
+<sc-if value="{{ showLog }}" hint-placeholder-val="{{ false }}"><div style="max-height:240px;overflow:auto;border-radius:12px;background:var(--stage);padding:12px 16px;font:400 12.5px/1.65 'DM Mono',monospace"><sc-for list="{{ logAll }}" as="l" hint-placeholder-count="6"><div style="display:flex;gap:12px"><span style="color:var(--t3)">{{ l.t }}</span><span style="color:var(--t2)">{{ l.m }}</span></div></sc-for></div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ showBack }}" hint-placeholder-val="{{ false }}"><div onClick="{{ backToResults }}" style="height:42px;padding:0 20px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-weight:500;cursor:pointer" style-hover="background:var(--s2)">Back to results</div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isResults }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;min-height:72px;display:flex;align-items:center;gap:20px;padding:0 24px;border-bottom:1px solid var(--line)">
+<div style="display:flex;gap:24px;align-self:stretch;flex:none">
+<div onClick="{{ tabDup }}" style="display:flex;align-items:center;gap:8px;border-bottom:2px solid {{ dupTabLine }};font-weight:600;font-size:16px;color:{{ dupTabFg }};cursor:pointer">Duplicates<span style="font:500 12px 'DM Mono',monospace;color:var(--t3)">{{ dupCount }}</span></div>
+<div onClick="{{ tabSim }}" style="display:flex;align-items:center;gap:8px;border-bottom:2px solid {{ simTabLine }};font-weight:600;font-size:16px;color:{{ simTabFg }};cursor:pointer">Similar<span style="font:500 12px 'DM Mono',monospace;color:var(--t3)">{{ simCount }}</span></div>
+</div>
+<div style="width:clamp(220px,22vw,380px);flex:none;display:flex;align-items:center;gap:10px;height:42px;padding:0 14px;border-radius:999px;background:var(--s1);border:1px solid var(--line);box-sizing:border-box"><div style="width:11px;height:11px;border-radius:50%;border:1.5px solid var(--t3);flex:none"></div><input value="{{ q }}" onChange="{{ onQ }}" placeholder="Search by file name or folder" style="flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--t1);font:400 14px 'DM Sans',sans-serif"></div>
+<sc-if value="{{ isDup }}" hint-placeholder-val="{{ true }}"><div onClick="{{ toggleHide }}" style="display:flex;align-items:center;gap:10px;color:var(--t2);cursor:pointer;white-space:nowrap;user-select:none;flex:none"><div style="width:32px;height:18px;border-radius:99px;background:{{ hideTrack }};padding:2px;box-sizing:border-box;display:flex;justify-content:{{ hideJust }}"><div style="width:14px;height:14px;border-radius:50%;background:{{ hideKnob }}"></div></div>Hide reviewed</div></sc-if>
+<sc-if value="{{ isDup }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-width:200px;display:flex;flex-direction:column;align-items:flex-end;gap:2px;text-align:right"><div style="font-size:14.5px;text-wrap:pretty"><b style="font-weight:600">{{ dupN }}</b> duplicate files taking <b style="font-weight:600">{{ dupMB }}</b>. The best copy of each picture or video is kept.</div><div style="font-size:12.5px;color:var(--t3)">Deleted files move to _PhotoSense_Removed and can be moved back.</div></div>
+<div onClick="{{ askAll }}" style="height:44px;padding:0 22px;display:flex;align-items:center;border-radius:999px;background:var(--rose);color:#fff;font-weight:600;font-size:15px;cursor:pointer;white-space:nowrap;flex:none;opacity:{{ allOp }};pointer-events:{{ allPe }}" style-hover="filter:brightness(1.08)">Delete all duplicates</div>
+</sc-if>
+<sc-if value="{{ isSim }}" hint-placeholder-val="{{ false }}"><div style="flex:1;min-width:200px;text-align:right;font-size:14px;color:var(--t2)">Similar shots are burst frames or edited versions. Nothing here is removed in bulk; review them one at a time.</div></sc-if>
+</div>
+
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:clamp(380px,32vw,620px) minmax(0,1fr)">
+<div style="min-height:0;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--s1)">
+<div style="flex:none;display:flex;align-items:center;justify-content:space-between;padding:14px 20px;font-size:13px;color:var(--t2)"><span><b style="color:var(--t1);font-weight:600">{{ groupCount }}</b> groups</span><div style="display:flex;align-items:center;gap:10px"><div onClick="{{ prev }}" style="height:30px;padding:0 13px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);cursor:pointer;opacity:{{ prevOp }}" style-hover="background:var(--s2)">Prev</div><span style="white-space:nowrap">{{ pageLabel }}</span><div onClick="{{ next }}" style="height:30px;padding:0 13px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);cursor:pointer;opacity:{{ nextOp }}" style-hover="background:var(--s2)">Next</div></div></div>
+<div style="flex:1;min-height:0;overflow:auto;padding:6px 20px 24px">
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:20px 14px">
+<sc-for list="{{ tiles }}" as="g" hint-placeholder-count="9">
+<div onClick="{{ g.onClick }}" style="display:flex;flex-direction:column;gap:8px;min-width:0;cursor:pointer">
+<div style="aspect-ratio:1;border-radius:10px;background:{{ g.bg }};position:relative;box-shadow:{{ g.ring }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+<sc-if value="{{ g.isVideo }}" hint-placeholder-val="{{ false }}"><div style="width:0;height:0;border-left:18px solid #fff;border-top:11px solid transparent;border-bottom:11px solid transparent;margin-left:5px"></div><div style="font:500 13px 'DM Mono',monospace;color:oklch(0.9 0.01 240)">{{ g.dur }}</div><div style="position:absolute;top:8px;left:8px;padding:2px 7px;border-radius:5px;background:oklch(1 0 0 / 0.14);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:0.08em">VIDEO</div></sc-if>
+<div style="position:absolute;top:8px;right:8px;padding:2px 8px;border-radius:99px;background:oklch(0 0 0 / 0.55);color:#fff;font:500 11.5px 'DM Mono',monospace">{{ g.badge }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:1px;min-width:0"><div style="font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.name }}</div><div style="font-size:12.5px;color:{{ g.sumColor }}">{{ g.sum }}</div></div>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ listEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:80px 20px;text-align:center;color:var(--t3);font-size:15px">{{ emptyMsg }}</div></sc-if>
+</div>
+</div>
+
+<div style="min-width:0;min-height:0;overflow:auto">
+<sc-if value="{{ noSel }}" hint-placeholder-val="{{ false }}"><div style="height:100%;display:grid;place-items:center;color:var(--t3);font-size:16px">Select a group to review</div></sc-if>
+<sc-if value="{{ hasSel }}" hint-placeholder-val="{{ true }}">
+<div style="padding:22px 28px 28px;display:flex;flex-direction:column;gap:18px;min-height:100%;box-sizing:border-box">
+<div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap"><div style="font-weight:600;font-size:20px;letter-spacing:-0.01em">{{ d.name }}</div><div style="font-size:14px;color:var(--t2)">{{ d.sub }}</div></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px">
+<div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+<div style="display:flex;align-items:center;gap:10px;min-height:24px"><div style="padding:4px 9px;border-radius:6px;background:var(--keep-bg);color:var(--keep);font-weight:700;font-size:11px;letter-spacing:0.08em;white-space:nowrap">{{ d.oBadge }}</div><span style="font-size:13.5px;color:var(--t2)">{{ d.oNote }}</span></div>
+<div onClick="{{ d.openSide }}" style="height:clamp(200px,28vh,300px);border-radius:14px;background:var(--stage);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 2px var(--keep-line);cursor:zoom-in;position:relative">
+<div style="width:{{ d.imgW }};aspect-ratio:{{ d.ar }};background:{{ d.oBg }};display:flex;align-items:center;justify-content:center"><sc-if value="{{ d.isVideo }}" hint-placeholder-val="{{ false }}"><div style="width:56px;height:56px;border-radius:50%;background:oklch(1 0 0 / 0.16);display:grid;place-items:center"><div style="width:0;height:0;border-left:16px solid #fff;border-top:10px solid transparent;border-bottom:10px solid transparent;margin-left:5px"></div></div></sc-if></div>
+<div style="position:absolute;bottom:12px;right:12px;padding:4px 10px;border-radius:999px;background:oklch(0 0 0 / 0.55);color:#fff;font-size:12px">{{ d.oFile }}</div>
+<sc-if value="{{ d.isVideo }}" hint-placeholder-val="{{ false }}"><div onClick="{{ d.openPlayer }}" style="position:absolute;top:12px;right:12px;height:30px;padding:0 12px;display:flex;align-items:center;border-radius:999px;background:oklch(0 0 0 / 0.55);color:#fff;font-size:12.5px;font-weight:500;cursor:pointer">Open in default player</div></sc-if>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+<div style="display:flex;align-items:center;gap:10px;min-height:24px"><div style="padding:4px 9px;border-radius:6px;background:{{ d.cBadgeBg }};color:{{ d.cBadgeFg }};font-weight:700;font-size:11px;letter-spacing:0.08em;white-space:nowrap">{{ d.cBadge }}</div><span style="font-size:13.5px;color:var(--t2)">{{ d.cNote }}</span><div style="flex:1"></div><span style="font-size:13px;color:var(--t3)">Click either to compare</span></div>
+<div onClick="{{ d.openSide }}" style="height:clamp(200px,28vh,300px);border-radius:14px;background:var(--stage);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px var(--line);cursor:zoom-in;position:relative">
+<div style="width:{{ d.imgW }};aspect-ratio:{{ d.ar }};background:{{ d.cBg }};display:flex;align-items:center;justify-content:center"><sc-if value="{{ d.isVideo }}" hint-placeholder-val="{{ false }}"><div style="width:56px;height:56px;border-radius:50%;background:oklch(1 0 0 / 0.16);display:grid;place-items:center"><div style="width:0;height:0;border-left:16px solid #fff;border-top:10px solid transparent;border-bottom:10px solid transparent;margin-left:5px"></div></div></sc-if></div>
+<div style="position:absolute;bottom:12px;right:12px;padding:4px 10px;border-radius:999px;background:oklch(0 0 0 / 0.55);color:#fff;font-size:12px">{{ d.cFile }}</div>
+</div>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:10px">
+<div style="display:flex;align-items:baseline;gap:12px"><div style="font-weight:600;font-size:15px">{{ d.stripTitle }}</div><div style="font-size:13px;color:var(--t3)">Hover for details, click to show it beside the original</div></div>
+<div style="position:relative;display:flex;gap:10px;flex-wrap:wrap">
+<sc-for list="{{ d.tiles }}" as="t" hint-placeholder-count="1">
+<div onClick="{{ t.onClick }}" onMouseEnter="{{ t.onEnter }}" onMouseLeave="{{ t.onLeave }}" style="width:120px;height:84px;border-radius:10px;background:{{ t.bg }};position:relative;overflow:hidden;cursor:pointer;box-shadow:{{ t.ring }}">
+<div style="position:absolute;top:7px;left:7px;padding:2px 7px;border-radius:5px;background:oklch(0 0 0 / 0.55);color:#fff;font:500 11px 'DM Mono',monospace">{{ t.fmt }}</div>
+<div style="position:absolute;left:0;right:0;bottom:0;padding:5px 8px;background:{{ t.lBg }};color:#fff;font-weight:700;font-size:10px;letter-spacing:0.08em">{{ t.label }}</div>
+</div>
+</sc-for>
+<sc-if value="{{ d.hasHc }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:{{ d.hc.left }};bottom:calc(100% + 12px);width:420px;padding:16px 18px;border-radius:14px;background:var(--pop);border:1px solid var(--line);box-shadow:0 18px 50px var(--shadow);display:flex;flex-direction:column;gap:12px;z-index:5;pointer-events:none">
+<div style="display:flex;flex-direction:column;gap:3px">
+<div style="display:flex;align-items:center;gap:8px"><div style="font-weight:600;font-size:15px">{{ d.hc.name }}</div><div style="padding:2px 7px;border-radius:5px;background:{{ d.hc.mBg }};color:{{ d.hc.mFg }};font-size:11.5px;font-weight:600">{{ d.hc.mLabel }}</div></div>
+<div style="font-size:13px;color:var(--t2)">{{ d.hc.taken }}</div>
+<div style="font:400 12.5px 'DM Mono',monospace;color:var(--t2)">{{ d.hc.folder }}</div>
+<div style="font-size:13px;color:var(--t2)">{{ d.hc.place }}</div>
+<div style="font-size:13px;color:var(--t2)">{{ d.hc.file }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line);font-size:13px">
+<div style="font-size:11.5px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--amber)">Differs from the original in</div>
+<sc-for list="{{ d.hc.diffs }}" as="x" hint-placeholder-count="3"><div><b style="font-weight:600">{{ x.k }}:</b> <span style="color:var(--t2)">{{ x.v }}</span></div></sc-for>
+</div>
+<div style="padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--t2)">Original preferred: <span style="color:var(--keep)">{{ d.hc.reason }}</span></div>
+</div>
+</sc-if>
+</div>
+</div>
+
+<div style="display:flex;flex-direction:column;gap:2px;font-size:14px">
+<div style="display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1fr);align-items:center;height:30px;padding:0 14px;font-size:12px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--t3)"><div>What differs</div><div style="color:var(--keep)">{{ d.oCol }}</div><div>This copy</div></div>
+<sc-for list="{{ d.rows }}" as="r" hint-placeholder-count="8">
+<div style="display:grid;grid-template-columns:150px minmax(0,1fr) minmax(0,1fr);align-items:center;min-height:36px;padding:0 14px;border-radius:8px;background:{{ r.bg }}">
+<div style="display:flex;align-items:center;gap:9px;color:var(--t2)"><div style="width:6px;height:6px;border-radius:50%;background:{{ r.dot }};flex:none"></div>{{ r.label }}</div>
+<div style="font-family:{{ r.ff }};font-size:{{ r.fs }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:16px">{{ r.o }}<sc-if value="{{ r.map }}" hint-placeholder-val="{{ false }}"> · <a href="#" onClick="{{ r.onMap }}">Show on map</a></sc-if></div>
+<div style="font-family:{{ r.ff }};font-size:{{ r.fs }};color:{{ r.vColor }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.v }}</div>
+</div>
+</sc-for>
+</div>
+
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:12px;padding-top:18px;border-top:1px solid var(--line);flex-wrap:wrap">
+<div style="flex:1;min-width:260px;display:flex;flex-direction:column;gap:2px"><div style="font-size:14px;color:var(--t2)">Original preferred: <span style="color:var(--keep);font-weight:500">{{ d.reason }}</span></div><div style="font-size:12.5px;color:var(--t3)">{{ d.note }}</div></div>
+<div onClick="{{ d.keep }}" style="height:44px;padding:0 20px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--keep-line);background:{{ d.keepBg }};color:var(--keep);font-weight:600;cursor:pointer;white-space:nowrap;opacity:{{ busyOp }};pointer-events:{{ busyPe }}" style-hover="filter:brightness(1.1)">{{ d.keepLabel }}</div>
+<div onClick="{{ d.delOne }}" style="height:44px;padding:0 20px;display:flex;align-items:center;border-radius:999px;background:{{ d.d1Bg }};border:1px solid {{ d.d1Border }};color:{{ d.d1Fg }};font-weight:600;cursor:pointer;white-space:nowrap;opacity:{{ d.d1Op }};pointer-events:{{ d.d1Pe }}" style-hover="filter:brightness(1.08)">{{ d.d1Label }}</div>
+<sc-if value="{{ d.showGroupDel }}" hint-placeholder-val="{{ false }}"><div onClick="{{ d.delGroup }}" style="height:44px;padding:0 22px;display:flex;align-items:center;border-radius:999px;background:var(--rose);color:#fff;font-weight:600;font-size:15px;cursor:pointer;white-space:nowrap;opacity:{{ busyOp }};pointer-events:{{ busyPe }}" style-hover="filter:brightness(1.08)">{{ d.groupDelLabel }}</div></sc-if>
+</div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ cmpOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeCmp }}" style="position:fixed;inset:0;z-index:50;background:var(--scrim);display:flex;padding:40px;box-sizing:border-box">
+<div onClick="{{ stop }}" style="flex:1;min-width:0;border-radius:18px;background:var(--s1);box-shadow:0 30px 90px var(--shadow);display:flex;flex-direction:column;overflow:hidden">
+<div style="height:72px;flex:none;display:flex;align-items:center;gap:16px;padding:0 18px 0 28px;border-bottom:1px solid var(--line)">
+<div style="flex:1;min-width:0;display:flex;align-items:center;gap:12px"><div style="font-weight:600;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cx.title }}</div><div style="padding:3px 8px;border-radius:6px;background:{{ cx.mBg }};color:{{ cx.mFg }};font-size:12px;font-weight:600;white-space:nowrap">{{ cx.matchLabel }}</div></div>
+<div style="display:flex;padding:4px;border-radius:999px;background:var(--s2);border:1px solid var(--line);flex:none">
+<div onClick="{{ cx.setSide }}" style="height:36px;padding:0 18px;display:flex;align-items:center;border-radius:999px;background:{{ cx.sideBg }};color:{{ cx.sideFg }};font-weight:600;cursor:pointer">Side by side</div>
+<div onClick="{{ cx.setCopy }}" style="height:36px;padding:0 18px;display:flex;align-items:center;border-radius:999px;background:{{ cx.copyBg }};color:{{ cx.copyFg }};font-weight:600;cursor:pointer">This copy</div>
+<div onClick="{{ cx.setOrig }}" style="height:36px;padding:0 18px;display:flex;align-items:center;gap:8px;border-radius:999px;background:{{ cx.origBg }};color:{{ cx.origFg }};font-weight:600;cursor:pointer"><div style="width:7px;height:7px;border-radius:50%;background:var(--keep)"></div>Original</div>
+</div>
+<div style="flex:1;display:flex;justify-content:flex-end;align-items:center;gap:10px"><span style="font:500 12px 'DM Mono',monospace;color:var(--t3);padding:3px 7px;border:1px solid var(--line);border-radius:6px">Esc</span><div onClick="{{ closeCmp }}" style="width:38px;height:38px;border-radius:50%;background:var(--s2);display:grid;place-items:center;font-size:18px;color:var(--t2);cursor:pointer" style-hover="background:var(--s3)">×</div></div>
+</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 420px">
+<div style="background:var(--stage);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:0 36px;min-width:0">
+<sc-if value="{{ cx.isSide }}" hint-placeholder-val="{{ true }}">
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;width:100%;align-items:end">
+<div style="display:flex;flex-direction:column;gap:12px;align-items:center"><div style="width:{{ cx.sideW }};aspect-ratio:{{ cx.ar }};background:{{ cx.oBg }};box-shadow:0 0 0 3px var(--keep-line)"></div><div style="display:flex;align-items:center;gap:10px"><div style="padding:3px 8px;border-radius:6px;background:var(--keep-bg);color:var(--keep);font-weight:700;font-size:11px;letter-spacing:0.08em">ORIGINAL</div><span style="font-size:14px">{{ cx.oCap }}</span></div></div>
+<div style="display:flex;flex-direction:column;gap:12px;align-items:center"><div style="width:{{ cx.sideW }};aspect-ratio:{{ cx.ar }};background:{{ cx.cBg }};box-shadow:0 0 0 1px var(--line)"></div><div style="display:flex;align-items:center;gap:10px"><div style="padding:3px 8px;border-radius:6px;background:var(--same-bg);color:var(--same);font-weight:700;font-size:11px;letter-spacing:0.08em">THIS COPY</div><span style="font-size:14px">{{ cx.cCap }}</span></div></div>
+</div>
+</sc-if>
+<sc-if value="{{ cx.isSingle }}" hint-placeholder-val="{{ false }}">
+<div style="width:{{ cx.singleW }};aspect-ratio:{{ cx.ar }};background:{{ cx.singleBg }};box-shadow:{{ cx.singleRing }};position:relative;display:flex;align-items:center;justify-content:center"><div style="position:absolute;top:14px;left:14px;padding:4px 10px;border-radius:7px;background:{{ cx.lblBg }};color:{{ cx.lblFg }};font-size:11.5px;font-weight:700;letter-spacing:0.07em">{{ cx.lbl }}</div><sc-if value="{{ cx.isVideo }}" hint-placeholder-val="{{ false }}"><div style="width:72px;height:72px;border-radius:50%;background:oklch(1 0 0 / 0.16);display:grid;place-items:center"><div style="width:0;height:0;border-left:20px solid #fff;border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:6px"></div></div></sc-if></div>
+<div style="font-size:14px;color:var(--t2)">{{ cx.singleCap }}</div>
+</sc-if>
+<div style="font-size:13px;color:var(--t3)">Press <span style="font-family:'DM Mono',monospace;padding:1px 6px;border:1px solid var(--line);border-radius:5px">Space</span> to flip between this copy and the original in the same spot</div>
+</div>
+<div style="border-left:1px solid var(--line);padding:24px;display:flex;flex-direction:column;gap:20px;min-height:0;overflow:auto">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3)">Match</div><div style="font-size:15px"><b style="font-weight:600">{{ cx.matchLabel }}.</b> <span style="color:var(--t2)">{{ cx.matchDesc }}</span></div><sc-if value="{{ cx.kept }}" hint-placeholder-val="{{ false }}"><div style="align-self:flex-start;margin-top:4px;padding:3px 8px;border-radius:6px;background:var(--keep-bg);color:var(--keep);font-size:11px;font-weight:700;letter-spacing:0.08em">KEEPING</div></sc-if></div>
+<div style="display:grid;grid-template-columns:72px minmax(0,1fr);row-gap:9px;column-gap:14px;font-size:14px">
+<div style="color:var(--t3)">Name</div><div style="font-weight:500;overflow-wrap:anywhere">{{ cx.name }}</div>
+<div style="color:var(--t3)">Taken</div><div>{{ cx.taken }}</div>
+<div style="color:var(--t3)">Folder</div><div style="font:400 13px 'DM Mono',monospace;overflow-wrap:anywhere">{{ cx.folder }}</div>
+<div style="color:var(--t3)">Place</div><div>{{ cx.place }}<sc-if value="{{ cx.hasPlace }}" hint-placeholder-val="{{ true }}"><br><span style="color:var(--t3)">{{ cx.coords }} · </span><a href="#" onClick="{{ cx.onMap }}">Show on map</a></sc-if></div>
+<div style="color:var(--t3)">File</div><div>{{ cx.file }}</div>
+<div style="color:var(--t3)">Camera</div><div>{{ cx.camera }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:7px;padding:14px 16px;border-radius:12px;background:var(--amber-bg);font-size:14px">
+<div style="font-size:12px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;color:var(--amber)">Differs from the original in</div>
+<sc-for list="{{ cx.diffs }}" as="x" hint-placeholder-count="3"><div><b style="font-weight:600">{{ x.k }}:</b> {{ x.v }}</div></sc-for>
+</div>
+<div style="font-size:14px;color:var(--t2)">Original preferred: <span style="color:var(--keep);font-weight:500">{{ cx.reason }}</span></div>
+<div style="flex:1"></div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div onClick="{{ cx.openViewer }}" style="height:44px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-weight:500;cursor:pointer" style-hover="background:var(--s3)">Open in default viewer</div>
+<div onClick="{{ cx.keep }}" style="height:44px;display:flex;align-items:center;justify-content:center;border-radius:999px;border:1px solid var(--keep-line);background:{{ cx.keepBg }};color:var(--keep);font-weight:600;cursor:pointer;opacity:{{ busyOp }};pointer-events:{{ busyPe }}">{{ cx.keepLabel }}</div>
+<sc-if value="{{ cx.notConfirmCopy }}" hint-placeholder-val="{{ true }}"><div onClick="{{ cx.askCopy }}" style="height:46px;display:flex;align-items:center;justify-content:center;border-radius:999px;background:var(--rose);color:#fff;font-weight:600;cursor:pointer;opacity:{{ cx.delOp }};pointer-events:{{ cx.delPe }}" style-hover="filter:brightness(1.08)">{{ cx.delLabel }}</div></sc-if>
+<sc-if value="{{ cx.confirmCopy }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px;border-radius:14px;background:var(--rose-bg);border:1px solid var(--rose-line)">
+<div style="font-size:14px">Move <b style="font-weight:600">{{ cx.name }}</b> ({{ cx.size }}) to _PhotoSense_Removed? You can move it back later.</div>
+<div style="display:flex;gap:8px;justify-content:flex-end"><div onClick="{{ cx.cancelConfirm }}" style="height:36px;padding:0 16px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-weight:500;cursor:pointer">Cancel</div><div onClick="{{ cx.doCopy }}" style="height:36px;padding:0 16px;display:flex;align-items:center;border-radius:999px;background:var(--rose);color:#fff;font-weight:600;cursor:pointer;opacity:{{ busyOp }};pointer-events:{{ busyPe }}">{{ cx.doCopyLabel }}</div></div>
+</div>
+</sc-if>
+<div style="text-align:center;font-size:12.5px;color:var(--t3)">Deleting moves the file to _PhotoSense_Removed. Move it back to restore it.</div>
+<sc-if value="{{ cx.notConfirmOrig }}" hint-placeholder-val="{{ true }}"><div onClick="{{ cx.askOrig }}" style="text-align:center;font-size:13px;color:var(--t3);text-decoration:underline;text-underline-offset:3px;padding-top:4px;cursor:pointer">Delete the original instead</div></sc-if>
+<sc-if value="{{ cx.confirmOrig }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:12px;padding:14px 16px;border-radius:14px;background:var(--s2);border:1px solid var(--line)">
+<div style="font-size:14px">{{ cx.origQ }}</div>
+<div style="display:flex;gap:8px;justify-content:flex-end"><div onClick="{{ cx.cancelConfirm }}" style="height:36px;padding:0 16px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-weight:500;cursor:pointer">Cancel</div><div onClick="{{ cx.doOrig }}" style="height:36px;padding:0 16px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--rose-line);color:var(--rose-t);font-weight:600;cursor:pointer;opacity:{{ busyOp }};pointer-events:{{ busyPe }}">{{ cx.doOrigLabel }}</div></div>
+</div>
+</sc-if>
+</div>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ cfOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeConfirm }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim);display:grid;place-items:center">
+<div onClick="{{ stop }}" style="width:520px;max-width:calc(100% - 48px);padding:28px;border-radius:20px;background:var(--pop);border:1px solid var(--line);box-shadow:0 30px 90px var(--shadow);display:flex;flex-direction:column;gap:16px;box-sizing:border-box">
+<div style="font-weight:600;font-size:21px;letter-spacing:-0.01em">{{ cf.title }}</div>
+<div style="display:flex;flex-direction:column;gap:8px;font-size:15px;color:var(--t2)"><sc-for list="{{ cf.lines }}" as="l" hint-placeholder-count="3"><div>{{ l.text }}</div></sc-for></div>
+<div style="padding:12px 14px;border-radius:12px;background:var(--s2);font-size:13.5px;color:var(--t2)">Files go to <span style="font-family:'DM Mono',monospace;color:var(--t1)">_PhotoSense_Removed</span> inside the scanned folder. Moving a file back restores it.</div>
+<div style="display:flex;justify-content:flex-end;gap:10px;padding-top:6px"><div onClick="{{ closeConfirm }}" style="height:44px;padding:0 20px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-weight:500;cursor:pointer;opacity:{{ busyOp }};pointer-events:{{ busyPe }}" style-hover="background:var(--s2)">Cancel</div><div onClick="{{ runConfirm }}" style="height:44px;padding:0 22px;display:flex;align-items:center;border-radius:999px;background:var(--rose);color:#fff;font-weight:600;cursor:pointer;opacity:{{ busyOp }};pointer-events:{{ busyPe }}" style-hover="filter:brightness(1.08)">{{ cf.btn }}</div></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ brOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeBrowser }}" style="position:fixed;inset:0;z-index:60;background:var(--scrim);display:grid;place-items:center">
+<div onClick="{{ stop }}" style="width:720px;height:560px;max-height:calc(100% - 48px);border-radius:20px;background:var(--pop);border:1px solid var(--line);box-shadow:0 30px 90px var(--shadow);display:flex;flex-direction:column;overflow:hidden">
+<div style="padding:22px 24px 16px;display:flex;flex-direction:column;gap:14px;border-bottom:1px solid var(--line)">
+<div style="font-weight:600;font-size:20px">{{ br.title }}</div>
+<div style="display:flex;gap:10px;align-items:center"><div onClick="{{ br.up }}" style="height:40px;padding:0 18px;display:flex;align-items:center;border-radius:999px;background:var(--s2);border:1px solid var(--line);font-weight:500;cursor:pointer;opacity:{{ br.upOp }}" style-hover="background:var(--s3)">Up</div><div style="flex:1;min-width:0;height:40px;padding:0 14px;border-radius:12px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;font:400 13.5px 'DM Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box">{{ br.path }}</div></div>
+</div>
+<div style="flex:1;min-height:0;display:grid;grid-template-columns:180px minmax(0,1fr)">
+<div style="border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px"><div style="padding:0 12px 8px;font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3)">Start from</div><sc-for list="{{ br.places }}" as="p" hint-placeholder-count="4"><div onClick="{{ p.onClick }}" style="padding:9px 12px;border-radius:999px;background:{{ p.bg }};font-weight:{{ p.fw }};cursor:pointer" style-hover="background:var(--s2)">{{ p.label }}</div></sc-for></div>
+<div style="overflow:auto;padding:10px">
+<sc-for list="{{ br.kids }}" as="k" hint-placeholder-count="5"><div onClick="{{ k.onClick }}" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer" style-hover="background:var(--s2)"><div style="width:18px;height:14px;border-radius:3px;background:var(--brand);opacity:0.7;flex:none"></div><div style="flex:1;min-width:0">{{ k.name }}</div><div style="color:var(--t3)">›</div></div></sc-for>
+<sc-if value="{{ br.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:60px 0;text-align:center;color:var(--t3)">No folders inside this one.</div></sc-if>
+</div>
+</div>
+<div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--line)"><div onClick="{{ closeBrowser }}" style="height:44px;padding:0 20px;display:flex;align-items:center;border-radius:999px;border:1px solid var(--line);font-weight:500;cursor:pointer" style-hover="background:var(--s2)">Cancel</div><div onClick="{{ useFolder }}" style="height:44px;padding:0 22px;display:flex;align-items:center;border-radius:999px;background:var(--brand);color:var(--on-brand);font-weight:600;cursor:pointer" style-hover="filter:brightness(1.08)">Use this folder</div></div>
+</div>
+</div>
+</sc-if>
+
+<div style="position:fixed;right:24px;bottom:24px;z-index:80;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none">
+<sc-for list="{{ toasts }}" as="t" hint-placeholder-count="0">
+<div style="pointer-events:auto;display:flex;align-items:center;gap:12px;max-width:540px;padding:10px 10px 10px 16px;border-radius:999px;background:var(--pop);border:1px solid {{ t.border }};box-shadow:0 14px 40px var(--shadow);font-size:14px">
+<div style="width:8px;height:8px;border-radius:50%;background:{{ t.dot }};flex:none"></div><div style="flex:1">{{ t.msg }}</div>
+<sc-if value="{{ t.isErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:var(--t3);white-space:nowrap">Kept in Errors</div></sc-if>
+<div onClick="{{ t.onClose }}" style="width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:var(--t2);cursor:pointer;flex:none" style-hover="background:var(--s2)">×</div>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startAt&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Results&quot;,&quot;First run&quot;],&quot;default&quot;:&quot;Results&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototype&quot;},&quot;offline&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototype&quot;}}">
+class Component extends DCLogic {
+  FS = {
+    'C:\\': ['Users', 'Program Files', 'Windows'], 'C:\\Users': ['jamie', 'Public'],
+    'C:\\Users\\jamie': ['Desktop', 'Documents', 'Downloads', 'Phone Pictures', 'Pictures', 'Videos'],
+    'C:\\Users\\jamie\\Pictures': ["Jamie's Phone", 'Camera Roll', 'Screenshots'],
+    'C:\\Users\\jamie\\Phone Pictures': ['2021', '2022', '2023'], 'D:\\': ['Backup'], 'D:\\Backup': ['Phone 2022']
+  };
+  state = this.init();
+
+  init() {
+    let theme = 'Dark';
+    try { theme = localStorage.getItem('ps-proto-theme') || 'Dark'; } catch (e) {}
+    const data = this.mkData(), first = (this.props && this.props.startAt) === 'First run';
+    return {
+      screen: first ? 'setup' : 'results', hasResults: !first, scannedAt: '4:25 PM', theme,
+      root: 'C:\\Users\\jamie\\Phone Pictures', second: "C:\\Users\\jamie\\Pictures\\Jamie's Phone", recursive: true,
+      scan: 'idle', prog: 0, log: [], showLog: false, rootErr: false, secondErr: false,
+      tab: 'dup', q: '', hideRev: false, page: 0, sel: data.dup[0].id, csel: 0, hov: -1, data,
+      cmp: null, confirm: null, busy: false, browser: null, toasts: [], errors: [], menu: false, errPanel: false
+    };
+  }
+
+  componentDidMount() {
+    this.onKey = e => {
+      const S = this.state;
+      if (e.key === 'Escape') {
+        if (S.browser) this.setState({ browser: null });
+        else if (S.confirm && !S.busy) this.setState({ confirm: null });
+        else if (S.cmp) this.setState({ cmp: null });
+        else this.setState({ menu: false, errPanel: false });
+      } else if (e.key === ' ' && S.cmp && !/INPUT|TEXTAREA/.test((document.activeElement || {}).tagName || '')) {
+        e.preventDefault();
+        this.setState({ cmp: { ...S.cmp, mode: S.cmp.mode === 'copy' ? 'orig' : 'copy' } });
+      }
+    };
+    window.addEventListener('keydown', this.onKey);
+  }
+  componentDidUpdate(prev) {
+    if (prev.startAt !== this.props.startAt) this.setState({ screen: this.props.startAt === 'First run' ? 'setup' : 'results', hasResults: true });
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); clearInterval(this.iv); clearTimeout(this.t1); }
+
+  norm(p) { p = (p || '').trim().replace(/\//g, '\\').replace(/\\+$/, ''); return /^[a-z]:$/i.test(p) ? p.toUpperCase() + '\\' : p; }
+  join(p, n) { return p.endsWith('\\') ? p + n : p + '\\' + n; }
+  parent(p) { if (/^[A-Za-z]:\\$/.test(p)) return null; const i = p.lastIndexOf('\\'); if (i < 0) return null; const q = p.slice(0, i); return q.length === 2 ? q + '\\' : q; }
+  findKey(p) { const n = this.norm(p).toLowerCase(); return Object.keys(this.FS).find(k => k.toLowerCase() === n); }
+  exists(p) {
+    const n = this.norm(p); if (!n) return false; if (this.findKey(n)) return true;
+    const par = this.parent(n); if (!par) return false; const k = this.findKey(par);
+    const leaf = n.slice(n.lastIndexOf('\\') + 1).toLowerCase();
+    return !!k && this.FS[k].some(x => x.toLowerCase() === leaf);
+  }
+  kids(p) { const k = this.findKey(p); return k ? this.FS[k] : []; }
+  short(p) { return (p || '').split('\\').filter(Boolean).pop() || p; }
+  mb(x) { return (Math.round(x * 10) / 10).toFixed(1) + ' MB'; }
+  st(h, s) { return `repeating-linear-gradient(135deg,oklch(var(--thL) var(--thC) ${h}) 0 ${s}px,oklch(var(--thL2) var(--thC) ${h}) ${s}px ${s * 2}px)`; }
+  now() { return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); }
+
+  mkData() {
+    const P = 'C:\\Users\\jamie\\Phone Pictures', J = "C:\\Users\\jamie\\Pictures\\Jamie's Phone";
+    let s = 11; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+    const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const pad = n => String(n).padStart(2, '0');
+    const date = () => `${MON[Math.floor(r() * 12)]} ${1 + Math.floor(r() * 28)}, ${2020 + Math.floor(r() * 4)}, ${1 + Math.floor(r() * 12)}:${pad(Math.floor(r() * 60))}:${pad(Math.floor(r() * 60))} ${r() < 0.5 ? 'AM' : 'PM'}`;
+    const PL = [{ name: 'Near Anaconda, Montana, US', xy: '46.1283, −112.9423' }, { name: 'Butte, Montana, US', xy: '46.0038, −112.5348' }, { name: 'Missoula, Montana, US', xy: '46.8721, −113.9940' }, null, null];
+    const HU = [220, 130, 30, 200, 330, 95, 160, 60, 250, 0, 280, 180];
+    let uid = 0;
+    const mk = o => Object.assign({ id: 'g' + (++uid), kind: 'photo', camera: 'iPhone 12 Pro Max', ar: 4 / 3, place: null }, o);
+    const cp = o => Object.assign({ id: 'c' + (++uid), kept: false }, o);
+    const IDR = 'In the root folder: the files are byte-for-byte the same';
+    const dup = [
+      mk({ name: 'IMG_4299.JPG', hue: 220, folder: P, taken: 'Apr 29, 2022, 5:34:26 PM', place: PL[0], px: '10418 × 3888', fmt: 'JPEG', size: 24.0, ar: 2.68, reason: 'Opens everywhere: JPEG rather than HEIC',
+        copies: [cp({ name: 'IMG_4299.HEIC', fmt: 'HEIC', size: 12.0, folder: J, px: '10418 × 3888', match: 'same' })] }),
+      mk({ name: 'IMG_0377.JPG', hue: 130, folder: P, taken: 'May 8, 2016, 6:24:28 AM', px: '5616 × 3744', fmt: 'JPEG', size: 14.8, ar: 1.5, camera: 'Canon EOS 5D Mark II', reason: IDR,
+        copies: [cp({ name: 'IMG_0648.JPG', fmt: 'JPEG', size: 14.8, folder: J, px: '5616 × 3744', match: 'identical' })] }),
+      mk({ name: 'DLWL2718.MP4', kind: 'video', hue: 0, folder: P, taken: 'Jul 4, 2022, 9:41:12 PM', place: PL[1], px: '1920 × 1080', fmt: 'MP4', size: 4.5, dur: '0:20', ar: 16 / 9, reason: IDR,
+        copies: [cp({ name: 'DLWL2718.MP4', fmt: 'MP4', size: 4.5, folder: J, px: '1920 × 1080', match: 'identical' }), cp({ name: 'DLWL2718 (1).MP4', fmt: 'MP4', size: 4.5, folder: P, px: '1920 × 1080', match: 'identical' })] }),
+      mk({ name: 'IMG_0712.JPG', hue: 330, folder: P, taken: 'Dec 24, 2021, 7:02:51 PM', px: '4032 × 3024', fmt: 'JPEG', size: 3.9, reason: IDR,
+        copies: [cp({ name: 'IMG_0712.JPG', fmt: 'JPEG', size: 3.9, folder: J, px: '4032 × 3024', match: 'identical', kept: true }), cp({ name: 'IMG_0712 copy.JPG', fmt: 'JPEG', size: 3.9, folder: P, px: '4032 × 3024', match: 'identical', kept: true })] })
+    ];
+    const raw = [];
+    for (let i = 0; i < 259; i++) { const v = 0.8 + r() * 4.2; raw.push(v); if (i === 0) raw.push(v); }
+    const k = 759.2 / raw.reduce((a, b) => a + b, 0);
+    let ri = 0; const sz = () => Math.round(raw[ri++] * k * 10) / 10;
+    for (let i = 0; i < 259; i++) {
+      const n = 1000 + ((i * 131) % 8900), nm = 'IMG_' + n, h = HU[i % HU.length], pl = PL[i % 5], taken = date();
+      const vid = i % 23 === 11, kind = vid ? 'vid' : i % 5 === 2 ? 'heic' : i % 7 === 3 ? 'small' : 'ident';
+      const c = sz();
+      if (vid) dup.push(mk({ name: 'MOV_' + n + '.MP4', kind: 'video', hue: h, folder: P, taken, place: pl, px: '1920 × 1080', fmt: 'MP4', size: c, dur: '0:' + pad(5 + (i % 50)), ar: 16 / 9, reason: IDR, copies: [cp({ name: 'MOV_' + n + '.MP4', fmt: 'MP4', size: c, folder: J, px: '1920 × 1080', match: 'identical' })] }));
+      else if (kind === 'heic') dup.push(mk({ name: nm + '.JPG', hue: h, folder: P, taken, place: pl, px: '4032 × 3024', fmt: 'JPEG', size: Math.round(c * 19) / 10, reason: 'Opens everywhere: JPEG rather than HEIC', copies: [cp({ name: nm + '.HEIC', fmt: 'HEIC', size: c, folder: J, px: '4032 × 3024', match: 'same' })] }));
+      else if (kind === 'small') dup.push(mk({ name: nm + '.JPG', hue: h, folder: P, taken, place: pl, px: '4032 × 3024', fmt: 'JPEG', size: Math.round(c * 52) / 10, reason: 'Higher resolution: 4032×3024 vs 1600×1200', copies: [cp({ name: nm + '.JPG', fmt: 'JPEG', size: c, folder: J, px: '1600 × 1200', match: 'same' })] }));
+      else {
+        const copies = [cp({ name: i % 4 === 1 ? 'IMG_' + (n + 37) + '.JPG' : nm + '.JPG', fmt: 'JPEG', size: c, folder: J, px: '4032 × 3024', match: 'identical' })];
+        if (i === 0) { sz(); copies.push(cp({ name: nm + ' (1).JPG', fmt: 'JPEG', size: c, folder: P, px: '4032 × 3024', match: 'identical' })); }
+        dup.push(mk({ name: nm + '.JPG', hue: h, folder: P, taken, place: pl, px: '4032 × 3024', fmt: 'JPEG', size: c, reason: IDR, copies }));
+      }
+    }
+    const sim = [], RS = ['Sharpest frame of the burst', 'Unedited version: the others were edited', 'Higher resolution: 4032×3024 vs 1600×1200'];
+    for (let i = 0; i < 170; i++) {
+      const n = 5000 + i * 7, h = HU[(i * 5) % HU.length], taken = date(), pl = PL[(i + 2) % 5], m = 1 + (i % 3), copies = [];
+      for (let j = 1; j <= m; j++) copies.push(cp({ name: 'IMG_' + (n + j) + '.JPG', fmt: 'JPEG', size: Math.round((1.5 + r() * 3) * 10) / 10, folder: P, px: i % 3 === 2 ? '1600 × 1200' : '4032 × 3024', match: 'similar', hueShift: j * 14, taken: taken.replace(/:(\d\d) /, (x, q) => ':' + pad((+q + j) % 60) + ' ') }));
+      sim.push(mk({ name: 'IMG_' + n + '.JPG', hue: h, folder: P, taken, place: pl, px: '4032 × 3024', fmt: 'JPEG', size: Math.round((3 + r() * 3) * 10) / 10, reason: RS[i % 3], copies }));
+    }
+    return { dup, sim };
+  }
+
+  listFor(S) {
+    const isDup = S.tab === 'dup', q = S.q.trim().toLowerCase();
+    let l = (isDup ? S.data.dup : S.data.sim).filter(g => g.copies.length);
+    if (q) l = l.filter(g => [g, ...g.copies].some(x => x.name.toLowerCase().includes(q) || x.folder.toLowerCase().includes(q)));
+    if (isDup && S.hideRev) l = l.filter(g => !g.copies.every(c => c.kept));
+    return l;
+  }
+  findG(gid) { const D = this.state.data; return D.dup.find(x => x.id === gid) || D.sim.find(x => x.id === gid); }
+
+  differs(g, c) {
+    const o = [], ct = c.taken || g.taken, cpx = c.px || g.px;
+    if (c.name !== g.name) o.push({ k: 'Name', v: 'the original is ' + g.name });
+    if (c.fmt !== g.fmt) o.push({ k: 'Format', v: `${c.fmt}, the original is ${g.fmt}` });
+    if (cpx !== g.px) o.push({ k: 'Pixel size', v: `${cpx}, the original is ${g.px}` });
+    if (c.size !== g.size) o.push({ k: 'File size', v: `${this.mb(c.size)}, the original is ${this.mb(g.size)}` });
+    if (c.folder !== g.folder) o.push({ k: 'Folder', v: `${this.short(c.folder)}, the original is in ${this.short(g.folder)}` });
+    if (ct !== g.taken) o.push({ k: 'Taken', v: `${ct}, the original was ${g.taken}` });
+    if (!o.length) o.push({ k: 'Nothing visible', v: 'only the location on disk differs' });
+    return o;
+  }
+
+  toast(kind, msg) {
+    const id = Date.now() + Math.random(), t = this.now();
+    this.setState(s => ({ toasts: [...s.toasts, { id, kind, msg }].slice(-4), errors: kind === 'err' ? [{ id, t, msg }, ...s.errors] : s.errors }));
+    if (kind !== 'err') setTimeout(() => this.dropToast(id), 4500);
+  }
+  dropToast(id) { this.setState(s => ({ toasts: s.toasts.filter(t => t.id !== id) })); }
+  offline() { if (this.props.offline) { this.toast('err', 'The PhotoSense service is not answering. Nothing was changed.'); return true; } return false; }
+
+  setTab(t) { const S = { ...this.state, tab: t, page: 0 }, l = this.listFor(S); this.setState({ tab: t, page: 0, sel: l[0] ? l[0].id : null, csel: 0, hov: -1 }); }
+  ask(scope, gid, cid) { if (this.offline()) return; this.setState({ confirm: { scope, gid, cid } }); }
+  runConfirm() { const c = this.state.confirm; if (!c) return; if (this.offline()) return this.setState({ confirm: null }); this.setState({ busy: true }); setTimeout(() => this.doDelete(c.scope, c.gid, c.cid), 1100); }
+
+  reselect(prevIds) {
+    const S = this.state, g = this.findG(S.sel);
+    if (g && g.copies.length) return S.sel;
+    const ids = this.listFor(S).map(x => x.id), i = prevIds.indexOf(S.sel);
+    return prevIds.slice(i + 1).find(id => ids.includes(id)) || ids[ids.length - 1] || null;
+  }
+  doDelete(scope, gid, cid) {
+    const S = this.state, prevIds = this.listFor(S).map(g => g.id), onDup = scope === 'all' || S.tab === 'dup';
+    let n = 0, size = 0;
+    const take = (g, pred) => { g.copies = g.copies.filter(c => { if (pred(c)) { n++; size += c.size; return false; } return true; }); };
+    if (scope === 'all') S.data.dup.forEach(g => take(g, c => !c.kept));
+    else { const g = this.findG(gid); if (g) take(g, c => scope === 'group' ? !c.kept : c.id === cid); }
+    const sel = this.reselect(prevIds), sg = this.findG(sel);
+    const keepCmp = S.cmp && sel === S.sel && sg && sg.copies.length;
+    this.setState({ data: { ...S.data }, sel, csel: 0, hov: -1, busy: false, confirm: null, cmp: keepCmp ? { mode: 'side', confirm: null } : null });
+    const noun = onDup ? (n === 1 ? 'duplicate' : 'duplicates') : (n === 1 ? 'file' : 'files');
+    this.toast('ok', `Moved ${n} ${noun} (${this.mb(size)}) to _PhotoSense_Removed`);
+  }
+  delOriginal(gid, cid) {
+    if (this.offline()) return;
+    this.setState({ busy: true });
+    setTimeout(() => {
+      const S = this.state, prevIds = this.listFor(S).map(g => g.id), g = this.findG(gid);
+      const i = g.copies.findIndex(x => x.id === cid), c = g.copies[i], old = { name: g.name, size: g.size };
+      Object.assign(g, { name: c.name, fmt: c.fmt, size: c.size, folder: c.folder, px: c.px || g.px, taken: c.taken || g.taken, hue: g.hue + (c.hueShift || 0), reason: 'You chose this copy as the original' });
+      g.copies.splice(i, 1);
+      const sel = this.reselect(prevIds);
+      this.setState({ data: { ...S.data }, busy: false, sel, csel: 0, cmp: g.copies.length && sel === gid ? { mode: 'side', confirm: null } : null });
+      this.toast('ok', `Moved ${old.name} (${this.mb(old.size)}) to _PhotoSense_Removed. ${c.name} is now the original.`);
+    }, 900);
+  }
+  toggleKeep(gid, cid) {
+    if (this.offline()) return;
+    const g = this.findG(gid), c = g && g.copies.find(x => x.id === cid); if (!c) return;
+    c.kept = !c.kept; this.setState({ data: { ...this.state.data } });
+    this.toast('ok', c.kept ? `Keeping ${c.name}. Bulk deletion will skip it.` : `Stopped keeping ${c.name}.`);
+  }
+
+  logEvents() {
+    const S = this.state, a = this.short(S.root), b = S.second.trim() ? this.short(S.second) : null;
+    const ev = [[0, `Scan started: ${b ? '2 folders' : '1 folder'}${S.recursive ? ', subfolders included' : ''}`], [0.4, `${a}: 4,212 files found`]];
+    if (b) ev.push([0.5, `${b}: 2,729 files found`]);
+    ev.push([2, 'Reading dates, places and cameras'], [34, 'Comparing file contents'], [58, 'Comparing pictures across formats and sizes'], [86, 'Matching videos (identical files only)'], [99.9, '263 duplicate groups · 264 files · 795 MB'], [99.95, '170 similar groups']);
+    for (let x = 8; x < 100; x += 8) { ev.push([x, `${a}: ${Math.round(4212 * x / 100).toLocaleString()} of 4,212`]); if (b) ev.push([x + 0.01, `${b}: ${Math.round(2729 * x / 100).toLocaleString()} of 2,729`]); }
+    return ev.sort((m, n) => m[0] - n[0]);
+  }
+  pushLogs(p) {
+    const T0 = 16 * 3600 + 12 * 60 + 4, pad = n => String(n).padStart(2, '0'), out = [];
+    while (this.logIdx < this.ev.length && this.ev[this.logIdx][0] <= p) {
+      const [thr, m] = this.ev[this.logIdx++], t = Math.round(T0 + thr / 100 * 778);
+      out.push({ t: `${pad(Math.floor(t / 3600))}:${pad(Math.floor(t / 60) % 60)}:${pad(t % 60)}`, m });
+    }
+    if (out.length) this.setState(s => ({ log: [...s.log, ...out].slice(-200) }));
+  }
+  startScan() {
+    const S = this.state; if (S.scan !== 'idle') return;
+    if (!S.root.trim()) { this.setState({ rootErr: true }); return this.toast('err', 'Choose a root folder to scan.'); }
+    const rootOk = this.exists(S.root), secOk = !S.second.trim() || this.exists(S.second);
+    if (!rootOk || !secOk) { this.setState({ rootErr: !rootOk, secondErr: !secOk }); return this.toast('err', `Folder not found: ${!rootOk ? S.root : S.second}`); }
+    if (this.offline()) return;
+    this.setState({ scan: 'starting', prog: 0, log: [], rootErr: false, secondErr: false });
+    this.ev = this.logEvents(); this.logIdx = 0;
+    this.t1 = setTimeout(() => {
+      this.setState({ scan: 'scanning' }); this.pushLogs(0);
+      this.iv = setInterval(() => {
+        const p = Math.min(100, this.state.prog + 0.6 + Math.random() * 0.9);
+        this.setState({ prog: p }); this.pushLogs(p);
+        if (p >= 100) { clearInterval(this.iv); this.t1 = setTimeout(() => this.finish(), 600); }
+      }, 110);
+    }, 800);
+  }
+  finish() {
+    clearInterval(this.iv); clearTimeout(this.t1);
+    const data = this.mkData();
+    this.setState({ screen: 'results', hasResults: true, scan: 'idle', prog: 0, data, tab: 'dup', q: '', page: 0, sel: data.dup[0].id, csel: 0, scannedAt: this.now() });
+    this.toast('ok', 'Scan finished: 263 duplicate groups and 170 similar groups');
+  }
+  setTheme(t) { try { localStorage.setItem('ps-proto-theme', t); } catch (e) {} this.setState({ theme: t }); }
+  openBrowser(target) { const cur = target === 'root' ? this.state.root : this.state.second; this.setState({ browser: { target, path: this.findKey(cur) || 'C:\\Users\\jamie\\Pictures' } }); }
+
+  renderVals() {
+    const S = this.state, isDup = S.tab === 'dup', D = S.data, offline = !!this.props.offline;
+    const MT = { identical: ['Identical file', 'var(--ident-bg)', 'var(--ident)', 'Byte-for-byte the same file.'], same: ['Same picture', 'var(--same-bg)', 'var(--same)', 'The same shot converted, resized or re-compressed.'], similar: ['Similar', 'var(--amber-bg)', 'var(--amber)', 'A burst frame or an edited version. Never removed in bulk.'] };
+    const pl = (n, a, b) => n + ' ' + (n === 1 ? a : b);
+    const busyOp = S.busy ? 0.5 : 1, busyPe = S.busy ? 'none' : 'auto';
+    const vidBg = 'oklch(0.24 0.012 240)';
+    const thumb = (g, c) => g.kind === 'video' ? vidBg : this.st(g.hue + ((c && c.hueShift) || 0), 6);
+
+    const list = this.listFor(S), pages = Math.max(1, Math.ceil(list.length / 50)), page = Math.min(S.page, pages - 1);
+    const items = list.slice(page * 50, page * 50 + 50);
+    let dupN = 0, dupMB = 0, keptN = 0;
+    D.dup.forEach(g => g.copies.forEach(c => { if (c.kept) keptN++; else { dupN++; dupMB += c.size; } }));
+    const sumOf = g => {
+      const live = g.copies.filter(c => !c.kept), m = live.reduce((a, c) => a + c.size, 0);
+      if (!isDup) return [pl(g.copies.length + 1, 'similar shot', 'similar shots'), false];
+      if (!live.length) return [`${pl(g.copies.length, 'copy', 'copies')}, all marked keep`, true];
+      return [`${pl(live.length, 'duplicate', 'duplicates')} · ${this.mb(m)}`, false];
+    };
+    const tiles = items.map(g => {
+      const [sum, kept] = sumOf(g);
+      return { name: g.name, sum, sumColor: kept ? 'var(--keep)' : 'var(--t2)', bg: thumb(g), isVideo: g.kind === 'video', dur: g.dur || '', badge: '+' + g.copies.length,
+        ring: g.id === S.sel ? '0 0 0 3px var(--s1), 0 0 0 5px var(--brand)' : '0 0 0 0 transparent', onClick: () => this.setState({ sel: g.id, csel: 0, hov: -1 }) };
+    });
+    const q = S.q.trim();
+    const emptyMsg = q ? `No groups match “${q}”` : isDup ? 'No duplicates to show' : 'No similar shots found';
+
+    const g = list.find(x => x.id === S.sel) || null;
+    let d = { tiles: [], rows: [], hc: {} }, cx = { diffs: [] };
+    if (g) {
+      const ci = Math.min(S.csel, g.copies.length - 1), c = g.copies[ci], n = g.copies.length, vid = g.kind === 'video';
+      const ct = c.taken || g.taken, cpx = c.px || g.px, mt = MT[c.match], badge = c.kept ? ['Keeping', 'var(--keep-bg)', 'var(--keep)'] : mt;
+      const live = g.copies.filter(x => !x.kept), liveMB = live.reduce((a, x) => a + x.size, 0);
+      const noPlace = 'No location in this file', onMap = e => { e.preventDefault(); e.stopPropagation(); this.toast('info', `Opening ${g.place.name} on a map in your browser`); };
+      const rows = [
+        ['Name', g.name, c.name], ['Format', g.fmt, c.fmt], ['File size', this.mb(g.size), this.mb(c.size)], ['Folder', g.folder, c.folder, 1],
+        ['Taken', g.taken, ct], ['Place', g.place ? g.place.name : noPlace, g.place ? g.place.name : noPlace, 0, 1],
+        [vid ? 'Video' : 'Pixel size', vid ? `${g.px} · ${g.dur}` : g.px, vid ? `${cpx} · ${g.dur}` : cpx], ['Camera', g.camera, g.camera]
+      ].map(([label, o, v, mono, map]) => ({ label, o, v: o === v ? 'Same' : v, diff: o !== v, bg: o !== v ? 'var(--diff)' : 'transparent', dot: o !== v ? 'var(--amber)' : 'transparent', vColor: o === v ? 'var(--t3)' : 'var(--t1)', ff: mono ? "'DM Mono',monospace" : "'DM Sans',sans-serif", fs: mono ? '13px' : '14px', map: !!(map && g.place), onMap }));
+      rows.sort((a, b) => b.diff - a.diff);
+      const H = 'clamp(200px, 28vh, 300px)';
+      let hc = {}, hasHc = false;
+      if (S.hov >= 0 && g.copies[S.hov]) {
+        const h = g.copies[S.hov], hm = MT[h.match]; hasHc = true;
+        hc = { name: h.name, mLabel: h.kept ? 'Keeping' : hm[0], mBg: h.kept ? 'var(--keep-bg)' : hm[1], mFg: h.kept ? 'var(--keep)' : hm[2], taken: h.taken || g.taken, folder: h.folder, place: g.place ? g.place.name : noPlace,
+          file: `${h.px || g.px} · ${h.fmt} · ${this.mb(h.size)}${vid ? ' · ' + g.dur : ''}`, diffs: this.differs(g, h), reason: g.reason, left: Math.min(S.hov * 130, 400) + 'px' };
+      }
+      const single = isDup && n === 1;
+      const d1Solid = !isDup || single;
+      d = {
+        name: g.name, sub: isDup ? (live.length ? `${pl(live.length, 'duplicate', 'duplicates')} · ${this.mb(liveMB)} to free` : 'All copies marked keep') : pl(n + 1, 'similar shot', 'similar shots'),
+        oBadge: isDup ? 'ORIGINAL' : 'BEST', oNote: isDup ? `The best copy of this ${vid ? 'video' : 'picture'}. It stays.` : 'The best of these similar shots. It stays.', oCol: isDup ? 'Original' : 'Best',
+        cBadge: badge[0].toUpperCase(), cBadgeBg: badge[1], cBadgeFg: badge[2], cNote: `${isDup ? 'Copy' : 'Shot'} ${ci + 1} of ${n} · ${c.fmt}`,
+        oBg: thumb(g), cBg: thumb(g, c), imgW: `min(100%, calc((${H} - 28px) * ${g.ar.toFixed(3)}))`, ar: g.ar.toFixed(3), isVideo: vid,
+        oFile: `${g.fmt} · ${this.mb(g.size)}`, cFile: `${c.fmt} · ${this.mb(c.size)}`,
+        openSide: () => this.setState({ cmp: { mode: 'side', confirm: null }, hov: -1 }),
+        openPlayer: e => { e.stopPropagation(); this.toast('info', `Opened ${g.name} in your default player`); },
+        stripTitle: isDup ? `Duplicates of this ${vid ? 'video' : 'picture'} (${n})` : `Similar shots (${n})`,
+        tiles: g.copies.map((x, i) => ({ fmt: x.fmt, label: x.kept ? 'KEEPING' : MT[x.match][0].toUpperCase(), lBg: x.kept ? 'oklch(0.42 0.09 160 / 0.92)' : 'oklch(0.2 0.008 240 / 0.85)', bg: thumb(g, x),
+          ring: i === ci ? '0 0 0 2px var(--brand)' : '0 0 0 1px var(--line)', onClick: () => this.setState({ csel: i }), onEnter: () => this.setState({ hov: i }), onLeave: () => this.setState({ hov: -1 }) })),
+        hasHc, hc, rows, reason: g.reason,
+        note: isDup ? 'Deleting moves files to _PhotoSense_Removed inside the scanned folder. Move them back to restore them.' : 'Similar shots are never removed in bulk. Deleting moves the file to _PhotoSense_Removed.',
+        keepLabel: c.kept ? 'Stop keeping this copy' : 'Keep this copy', keepBg: c.kept ? 'var(--keep-bg)' : 'transparent', keep: () => this.toggleKeep(g.id, c.id),
+        d1Label: single ? `Delete this duplicate · ${this.mb(c.size)}` : `Delete this copy · ${this.mb(c.size)}`,
+        d1Bg: d1Solid ? 'var(--rose)' : 'transparent', d1Fg: d1Solid ? '#fff' : 'var(--rose-t)', d1Border: d1Solid ? 'var(--rose)' : 'var(--rose-line)',
+        d1Op: c.kept || S.busy ? 0.4 : 1, d1Pe: c.kept || S.busy ? 'none' : 'auto',
+        delOne: () => this.ask(single ? 'group' : 'copy', g.id, c.id),
+        showGroupDel: isDup && n > 1 && live.length > 0, groupDelLabel: `Delete these ${pl(live.length, 'duplicate', 'duplicates')} · ${this.mb(liveMB)}`, delGroup: () => this.ask('group', g.id)
+      };
+      if (S.cmp) {
+        const m = S.cmp.mode, on = 'var(--t1)', onFg = 'var(--bg)';
+        const setMode = mode => () => this.setState({ cmp: { ...S.cmp, mode } });
+        cx = {
+          title: m === 'orig' ? g.name : c.name, matchLabel: mt[0], matchDesc: mt[3], mBg: mt[1], mFg: mt[2], kept: c.kept,
+          sideBg: m === 'side' ? on : 'transparent', sideFg: m === 'side' ? onFg : 'var(--t2)', copyBg: m === 'copy' ? on : 'transparent', copyFg: m === 'copy' ? onFg : 'var(--t2)', origBg: m === 'orig' ? on : 'transparent', origFg: m === 'orig' ? onFg : 'var(--t2)',
+          setSide: setMode('side'), setCopy: setMode('copy'), setOrig: setMode('orig'),
+          isSide: m === 'side', isSingle: m !== 'side', isVideo: vid, ar: g.ar.toFixed(3),
+          sideW: `min(100%, calc((100vh - 360px) * ${g.ar.toFixed(3)}))`, singleW: `min(100%, calc((100vh - 290px) * ${g.ar.toFixed(3)}))`,
+          oBg: thumb(g), cBg: thumb(g, c), oCap: `${g.name} · ${g.fmt} · ${this.mb(g.size)}`, cCap: `${c.name} · ${c.fmt} · ${this.mb(c.size)}`,
+          singleBg: m === 'orig' ? thumb(g) : thumb(g, c), singleRing: m === 'orig' ? '0 0 0 4px var(--keep)' : '0 0 0 1px var(--line)',
+          lbl: m === 'orig' ? 'ORIGINAL · IT STAYS' : 'THIS COPY · ' + mt[0].toUpperCase(), lblBg: m === 'orig' ? 'var(--keep)' : 'oklch(0 0 0 / 0.6)', lblFg: m === 'orig' ? 'oklch(0.2 0.03 160)' : '#fff',
+          singleCap: m === 'orig' ? `${g.name} · ${g.px} · ${g.fmt} · ${this.mb(g.size)}` : `${c.name} · ${cpx} · ${c.fmt} · ${this.mb(c.size)}`,
+          name: c.name, taken: ct, folder: c.folder, place: g.place ? g.place.name : noPlace, hasPlace: !!g.place, coords: g.place ? g.place.xy : '', onMap,
+          file: `${cpx} · ${c.fmt} · ${this.mb(c.size)}${vid ? ' · ' + g.dur : ''}`, camera: g.camera, diffs: this.differs(g, c), reason: g.reason, size: this.mb(c.size),
+          openViewer: () => this.toast('info', `Opened ${m === 'orig' ? g.name : c.name} in your default viewer`),
+          keepLabel: c.kept ? 'Stop keeping this copy' : 'Keep this copy too', keepBg: c.kept ? 'var(--keep-bg)' : 'transparent', keep: () => this.toggleKeep(g.id, c.id),
+          confirmCopy: S.cmp.confirm === 'copy', notConfirmCopy: S.cmp.confirm !== 'copy', confirmOrig: S.cmp.confirm === 'orig', notConfirmOrig: S.cmp.confirm !== 'orig',
+          delLabel: `Delete this copy · ${this.mb(c.size)}`, delOp: c.kept || S.busy ? 0.4 : 1, delPe: c.kept || S.busy ? 'none' : 'auto',
+          askCopy: () => { if (!this.offline()) this.setState({ cmp: { ...S.cmp, confirm: 'copy' } }); }, askOrig: () => this.setState({ cmp: { ...S.cmp, confirm: 'orig' } }),
+          cancelConfirm: () => this.setState({ cmp: { ...S.cmp, confirm: null } }),
+          doCopy: () => { if (this.offline()) return; this.setState({ busy: true }); setTimeout(() => this.doDelete('copy', g.id, c.id), 900); }, doCopyLabel: S.busy ? 'Working…' : 'Delete this copy',
+          origQ: `Move ${g.name} (${this.mb(g.size)}) to _PhotoSense_Removed and keep ${c.name} as the original instead?`,
+          doOrig: () => this.delOriginal(g.id, c.id), doOrigLabel: S.busy ? 'Working…' : 'Delete the original'
+        };
+      }
+    }
+
+    let cf = { lines: [] };
+    if (S.confirm) {
+      const { scope, gid, cid } = S.confirm, line = t => ({ text: t });
+      if (scope === 'all') cf = { title: 'Delete all duplicates?', btn: `Delete ${pl(dupN, 'file', 'files')}`, lines: [line(`${pl(dupN, 'file', 'files')} taking ${Math.round(dupMB)} MB will be removed.`), line('The best copy of each picture or video stays.'), ...(keptN ? [line(`${pl(keptN, 'copy', 'copies')} you marked keep ${keptN === 1 ? 'is' : 'are'} skipped.`)] : [])] };
+      else {
+        const gg = this.findG(gid), lv = gg.copies.filter(x => !x.kept), kn = gg.copies.length - lv.length;
+        if (scope === 'group') cf = { title: `Delete the duplicates of ${gg.name}?`, btn: `Delete ${pl(lv.length, 'file', 'files')}`, lines: [line(`${pl(lv.length, 'file', 'files')} taking ${this.mb(lv.reduce((a, x) => a + x.size, 0))} will be removed.`), line(`The best copy, ${gg.name}, stays.`), ...(kn ? [line(`${pl(kn, 'copy', 'copies')} you marked keep ${kn === 1 ? 'is' : 'are'} skipped.`)] : [])] };
+        else { const cc = gg.copies.find(x => x.id === cid); cf = { title: `Delete ${cc.name}?`, btn: 'Delete 1 file', lines: [line(`1 file taking ${this.mb(cc.size)} will be removed.`), line(`The best copy, ${gg.name}, stays.`)] }; }
+      }
+      if (S.busy) cf.btn = 'Working…';
+    }
+
+    let br = { kids: [], places: [] };
+    if (S.browser) {
+      const p = S.browser.path, ks = this.kids(p), par = this.parent(p);
+      br = { title: S.browser.target === 'root' ? 'Choose the root folder' : 'Choose the secondary folder', path: p, upOp: par ? 1 : 0.4,
+        up: () => { if (par) this.setState({ browser: { ...S.browser, path: par } }); },
+        kids: ks.map(k => ({ name: k, onClick: () => this.setState({ browser: { ...S.browser, path: this.join(p, k) } }) })), empty: !ks.length,
+        places: [['Pictures', 'C:\\Users\\jamie\\Pictures'], ['Home', 'C:\\Users\\jamie'], ['Disk C:', 'C:\\'], ['Disk D:', 'D:\\']].map(([l, v]) => ({ label: l, bg: v === p ? 'var(--sel)' : 'transparent', fw: v === p ? 600 : 400, onClick: () => this.setState({ browser: { ...S.browser, path: v } }) })) };
+    }
+
+    const hasB = !!S.second.trim(), total = hasB ? 6941 : 4212, f = Math.min(1, S.prog / 100);
+    const HU = [220, 130, 30, 200, 330, 95, 160, 60, 250, 0];
+    const lit = Math.round(S.prog * 1.2);
+    const errs = S.errors.map(e => ({ ...e, onClear: () => this.setState(s => ({ errors: s.errors.filter(x => x.id !== e.id) })) }));
+
+    return {
+      theme: S.theme, isSetup: S.screen === 'setup', isResults: S.screen === 'results', offline,
+      chipA: this.short(S.root), hasB, chipB: this.short(S.second), chipMeta: `${total.toLocaleString()} files · scanned today at ${S.scannedAt}`,
+      goSetup: () => this.setState({ screen: 'setup', menu: false, errPanel: false }),
+      hasErrs: S.errors.length > 0, noErrs: !S.errors.length, errLabel: pl(S.errors.length, 'error', 'errors'), errCount: S.errors.length, errs,
+      toggleErr: () => this.setState({ errPanel: !S.errPanel, menu: false }), openErrs: () => this.setState({ errPanel: true, menu: false }),
+      clearAll: () => this.setState({ errors: [], toasts: S.toasts.filter(t => t.kind !== 'err') }),
+      toggleMenu: () => this.setState({ menu: !S.menu, errPanel: false }), menuOpen: S.menu, errOpen: S.errPanel, anyPop: S.menu || S.errPanel,
+      closePops: () => this.setState({ menu: false, errPanel: false }), menuBtnBg: S.menu ? 'var(--s3)' : 'var(--s1)',
+      darkBg: S.theme === 'Dark' ? 'var(--pop)' : 'transparent', darkFw: S.theme === 'Dark' ? 600 : 400, lightBg: S.theme === 'Light' ? 'var(--pop)' : 'transparent', lightFw: S.theme === 'Light' ? 600 : 400,
+      setDark: () => this.setTheme('Dark'), setLight: () => this.setTheme('Light'),
+      retry: () => { if (!this.offline()) this.toast('ok', 'The PhotoSense service is answering again'); },
+
+      root: S.root, second: S.second,
+      onRoot: e => this.setState({ root: e.target.value, rootErr: false }), onSecond: e => this.setState({ second: e.target.value, secondErr: false }),
+      rootBorder: S.rootErr ? 'var(--rose)' : 'var(--line)', secondBorder: S.secondErr ? 'var(--rose)' : 'var(--line)',
+      browseRoot: () => this.openBrowser('root'), browseSecond: () => this.openBrowser('second'),
+      recBg: S.recursive ? 'var(--brand)' : 'transparent', recBorder: S.recursive ? 'var(--brand)' : 'var(--t3)', recMark: S.recursive ? '✓' : '', toggleRec: () => this.setState({ recursive: !S.recursive }),
+      scanLabel: S.scan === 'idle' ? 'Scan' : S.scan === 'starting' ? 'Starting…' : 'Scanning…', scanOp: S.scan === 'idle' ? 1 : 0.55, scanPe: S.scan === 'idle' ? 'auto' : 'none', startScan: () => this.startScan(),
+      showProg: S.scan !== 'idle', pct: Math.floor(S.prog) + '%', filesLine: `${Math.round(total * f).toLocaleString()} of ${total.toLocaleString()} files`,
+      folderLines: [{ name: this.short(S.root), count: `${Math.round(4212 * f).toLocaleString()} / 4,212` }, ...(hasB ? [{ name: this.short(S.second), count: `${Math.round(2729 * f).toLocaleString()} / 2,729` }] : [])],
+      mosaic: Array.from({ length: 120 }, (_, i) => ({ bg: i < lit ? this.st(HU[(i * 7) % 10], 3) : 'var(--s3)', op: i < lit ? 1 : 0.6 })),
+      logTail: S.log.slice(-3), logAll: S.log, showLog: S.showLog, toggleLog: () => this.setState({ showLog: !S.showLog }), logToggleLabel: S.showLog ? 'Hide full log' : 'Show full log',
+      skip: () => this.finish(), showBack: S.hasResults && S.scan === 'idle', backToResults: () => this.setState({ screen: 'results' }),
+
+      tabDup: () => this.setTab('dup'), tabSim: () => this.setTab('sim'),
+      dupTabLine: isDup ? 'var(--t1)' : 'transparent', dupTabFg: isDup ? 'var(--t1)' : 'var(--t2)', simTabLine: !isDup ? 'var(--t1)' : 'transparent', simTabFg: !isDup ? 'var(--t1)' : 'var(--t2)',
+      dupCount: D.dup.filter(x => x.copies.length).length, simCount: D.sim.filter(x => x.copies.length).length,
+      q: S.q, onQ: e => this.setState({ q: e.target.value, page: 0 }), isDup, isSim: !isDup,
+      toggleHide: () => this.setState({ hideRev: !S.hideRev, page: 0 }), hideTrack: S.hideRev ? 'var(--brand)' : 'var(--s3)', hideJust: S.hideRev ? 'flex-end' : 'flex-start', hideKnob: S.hideRev ? 'var(--on-brand)' : 'var(--t1)',
+      dupN: dupN.toLocaleString(), dupMB: Math.round(dupMB) + ' MB', askAll: () => this.ask('all'), allOp: dupN && !S.busy ? 1 : 0.4, allPe: dupN && !S.busy ? 'auto' : 'none',
+      groupCount: list.length.toLocaleString(), pageLabel: `Page ${page + 1} of ${pages}`,
+      prev: () => this.setState({ page: Math.max(0, page - 1) }), next: () => this.setState({ page: Math.min(pages - 1, page + 1) }), prevOp: page > 0 ? 1 : 0.4, nextOp: page < pages - 1 ? 1 : 0.4,
+      tiles, listEmpty: !list.length, emptyMsg, noSel: !g, hasSel: !!g, d, busyOp, busyPe,
+
+      cmpOpen: !!(S.cmp && g), cx, closeCmp: () => { if (!S.busy) this.setState({ cmp: null }); }, stop: e => e.stopPropagation(),
+      cfOpen: !!S.confirm, cf, closeConfirm: () => { if (!S.busy) this.setState({ confirm: null }); }, runConfirm: () => this.runConfirm(),
+      brOpen: !!S.browser, br, closeBrowser: () => this.setState({ browser: null }),
+      useFolder: () => { const b = S.browser; this.setState({ [b.target]: b.path, [b.target === 'root' ? 'rootErr' : 'secondErr']: false, browser: null }); },
+      toasts: S.toasts.map(t => ({ msg: t.msg, isErr: t.kind === 'err', dot: t.kind === 'err' ? 'var(--rose)' : t.kind === 'ok' ? 'var(--keep)' : 'var(--brand)', border: t.kind === 'err' ? 'var(--rose-line)' : 'var(--line)', onClose: () => this.dropToast(t.id) }))
+    };
+  }
+}
+</script>
+</body>
+</html>
