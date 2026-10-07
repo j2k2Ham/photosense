@@ -55,6 +55,20 @@ export function mapUrl(p: PhotoDto): string | undefined {
   return `https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=15/${p.latitude}/${p.longitude}`;
 }
 
+/** What sets a copy apart from the original it was matched with: one phrase for each thing that differs. */
+export function differences(original: PhotoDto, copy: PhotoDto): string[] {
+  const found: string[] = [];
+  if (copy.fileName !== original.fileName) found.push(`Name: the original is ${original.fileName}`);
+  if (copy.folder !== original.folder) found.push(`Folder: the original is in ${original.folder}`);
+  const format = copy.format ?? '?', originalFormat = original.format ?? '?';
+  if (format !== originalFormat) found.push(`Format: ${format}, the original is ${originalFormat}`);
+  if (copy.width !== original.width || copy.height !== original.height) found.push(`Pixels: ${formatDimensions(copy)}, the original is ${formatDimensions(original)}`);
+  const size = formatBytes(copy.fileSizeBytes), originalSize = formatBytes(original.fileSizeBytes);
+  if (size !== originalSize) found.push(`File size: ${size}, the original is ${originalSize}`);
+  if (copy.takenOn !== original.takenOn) found.push(`Capture date: ${formatTaken(copy.takenOn)}, the original: ${formatTaken(original.takenOn)}`);
+  return found;
+}
+
 export const matchLabel: Record<MatchKind, string> = {
   identical: 'Identical file',
   samePicture: 'Same picture',

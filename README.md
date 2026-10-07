@@ -41,7 +41,9 @@ The API the UI uses (Functions host, `http://localhost:7071/api`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/scan/start` | POST | Start a scan. Body `{ primaryLocation, secondaryLocation?, recursive }`; returns `{ instanceId }`, or 400 `{ error }` when a folder is not found on the server |
+| `/folders?path=` | GET | The folders inside a folder of the computer the service runs on, each with its full path; without `path`, the places to start from (Pictures, the home folder, each disk) |
+| `/scan/start` | POST | Start a scan. Body `{ primaryLocation, secondaryLocation?, recursive, startOver? }`; returns `{ instanceId }`, or 400 `{ error }` when a folder is not found on the server |
+| `/scan/reset` | POST | Forget everything earlier scans recorded, previews included; refused while a scan is running. The photos are not touched |
 | `/scan/progress/{instanceId}` | GET | Current `ScanProgressSnapshot` |
 | `/scan/groups?mode=duplicates\|similar&page=&pageSize=&q=&hideKept=` | GET | Groups: a keeper (the best copy) and the photos matched against it |
 | `/photos/{id}/thumbnail` | GET | Small JPEG preview (cached at scan time); pictures only |
@@ -52,7 +54,33 @@ The API the UI uses (Functions host, `http://localhost:7071/api`):
 | `/photos/{id}?physical=true` | DELETE | Remove one file, with the sidecars and Live Photo video that belong to it alone |
 | `/photos/bulk/remove-duplicates?group=` | POST | Remove the duplicates of one group, or of all groups |
 
-Requests that change or remove photos must carry the `x-photosense-client` header (the React client sends it). Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
+Requests that change or remove photos, and the folder listing, must carry the `x-photosense-client` header (the React client sends it). Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
+
+### Choosing the folders to scan
+
+A scan needs each folder's full path as the service sees it. The **…** button beside a path opens a folder browser that lists the folders of the computer the service runs on and fills in the full path of the one chosen; a path can also be typed or pasted. (A browser's own folder dialog is no use here: it tells a web page the name of the folder that was picked and never where it is.)
+
+### Scanning again, and starting over
+
+A scan builds on the one before it: files that have not changed since are skipped, files that have gone are forgotten at the end, and copies marked keep stay marked. That makes a second scan of a large library take seconds rather than minutes.
+
+To run a scan from nothing instead, tick **Start over** before pressing Scan: everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results** does the forgetting on its own, without scanning. Either way only PhotoSense's record goes, with its previews and keep marks; the photos, and anything already moved to `_PhotoSense_Removed`, stay where they are.
+
+### Where the data is kept
+
+The database (`photosense.db`) and the thumbnail cache are kept in a folder of your own, outside the program:
+
+| System | Folder |
+|--------|--------|
+| Windows | `%LOCALAPPDATA%\PhotoSense` |
+| macOS | `~/Library/Application Support/PhotoSense` |
+| Linux | `~/.local/share/PhotoSense` |
+
+Set `PhotoStorage__DatabasePath` to an absolute path to keep the database elsewhere, and `PhotoStorage__ThumbnailPath` for the thumbnails (by default a folder beside the database). A path that is not absolute is taken from the folder above. Deleting the folder forgets every scan; the photos themselves are not touched.
+
+The data must not be inside the folder the service runs from (`PhotoSense.Functions/bin/...`), and the service refuses to start a database there. The Functions host watches that folder and restarts itself when a folder appears in it, as a thumbnail cache does on a scan's first picture; after such a restart it answers every request with an error while the scan carries on unseen.
+
+If the service does stop answering, the page says so in a red bar at the top, since what is already on screen stays there.
 
 ## How duplicates are found
 
@@ -79,6 +107,8 @@ To keep the HEIC instead, set `PhotoStorage__KeepFormat` to `CameraOriginal` (un
 PhotoSense shows HEIC pictures itself, whatever the computer can open. Outside it, Windows opens HEIC files only once the free "HEIF Image Extensions" and the "HEVC Video Extensions" are installed from the Microsoft Store; without both, Photos and Explorer previews show nothing. macOS and iOS open them as they are.
 
 ### Looking at a file before deciding
+
+Hovering over a duplicate lists what sets it apart from the original: its name, folder, format, pixel size, file size or capture date, whichever differ. Two files of one picture can share a name, a folder and a date, as a phone's `IMG_4299.HEIC` and the `IMG_4299.JPG` made from it do, and would otherwise look like one file listed twice. Each thumbnail also carries its format in the corner.
 
 Clicking a picture or a thumbnail opens it in a floating window. A video plays in the page, in the review panel and in the floating window alike. What plays there depends on the browser: MP4 and most iPhone MOV files do; where one does not, the player says so. Either way **Open in default player** (or **Open in default viewer** for a picture) hands the file to the operating system, as double-clicking it would: the file itself through the Windows shell, `open` on macOS, `xdg-open` on Linux. The program starts on the computer the service runs on, so this is for running PhotoSense on your own machine.
 
@@ -159,7 +189,9 @@ Use the PowerShell helper script to spin up the Azure Functions host and the Rea
 ./dev-start.ps1 -IncludeBlazor -UseWatch  # (optional) also start legacy Blazor in watch mode
 ```
 
-Creates local photo folders under `PhotoSense.Functions/photos/primary` & `.../secondary` if missing. Press Ctrl+C to stop all processes.
+Creates local photo folders under `PhotoSense.Functions/photos/primary` & `.../secondary` if missing.
+
+To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./dev-start.ps1 -Stop` from any terminal. To restart it, run `./dev-start.ps1` again: it first stops a copy that is still running, since two cannot share the ports and a running service keeps its program files locked against the build. Only PhotoSense's own processes are stopped; if some other program has the UI's port, the UI takes the next free one and the service is told to accept it there.
 
 The scan runs as a Durable Functions activity, which needs the Azurite storage emulator. The script starts it when nothing is listening on port 10000 and `azurite` is on PATH (`npm install -g azurite`); `docker compose -f docker-compose.azurite.yml up` works too.
 

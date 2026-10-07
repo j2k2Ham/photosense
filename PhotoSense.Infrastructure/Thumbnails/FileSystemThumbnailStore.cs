@@ -26,6 +26,12 @@ public class FileSystemThumbnailStore : IThumbnailStore
         return File.Exists(path) ? await File.ReadAllBytesAsync(path, ct) : null;
     }
 
+    public Task ClearAsync(CancellationToken ct = default)
+    {
+        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
+        return Task.CompletedTask;
+    }
+
     // Content hashes are hex, so they are safe as file names; two-character folders keep directories small.
     private string PathFor(string contentHash)
     {

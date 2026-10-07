@@ -23,6 +23,30 @@ public class PhotoStorageOptionsValidatorTests
         Assert.False(result.Succeeded);
     }
 
+    [Fact]
+    public void Data_Inside_The_Folder_The_Service_Runs_From_Is_Refused()
+    {
+        // Writing there makes the Functions host restart under a running scan, after which it answers nothing.
+        var program = Path.Combine(Path.GetTempPath(), "photosense-app", "bin");
+        var validator = new PhotoStorageOptionsValidator(program + Path.DirectorySeparatorChar);
+
+        var database = validator.Validate(null, new PhotoStorageOptions { DatabasePath = Path.Combine(program, "photosense.db") });
+        Assert.True(database.Failed);
+        Assert.Contains("DatabasePath", database.FailureMessage);
+        Assert.Contains("inside the folder the service runs from", database.FailureMessage);
+        Assert.True(validator.Validate(null, new PhotoStorageOptions { DatabasePath = Path.Combine(program, "data", "library", "photosense.db") }).Failed);
+
+        var thumbnails = validator.Validate(null, new PhotoStorageOptions { ThumbnailPath = Path.Combine(program, "thumbs") });
+        Assert.True(thumbnails.Failed);
+        Assert.Contains("ThumbnailPath", thumbnails.FailureMessage);
+
+        // Beside it is fine, even under a name that begins the same way.
+        Assert.True(validator.Validate(null, new PhotoStorageOptions { DatabasePath = Path.Combine(program + "-data", "photosense.db") }).Succeeded);
+        Assert.True(validator.Validate(null, new PhotoStorageOptions { DatabasePath = Path.Combine(Path.GetTempPath(), "photosense-app", "photosense.db") }).Succeeded);
+        // And so is the default, for the service as it really runs.
+        Assert.True(new PhotoStorageOptionsValidator().Validate(null, new PhotoStorageOptions()).Succeeded);
+    }
+
     [Theory]
     [InlineData(null, FormatPreference.WidelyCompatible)]               // nothing set: the JPEG is kept
     [InlineData("CameraOriginal", FormatPreference.CameraOriginal)]

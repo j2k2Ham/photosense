@@ -1,62 +1,33 @@
-import React, { useRef, useState } from 'react';
+import React, { useState } from 'react';
 import { startScan } from '../lib/apiClient';
+import { FolderPicker } from './FolderPicker';
 
 interface Props { onStarted(id: string): void; }
 
-// Makes a file input offer folders rather than files. Neither attribute is in React's typings.
-const folderPicker: Record<string, string> = { webkitdirectory: '', directory: '' };
+type Which = 'primary' | 'secondary';
 
 export function SettingsPanel({ onStarted }: Props) {
   const [primary, setPrimary] = useState('');
   const [secondary, setSecondary] = useState('');
   const [recursive, setRecursive] = useState(true);
+  const [startOver, setStartOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const primaryInputRef = useRef<HTMLInputElement>(null);
-  const secondaryInputRef = useRef<HTMLInputElement>(null);
+  // Which of the two paths a folder is being browsed for, while the folder dialog is open.
+  const [browsing, setBrowsing] = useState<Which>();
 
-  async function pickDirectory(kind: 'primary' | 'secondary') {
-    // Prefer File System Access API if available
-    try {
-      // @ts-expect-error experimental
-      if (window.showDirectoryPicker) {
-        // @ts-expect-error experimental
-        const handle: FileSystemDirectoryHandle = await window.showDirectoryPicker();
-        const name = handle.name || '';
-        if (kind === 'primary') setPrimary(name); else setSecondary(name);
-        return;
-      }
-    } catch (e) {
-      // Swallow expected errors (permission denied, user cancel). Log unexpected.
-      if (e && typeof e === 'object' && (e as any).name && ['AbortError','NotAllowedError','SecurityError'].includes((e as any).name)) {
-        // benign
-      } else {
-        // eslint-disable-next-line no-console
-        console.debug('Directory picker fallback reason:', e);
-      }
-    }
-    // Fallback: trigger hidden webkitdirectory input to at least capture top-level folder name
-    if (kind === 'primary') primaryInputRef.current?.click(); else secondaryInputRef.current?.click();
-  }
-
-  function onHiddenDirChange(e: React.ChangeEvent<HTMLInputElement>, kind: 'primary' | 'secondary') {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    // webkitRelativePath gives 'Folder/subfolder/file.ext' – take first segment as folder name (not full path)
-    const rel = (files[0] as any).webkitRelativePath as string | undefined;
-    if (rel) {
-      const top = rel.split(/[\\/]/)[0];
-      if (kind === 'primary') setPrimary(p => p || top); else setSecondary(s => s || top);
-    }
-    // Clear selection so user can re-select same folder later if needed
-    e.target.value = '';
+  function picked(path: string) {
+    if (browsing === 'primary') setPrimary(path); else setSecondary(path);
+    setBrowsing(undefined);
   }
 
   async function handleScan() {
     setBusy(true);
     setError(undefined);
     try {
-      const res = await startScan({ primaryLocation: primary.trim(), secondaryLocation: secondary.trim() || undefined, recursive });
+      const res = await startScan({ primaryLocation: primary.trim(), secondaryLocation: secondary.trim() || undefined, recursive, startOver });
+      // Asked for once, done once: the scan after this one builds on its results again.
+      setStartOver(false);
       onStarted(res.instanceId);
     } catch (e) { setError(e instanceof TypeError ? 'Cannot reach the PhotoSense server.' : e instanceof Error ? e.message : String(e)); }
     finally { setBusy(false); }
@@ -67,26 +38,36 @@ export function SettingsPanel({ onStarted }: Props) {
       <div>
         <label htmlFor="primaryPath" className="block text-xs font-semibold mb-1">Root folder path</label>
         <div className="flex gap-2">
-          <input id="primaryPath" className="flex-1 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 text-sm" value={primary} onChange={e=>setPrimary(e.target.value)} placeholder="C:/photos" />
-          <button type="button" onClick={()=>pickDirectory('primary')} className="btn-secondary px-2 py-1 text-xs" title="Browse...">…</button>
+          <input id="primaryPath" className="flex-1 min-w-0 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 text-sm" value={primary} onChange={e=>setPrimary(e.target.value)} placeholder="C:/photos" />
+          <button type="button" onClick={()=>setBrowsing('primary')} className="btn-secondary px-2 py-1 text-xs" aria-label="Browse for the root folder" title="Browse…">…</button>
         </div>
-        <input ref={primaryInputRef} type="file" {...folderPicker} style={{display:'none'}} multiple onChange={e=>onHiddenDirChange(e,'primary')} />
       </div>
       <div>
         <label htmlFor="secondaryPath" className="block text-xs font-semibold mb-1">Secondary folder path</label>
         <div className="flex gap-2">
-          <input id="secondaryPath" className="flex-1 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 text-sm" value={secondary} onChange={e=>setSecondary(e.target.value)} placeholder="D:/backup" />
-          <button type="button" onClick={()=>pickDirectory('secondary')} className="btn-secondary px-2 py-1 text-xs" title="Browse...">…</button>
+          <input id="secondaryPath" className="flex-1 min-w-0 rounded bg-neutral-900 border border-neutral-700 px-2 py-1 text-sm" value={secondary} onChange={e=>setSecondary(e.target.value)} placeholder="D:/backup" />
+          <button type="button" onClick={()=>setBrowsing('secondary')} className="btn-secondary px-2 py-1 text-xs" aria-label="Browse for the secondary folder" title="Browse…">…</button>
         </div>
-        <input ref={secondaryInputRef} type="file" {...folderPicker} style={{display:'none'}} multiple onChange={e=>onHiddenDirChange(e,'secondary')} />
-        <p className="mt-1 text-[10px] text-neutral-500 leading-snug">Type or paste the full path as the server sees it, for example {'C:\\Users\\you\\Pictures'}. The browse button can only fill in a folder name, because browsers do not reveal full paths.</p>
+        <p className="mt-1 text-[10px] text-neutral-500 leading-snug">Browse for a folder, or type or paste its full path, for example {'C:\\Users\\you\\Pictures'}. The folders are those of the computer PhotoSense runs on.</p>
       </div>
       <div className="flex items-center gap-2 text-xs">
         <input id="recursive" type="checkbox" checked={recursive} onChange={e=>setRecursive(e.target.checked)} />
         <label htmlFor="recursive">Recursive</label>
       </div>
+      <div className="flex items-start gap-2 text-xs">
+        <input id="startOver" type="checkbox" className="mt-0.5" checked={startOver} onChange={e=>setStartOver(e.target.checked)} />
+        <label htmlFor="startOver">
+          Start over
+          <span className="block text-[10px] text-neutral-500 leading-snug">Forget the results of earlier scans and read every file again. Without this, a scan skips files that have not changed.</span>
+        </label>
+      </div>
       <button disabled={!primary.trim() || busy} onClick={handleScan} className="btn-primary">{busy? 'Starting...' : 'Scan'}</button>
       {error && <p role="alert" className="text-xs text-rose-400 break-words">{error}</p>}
+
+      {browsing && (
+        <FolderPicker title={browsing === 'primary' ? 'Choose the root folder' : 'Choose the secondary folder'}
+          startAt={browsing === 'primary' ? primary : secondary} onPick={picked} onCancel={() => setBrowsing(undefined)} />
+      )}
     </div>
   );
 }

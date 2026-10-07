@@ -10,7 +10,8 @@
   - Launches React UI via 'npm run dev' (Next.js)
   - Optionally can still launch Blazor Server with -IncludeBlazor
   - Streams logs with color differentiation
-  - Supports graceful shutdown on Ctrl+C
+  - Stops everything it started on Ctrl+C
+  - Takes over from a copy that is still running: starting again is how to restart
 
 .PARAMETER NoBuild
   Skip the initial 'dotnet build'.
@@ -30,11 +31,17 @@
 .PARAMETER Open
   After startup, open the default browser to the React UI URL.
 
+.PARAMETER Stop
+  Stop a copy of PhotoSense that is running (service, UI and storage emulator), then exit.
+
 .EXAMPLE
   ./dev-start.ps1
 
 .EXAMPLE
   ./dev-start.ps1 -UseWatch -FunctionsPort 7072
+
+.EXAMPLE
+  ./dev-start.ps1 -Stop
 
 .NOTES
   Requires Azure Functions Core Tools v4+ available on PATH (func).
@@ -45,6 +52,7 @@ param(
   [int]$FunctionsPort = 7071,
   [switch]$UseWatch,
   [switch]$Open,
+  [switch]$Stop,
   [switch]$IncludeBlazor,
   [switch]$ForceUnlock,
   [switch]$UseDotNetFunctions,
@@ -82,8 +90,11 @@ function Start-ProcessLogged {
 
   $null = $proc.Start()
 
-  Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -Action { if ($EventArgs.Data) { Write-Host "[$Name] $($EventArgs.Data)" -ForegroundColor $Color } } | Out-Null
-  Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -Action { if ($EventArgs.Data) { Write-Host "[$Name][ERR] $($EventArgs.Data)" -ForegroundColor Red } } | Out-Null
+  # The handlers run apart from this function, so the label and its colour are handed to them.
+  $label = @{ Name = $Name; Color = $Color }
+  Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -MessageData $label -Action { if ($EventArgs.Data) { Write-Host "[$($Event.MessageData.Name)] $($EventArgs.Data)" -ForegroundColor $Event.MessageData.Color } } | Out-Null
+  # Tools put notices and progress on their error stream as well as errors, so these lines are not called errors.
+  Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -MessageData $label -Action { if ($EventArgs.Data) { Write-Host "[$($Event.MessageData.Name)] $($EventArgs.Data)" -ForegroundColor DarkYellow } } | Out-Null
 
   $proc.BeginOutputReadLine(); $proc.BeginErrorReadLine()
   return $proc
@@ -91,6 +102,54 @@ function Start-ProcessLogged {
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
+
+# What a run of this script leaves running: the service and its worker, the UI's dev server and, when it
+# started one, the storage emulator. They are recognised by what they are running out of this folder,
+# never by port alone, so another program that happens to sit on the same port is left alone.
+function Get-PhotoSenseProcesses([switch]$IncludeStorage){
+  $here = [regex]::Escape($root)
+  Get-CimInstance Win32_Process | Where-Object {
+    $cmd = $_.CommandLine
+    if(-not $cmd -or $cmd -notmatch $here){ return $false }
+    ($_.Name -eq 'func.exe') -or
+    ($_.Name -eq 'dotnet.exe' -and $cmd -match 'PhotoSense\.Functions\.dll') -or
+    ($_.Name -eq 'node.exe' -and $cmd -match 'PhotoSense\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]') -or
+    ($IncludeStorage -and $_.Name -eq 'node.exe' -and $cmd -match 'azurite')
+  }
+}
+
+# Ends a process together with everything it started. Each service runs underneath a cmd wrapper, and
+# ending the wrapper alone leaves the service itself running and holding its port.
+function Stop-Tree([int]$processId){
+  & taskkill.exe /PID $processId /T /F *> $null
+}
+
+function Stop-PhotoSense([switch]$IncludeStorage){
+  $found = @(Get-PhotoSenseProcesses -IncludeStorage:$IncludeStorage)
+  foreach($p in $found){ Stop-Tree $p.ProcessId }
+  if($found.Count -gt 0){ Start-Sleep -Milliseconds 800 }   # the ports take a moment to come free
+  return $found.Count
+}
+
+function Get-PortOwner([int]$port){
+  $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  if($listener){ Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue }
+}
+
+if($Stop){
+  $stopped = Stop-PhotoSense -IncludeStorage
+  if($stopped -gt 0){ Write-Host "Stopped PhotoSense ($stopped processes)." -ForegroundColor Cyan }
+  else { Write-Host 'PhotoSense is not running.' -ForegroundColor Cyan }
+  return
+}
+
+# Starting again takes over from a copy that is still running. Two copies cannot share the ports, and a
+# running service keeps its program files locked, which would fail the build below.
+$earlier = Stop-PhotoSense
+if($earlier -gt 0){ Write-Host "Stopped the copy of PhotoSense that was already running ($earlier processes)." -ForegroundColor DarkYellow }
+
+$busy = Get-PortOwner $FunctionsPort
+if($busy){ throw "Port $FunctionsPort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not PhotoSense. Close it, or start with -FunctionsPort <another port>." }
 
 if($Clean){ Write-Section 'Cleaning solution'; dotnet clean PhotoSense.sln }
 
@@ -130,6 +189,7 @@ if(-not $NoBuild){
   if($IncludeBlazor){
     Write-Section 'Building full solution (including Blazor)'
     dotnet build PhotoSense.sln
+    if($LASTEXITCODE -ne 0){ throw 'The build failed; PhotoSense was not started.' }
   } else {
     Write-Section 'Building core projects (excluding Blazor)'
     $projects = @(
@@ -143,6 +203,7 @@ if(-not $NoBuild){
     foreach($p in $projects){
       Write-Host "-> building $p" -ForegroundColor Gray
       dotnet build $p
+      if($LASTEXITCODE -ne 0){ throw "The build of $p failed; PhotoSense was not started." }
     }
   }
 }
@@ -158,11 +219,9 @@ Write-Section 'Starting services'
 
 function Get-FreePort([int]$start,[int]$count){
   for($p=$start; $p -lt ($start+$count); $p++){
-    $listener = $null
-    try {
-      $listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback,$p)
-      $listener.Start(); $listener.Stop(); return $p
-    } catch { if($listener){ try { $listener.Stop() } catch {} } }
+    # Asked of the system rather than tried: a dev server listening on every address does not stop a
+    # second program from binding the same port on 127.0.0.1 alone, so trying proves nothing.
+    if(-not (Get-PortOwner $p)){ return $p }
   }
   throw "No free port in range $start - $(($start+$count-1))"
 }
@@ -193,7 +252,8 @@ function Start-FunctionsHost {
   } else {
     Write-Host "Starting Functions via Core Tools (attempt $attempt)" -ForegroundColor Yellow
     # No --csharp: that flag makes Core Tools use its in-process host, which cannot load this isolated-worker app.
-    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
+    # The service answers the UI's address only, so it is told which port the UI was given.
+    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --cors http://localhost:$reactPort,http://127.0.0.1:$reactPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
   }
 }
 
@@ -258,7 +318,7 @@ if($IncludeBlazor){
   }
 }
 
-Write-Host "Press Ctrl+C to stop both." -ForegroundColor Cyan
+Write-Host "Press Ctrl+C here to stop PhotoSense, or run ./dev-start.ps1 -Stop from another terminal." -ForegroundColor Cyan
 
 if($Open){ Start-Process ("http://localhost:{0}" -f $reactPort) | Out-Null }
 
@@ -321,31 +381,34 @@ Start-Job -ScriptBlock {
 
 if($Diagnostics){ Write-Host "Diagnostics enabled: retries=$HealthRetry interval=${HealthIntervalMs}ms" -ForegroundColor DarkCyan }
 
-# Graceful shutdown
-$stopping = $false
-
-$handler = {
-  if($stopping){ return }
-  $script:stopping = $true
-  Write-Host "`nStopping processes..." -ForegroundColor Cyan
-  foreach($p in @($funcProc,$reactProc,$blazorProc,$azuriteProc)){
-    if($p -and -not $p.HasExited){
-      try { $p.Kill() } catch { }
-    }
+# Shutdown. Whatever ends the wait below (Ctrl+C, or one of the services dying) lands in the finally
+# block, which ends each service this run started together with everything underneath its wrapper.
+# It ends nothing else: a later run that has taken over must not lose what it has just started.
+$started = @($funcProc,$reactProc,$blazorProc,$azuriteProc)
+function Stop-Started {
+  foreach($p in $started){
+    if($p -and -not $p.HasExited){ Stop-Tree $p.Id }
   }
-  Write-Host 'Done.' -ForegroundColor Cyan
-  exit
 }
 
-# Trap Ctrl+C
-Register-EngineEvent PowerShell.Exiting -Action $handler | Out-Null
+# Closing the terminal window does not run the finally block, so that case is covered here. The action
+# runs apart from this script, so it is handed the processes rather than left to look for them.
+Register-EngineEvent PowerShell.Exiting -MessageData $started -Action {
+  foreach($p in $Event.MessageData){
+    if($p -and -not $p.HasExited){ & taskkill.exe /PID $p.Id /T /F *> $null }
+  }
+} | Out-Null
 
-while(-not $stopping){
-  Start-Sleep -Seconds 1
-  if($funcProc.HasExited){ Write-Host "Functions host exited (code $($funcProc.ExitCode))" -ForegroundColor Red; break }
-  if($reactProc.HasExited){ Write-Host "React UI exited (code $($reactProc.ExitCode))" -ForegroundColor Red; break }
-  if($blazorProc -and $blazorProc.HasExited){ Write-Host "Blazor host exited (code $($blazorProc.ExitCode))" -ForegroundColor Red; break }
+try {
+  while($true){
+    Start-Sleep -Seconds 1
+    if($funcProc.HasExited){ Write-Host "Functions host exited (code $($funcProc.ExitCode))" -ForegroundColor Red; break }
+    if($reactProc.HasExited){ Write-Host "React UI exited (code $($reactProc.ExitCode))" -ForegroundColor Red; break }
+    if($blazorProc -and $blazorProc.HasExited){ Write-Host "Blazor host exited (code $($blazorProc.ExitCode))" -ForegroundColor Red; break }
+  }
 }
-
-# Cleanup if one exited
-& $handler
+finally {
+  Write-Host "`nStopping PhotoSense..." -ForegroundColor Cyan
+  Stop-Started
+  Write-Host 'Stopped.' -ForegroundColor Cyan
+}

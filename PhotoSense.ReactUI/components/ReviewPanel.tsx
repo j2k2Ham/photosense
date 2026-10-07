@@ -56,7 +56,7 @@ export function ReviewPanel({ group, mode, busy, onOpen, onRemoveGroup, onOpenIn
             </button>
           )}
         </div>
-        <DuplicateStrip members={group.members} onOpen={onOpen} />
+        <DuplicateStrip original={original} members={group.members} onOpen={onOpen} />
       </div>
     </div>
   );

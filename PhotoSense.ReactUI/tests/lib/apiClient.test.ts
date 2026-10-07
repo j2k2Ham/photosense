@@ -102,6 +102,30 @@ describe('requests that act on photos', () => {
     expect(swr.mutate).toHaveBeenCalledTimes(3);
   });
 
+  it('list the folders of the service\'s machine, from the top or inside one of them', async () => {
+    const listing = { path: 'C:\\Users\\jamie\\Pictures', parent: 'C:\\Users\\jamie', folders: [{ name: "Jamie's Phone", path: "C:\\Users\\jamie\\Pictures\\Jamie's Phone" }] };
+    answering(listing);
+    const api = await load();
+
+    await expect(api.browseFolders("C:\\Users\\jamie\\Pictures\\Jamie's Phone")).resolves.toEqual(listing);
+    expect(lastRequest()).toEqual({
+      url: `${API}/folders?path=C%3A%5CUsers%5Cjamie%5CPictures%5CJamie's%20Phone`,
+      init: { headers: { 'Content-Type': 'application/json', 'x-photosense-client': 'web' } },
+    });
+    await api.browseFolders();
+    expect(lastRequest().url).toBe(`${API}/folders`);
+    await api.browseFolders('');
+    expect(lastRequest().url).toBe(`${API}/folders`);
+  });
+
+  it('clear the scan results, say how many files were forgotten, and refresh the groups', async () => {
+    answering({ forgotten: 6941 });
+    const api = await load();
+    await expect(api.clearResults()).resolves.toEqual({ forgotten: 6941 });
+    expect(lastRequest()).toEqual({ url: `${API}/scan/reset`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    expect(swr.mutate).toHaveBeenCalledOnce();
+  });
+
   it('start a scan and hand back its id', async () => {
     answering({ instanceId: 'scan-7' });
     const api = await load();
@@ -123,6 +147,8 @@ describe('requests that act on photos', () => {
     const api = await load();
     await expect(api.openInViewer('abc')).rejects.toMatchObject({ message });
     await expect(api.removePhoto('abc')).rejects.toMatchObject({ message });
+    await expect(api.browseFolders('E:\\')).rejects.toMatchObject({ message });
+    await expect(api.clearResults()).rejects.toMatchObject({ message });
     await expect(api.startScan({ primaryLocation: 'C:\\nowhere', recursive: true })).rejects.toMatchObject({ message });
     // Nothing changed, so nothing is refreshed.
     expect(swr.mutate).not.toHaveBeenCalled();

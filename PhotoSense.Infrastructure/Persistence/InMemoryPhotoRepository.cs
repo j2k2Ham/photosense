@@ -34,6 +34,18 @@ public class InMemoryPhotoRepository : IPhotoRepository
         return Task.CompletedTask;
     }
 
+    public Task<int> ClearAsync(CancellationToken ct = default)
+    {
+        int removed;
+        lock (_writeLock)
+        {
+            removed = _store.Count;
+            _store.Clear();
+        }
+        Interlocked.Increment(ref _version);
+        return Task.FromResult(removed);
+    }
+
     public Task<IReadOnlyList<Photo>> GetAllAsync(CancellationToken ct = default)
         => Task.FromResult<IReadOnlyList<Photo>>(_store.Values.ToList());
 

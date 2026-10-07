@@ -8,7 +8,7 @@ import { PhotoWindow } from '../components/PhotoWindow';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ProgressPanel } from '../components/ProgressPanel';
 import { LogsPanel } from '../components/LogsPanel';
-import { useGroups, useScanProgress, connectLogStream, setKept, removePhoto, removeDuplicates, openInViewer } from '../lib/apiClient';
+import { useGroups, useScanProgress, connectLogStream, setKept, removePhoto, removeDuplicates, openInViewer, clearResults } from '../lib/apiClient';
 import { useToasts, Toaster } from '../components/Toaster';
 import { formatBytes, linkedFiles } from '../lib/format';
 import type { DuplicateGroupDto, GroupMode, PhotoDto } from '../types';
@@ -28,6 +28,8 @@ export default function HomePage() {
   const [selectedKey, setSelectedKey] = useState<string>();
   const [opened, setOpened] = useState<Opened>();
   const [pending, setPending] = useState<PendingRemoval>();
+  // Whether the question "clear the results?" is being asked.
+  const [clearing, setClearing] = useState(false);
   const [busy, setBusy] = useState(false);
   const groups = useGroups(mode, filter, page, hideKept);
   const progress = useScanProgress(instanceId);
@@ -78,6 +80,15 @@ export default function HomePage() {
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`, 'error');
   });
 
+  const confirmClear = () => run(async () => {
+    const result = await clearResults();
+    setClearing(false);
+    setOpened(undefined);
+    setSelectedKey(undefined);
+    setPage(1);
+    push(`Cleared the results: ${result.forgotten.toLocaleString()} scanned ${result.forgotten === 1 ? 'file' : 'files'} forgotten. Your photos were not touched.`, 'success');
+  });
+
   return (
     <div className="flex flex-1 overflow-hidden">
       <div className="flex flex-col gap-3 p-3 pr-0 w-72 shrink-0 overflow-y-auto">
@@ -87,6 +98,12 @@ export default function HomePage() {
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden gap-3 p-3">
+        {/* What is on screen stays there when a request fails, so a service that has stopped must be said out loud. */}
+        {groups.error && (
+          <div role="alert" className="rounded-lg border border-rose-500/70 bg-rose-950/50 px-4 py-2 text-sm text-rose-100">
+            The PhotoSense service is not answering, so what is shown here may be out of date. Look at the window it was started in; stopping it and starting it again does no harm.
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <button className={clsx('btn-secondary', mode === 'duplicates' && 'ring-1 ring-emerald-500')} onClick={() => switchMode('duplicates')}>Duplicates</button>
           <button className={clsx('btn-secondary', mode === 'similar' && 'ring-1 ring-amber-500')} onClick={() => switchMode('similar')} title="Burst frames and edited versions. For review only; never removed in bulk.">Similar</button>
@@ -96,6 +113,10 @@ export default function HomePage() {
               <input type="checkbox" checked={hideKept} onChange={e => { setHideKept(e.target.checked); setPage(1); }} /> Hide reviewed
             </label>
           )}
+          <button type="button" disabled={busy} className="btn-secondary py-1.5 px-3 text-xs" onClick={() => setClearing(true)}
+            title="Forget everything that has been scanned, so the next scan starts from nothing. Your photos are not touched.">
+            Clear results
+          </button>
         </div>
 
         {mode === 'duplicates' ? (
@@ -146,6 +167,13 @@ export default function HomePage() {
           confirmLabel={`Delete ${pending.count.toLocaleString()} ${pending.count === 1 ? 'file' : 'files'}`}>
           <p><span className="font-semibold">{pending.count.toLocaleString()}</span> {pending.count === 1 ? 'file' : 'files'} ({formatBytes(pending.bytes)}) will be moved out of your photos. The best copy of each picture or video stays where it is, and copies you marked keep are not touched. An edit sidecar or Live Photo video goes with its picture only when no other picture of that shot stays in the folder.</p>
           <p className="text-neutral-400">The files go to a <span className="font-mono text-neutral-300">{REMOVED_FOLDER}</span> folder inside the scanned folder, so nothing is lost if a match was wrong. Delete that folder yourself to free the space.</p>
+        </ConfirmDialog>
+      )}
+
+      {clearing && (
+        <ConfirmDialog busy={busy} onCancel={() => setClearing(false)} onConfirm={confirmClear} title="Clear the scan results?" confirmLabel="Clear results">
+          <p>PhotoSense forgets every file it has scanned, with the groups, the previews and any copies you marked keep. The next scan reads every file again.</p>
+          <p className="text-neutral-400">Only PhotoSense's own record goes. Your photos stay exactly where they are, and so does anything already moved to <span className="font-mono text-neutral-300">{REMOVED_FOLDER}</span>.</p>
         </ConfirmDialog>
       )}
 

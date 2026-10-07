@@ -46,6 +46,14 @@ public class ScanExecutionService : IScanExecutionService
                 return new ScanSummary(0, 0, 0, 0, 0);
             }
 
+            // Only once the folders are known to be there: a mistyped path must not cost the earlier results.
+            if (request.StartOver)
+            {
+                var forgotten = await _repo.ClearAsync(ct);
+                await _thumbnails.ClearAsync(ct);
+                _log?.Log(instanceId, "Info", $"Starting over: forgot {forgotten} files recorded by earlier scans");
+            }
+
             // A file reachable from both folders is scanned once, as part of the primary set.
             var claimed = new HashSet<string>(StringComparer.Ordinal);
             var primary = Enumerate(request.PrimaryPath, request.Recursive, claimed);

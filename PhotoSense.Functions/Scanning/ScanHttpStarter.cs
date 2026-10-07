@@ -64,7 +64,7 @@ public class ScanHttpStarter
     public static ScanRequest ParseBody(string body, PhotoStorageOptions defaults)
     {
         string? primary = null, secondary = null;
-        var recursive = true;
+        bool recursive = true, startOver = false;
         try
         {
             using var doc = JsonDocument.Parse(body);
@@ -74,6 +74,7 @@ public class ScanHttpStarter
                 primary = Text(root, "primaryLocation") ?? Text(root, "primary");
                 secondary = Text(root, "secondaryLocation") ?? Text(root, "secondary");
                 if (root.TryGetProperty("recursive", out var r) && r.ValueKind is JsonValueKind.True or JsonValueKind.False) recursive = r.GetBoolean();
+                startOver = root.TryGetProperty("startOver", out var s) && s.ValueKind == JsonValueKind.True;
             }
         }
         catch (JsonException) { /* no usable body: scan the configured folders */ }
@@ -81,7 +82,8 @@ public class ScanHttpStarter
         return new ScanRequest(
             string.IsNullOrWhiteSpace(primary) ? defaults.PrimaryPath : primary.Trim(),
             string.IsNullOrWhiteSpace(secondary) ? NullIfBlank(defaults.SecondaryPath) : secondary.Trim(),
-            recursive);
+            recursive,
+            startOver);
     }
 
     private static string? Text(JsonElement root, string name)

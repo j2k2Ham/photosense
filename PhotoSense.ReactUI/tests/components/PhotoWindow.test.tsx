@@ -34,6 +34,15 @@ describe('PhotoWindow on a copy', () => {
     expect(screen.getByText('SAME PICTURE')).toBeInTheDocument();
   });
 
+  it('lists how the copy differs from the original, and nothing of the kind for the original itself', async () => {
+    open({ member: member({ id: 'm2', fileName: 'IMG_4198.HEIC', format: 'HEIC', fileSizeBytes: 3_046_000 }, 'samePicture') });
+    expect(screen.getByText('Differs from the original in')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').map(li => li.textContent)).toEqual(['Name: the original is IMG_4198.JPG', 'Format: HEIC, the original is JPEG', 'File size: 2.9 MB, the original is 5.8 MB']);
+
+    await click('Original');
+    expect(screen.queryByText('Differs from the original in')).not.toBeInTheDocument();
+  });
+
   it('flips to the original and back for comparing the two', async () => {
     open({ member: copy });
 

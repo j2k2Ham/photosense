@@ -121,4 +121,24 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
         Assert.Null(await repo.GetAsync(PhotoId.New()));
         Assert.Null(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "never-scanned.jpg")));
     }
+
+    [Fact]
+    public async Task Clearing_Forgets_Every_Record_And_Counts_Them()
+    {
+        using var repo = new LiteDbPhotoRepository(_db);
+        Assert.Equal(0, await repo.ClearAsync());
+        await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "a.jpg"), FileName = "a.jpg", ContentHash = "A" });
+        await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "b.jpg"), FileName = "b.jpg", ContentHash = "B" });
+        var version = repo.Version;
+
+        Assert.Equal(2, await repo.ClearAsync());
+
+        Assert.Empty(await repo.GetAllAsync());
+        Assert.Empty(await repo.GetByHashAsync("A"));
+        Assert.NotEqual(version, repo.Version);
+
+        // And it can be filled again afterwards.
+        await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "c.jpg"), FileName = "c.jpg", ContentHash = "C" });
+        Assert.Single(await repo.GetAllAsync());
+    }
 }

@@ -30,7 +30,66 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-scanapi-");
     private readonly InMemoryScanProgressStore _progress = new();
 
-    public void Dispose() => _root.Delete(true);
+    public void Dispose() => TestFiles.Remove(_root);
+
+    // ---- forgetting earlier results
+
+    private (ScanResetFunction Reset, InMemoryPhotoRepository Repo, InMemoryThumbnailStore Thumbnails) Resetter()
+    {
+        var repo = new InMemoryPhotoRepository();
+        var thumbnails = new InMemoryThumbnailStore();
+        return (new ScanResetFunction(repo, thumbnails, _progress), repo, thumbnails);
+    }
+
+    [Fact]
+    public async Task Clearing_Forgets_Every_Record_And_Preview_And_Says_How_Many()
+    {
+        var (reset, repo, thumbnails) = Resetter();
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
+        await repo.AddOrUpdateAsync(TestPhotos.Make("b.jpg"));
+        await thumbnails.SaveAsync("AB12", [1]);
+        // A scan that has finished does not stand in the way.
+        _progress.ScanStarted("earlier");
+        _progress.ScanCompleted("earlier");
+
+        var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, response.Json().GetProperty("forgotten").GetInt32());
+        Assert.Empty(await repo.GetAllAsync());
+        Assert.Empty(thumbnails.Saved);
+
+        // With nothing left there is nothing to forget, and that is no error.
+        Assert.Equal(0, (await reset.ResetAsync(Http.Post("scan/reset").FromClient())).Json().GetProperty("forgotten").GetInt32());
+    }
+
+    [Fact]
+    public async Task Results_Cannot_Be_Cleared_From_Under_A_Running_Scan()
+    {
+        var (reset, repo, thumbnails) = Resetter();
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
+        await thumbnails.SaveAsync("AB12", [1]);
+        _progress.ScanStarted("running");
+
+        var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient());
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("A scan is running", response.Json().GetProperty("error").GetString());
+        Assert.Single(await repo.GetAllAsync());
+        Assert.Single(thumbnails.Saved);
+    }
+
+    [Fact]
+    public async Task Only_The_UI_May_Clear_The_Results()
+    {
+        var (reset, repo, _) = Resetter();
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
+
+        var response = await reset.ResetAsync(Http.Post("scan/reset"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Single(await repo.GetAllAsync());
+    }
 
     // ---- starting a scan
 
@@ -55,7 +114,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("instance-1", response.Json().GetProperty("instanceId").GetString());
-        client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(nameof(ScanOrchestrator.RunScanAsync), new ScanRequest(_root.FullName, backup, false),
+        client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(nameof(ScanOrchestrator.RunScanAsync), new ScanRequest(_root.FullName, backup, false, false),
             It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
         Assert.True(ScanHttpStarter.IsRunning(_progress.GetLatest()));
     }
@@ -98,7 +157,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     {
         var (starter, client) = Starter(new PhotoStorageOptions { PrimaryPath = _root.FullName });
         Assert.Equal(HttpStatusCode.Accepted, (await starter.StartAsync(Http.Post("scan/start", ""), client.Object)).StatusCode);
-        client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), new ScanRequest(_root.FullName, null, true),
+        client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), new ScanRequest(_root.FullName, null, true, false),
             It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
@@ -237,7 +296,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     {
         var settings = new Dictionary<string, string?>
         {
-            ["PhotoStorage:DatabasePath"] = Path.Combine(_root.FullName, "photosense.db"),
+            ["PhotoStorage:DatabasePath"] = Path.Combine(_root.FullName, "not-there-yet", "photosense.db"),
             ["PhotoStorage:KeepFormat"] = "WidelyCompatible"
         };
         using var host = new HostBuilder()
@@ -251,7 +310,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
             typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
             typeof(IPhotoMetadataExtractor), typeof(PhotoRanking), typeof(IDuplicateAnalysisService), typeof(IDuplicateRemovalService), typeof(IPlaceNameResolver),
             typeof(PhotoDtoMapper), typeof(ScanGroupingFacade), typeof(IScanRequestPublisher), typeof(IOutboxStore), typeof(IIntegrationEventPublisher),
-            typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IPhotoDeletionService), typeof(IPhotoQueryService), typeof(IPhotoSearchService),
+            typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IFolderBrowser), typeof(IPhotoDeletionService), typeof(IPhotoQueryService), typeof(IPhotoSearchService),
             typeof(IScanProgressStore), typeof(IScanLogSink), typeof(IScanExecutionService), typeof(IValidateOptions<PhotoStorageOptions>)
         })
             Assert.NotNull(services.GetRequiredService(type));
@@ -262,6 +321,8 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var jpeg = TestPhotos.Make("a.JPG", format: "JPEG");
         Assert.Same(jpeg, new[] { heic, jpeg }.OrderBy(p => p, ranking.BestFirst).First());
         Assert.StartsWith(_root.FullName, services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath());
+        // The folder for the database is made on first use.
+        Assert.True(File.Exists(Path.Combine(_root.FullName, "not-there-yet", "photosense.db")));
         await host.StopAsync();
     }
 }

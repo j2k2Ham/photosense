@@ -14,4 +14,6 @@ public interface IPhotoRepository
     Task<IReadOnlyList<Photo>> GetByHashAsync(string hash, CancellationToken ct = default);
     Task<IReadOnlyList<Photo>> GetAllAsync(CancellationToken ct = default);
     Task DeleteAsync(PhotoId id, CancellationToken ct = default);
+    /// <summary>Forgets every record, as though nothing had been scanned. Returns how many there were.</summary>
+    Task<int> ClearAsync(CancellationToken ct = default);
 }

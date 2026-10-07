@@ -7,7 +7,8 @@ public interface IScanRequestPublisher
     Task PublishAsync(ScanRequestedEvent evt, CancellationToken ct = default);
 }
 
-public sealed record ScanRequest(string PrimaryPath, string? SecondaryPath, bool Recursive);
+/// <param name="StartOver">Forget what earlier scans recorded and read every file again, instead of skipping files that have not changed.</param>
+public sealed record ScanRequest(string PrimaryPath, string? SecondaryPath, bool Recursive, bool StartOver = false);
 
 /// <param name="Total">Pictures and videos found under the scanned folders.</param>
 /// <param name="Analyzed">Files read and measured in this scan.</param>

@@ -42,6 +42,15 @@ public class ScanHttpStarterTests
         Assert.False(ScanHttpStarter.IsRunning(progress.GetLatest()));
     }
 
+    [Theory]
+    [InlineData("""{"primaryLocation":"C:\\Photos","startOver":true}""", true)]
+    [InlineData("""{"primaryLocation":"C:\\Photos","startOver":false}""", false)]
+    [InlineData("""{"primaryLocation":"C:\\Photos"}""", false)]                      // not asked for: earlier results are built on
+    [InlineData("""{"primaryLocation":"C:\\Photos","startOver":"yes"}""", false)]     // only a plain true forgets anything
+    [InlineData("not json", false)]
+    public void A_Scan_Starts_Over_Only_When_Plainly_Asked_To(string body, bool startOver)
+        => Assert.Equal(startOver, ScanHttpStarter.ParseBody(body, Defaults).StartOver);
+
     [Fact]
     public void No_Secondary_Folder_Anywhere_Means_None()
     {

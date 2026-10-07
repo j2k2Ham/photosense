@@ -16,16 +16,31 @@ public class PhotoStorageOptions
 
     public string PrimaryPath { get; set; } = string.Empty;
     public string SecondaryPath { get; set; } = string.Empty;
+    /// <summary>The database file. A path that is not absolute is taken from <see cref="DefaultDataFolder"/>.</summary>
     public string DatabasePath { get; set; } = "photosense.db";
     /// <summary>Where preview images are cached. Defaults to a folder beside the database.</summary>
     public string ThumbnailPath { get; set; } = string.Empty;
     /// <summary>Set to CameraOriginal (PhotoStorage__KeepFormat) to keep HEIC originals instead of their JPEG conversions.</summary>
     public FormatPreference KeepFormat { get; set; } = FormatPreference.WidelyCompatible;
 
+    /// <summary>
+    /// Where the database and the thumbnail cache are kept unless an absolute path says otherwise: a folder
+    /// of the user's own, never the folder the service runs from. The Functions host watches that folder and
+    /// restarts itself when a folder appears in it, which the first thumbnail of a scan would cause.
+    /// </summary>
+    public static string DefaultDataFolder { get; } = DataFolderIn(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+
+    /// <param name="userData">The user's application-data folder; empty for an account that has none.</param>
+    public static string DataFolderIn(string userData)
+        => Path.Combine(string.IsNullOrEmpty(userData) ? Path.GetTempPath() : userData, "PhotoSense");
+
+    public string ResolveDatabasePath() => Path.GetFullPath(DatabasePath, DefaultDataFolder);
+
+    /// <summary>The folder the database is in.</summary>
+    public string ResolveDatabaseFolder() => Path.GetDirectoryName(ResolveDatabasePath()) ?? DefaultDataFolder;
+
     public string ResolveThumbnailPath()
-    {
-        if (!string.IsNullOrWhiteSpace(ThumbnailPath)) return Path.GetFullPath(ThumbnailPath);
-        var dbDirectory = Path.GetDirectoryName(Path.GetFullPath(DatabasePath)) ?? Directory.GetCurrentDirectory();
-        return Path.Combine(dbDirectory, "photosense-thumbnails");
-    }
+        => string.IsNullOrWhiteSpace(ThumbnailPath)
+            ? Path.Combine(ResolveDatabaseFolder(), "photosense-thumbnails")
+            : Path.GetFullPath(ThumbnailPath, DefaultDataFolder);
 }

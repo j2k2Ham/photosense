@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Persistence;
+using PhotoSense.Infrastructure.Browsing;
 using PhotoSense.Infrastructure.Hashing;
 using PhotoSense.Infrastructure.Imaging;
 using PhotoSense.Infrastructure.Metadata;
@@ -35,7 +36,8 @@ public static class DependencyInjection
         s.AddSingleton<LiteDatabase>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value;
-            return new LiteDatabase(opts.DatabasePath);
+            Directory.CreateDirectory(opts.ResolveDatabaseFolder());
+            return new LiteDatabase(opts.ResolveDatabasePath());
         });
         // Every store shares the one database connection.
         s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
@@ -56,6 +58,7 @@ public static class DependencyInjection
         s.AddSingleton<IIntegrationEventPublisher, OutboxIntegrationEventPublisher>();
         s.AddSingleton<ICompanionFileFinder, CompanionFileFinder>();
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
+        s.AddSingleton<IFolderBrowser, FileSystemFolderBrowser>();
         s.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
         s.AddSingleton<IPhotoQueryService, PhotoQueryService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();

@@ -5,4 +5,6 @@ public interface IThumbnailStore
 {
     Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default);
     Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default);
+    /// <summary>Discards every preview; they are made again by the next scan.</summary>
+    Task ClearAsync(CancellationToken ct = default);
 }

@@ -9,7 +9,7 @@ import { group, groupsPage, member, photo } from '../fixtures';
 
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(),
-  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), openInViewer: vi.fn(),
+  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 
@@ -39,6 +39,7 @@ beforeEach(() => {
   api.removePhoto.mockResolvedValue({ companions: 0 });
   api.removeDuplicates.mockResolvedValue({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
   api.startScan.mockResolvedValue({ instanceId: 'scan-7' });
+  api.clearResults.mockResolvedValue({ forgotten: 0 });
 });
 
 function open() {
@@ -69,13 +70,29 @@ describe('before there is anything to show', () => {
     expect(screen.getByText('0.0%')).toBeInTheDocument();
     expect(lastGroupsRequest()).toEqual(['duplicates', '', 1, false]);
     expect(api.useScanProgress).toHaveBeenLastCalledWith(undefined);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('says so when the service cannot be reached', () => {
     groupsFor = () => ({ error: new TypeError('Failed to fetch') });
     open();
     expect(screen.getByText('Cannot reach the PhotoSense server.')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('The PhotoSense service is not answering');
     expect(button('Delete all duplicates')).toBeDisabled();
+  });
+
+  it('says so too when the service stops answering while groups are on screen, and stops saying it once it answers again', () => {
+    let failing = true;
+    // As the real listing does, the last answer stays on screen when a later request fails.
+    groupsFor = () => ({ data: groupsPage([groupA, groupB]), error: failing ? new TypeError('Failed to fetch') : undefined });
+    const { refresh } = open();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('The PhotoSense service is not answering, so what is shown here may be out of date.');
+    expect(screen.getByText('2 groups')).toBeInTheDocument();
+
+    failing = false;
+    refresh();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('says there is nothing to remove when no duplicates were found', () => {
@@ -229,7 +246,7 @@ describe('scanning', () => {
     await userEvent.type(screen.getByLabelText('Root folder path'), 'C:\\photos');
     await click('Scan');
 
-    expect(api.startScan).toHaveBeenCalledExactlyOnceWith({ primaryLocation: 'C:\\photos', secondaryLocation: undefined, recursive: true });
+    expect(api.startScan).toHaveBeenCalledExactlyOnceWith({ primaryLocation: 'C:\\photos', secondaryLocation: undefined, recursive: true, startOver: false });
     expect(await screen.findByText('34.0%')).toBeInTheDocument();
     expect(api.useScanProgress).toHaveBeenLastCalledWith('scan-7');
     expect(screen.getByText('Primary 34/80 • Secondary 0/20')).toBeInTheDocument();
@@ -447,6 +464,80 @@ describe('deleting the duplicates of one group', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(api.removeDuplicates).not.toHaveBeenCalled();
+  });
+});
+
+describe('clearing the results', () => {
+  const ask = async () => {
+    await click('Clear results');
+    return screen.getByRole('alertdialog', { name: 'Clear the scan results?' });
+  };
+
+  it('asks first, saying that only the record goes and the photos stay', async () => {
+    open();
+    const dialog = await ask();
+    expect(dialog).toHaveTextContent('PhotoSense forgets every file it has scanned');
+    expect(dialog).toHaveTextContent('Your photos stay exactly where they are');
+    expect(api.clearResults).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [6941, 'Cleared the results: 6,941 scanned files forgotten. Your photos were not touched.'],
+    [1, 'Cleared the results: 1 scanned file forgotten. Your photos were not touched.'],
+  ])('forgets everything once confirmed, and goes back to the first page with nothing chosen', async (forgotten, message) => {
+    let cleared = false;
+    api.clearResults.mockImplementation(async () => { cleared = true; return { forgotten }; });
+    groupsFor = (_mode, _filter, page) => ({ data: cleared ? groupsPage([]) : groupsPage([groupA, groupB], { page, totalPages: 2 }) });
+    open();
+    await click('Next');
+    await userEvent.click(inList('IMG_5000.JPG'));
+    await click('Open IMG_5000 (1).JPG');
+    await userEvent.click(inWindow('Close'));
+
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Clear results' }));
+
+    expect(api.clearResults).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('button', { name: new RegExp('^' + message.replace(/[.,]/g, '.')) })).toHaveClass('bg-emerald-900');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(lastGroupsRequest()).toEqual(['duplicates', '', 1, false]);
+    expect(screen.getByText('0 groups')).toBeInTheDocument();
+    expect(screen.getByText('Select a group to review')).toBeInTheDocument();
+  });
+
+  it('closes an open photo window along with the results it came from', async () => {
+    open();
+    await click('Open IMG_4198 (1).JPG');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // The question sits over the window; answering it puts both away.
+    fireEvent.click(button('Clear results'));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Clear results' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('forgets nothing when the question is cancelled', async () => {
+    open();
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.clearResults).not.toHaveBeenCalled();
+    expect(screen.getByText('2 groups')).toBeInTheDocument();
+  });
+
+  it('says why, and leaves the question open, when a scan is still running', async () => {
+    api.clearResults.mockRejectedValue(new Error('A scan is running. Wait for it to finish before clearing its results.'));
+    open();
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Clear results' }));
+
+    expect(await screen.findByRole('button', { name: /^A scan is running/ })).toHaveClass('bg-red-900');
+    expect(question()).toBeInTheDocument();
+    expect(screen.getByText('2 groups')).toBeInTheDocument();
+  });
+
+  it('is offered on the Similar tab too, and before anything has been found', async () => {
+    groupsFor = () => ({});
+    open();
+    expect(button('Clear results')).toBeEnabled();
+    await click('Similar');
+    expect(button('Clear results')).toBeEnabled();
   });
 });
 

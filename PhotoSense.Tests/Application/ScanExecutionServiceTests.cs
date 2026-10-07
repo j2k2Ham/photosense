@@ -132,6 +132,50 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Starting_Over_Forgets_Earlier_Results_And_Reads_Every_File_Again()
+    {
+        var path = Write("a.jpg", "picture a");
+        Write("b.jpg", "picture b");
+        await ScanAsync();
+        var before = (await _repo.GetAllAsync()).Single(p => p.SourcePath == path);
+        before.IsKept = true;
+        await _repo.AddOrUpdateAsync(before);
+        // Left over from a scan of some other folder: an ordinary scan would only drop it at its end.
+        await _repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "elsewhere", "old.jpg"), FileName = "old.jpg", ContentHash = "OLD" });
+        _thumbnails.Saved["STALE"] = [9];
+
+        var summary = await _service.RunAsync(new ScanRequest(_root.FullName, null, true, StartOver: true), "fresh");
+
+        // Nothing is taken as unchanged, and nothing is counted as having gone missing.
+        Assert.Equal(new ScanSummary(Total: 2, Analyzed: 2, Unchanged: 0, Unreadable: 0, Pruned: 0), summary);
+        Assert.Equal(4, _analyzer.Calls);
+        var after = (await _repo.GetAllAsync()).Single(p => p.SourcePath == path);
+        Assert.NotEqual(before.Id, after.Id);
+        Assert.False(after.IsKept);                          // marks made on the earlier results go with them
+        Assert.Equal(2, (await _repo.GetAllAsync()).Count);
+        Assert.DoesNotContain("STALE", _thumbnails.Saved.Keys);
+        Assert.Equal(2, _thumbnails.Saved.Count);
+        _log.Verify(l => l.Log("fresh", "Info", "Starting over: forgot 3 files recorded by earlier scans"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Starting_Over_With_A_Mistyped_Folder_Forgets_Nothing()
+    {
+        Write("a.jpg", "picture a");
+        await ScanAsync();
+        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, parallelism: 1);
+
+        var missing = Path.Combine(_root.FullName, "no-such-folder");
+        Assert.Equal(new ScanSummary(0, 0, 0, 0, 0), await quiet.RunAsync(new ScanRequest(missing, null, true, StartOver: true), "typo"));
+        Assert.Single(await _repo.GetAllAsync());
+        Assert.Single(_thumbnails.Saved);
+
+        // The same service, with nowhere to log, starts over all the same once the folder is right.
+        var summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true, StartOver: true), "fresh");
+        Assert.Equal((1, 0), (summary.Analyzed, summary.Unchanged));
+    }
+
+    [Fact]
     public async Task A_File_That_Cannot_Be_Decoded_Is_Still_Recorded_By_Its_Content()
     {
         Write("broken.heic", FakeAnalyzer.Undecodable);
@@ -421,5 +465,6 @@ public sealed class ScanExecutionServiceTests : IDisposable
         public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Saved { get; } = new();
         public Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default) { Saved[contentHash] = jpeg; return Task.CompletedTask; }
         public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
+        public Task ClearAsync(CancellationToken ct = default) { Saved.Clear(); return Task.CompletedTask; }
     }
 }

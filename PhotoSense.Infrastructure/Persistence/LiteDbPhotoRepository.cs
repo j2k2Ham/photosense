@@ -22,6 +22,7 @@ public sealed class LiteDbPhotoRepository : IPhotoRepository, IDisposable
     {
         _db = db;
         _ownsDb = ownsDb;
+        LiteDbMapping.Prepare<PhotoDocument>();
         _col = _db.GetCollection<PhotoDocument>("photos");
         _col.EnsureIndex(x => x.ContentHash);
         _col.EnsureIndex(x => x.PathKey);
@@ -49,6 +50,14 @@ public sealed class LiteDbPhotoRepository : IPhotoRepository, IDisposable
         lock (_writeLock) _col.Delete(id.Value);
         Interlocked.Increment(ref _version);
         return Task.CompletedTask;
+    }
+
+    public Task<int> ClearAsync(CancellationToken ct = default)
+    {
+        int removed;
+        lock (_writeLock) removed = _col.DeleteAll();
+        Interlocked.Increment(ref _version);
+        return Task.FromResult(removed);
     }
 
     public Task<IReadOnlyList<Photo>> GetAllAsync(CancellationToken ct = default)

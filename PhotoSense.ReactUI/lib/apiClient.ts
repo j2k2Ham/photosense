@@ -1,6 +1,6 @@
 import useSWR, { mutate } from 'swr';
 import * as signalR from '@microsoft/signalr';
-import type { BulkRemovalResultDto, GroupMode, GroupsPageDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
+import type { BulkRemovalResultDto, FolderListingDto, GroupMode, GroupsPageDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
 
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
@@ -116,9 +116,22 @@ export async function removeDuplicates(groupKey?: string): Promise<BulkRemovalRe
   return result;
 }
 
+/** Forgets everything earlier scans recorded. The photos themselves are not touched. */
+export async function clearResults(): Promise<{ forgotten: number }> {
+  const res = await send(`${API_BASE}/scan/reset`, 'POST');
+  const result = await res.json();
+  await refreshGroups();
+  return result;
+}
+
 export function useScanProgress(instanceId?: string) {
   const key = instanceId ? `${API_BASE}/scan/progress/${instanceId}` : null;
   return useSWR<ScanProgressSnapshotDto>(key, json, { refreshInterval: 1500 });
+}
+
+/** Lists the folders inside a folder of the computer the service runs on; with no path, the places to start from. */
+export function browseFolders(path?: string) {
+  return json<FolderListingDto>(`${API_BASE}/folders${path ? `?path=${encodeURIComponent(path)}` : ''}`);
 }
 
 export async function startScan(req: StartScanRequest) {

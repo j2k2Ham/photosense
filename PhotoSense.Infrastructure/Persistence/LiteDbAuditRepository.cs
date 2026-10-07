@@ -16,6 +16,7 @@ public sealed class LiteDbAuditRepository : IAuditRepository, IDisposable
     {
         _db = db;
         _ownsDb = ownsDb;
+        LiteDbMapping.Prepare<AuditEntry>();
         _col = _db.GetCollection<AuditEntry>("audit");
         _col.EnsureIndex(x => x.UtcTimestamp);
     }

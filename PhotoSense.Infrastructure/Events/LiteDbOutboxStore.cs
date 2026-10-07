@@ -1,6 +1,7 @@
 using LiteDB;
 using PhotoSense.Domain.Events;
 using PhotoSense.Domain.Services;
+using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Infrastructure.Events;
 
@@ -12,6 +13,7 @@ public class LiteDbOutboxStore : IOutboxStore
     public LiteDbOutboxStore(LiteDatabase db)
     {
         _db = db;
+        LiteDbMapping.Prepare<OutboxMessage>();
         _col = _db.GetCollection<OutboxMessage>("outbox");
         _col.EnsureIndex(x => x.ProcessedUtc);
     }

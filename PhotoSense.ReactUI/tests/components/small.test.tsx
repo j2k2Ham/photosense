@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import RootLayout, { metadata } from '../../app/layout';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { Differences } from '../../components/Differences';
 import { Footer } from '../../components/Footer';
 import { GroupList } from '../../components/GroupList';
 import { LogsPanel } from '../../components/LogsPanel';
@@ -119,6 +120,20 @@ describe('PhotoDetails', () => {
     const coordinates = screen.getByText('30.0000° N, 40.0000° W');
     expect(coordinates).not.toHaveClass('text-neutral-400');
     expect(screen.getByRole('link', { name: 'Show on map' })).toBeInTheDocument();
+  });
+});
+
+describe('Differences', () => {
+  it('lists what sets the copy apart', () => {
+    render(<Differences original={photo()} copy={photo({ fileName: 'IMG_4198 (1).JPG', folder: 'D:\\backup' })} />);
+    expect(screen.getByText('Differs from the original in')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem').map(li => li.textContent)).toEqual(['Name: the original is IMG_4198.JPG', 'Folder: the original is in C:\\photos\\2024']);
+  });
+
+  it('says so when nothing on record sets it apart', () => {
+    render(<Differences original={photo()} copy={photo()} />);
+    expect(screen.getByText('Nothing that is recorded about it.')).toBeInTheDocument();
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
   });
 });
 

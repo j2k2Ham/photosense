@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import type { GroupMemberDto, GroupMode, PhotoDto } from '../types';
 import { matchLabel } from '../lib/format';
+import { Differences } from './Differences';
 import { PhotoDetails } from './PhotoDetails';
 import { PhotoView } from './PhotoThumb';
 
@@ -55,6 +56,7 @@ export function PhotoWindow({ original, mode, member, busy, onClose, onToggleKee
               {!onOriginal ? matchLabel[member!.match].toUpperCase() : mode === 'similar' ? 'THE BEST OF THESE SIMILAR SHOTS' : 'ORIGINAL — THE BEST COPY, KEPT'}
             </div>
             <PhotoDetails photo={shown} />
+            {member && !onOriginal && <div className="text-xs"><Differences original={original} copy={member.photo} /></div>}
             {member && !onOriginal && (
               <p className="text-xs text-neutral-400">
                 {member.match === 'similar'

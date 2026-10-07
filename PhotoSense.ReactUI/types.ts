@@ -76,8 +76,25 @@ export interface ScanProgressSnapshotDto {
   overallPercent: number;
 }
 
+/** A folder on the computer the service runs on. */
+export interface FolderDto {
+  name: string;
+  /** The full path, as the service sees it. */
+  path: string;
+}
+
+export interface FolderListingDto {
+  /** The folder that was listed; absent when the starting places are listed instead. */
+  path?: string | null;
+  /** The folder it is in; absent at the top of a disk. */
+  parent?: string | null;
+  folders: FolderDto[];
+}
+
 export interface StartScanRequest {
   primaryLocation: string;
   secondaryLocation?: string;
   recursive: boolean;
+  /** Forget what earlier scans recorded and read every file again. */
+  startOver?: boolean;
 }

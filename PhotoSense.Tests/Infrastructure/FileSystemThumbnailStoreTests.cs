@@ -60,4 +60,21 @@ public sealed class FileSystemThumbnailStoreTests : IDisposable
 
         Assert.Empty(Directory.GetFiles(_root.FullName, "*", SearchOption.AllDirectories));
     }
+
+    [Fact]
+    public async Task Clearing_Discards_Every_Preview_And_New_Ones_Can_Be_Saved_After()
+    {
+        var folder = Path.Combine(_root.FullName, "thumbs");
+        var store = new FileSystemThumbnailStore(folder);
+        await store.ClearAsync();                         // nothing saved yet, no folder even: nothing to do
+        await store.SaveAsync(Hash, [1, 2, 3]);
+        await store.SaveAsync("CD34EF56", [4]);
+
+        await store.ClearAsync();
+
+        Assert.Null(await store.GetAsync(Hash));
+        Assert.False(Directory.Exists(folder));
+        await store.SaveAsync(Hash, [7]);
+        Assert.Equal(new byte[] { 7 }, await store.GetAsync(Hash));
+    }
 }

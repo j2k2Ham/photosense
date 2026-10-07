@@ -68,9 +68,39 @@ public class PhotoIdentityTests
     {
         var beside = new PhotoStorageOptions { DatabasePath = Path.Combine(Path.GetTempPath(), "data", "photosense.db") };
         Assert.Equal(Path.Combine(Path.GetTempPath(), "data", "photosense-thumbnails"), beside.ResolveThumbnailPath());
-        Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), "photosense-thumbnails"), new PhotoStorageOptions().ResolveThumbnailPath());
+        Assert.Equal(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "photosense-thumbnails"), new PhotoStorageOptions().ResolveThumbnailPath());
         var chosen = new PhotoStorageOptions { ThumbnailPath = Path.Combine(Path.GetTempPath(), "thumbs") };
         Assert.Equal(Path.Combine(Path.GetTempPath(), "thumbs"), chosen.ResolveThumbnailPath());
+        var named = new PhotoStorageOptions { ThumbnailPath = "previews" };
+        Assert.Equal(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "previews"), named.ResolveThumbnailPath());
+    }
+
+    [Fact]
+    public void Data_Is_Kept_In_The_Users_Own_Folder_And_Never_Where_The_Service_Runs_From()
+    {
+        // The Functions host restarts itself when a folder appears beside the program, as a thumbnail cache would.
+        var defaults = new PhotoStorageOptions();
+        Assert.Equal(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "photosense.db"), defaults.ResolveDatabasePath());
+        Assert.Equal(PhotoStorageOptions.DefaultDataFolder, defaults.ResolveDatabaseFolder());
+        Assert.True(Path.IsPathFullyQualified(PhotoStorageOptions.DefaultDataFolder));
+        Assert.Equal("PhotoSense", Path.GetFileName(PhotoStorageOptions.DefaultDataFolder));
+        Assert.NotEqual(Path.Combine(Directory.GetCurrentDirectory(), "photosense.db"), defaults.ResolveDatabasePath());
+        Assert.NotEqual(Path.Combine(AppContext.BaseDirectory, "photosense.db"), defaults.ResolveDatabasePath());
+
+        // A name alone, or a path that is not absolute, lands in that folder too.
+        Assert.Equal(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "library", "mine.db"), new PhotoStorageOptions { DatabasePath = Path.Combine("library", "mine.db") }.ResolveDatabasePath());
+        // An absolute path is taken as given.
+        var chosen = Path.Combine(Path.GetTempPath(), "elsewhere", "photosense.db");
+        Assert.Equal(chosen, new PhotoStorageOptions { DatabasePath = chosen }.ResolveDatabasePath());
+        Assert.Equal(Path.Combine(Path.GetTempPath(), "elsewhere"), new PhotoStorageOptions { DatabasePath = chosen }.ResolveDatabaseFolder());
+    }
+
+    [Fact]
+    public void An_Account_With_No_Folder_Of_Its_Own_Keeps_Its_Data_With_The_Temporary_Files()
+    {
+        Assert.Equal(Path.Combine(Path.GetTempPath(), "PhotoSense"), PhotoStorageOptions.DataFolderIn(string.Empty));
+        var home = Path.Combine(Path.GetTempPath(), "someone", "AppData");
+        Assert.Equal(Path.Combine(home, "PhotoSense"), PhotoStorageOptions.DataFolderIn(home));
     }
 
     [Fact]
@@ -110,9 +140,9 @@ public class PhotoIdentityTests
     }
 
     [Fact]
-    public void A_Database_Path_With_No_Folder_Puts_Thumbnails_In_The_Working_Folder()
+    public void A_Database_Path_With_No_Folder_Puts_Thumbnails_In_The_Data_Folder()
     {
         var top = Path.GetPathRoot(Path.GetTempPath())!;
-        Assert.Equal(Path.Combine(Directory.GetCurrentDirectory(), "photosense-thumbnails"), new PhotoStorageOptions { DatabasePath = top }.ResolveThumbnailPath());
+        Assert.Equal(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "photosense-thumbnails"), new PhotoStorageOptions { DatabasePath = top }.ResolveThumbnailPath());
     }
 }

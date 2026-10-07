@@ -323,5 +323,5 @@ public class PhotosFunctions
     }
 
     private static bool Authorize(HttpRequestData req)
-        => RequestGuard.Allows(req.Headers, Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY"));
+        => RequestGuard.Allows(req.Headers);
 }

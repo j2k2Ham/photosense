@@ -10,10 +10,31 @@ internal sealed class InMemoryThumbnailStore : IThumbnailStore
     public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Saved { get; } = new();
     public Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default) { Saved[contentHash] = jpeg; return Task.CompletedTask; }
     public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
+    public Task ClearAsync(CancellationToken ct = default) { Saved.Clear(); return Task.CompletedTask; }
 }
 
 internal static class TestFiles
 {
+    /// <summary>
+    /// Deletes a test's folder. A database file closed a moment ago can still be held for an instant, by a
+    /// virus scanner for one, and on Windows that now and then makes the first attempt fail.
+    /// </summary>
+    public static void Remove(DirectoryInfo folder)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                folder.Delete(true);
+                return;
+            }
+            catch (Exception ex) when (attempt < 5 && ex is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(100 * attempt);
+            }
+        }
+    }
+
     /// <summary>
     /// Takes away this user's access to a file or folder until disposed, so that code which must cope with
     /// "access denied" can be shown to. Returns null where that cannot be arranged (running as root).
