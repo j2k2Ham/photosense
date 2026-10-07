@@ -294,6 +294,22 @@ Data still comes from the existing API, `lib/` and SignalR progress. The "differ
 - Fonts: DM Sans and DM Mono from Google Fonts.
 - Icons are simple CSS shapes: the logo ring, the play triangle, the search circle, the menu bars and ×. Swap them for your icon set if you have one, at the same sizes.
 
+## Screenshots
+These were captured from the prototype at 1600×900 and scaled down. They are in `screenshots/`:
+- `01-results-dark.png`: the main screen with a group selected
+- `02-copy-hover-card.png`: the hover card on a copy tile, with "Differs from the original in"
+- `03-compare-side-by-side.png`: the comparison window in Side by side mode
+- `04-compare-flipped-to-original.png`: the comparison window flipped to Original
+- `05-compare-inline-delete-confirm.png`: the two-step "Delete this copy" confirm
+- `06-confirm-delete-all.png`: the confirmation dialog for Delete all duplicates
+- `07-menu-theme-toggle.png`: the menu with the Dark/Light toggle
+- `08-setup-first-run.png`: the Setup / first-run screen
+- `09-folder-browser.png`: the folder browser dialog
+- `10-folder-not-found-error-toast.png`: the inline error border and the error toast that stays until dismissed
+- `11-errors-panel.png`: the persistent Errors panel
+- `12-scanning.png`: the scan in progress (mosaic, counts and log tail)
+- `13-results-light.png`, `14-compare-light.png`: the Light theme
+
 ## Files
 - `PhotoSense Prototype.dc.html` is the clickable spec (it needs `support.js`). Markup with inline styles is at the top and the behavior logic is in `class Component`.
 - `reference/PhotoSense Redesign (explorations).dc.html` has the earlier directions 1a, 1b and 1c, for context.
