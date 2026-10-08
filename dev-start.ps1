@@ -159,12 +159,29 @@ if($earlier -gt 0){ Write-Host "Stopped the copy of PhotoSense that was already 
 $busy = Get-PortOwner $FunctionsPort
 if($busy){ throw "Port $FunctionsPort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not PhotoSense. Close it, or start with -FunctionsPort <another port>." }
 
-if($Clean){ Write-Section 'Cleaning solution'; dotnet clean PhotoSense.sln }
+# A build leaves worker processes waiting to be used again, and after building the service they go on
+# holding its program files. The next build then cannot replace those files and fails ("Could not copy ...
+# The file is locked by: MSBuild"). The ones doing nothing are ended here, whoever left them; one that is
+# in the middle of a build, of this project or any other, is using the processor and is left alone.
+function Stop-IdleBuildWorkers {
+  $workers = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '/nodemode:1' } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
+  if($workers.Count -eq 0){ return }
+  $before = @{}
+  foreach($w in $workers){ $before[$w.Id] = $w.TotalProcessorTime }
+  Start-Sleep -Milliseconds 500
+  $idle = @($workers | Where-Object { $_.Refresh(); -not $_.HasExited -and $_.TotalProcessorTime -eq $before[$_.Id] })
+  foreach($w in $idle){ Stop-Process -Id $w.Id -Force -ErrorAction SilentlyContinue }
+  if($idle.Count -gt 0){ Write-Host "Ended $($idle.Count) idle build worker(s) left by an earlier build." -ForegroundColor DarkGray }
+}
+
+if($Clean){ Write-Section 'Cleaning solution'; Stop-IdleBuildWorkers; dotnet clean PhotoSense.sln -nodeReuse:false }
 
 if(-not $NoBuild){
   Write-Section 'Building'
-  # The service's project brings the projects it is built from with it.
-  dotnet build PhotoSense.Functions/PhotoSense.Functions.csproj
+  Stop-IdleBuildWorkers
+  # The service's project brings the projects it is built from with it. No workers are left waiting
+  # afterwards (-nodeReuse:false), so this build does not get in the way of the next one.
+  dotnet build PhotoSense.Functions/PhotoSense.Functions.csproj -nodeReuse:false
   if($LASTEXITCODE -ne 0){ throw 'The build failed; PhotoSense was not started.' }
 }
 
