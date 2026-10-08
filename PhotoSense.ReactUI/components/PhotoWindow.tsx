@@ -37,9 +37,12 @@ function Caption({ photo, children }: { readonly photo: PhotoDto; readonly child
 /** The comparison window: the original and a copy side by side, or one at a time in the same spot to flip between. */
 export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKeep, onRemove, onOpenInViewer }: Props) {
   const [view, setView] = useState<View>('side');
-  // Which deletion is being asked about a second time, in place of its button.
-  const [confirm, setConfirm] = useState<'copy' | 'original'>();
+  // Which deletion is being asked about a second time, in place of its button, and of which copy. The
+  // question is not carried over to the copy that takes this one's place once it has gone.
+  const [asked, setAsked] = useState<{ what: 'copy' | 'original'; of: string }>();
   const copy = member.photo;
+  const confirm = asked?.of === copy.id ? asked.what : undefined;
+  const setConfirm = (what?: 'copy' | 'original') => setAsked(what && { what, of: copy.id });
   const similar = mode === 'similar';
   const shown = view === 'original' ? original : copy;
   // What the file that stays is called here.

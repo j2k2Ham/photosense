@@ -103,6 +103,19 @@ describe('requests that act on photos', () => {
     expect(swr.mutate).toHaveBeenCalledTimes(3);
   });
 
+  it('remove the similar shots of one group when asked for those, and never those of every group', async () => {
+    answering({ removed: 2, bytes: 600, skipped: 0, companions: 0, problems: [] });
+    const api = await load();
+
+    await api.removeDuplicates('gS', 'similar');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS&mode=similar`);
+    await api.removeDuplicates('gS', 'duplicates');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS`);
+    // With no group named it still says similar, which the service refuses; it is never sent as "every duplicate".
+    await api.removeDuplicates(undefined, 'similar');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
+  });
+
   it('list the folders of the service\'s machine, from the top or inside one of them', async () => {
     const listing = { path: 'C:\\Users\\jamie\\Pictures', parent: 'C:\\Users\\jamie', folders: [{ name: "Jamie's Phone", path: "C:\\Users\\jamie\\Pictures\\Jamie's Phone" }] };
     answering(listing);

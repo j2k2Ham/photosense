@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <!-- TUnit tests are a program of their own: built as an executable and run on Microsoft.Testing.Platform. -->
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>

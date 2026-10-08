@@ -412,7 +412,7 @@ public sealed class PhotosFunctionsTests : IDisposable
     [Arguments("b?group=abc", "abc")]
     public async Task Duplicates_Are_Removed_For_One_Group_Or_For_All(string url, string? expectedGroup)
     {
-        _remover.Setup(r => r.RemoveDuplicatesAsync(expectedGroup, It.IsAny<CancellationToken>()))
+        _remover.Setup(r => r.RemoveDuplicatesAsync(expectedGroup, false, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BulkRemovalResult(3, 900, 1, ["one was left alone"], 2));
 
         var json = (await _api.RemoveDuplicatesAsync(Http.Post(url).FromClient())).Json();
@@ -420,5 +420,31 @@ public sealed class PhotosFunctionsTests : IDisposable
         await Assert.That((json.GetProperty("removed").GetInt32(), json.GetProperty("bytes").GetInt64(), json.GetProperty("skipped").GetInt32(), json.GetProperty("companions").GetInt32())).IsEqualTo((3, 900L, 1, 2));
         await Assert.That(json.GetProperty("problems").EnumerateArray().Single().GetString()).IsEqualTo("one was left alone");
         await Assert.That((_audited[0].Action, _audited[0].PhotoId, _audited[0].Details)).IsEqualTo(("RemoveDuplicates", expectedGroup, "removed=3 bytes=900 linked=2 skipped=1"));
+    }
+
+    [Test]
+    [Arguments("b?group=abc&mode=similar")]
+    [Arguments("b?mode=SIMILAR&group=abc")]
+    public async Task The_Similar_Shots_Of_A_Group_Are_Removed_When_The_Group_Is_Named(string url)
+    {
+        _remover.Setup(r => r.RemoveDuplicatesAsync("abc", true, It.IsAny<CancellationToken>())).ReturnsAsync(new BulkRemovalResult(2, 600, 0, [], 0));
+
+        var json = (await _api.RemoveDuplicatesAsync(Http.Post(url).FromClient())).Json();
+
+        await Assert.That((json.GetProperty("removed").GetInt32(), json.GetProperty("bytes").GetInt64())).IsEqualTo((2, 600L));
+        await Assert.That((_audited[0].Action, _audited[0].PhotoId)).IsEqualTo(("RemoveSimilar", "abc"));
+    }
+
+    [Test]
+    [Arguments("b?mode=similar")]
+    [Arguments("b?mode=similar&group=%20")]
+    public async Task Similar_Shots_Are_Never_Removed_Without_Naming_A_Group(string url)
+    {
+        var response = await _api.RemoveDuplicatesAsync(Http.Post(url).FromClient());
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(response.Text()).Contains("name the group");
+        _remover.VerifyNoOtherCalls();
+        await Assert.That(_audited).IsEmpty();
     }
 }

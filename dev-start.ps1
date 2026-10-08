@@ -208,7 +208,7 @@ function Start-FunctionsHost {
     Write-Host "Starting Functions via Core Tools (attempt $attempt)" -ForegroundColor Yellow
     # No --csharp: that flag makes Core Tools use its in-process host, which cannot load this isolated-worker app.
     # The service answers the UI's address only, so it is told which port the UI was given.
-    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --cors http://localhost:$reactPort,http://127.0.0.1:$reactPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
+    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --cors http://localhost:$reactPort,http://127.0.0.1:$reactPort --script-root $photoRoot/bin/Debug/net10.0" -WorkingDirectory $photoRoot -Color Yellow
   }
 }
 

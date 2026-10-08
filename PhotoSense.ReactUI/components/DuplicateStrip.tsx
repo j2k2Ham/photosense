@@ -69,7 +69,7 @@ function HoverCard({ hover, original }: { hover: Hover; original: PhotoDto }) {
       </dl>
       <div className="mt-3 border-t border-line pt-3"><Differences original={original} copy={photo} /></div>
       <div className="mt-3 border-t border-line pt-3 text-t2">
-        {match === 'similar' ? 'A different shot or an edited version. Never removed in bulk.' : <>Original preferred: <span className="font-medium text-keep">{keeperReason}</span></>}
+        {match === 'similar' ? 'A different shot or an edited version. Never removed along with the duplicates.' : <>Original preferred: <span className="font-medium text-keep">{keeperReason}</span></>}
       </div>
     </div>
   );

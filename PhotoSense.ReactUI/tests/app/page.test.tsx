@@ -230,7 +230,7 @@ describe('similar shots', () => {
     expect(gallery()).toHaveTextContent('Loading…');
     expect(tab(/Duplicates/)).toHaveTextContent('Duplicates2');
     expect(tab(/Similar/)).toHaveTextContent(/^Similar$/);
-    expect(screen.getByText(/^Similar shots are burst frames or edited versions\. Nothing here is removed in bulk/)).toBeInTheDocument();
+    expect(screen.getByText(/^Similar shots are burst frames or edited versions\. They are never removed all at once/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete all duplicates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 
@@ -435,8 +435,30 @@ describe('deleting', () => {
     expect(screen.getByRole('alertdialog', { name: 'Delete IMG_0648.JPG?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent(`IMG_0648.JPG (14.8 MB) will be removed.The original, IMG_0377.JPG, stays in ${folder}.`);
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
-    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('g0377');
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('g0377', 'duplicates');
     expect(await toast('Moved IMG_0648.JPG (14.8 MB) to _PhotoSense_Removed. IMG_0377.JPG stays where it is.')).toBeInTheDocument();
+  });
+
+  it('all the similar shots of one group: asks first, saying they are not copies, and takes only that group\'s', async () => {
+    const shots = group({
+      key: 'gS', reclaimableBytes: 18_279_000, keeper: photo({ id: 's', fileName: 'IMG_7001.JPG' }),
+      members: [2, 3, 4].map(n => member({ id: `s${n}`, fileName: `IMG_700${n}.JPG` }, 'similar')),
+    });
+    groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([shots], {}, 'similar') : groupsPage([groupA, groupB]) });
+    api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 18_279_000, skipped: 0, companions: 0, problems: [] });
+    open();
+    currentMode = 'similar';
+    await userEvent.click(tab(/Similar/));
+
+    // One shot, or all of them: both are offered, and "this copy" asks about the one beside the best shot only.
+    expect(within(desk()).getByRole('button', { name: 'Delete this copy · 5.8 MB' })).toBeEnabled();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 3 copies · 17.4 MB' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete the 3 shots similar to IMG_7001.JPG?' })).toBeInTheDocument();
+    expect(question()).toHaveTextContent('3 files taking 17.4 MB will be removed: IMG_7002.JPG, IMG_7003.JPG, IMG_7004.JPG.The best shot, IMG_7001.JPG, stays in C:\\photos\\2024.These are different shots or edited versions, not copies of one file.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('gS', 'similar');
+    expect(api.removePhoto).not.toHaveBeenCalled();
+    expect(await toast('Moved 3 similar shots (17.4 MB) to _PhotoSense_Removed. IMG_7001.JPG stays where it is.')).toBeInTheDocument();
   });
 
   it('a similar shot: says that the best shot stays', async () => {
@@ -453,12 +475,12 @@ describe('deleting', () => {
   it('the duplicates of one group: counts what goes and what is kept', async () => {
     api.removeDuplicates.mockResolvedValue({ removed: 2, bytes: 9_139_000, skipped: 0, companions: 0, problems: [] });
     open();
-    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete these 2 duplicates · 8.7 MB' }));
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 2 copies · 8.7 MB' }));
     expect(screen.getByRole('alertdialog', { name: 'Delete the 2 duplicates of IMG_4198.JPG?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent('2 files taking 8.7 MB will be removed: IMG_4198 (1).JPG, IMG_4198.HEIC.The original, IMG_4198.JPG, stays in C:\\photos\\2024.');
     expect(question()).not.toHaveTextContent('marked keep');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 2 files' }));
-    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('gA');
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('gA', 'duplicates');
     expect(await toast('Moved 2 duplicates (8.7 MB) to _PhotoSense_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
   });
 
@@ -466,7 +488,7 @@ describe('deleting', () => {
     const copies = [1, 2, 3, 4, 5, 6].map(n => member({ id: `a${n}`, fileName: `IMG_4198 (${n}).JPG` }));
     groupsFor = () => ({ data: groupsPage([group({ ...groupA, members: copies, reclaimableBytes: 36_558_000 })]) });
     open();
-    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete these 6 duplicates/ }));
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete all 6 copies/ }));
     expect(question()).toHaveTextContent('6 files taking 34.9 MB will be removed: IMG_4198 (1).JPG, IMG_4198 (2).JPG, IMG_4198 (3).JPG, IMG_4198 (4).JPG and 2 more.The original');
   });
 
@@ -477,7 +499,7 @@ describe('deleting', () => {
     const copies = [copyA1, copyA2, member({ id: 'a3', fileName: 'IMG_4198 (3).JPG' })].map((m, i) => ({ ...m, photo: { ...m.photo, kept: i < keptCount } }));
     groupsFor = () => ({ data: groupsPage([group({ ...groupA, members: copies })]) });
     open();
-    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete (these 2 duplicates|this duplicate)/ }));
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete (all 2 copies|this duplicate)/ }));
     expect(question()).toHaveTextContent(line);
     expect(within(question()).getByRole('button', { name: label })).toBeEnabled();
     await userEvent.click(within(question()).getByRole('button', { name: 'Cancel' }));
@@ -492,7 +514,7 @@ describe('deleting', () => {
     expect(screen.getByRole('alertdialog', { name: 'Delete all duplicates?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent('3 files taking 14.5 MB will be removed.The best copy of each picture or video stays. Copies you marked keep are skipped.');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
-    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith(undefined, 'duplicates');
     expect(await toast('Moved 1 duplicate (5.8 MB) and 1 linked file to _PhotoSense_Removed')).toBeInTheDocument();
     expect(screen.getByText('1 left alone. Changed since the scan, left alone: C:\\photos\\x.jpg')).toBeInTheDocument();
   });

@@ -309,7 +309,7 @@ public class PhotosFunctions
         return resp;
     }
 
-    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group)
+    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group, and &mode=similar for its look-alikes)
     public async Task<HttpResponseData> RemoveDuplicatesAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/remove-duplicates")] HttpRequestData req)
     {
@@ -318,9 +318,17 @@ public class PhotosFunctions
         // No group, or a blank one, means every group.
         var group = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("group");
         if (string.IsNullOrWhiteSpace(group)) group = null;
-        var result = await _remover.RemoveDuplicatesAsync(group);
-        _log.Log("audit", "Info", $"Removed {result.Removed} duplicates ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
-        await _audit.AddAsync(new AuditEntry { Action = "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}" });
+        var similar = string.Equals(System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
+        if (similar && group is null)
+        {
+            await resp.WriteStringAsync("Similar shots are removed one group at a time: name the group.");
+            resp.StatusCode = HttpStatusCode.BadRequest;
+            return resp;
+        }
+        var result = await _remover.RemoveDuplicatesAsync(group, similar);
+        var what = similar ? "similar shots" : "duplicates";
+        _log.Log("audit", "Info", $"Removed {result.Removed} {what} ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
+        await _audit.AddAsync(new AuditEntry { Action = similar ? "RemoveSimilar" : "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}" });
         await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems });
         return resp;
     }

@@ -128,9 +128,15 @@ export async function removePhoto(id: string): Promise<{ companions: number }> {
   return result;
 }
 
-/** Moves the duplicates of one group, or of every group, to the holding folder. */
-export async function removeDuplicates(groupKey?: string): Promise<BulkRemovalResultDto> {
-  const res = await send(`${API_BASE}/photos/bulk/remove-duplicates${groupKey ? `?group=${encodeURIComponent(groupKey)}` : ''}`, 'POST');
+/**
+ * Moves the duplicates of one group, or of every group, to the holding folder. Asked for a group's similar
+ * shots instead, it moves those: they go a group at a time, never all at once.
+ */
+export async function removeDuplicates(groupKey?: string, mode: GroupMode = 'duplicates'): Promise<BulkRemovalResultDto> {
+  // The kind is always said: asked for similar shots with no group named, the service refuses, where a
+  // request that left the kind out would be taken as "every duplicate".
+  const query = [groupKey && `group=${encodeURIComponent(groupKey)}`, mode === 'similar' && 'mode=similar'].filter(Boolean).join('&');
+  const res = await send(`${API_BASE}/photos/bulk/remove-duplicates${query && `?${query}`}`, 'POST');
   const result = await res.json();
   await refreshGroups();
   return result;

@@ -54,7 +54,10 @@ public class PhotoStorageOptionsValidatorTests
     public async Task The_Format_To_Keep_Is_Read_From_The_Settings(string? setting, FormatPreference expected)
     {
         // As the service reads it: an environment variable PhotoStorage__KeepFormat arrives under this key.
-        var settings = new Dictionary<string, string?> { ["PhotoStorage:DatabasePath"] = "photosense.db", ["PhotoStorage:KeepFormat"] = setting };
+        // A variable that is not set is simply not there. (A key that is there with no value is another matter:
+        // from .NET 10 it is read as "nothing", which for this setting would be the first of the two choices.)
+        var settings = new Dictionary<string, string?> { ["PhotoStorage:DatabasePath"] = "photosense.db" };
+        if (setting is not null) settings["PhotoStorage:KeepFormat"] = setting;
         var options = new ConfigurationBuilder().AddInMemoryCollection(settings).Build().GetSection("PhotoStorage").Get<PhotoStorageOptions>()!;
         await Assert.That(options.KeepFormat).IsEqualTo(expected);
         await Assert.That(options.DatabasePath).IsEqualTo("photosense.db");

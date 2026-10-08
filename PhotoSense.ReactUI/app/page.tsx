@@ -133,11 +133,12 @@ export default function HomePage() {
     push(`Moved ${photo.fileName}${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. ${stays.fileName} stays where it is.`, 'ok');
   });
   const removeMany = (group?: DuplicateGroupDto) => run(async () => {
-    const result = await removeDuplicates(group?.key);
+    const result = await removeDuplicates(group?.key, mode);
     setPending(undefined);
     setCopyIndex(0);
     const going = group?.members.filter(m => !m.photo.kept) ?? [];
-    const what = going.length === 1 ? going[0].photo.fileName : `${result.removed} ${result.removed === 1 ? 'duplicate' : 'duplicates'}`;
+    const kind = mode === 'similar' ? 'similar shot' : 'duplicate';
+    const what = going.length === 1 ? going[0].photo.fileName : `${result.removed} ${kind}${result.removed === 1 ? '' : 's'}`;
     const stays = group ? `. ${group.keeper.fileName} stays where it is.` : '';
     if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}${stays}`, 'ok');
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
@@ -216,7 +217,7 @@ export default function HomePage() {
                   className="pill-rose my-auto h-11 px-[22px] text-[15px]">Delete all duplicates</button>
               </>
             ) : (
-              <p className="my-auto max-w-[520px] text-right text-[14px] text-t2">Similar shots are burst frames or edited versions. Nothing here is removed in bulk; review them one at a time.</p>
+              <p className="my-auto max-w-[520px] text-right text-[14px] text-t2">Similar shots are burst frames or edited versions. They are never removed all at once; go through them a group at a time.</p>
             )}
           </div>
 
@@ -242,7 +243,7 @@ export default function HomePage() {
           <p>The best copy of each picture or video stays. Copies you marked keep are skipped.</p>
         </ConfirmDialog>
       )}
-      {pending?.scope === 'group' && <GroupConfirm group={pending.group} busy={busy} note={note} onCancel={cancel} onConfirm={() => removeMany(pending.group)} />}
+      {pending?.scope === 'group' && <GroupConfirm group={pending.group} similar={mode === 'similar'} busy={busy} note={note} onCancel={cancel} onConfirm={() => removeMany(pending.group)} />}
       {pending?.scope === 'copy' && (
         <ConfirmDialog busy={busy} title={`Delete ${pending.member.photo.fileName}?`} confirmLabel="Delete 1 file" note={note}
           onCancel={cancel} onConfirm={() => removeOne(pending.member.photo, pending.group.keeper)}>
@@ -269,7 +270,7 @@ export default function HomePage() {
   );
 }
 
-interface GroupConfirmProps { readonly group: DuplicateGroupDto; readonly busy: boolean; readonly note: React.ReactNode; onCancel(): void; onConfirm(): void; }
+interface GroupConfirmProps { readonly group: DuplicateGroupDto; readonly similar: boolean; readonly busy: boolean; readonly note: React.ReactNode; onCancel(): void; onConfirm(): void; }
 
 const Name = ({ children }: { readonly children: string }) => <span className="font-semibold text-t1 [overflow-wrap:anywhere]">{children}</span>;
 
@@ -278,18 +279,19 @@ function Stays({ what, photo }: { readonly what: string; readonly photo: PhotoDt
   return <p>The {what}, <Name>{photo.fileName}</Name>, stays in <span className="font-mono text-[13.5px] [overflow-wrap:anywhere]">{photo.folder}</span>.</p>;
 }
 
-function GroupConfirm({ group, busy, note, onCancel, onConfirm }: GroupConfirmProps) {
+function GroupConfirm({ group, similar, busy, note, onCancel, onConfirm }: GroupConfirmProps) {
   const going = group.members.filter(m => !m.photo.kept).map(m => m.photo.fileName);
   const kept = group.members.length - going.length;
   const count = going.length;
   const more = count - NAMED;
   return (
-    <ConfirmDialog busy={busy} title={count === 1 ? `Delete ${going[0]}?` : `Delete the ${count} duplicates of ${group.keeper.fileName}?`}
+    <ConfirmDialog busy={busy} title={count === 1 ? `Delete ${going[0]}?` : `Delete the ${count} ${similar ? 'shots similar to' : 'duplicates of'} ${group.keeper.fileName}?`}
       confirmLabel={`Delete ${files(count)}`} note={note} onCancel={onCancel} onConfirm={onConfirm}>
       {count === 1
         ? <p><Name>{going[0]}</Name> ({formatBytes(group.reclaimableBytes)}) will be removed.</p>
         : <p>{files(count)} taking {formatBytes(group.reclaimableBytes)} will be removed: <Name>{going.slice(0, NAMED).join(', ')}</Name>{more > 0 && ` and ${more} more`}.</p>}
-      <Stays what="original" photo={group.keeper} />
+      <Stays what={similar ? 'best shot' : 'original'} photo={group.keeper} />
+      {similar && <p>These are different shots or edited versions, not copies of one file.</p>}
       {kept > 0 && <p>{kept} {kept === 1 ? 'copy' : 'copies'} you marked keep {kept === 1 ? 'is' : 'are'} skipped.</p>}
     </ConfirmDialog>
   );

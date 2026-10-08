@@ -143,7 +143,7 @@ describe('DuplicateStrip', () => {
   it('says of a similar shot that it is not a copy, and of a kept one that it is kept', () => {
     show();
     fireEvent.mouseEnter(tile('IMG_4199.JPG'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('A different shot or an edited version. Never removed in bulk.');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('A different shot or an edited version. Never removed along with the duplicates.');
     fireEvent.mouseEnter(tile('IMG_4198 (2).JPG'));
     expect(screen.getByRole('tooltip')).toHaveTextContent('IMG_4198 (2).JPGKeeping');
   });
@@ -300,7 +300,7 @@ describe('ReviewPanel', () => {
     expect(desk()).toHaveTextContent('KeepingIMG_4198 (2).JPG');
     await userEvent.click(button('Delete this copy · 2.9 MB'));
     expect(onDeleteCopy).toHaveBeenCalledExactlyOnceWith(converted);
-    await userEvent.click(button('Delete these 2 duplicates · 8.7 MB'));
+    await userEvent.click(button('Delete all 2 copies · 8.7 MB'));
     expect(onDeleteGroup).toHaveBeenCalledExactlyOnceWith(several);
     await userEvent.click(button('Show IMG_4198 (2).JPG'));
     expect(onSelectCopy).toHaveBeenCalledExactlyOnceWith(2);
@@ -326,7 +326,7 @@ describe('ReviewPanel', () => {
     expect(within(desk()).queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
     unmount();
     show(group({ keeper: original, members: [identical, converted] }), { busy: true });
-    for (const name of [/^Delete this copy/, /^Delete these 2/, 'Keep this copy']) expect(button(name)).toBeDisabled();
+    for (const name of [/^Delete this copy/, /^Delete all 2/, 'Keep this copy']) expect(button(name)).toBeDisabled();
   });
 
   it('presents similar shots as shots to review one at a time', async () => {
@@ -335,12 +335,26 @@ describe('ReviewPanel', () => {
     expect(desk()).toHaveTextContent('BestThe best of these similar shots.');
     expect(desk().querySelector('[data-file="copy"]')).toHaveTextContent(/^IMG_4199\.JPGIn the same folder as the best shot$/);
     expect(screen.getByRole('heading', { name: 'Similar shots (1)' })).toBeInTheDocument();
-    expect(desk()).toHaveTextContent('A burst frame or an edited version. Never removed in bulk.');
+    expect(desk()).toHaveTextContent('A burst frame or an edited version. Never removed along with the duplicates.');
     expect(within(desk()).queryByRole('button', { name: /keep/i })).not.toBeInTheDocument();
     expect(within(desk()).queryByRole('button', { name: /duplicates?( ·|$)/ })).not.toBeInTheDocument();
     expect(button(/^Delete this copy/)).toHaveClass('pill-rose');
     await userEvent.click(button(/^Delete this copy/));
     expect(onDeleteCopy).toHaveBeenCalledExactlyOnceWith(burst);
+  });
+
+  it('with several similar shots, offers the one beside the best shot, or all of them', async () => {
+    const second = member({ id: 'm6', fileName: 'IMG_4200.JPG' }, 'similar');
+    const shots = group({ keeper: original, members: [burst, second], reclaimableBytes: 12_186_000 });
+    const { onDeleteCopy, onDeleteGroup } = show(shots, { mode: 'similar', copyIndex: 1 });
+    // The one that takes everything is the bold one; the one for a single shot steps back beside it.
+    expect(button('Delete this copy · 5.8 MB')).toHaveClass('pill-rose-outline');
+    expect(button('Delete all 2 copies · 11.6 MB')).toHaveClass('pill-rose');
+    await userEvent.click(button('Delete this copy · 5.8 MB'));
+    expect(onDeleteCopy).toHaveBeenCalledExactlyOnceWith(second);
+    expect(onDeleteGroup).not.toHaveBeenCalled();
+    await userEvent.click(button('Delete all 2 copies · 11.6 MB'));
+    expect(onDeleteGroup).toHaveBeenCalledExactlyOnceWith(shots);
   });
 
   it('shows a video as a still, with the way to the system\'s player', async () => {

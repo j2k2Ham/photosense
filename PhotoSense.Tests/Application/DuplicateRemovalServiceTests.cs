@@ -135,6 +135,53 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That((await _service.RemoveDuplicatesAsync("no-such-group")).Removed).IsEqualTo(0);
     }
 
+    // ---- similar shots, a group at a time
+
+    // A picture as a scan records it, with what similar shots are told by: a hash, a signature and a capture time.
+    private async Task<Photo> AddShotAsync(string name, byte[] signature, int secondsLater, bool kept = false)
+    {
+        var path = Path.Combine(_root.FullName, name);
+        await File.WriteAllTextAsync(path, name);
+        var info = new FileInfo(path);
+        var shot = TestPhotos.Make(name, folder: _root.FullName, signature: signature, taken: TestPhotos.Shot.AddSeconds(secondsLater), format: "JPEG", kept: kept);
+        var photo = new Photo
+        {
+            SourcePath = path, FileName = name, FileSizeBytes = info.Length, FileModifiedUtc = info.LastWriteTimeUtc, ScanRoot = _root.FullName,
+            ContentHash = name, PerceptualHash = shot.PerceptualHash, Signature = shot.Signature, Width = shot.Width, Height = shot.Height,
+            Format = shot.Format, TakenOn = shot.TakenOn, Set = PhotoSet.Primary, IsKept = kept
+        };
+        await _repo.AddOrUpdateAsync(photo);
+        return photo;
+    }
+
+    [Test]
+    public async Task The_Similar_Shots_Of_One_Group_Go_Together_When_Asked_For_By_Name_And_The_Best_Stays()
+    {
+        // A burst: the same view seconds apart, so each is a shot of its own and none a copy.
+        var best = await AddShotAsync("IMG_5490.JPG", TestPhotos.Signature(), 0);
+        var second = await AddShotAsync("IMG_5491.JPG", TestPhotos.Signature(), 2);
+        var third = await AddShotAsync("IMG_5492.JPG", TestPhotos.Signature(), 4);
+        var keeping = await AddShotAsync("IMG_5493.JPG", TestPhotos.Signature(), 6, kept: true);
+        var analysis = await new DuplicateAnalysisService(_repo).GetAsync();
+        await Assert.That(analysis.Duplicates).IsEmpty();
+        var group = analysis.Similar.Single();
+        await Assert.That(group.Members.Count).IsEqualTo(3);
+
+        // Removing duplicates never takes similar shots, for this group or for all of them.
+        await Assert.That((await _service.RemoveDuplicatesAsync(group.Key)).Removed).IsEqualTo(0);
+        await Assert.That((await _service.RemoveDuplicatesAsync()).Removed).IsEqualTo(0);
+        // And similar shots do not go without a group being named.
+        await Assert.That((await _service.RemoveDuplicatesAsync(similar: true)).Removed).IsEqualTo(0);
+
+        var result = await _service.RemoveDuplicatesAsync(group.Key, similar: true);
+
+        await Assert.That((result.Removed, result.Skipped)).IsEqualTo((2, 0));
+        var left = new[] { best, second, third, keeping }.Where(p => File.Exists(p.SourcePath)).Select(p => p.FileName).ToList();
+        await Assert.That(left).Contains(group.Keeper.FileName);
+        await Assert.That(left).Contains("IMG_5493.JPG");
+        await Assert.That(left.Count).IsEqualTo(2);
+    }
+
     [Test]
     public async Task Reports_A_Copy_That_Cannot_Be_Moved_But_Not_One_That_Is_Already_Gone()
     {

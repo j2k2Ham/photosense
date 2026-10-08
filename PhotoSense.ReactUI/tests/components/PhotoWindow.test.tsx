@@ -104,6 +104,20 @@ describe('the comparison window', () => {
     expect(onRemove).toHaveBeenCalledExactlyOnceWith(copy.photo, original);
   });
 
+  it('asks afresh about the copy that takes the place of one just deleted', async () => {
+    const { rerender, onClose, onToggleKeep, onRemove, onOpenInViewer } = open();
+    await click('Delete this copy · 12.0 MB');
+    expect(button('Delete this copy')).toBeInTheDocument();
+
+    // The copy has gone and the group's next one is shown in the same window: nothing is armed for it.
+    const next = member({ id: 'm9', fileName: 'IMG_4299 (1).JPG', fileSizeBytes: 25_165_824 }, 'identical');
+    rerender(<PhotoWindow original={original} member={next} mode="duplicates" busy={false} onClose={onClose} onToggleKeep={onToggleKeep} onRemove={onRemove} onOpenInViewer={onOpenInViewer} />);
+    expect(button('Delete this copy · 24.0 MB')).toBeEnabled();
+    expect(within(win()).queryByRole('button', { name: 'Delete this copy' })).not.toBeInTheDocument();
+    expect(within(win()).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(onRemove).not.toHaveBeenCalled();
+  });
+
   it('can delete the original instead, saying which file then takes its place', async () => {
     const { onRemove } = open();
     await click('Delete the original instead');
@@ -143,7 +157,7 @@ describe('the comparison window', () => {
 
   it('presents a similar shot as a different picture: no keeping, and the best shot named as such', async () => {
     open({ mode: 'similar', member: member({ id: 'm3', fileName: 'IMG_4300.JPG' }, 'similar') });
-    expect(win()).toHaveTextContent('Similar. A burst frame or an edited version. Never removed in bulk.');
+    expect(win()).toHaveTextContent('Similar. A burst frame or an edited version. Never removed along with the duplicates.');
     expect(win()).toHaveTextContent('BEST IMG_4299.JPG');
     expect(win()).toHaveTextContent(/^IMG_4300\.JPGsimilar to IMG_4299\.JPGSimilar/);
     expect(within(win()).queryByRole('button', { name: /keep/i })).not.toBeInTheDocument();

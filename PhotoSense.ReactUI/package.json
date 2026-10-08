@@ -13,7 +13,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@microsoft/signalr": "^8.0.17",
+    "@microsoft/signalr": "^10.0.11",
     "next": "14.2.5",
     "react": "18.2.0",
     "react-dom": "18.2.0",

@@ -150,5 +150,5 @@ export const matchLabel: Record<MatchKind, string> = {
 export const matchMeaning: Record<MatchKind, string> = {
   identical: 'Byte-for-byte the same file.',
   samePicture: 'The same shot converted, resized or re-compressed.',
-  similar: 'A burst frame or an edited version. Never removed in bulk.',
+  similar: 'A burst frame or an edited version. Never removed along with the duplicates.',
 };

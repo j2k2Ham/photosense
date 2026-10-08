@@ -63,6 +63,7 @@ export function ReviewPanel({ group, mode, busy, copyIndex, onSelectCopy, onComp
   const summary = groupSummary(group, mode);
   // One copy to delete is the whole group's worth; with several, this copy and all of them are offered apart.
   const offerCopy = similar || group.members.length > 1;
+  const offerAll = removable > (similar ? 1 : 0);
 
   return (
     <section aria-label="Review" className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -105,7 +106,7 @@ export function ReviewPanel({ group, mode, busy, copyIndex, onSelectCopy, onComp
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-line px-7 py-[18px]">
         <div className="min-w-[260px] flex-1">
           <p className="text-[14px] text-t2">
-            {similar ? 'A burst frame or an edited version. Never removed in bulk.' : <>Original preferred: <span className="font-medium text-keep">{member.keeperReason}</span></>}
+            {similar ? 'A burst frame or an edited version. Never removed along with the duplicates.' : <>Original preferred: <span className="font-medium text-keep">{member.keeperReason}</span></>}
           </p>
           <p className="mt-0.5 text-[12.5px] text-t3">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder. Move them back to restore them.</p>
         </div>
@@ -115,13 +116,13 @@ export function ReviewPanel({ group, mode, busy, copyIndex, onSelectCopy, onComp
           </button>
         )}
         {offerCopy && (
-          <button type="button" disabled={busy || copy.kept} onClick={() => onDeleteCopy(member)} className={`${similar ? 'pill-rose' : 'pill-rose-outline'} h-11 px-5 text-[14.5px]`}>
+          <button type="button" disabled={busy || copy.kept} onClick={() => onDeleteCopy(member)} className={`${offerAll ? 'pill-rose-outline' : 'pill-rose'} h-11 px-5 text-[14.5px]`}>
             Delete this copy · {formatBytes(copy.fileSizeBytes)}
           </button>
         )}
-        {!similar && removable > 0 && (
+        {offerAll && (
           <button type="button" disabled={busy} onClick={() => onDeleteGroup(group)} className="pill-rose h-11 px-5 text-[14.5px]">
-            Delete {removable === 1 ? 'this duplicate' : `these ${removable} duplicates`} · {formatBytes(group.reclaimableBytes)}
+            Delete {removable === 1 ? 'this duplicate' : `all ${removable} copies`} · {formatBytes(group.reclaimableBytes)}
           </button>
         )}
       </div>
