@@ -104,6 +104,70 @@ public sealed class FileSystemPhotoDeletionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_Copy_Goes_While_One_Of_The_Files_It_Copies_Is_Still_There()
+    {
+        var gone = await AddAsync("IMG_1.jpg");
+        var original = await AddAsync("IMG_2.jpg");
+        var copy = await AddAsync("IMG_3.jpg");
+        File.Delete(gone.SourcePath);
+
+        var result = await _service.DeleteAsync(copy.Id, true, [gone, original]);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(Held("IMG_3.jpg"), result.HeldAt);
+        Assert.True(File.Exists(original.SourcePath));
+    }
+
+    [Fact]
+    public async Task A_Copy_Is_Left_Alone_When_Nothing_It_Copies_Is_Left_As_It_Was_Scanned()
+    {
+        var gone = await AddAsync("IMG_1.jpg");
+        var edited = await AddAsync("IMG_2.jpg");
+        var copy = await AddAsync("IMG_3.jpg");
+        File.Delete(gone.SourcePath);
+        await File.WriteAllTextAsync(edited.SourcePath, "no longer the picture that was scanned");
+
+        Assert.Equal(RemovalOutcome.LastCopy, (await _service.DeleteAsync(copy.Id, true, [gone, edited])).Outcome);
+        Assert.Equal(RemovalOutcome.LastCopy, (await _service.DeleteAsync(copy.Id, true, [])).Outcome);
+
+        Assert.Equal("picture", await File.ReadAllTextAsync(copy.SourcePath));
+        Assert.False(Directory.Exists(Held()));
+        Assert.NotNull(await _repo.GetAsync(copy.Id));
+        _publisher.Verify(p => p.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task A_File_Recorded_Under_Two_Paths_Is_Put_Back_Rather_Than_Removed_As_A_Copy_Of_Itself()
+    {
+        // One file, reached through the folder itself and through a link to that folder.
+        var original = await AddAsync(Path.Combine("photos", "IMG_1.jpg"), Path.Combine(_root.FullName, "photos"));
+        var alias = Path.Combine(_root.FullName, "alias");
+        using var link = TestFiles.LinkFolder(alias, Path.Combine(_root.FullName, "photos"));
+        var same = new Photo
+        {
+            SourcePath = Path.Combine(alias, "IMG_1.jpg"), FileName = "IMG_1.jpg", FileSizeBytes = original.FileSizeBytes,
+            FileModifiedUtc = original.FileModifiedUtc, ScanRoot = alias, ContentHash = original.ContentHash
+        };
+        await _repo.AddOrUpdateAsync(same);
+
+        var result = await _service.DeleteAsync(same.Id, true, [original]);
+
+        Assert.Equal(RemovalOutcome.LastCopy, result.Outcome);
+        Assert.Equal("picture", await File.ReadAllTextAsync(original.SourcePath));
+        Assert.Empty(Directory.GetFiles(Path.Combine(_root.FullName, "photos", PhotoStorageOptions.RemovedFolderName)));
+        Assert.NotNull(await _repo.GetAsync(same.Id));
+        _publisher.Verify(p => p.PublishAsync(It.IsAny<object>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Forgetting_A_Copy_Without_Deleting_It_Asks_Nothing_Of_The_Files_It_Copies()
+    {
+        var copy = await AddAsync("IMG_3.jpg");
+        Assert.True((await _service.DeleteAsync(copy.Id, deleteFile: false, [])).Succeeded);
+        Assert.True(File.Exists(copy.SourcePath));
+    }
+
+    [Fact]
     public async Task Forgetting_Without_Deleting_Leaves_The_File_Where_It_Is()
     {
         var photo = await AddAsync("IMG_1.jpg");

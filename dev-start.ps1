@@ -70,6 +70,12 @@ function Write-Section($msg){
   Write-Host "`n=== $msg ===" -ForegroundColor Cyan
 }
 
+# What the services print is read by this script itself, a line at a time, and never through PowerShell's
+# event handlers (Register-ObjectEvent). Those handlers go on firing after the script has handed the
+# terminal back, as they do when the services are stopped, and two arriving together at an idle prompt
+# race inside PowerShell and end the whole terminal.
+$outputs = [System.Collections.Generic.List[hashtable]]::new()
+
 function Start-ProcessLogged {
   param(
     [string]$Name,
@@ -90,14 +96,29 @@ function Start-ProcessLogged {
 
   $null = $proc.Start()
 
-  # The handlers run apart from this function, so the label and its colour are handed to them.
-  $label = @{ Name = $Name; Color = $Color }
-  Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -MessageData $label -Action { if ($EventArgs.Data) { Write-Host "[$($Event.MessageData.Name)] $($EventArgs.Data)" -ForegroundColor $Event.MessageData.Color } } | Out-Null
+  $outputs.Add(@{ Name = $Name; Color = $Color; Reader = $proc.StandardOutput; Line = $proc.StandardOutput.ReadLineAsync() })
   # Tools put notices and progress on their error stream as well as errors, so these lines are not called errors.
-  Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -MessageData $label -Action { if ($EventArgs.Data) { Write-Host "[$($Event.MessageData.Name)] $($EventArgs.Data)" -ForegroundColor DarkYellow } } | Out-Null
-
-  $proc.BeginOutputReadLine(); $proc.BeginErrorReadLine()
+  $outputs.Add(@{ Name = $Name; Color = [ConsoleColor]::DarkYellow; Reader = $proc.StandardError; Line = $proc.StandardError.ReadLineAsync() })
   return $proc
+}
+
+# Prints the lines the services have written since it was last called.
+function Show-Output {
+  foreach($o in $outputs){
+    # A service that prints without pause is not allowed to hold up the others, or Ctrl+C.
+    for($n = 0; $n -lt 500 -and $o.Line -and $o.Line.IsCompleted; $n++){
+      $text = if($o.Line.IsCompletedSuccessfully){ $o.Line.Result } else { $null }
+      if($null -eq $text){ $o.Line = $null; break }   # the service has closed this stream
+      if($text){ Write-Host "[$($o.Name)] $text" -ForegroundColor $o.Color }
+      $o.Line = $o.Reader.ReadLineAsync()
+    }
+  }
+}
+
+# Waits, showing what the services print meanwhile.
+function Wait-Showing([int]$Milliseconds){
+  $until = [DateTime]::UtcNow.AddMilliseconds($Milliseconds)
+  do { Start-Sleep -Milliseconds 100; Show-Output } while([DateTime]::UtcNow -lt $until)
 }
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -237,7 +258,7 @@ if(-not $storageUp){
   if(Get-Command azurite -ErrorAction SilentlyContinue){
     Write-Host 'Starting Azurite storage emulator' -ForegroundColor DarkGray
     $azuriteProc = Start-ProcessLogged -Name 'AZURITE' -Command "azurite --silent --location `"$root\.azurite`"" -WorkingDirectory $root -Color DarkGray
-    Start-Sleep -Seconds 2
+    Wait-Showing 2000
   } else {
     Write-Warning 'Azurite is not running and is not on PATH, so scans will not start. Install it with: npm install -g azurite'
   }
@@ -260,7 +281,7 @@ function Start-FunctionsHost {
 $funcProc = $null
 for($a=1; $a -le ([math]::Max(1,$FunctionsRetry+1)); $a++){
   $funcProc = Start-FunctionsHost -attempt $a
-  Start-Sleep -Milliseconds 700
+  Wait-Showing 700
   if(-not $funcProc.HasExited){ break }
   Write-Warning "Functions host exited immediately (attempt $a)."
   if(-not $UseDotNetFunctions -and $a -eq 1){
@@ -401,10 +422,13 @@ Register-EngineEvent PowerShell.Exiting -MessageData $started -Action {
 
 try {
   while($true){
-    Start-Sleep -Seconds 1
-    if($funcProc.HasExited){ Write-Host "Functions host exited (code $($funcProc.ExitCode))" -ForegroundColor Red; break }
-    if($reactProc.HasExited){ Write-Host "React UI exited (code $($reactProc.ExitCode))" -ForegroundColor Red; break }
-    if($blazorProc -and $blazorProc.HasExited){ Write-Host "Blazor host exited (code $($blazorProc.ExitCode))" -ForegroundColor Red; break }
+    Wait-Showing 1000
+    $ended = if($funcProc.HasExited){ 'Functions host', $funcProc } elseif($reactProc.HasExited){ 'React UI', $reactProc } elseif($blazorProc -and $blazorProc.HasExited){ 'Blazor host', $blazorProc }
+    if($ended){
+      Wait-Showing 300   # its last lines, which say why
+      Write-Host "$($ended[0]) exited (code $($ended[1].ExitCode))" -ForegroundColor Red
+      break
+    }
   }
 }
 finally {

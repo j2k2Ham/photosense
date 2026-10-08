@@ -1,4 +1,5 @@
 using PhotoSense.Domain.Configuration;
+using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -14,7 +15,7 @@ public class FileSystemPhotoDeletionService : IPhotoDeletionService
     public FileSystemPhotoDeletionService(IPhotoRepository repo, IIntegrationEventPublisher publisher, ICompanionFileFinder companions)
     { _repo = repo; _publisher = publisher; _companions = companions; }
 
-    public async Task<RemovalResult> DeleteAsync(PhotoId id, bool deleteFile, CancellationToken ct = default)
+    public async Task<RemovalResult> DeleteAsync(PhotoId id, bool deleteFile, IReadOnlyList<Photo>? copyOf = null, CancellationToken ct = default)
     {
         var photo = await _repo.GetAsync(id, ct);
         if (photo is null) return new RemovalResult(RemovalOutcome.NotFound);
@@ -28,15 +29,27 @@ public class FileSystemPhotoDeletionService : IPhotoDeletionService
             if (file.Length != photo.FileSizeBytes || (photo.FileModifiedUtc is { } scanned && file.LastWriteTimeUtc != scanned))
                 return new RemovalResult(RemovalOutcome.Changed);
 
+            // A copy goes only while something it is a copy of is still there, exactly as it was scanned.
+            var stays = copyOf?.FirstOrDefault(ScannedFile.IsIntact);
+            if (copyOf is not null && stays is null) return new RemovalResult(RemovalOutcome.LastCopy);
+
             // Worked out while the file is still in place: its sidecars and Live Photo video, if nothing else uses them.
             var companions = _companions.FindFor(photo.SourcePath);
             try
             {
                 heldAt = Hold(photo.SourcePath, photo.ScanRoot);
+                // Two records can be one file reached by two paths: through a linked folder, or a drive letter
+                // standing for the same folder. Moving the "copy" then takes the file that was to stay with it,
+                // so it goes straight back.
+                if (stays is not null && !File.Exists(stays.SourcePath))
+                {
+                    File.Move(heldAt, photo.SourcePath);
+                    return new RemovalResult(RemovalOutcome.LastCopy);
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                return new RemovalResult(RemovalOutcome.Failed, Error: ex.Message);
+                return new RemovalResult(RemovalOutcome.Failed, heldAt, ex.Message);
             }
 
             foreach (var companion in companions)

@@ -21,7 +21,6 @@ public sealed class PhotosFunctionsTests : IDisposable
     private readonly InMemoryThumbnailStore _thumbnails = new();
     private readonly Mock<IImageAnalyzer> _analyzer = new();
     private readonly Mock<ISystemViewer> _viewer = new();
-    private readonly Mock<IPhotoDeletionService> _deleter = new();
     private readonly Mock<IDuplicateRemovalService> _remover = new();
     private readonly Mock<IAuditRepository> _audit = new();
     private readonly List<AuditEntry> _audited = [];
@@ -36,7 +35,7 @@ public sealed class PhotosFunctionsTests : IDisposable
 
     public void Dispose() => _root.Delete(true);
 
-    private PhotosFunctions Api(IPhotoRepository repo) => new(repo, new PhotoSearchService(repo), _deleter.Object, _remover.Object, _thumbnails,
+    private PhotosFunctions Api(IPhotoRepository repo) => new(repo, new PhotoSearchService(repo), _remover.Object, _thumbnails,
         _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object);
 
     // A real file with a record that matches it, as a scan would leave it.
@@ -65,7 +64,6 @@ public sealed class PhotosFunctionsTests : IDisposable
         Assert.Equal(HttpStatusCode.Unauthorized, (await _api.OpenPhotoAsync(Http.Post($"photos/{id}/open"), id)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await _api.RemoveDuplicatesAsync(Http.Post("photos/bulk/remove-duplicates"))).StatusCode);
 
-        _deleter.VerifyNoOtherCalls();
         _remover.VerifyNoOtherCalls();
         _viewer.VerifyNoOtherCalls();
         Assert.False((await _repo.GetAsync(photo.Id))!.IsKept);
@@ -281,7 +279,7 @@ public sealed class PhotosFunctionsTests : IDisposable
     public async Task Removing_A_File_Reports_Where_It_Went_And_What_Went_With_It()
     {
         var id = Guid.NewGuid();
-        _deleter.Setup(d => d.DeleteAsync(new PhotoId(id), true, It.IsAny<CancellationToken>()))
+        _remover.Setup(r => r.RemoveAsync(new PhotoId(id), true, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RemovalResult(RemovalOutcome.Removed, "held/IMG_1.HEIC") { Companions = ["a.MOV", "a.AAE"] });
 
         var response = await _api.DeletePhotoAsync(Http.Delete("p?physical=true").FromClient(), id.ToString());
@@ -296,7 +294,7 @@ public sealed class PhotosFunctionsTests : IDisposable
     public async Task Forgetting_A_Record_Leaves_The_File_Alone()
     {
         var id = Guid.NewGuid();
-        _deleter.Setup(d => d.DeleteAsync(new PhotoId(id), false, It.IsAny<CancellationToken>())).ReturnsAsync(new RemovalResult(RemovalOutcome.Removed));
+        _remover.Setup(r => r.RemoveAsync(new PhotoId(id), false, It.IsAny<CancellationToken>())).ReturnsAsync(new RemovalResult(RemovalOutcome.Removed));
         var response = await _api.DeletePhotoAsync(Http.Delete("p").FromClient(), id.ToString());
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("logical", Assert.Single(_audited).Details);
@@ -305,10 +303,11 @@ public sealed class PhotosFunctionsTests : IDisposable
     [Theory]
     [InlineData(RemovalOutcome.NotFound, HttpStatusCode.NotFound, "")]
     [InlineData(RemovalOutcome.Changed, HttpStatusCode.Conflict, "changed since it was scanned")]
+    [InlineData(RemovalOutcome.LastCopy, HttpStatusCode.Conflict, "this may be the only copy left")]
     [InlineData(RemovalOutcome.Failed, HttpStatusCode.InternalServerError, "in use by another process")]
     public async Task A_File_That_Was_Not_Removed_Says_Why(RemovalOutcome outcome, HttpStatusCode status, string message)
     {
-        _deleter.Setup(d => d.DeleteAsync(It.IsAny<PhotoId>(), true, It.IsAny<CancellationToken>()))
+        _remover.Setup(r => r.RemoveAsync(It.IsAny<PhotoId>(), true, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RemovalResult(outcome, Error: "in use by another process"));
         var response = await _api.DeletePhotoAsync(Http.Delete("p?physical=true").FromClient(), Guid.NewGuid().ToString());
         Assert.Equal(status, response.StatusCode);

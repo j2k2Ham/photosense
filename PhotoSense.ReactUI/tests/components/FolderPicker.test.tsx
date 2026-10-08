@@ -38,88 +38,71 @@ function open(startAt?: string) {
 
 const dialog = () => screen.getByRole('dialog', { name: 'Choose the secondary folder' });
 const here = () => screen.getByLabelText('Current folder');
-const folder = (name: string) => within(dialog()).getByRole('button', { name });
+const place = (name: string) => within(screen.getByRole('navigation', { name: 'Start from' })).getByRole('button', { name });
+const folder = (name: string) => within(dialog().querySelector('ul')!).getByRole('button', { name });
 const use = () => within(dialog()).getByRole('button', { name: 'Use this folder' });
 const up = () => within(dialog()).getByRole('button', { name: 'Up' });
 
 describe('FolderPicker', () => {
-  it('starts with the places to browse from, none of which is a folder to pick yet', async () => {
+  it('offers the places to start from, none of which is chosen yet', async () => {
     open();
     expect(screen.getByText('Loading…')).toBeInTheDocument();
-
     expect(await screen.findByRole('button', { name: 'Pictures' })).toBeInTheDocument();
     expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
-    expect(here()).toHaveTextContent('This computer');
+    expect(here()).toHaveTextContent('Choose where to start');
     expect(use()).toBeDisabled();
     expect(up()).toBeDisabled();
-    expect(api.browseFolders).toHaveBeenCalledExactlyOnceWith(undefined);
-    expect(dialog().parentElement?.parentElement).toBe(document.body);    // over the whole page, not inside the panel it was opened from
+    expect(dialog().parentElement?.parentElement).toBe(document.body);
   });
 
   it('opens a folder that is clicked and hands back its full path when it is chosen', async () => {
     const { onPick } = open();
-
     await userEvent.click(await screen.findByRole('button', { name: 'Pictures' }));
     expect(here()).toHaveTextContent('C:\\Users\\jamie\\Pictures');
-    expect(folder('Trips')).toHaveAttribute('title', 'C:\\Users\\jamie\\Pictures\\Trips');
+    expect(place('Pictures')).toHaveClass('bg-sel');
+    expect(place('C:\\')).not.toHaveClass('bg-sel');
 
-    await userEvent.click(folder("Jamie's Phone"));
+    await userEvent.click(folder("Jamie's Phone")!);
     expect(here()).toHaveTextContent("C:\\Users\\jamie\\Pictures\\Jamie's Phone");
     expect(screen.getByText('No folders inside this one.')).toBeInTheDocument();
-
     await userEvent.click(use());
     expect(onPick).toHaveBeenCalledExactlyOnceWith("C:\\Users\\jamie\\Pictures\\Jamie's Phone");
   });
 
-  it('goes up a folder at a time, and from the top of a disk back to the starting places', async () => {
-    open('C:\\Users\\jamie\\Pictures');
+  it('goes up a folder at a time, says so when a folder cannot be opened, and stops at the top of a disk', async () => {
+    open('  C:\\Users\\jamie\\Pictures  ');
     expect(await screen.findByRole('button', { name: 'Trips' })).toBeInTheDocument();
+    expect(api.browseFolders).toHaveBeenCalledWith('C:\\Users\\jamie\\Pictures');
 
     await userEvent.click(up());
     expect(here()).toHaveTextContent(/^C:\\Users\\jamie$/);
-
     await userEvent.click(up());       // C:\Users is not on this small disk
     expect(await screen.findByRole('alert')).toHaveTextContent('Folder not found: C:\\Users');
-    expect(here()).toHaveTextContent(/^C:\\Users\\jamie$/);      // stays where it was
+    expect(here()).toHaveTextContent(/^C:\\Users\\jamie$/);
 
-    await userEvent.click(folder('Pictures'));
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();  // the complaint goes with the next move
-  });
-
-  it('goes from the top of a disk back to the starting places', async () => {
-    open('C:\\');
-    expect(await screen.findByRole('button', { name: 'Users' })).toBeInTheDocument();
-    expect(up()).toBeEnabled();
-
-    await userEvent.click(up());
-
-    expect(here()).toHaveTextContent('This computer');
-    expect(api.browseFolders).toHaveBeenLastCalledWith(undefined);
-  });
-
-  it('opens where the typed path points, spaces around it aside', async () => {
-    open("  C:\\Users\\jamie\\Pictures\\Jamie's Phone  ");
-    expect(await screen.findByText('No folders inside this one.')).toBeInTheDocument();
-    expect(api.browseFolders).toHaveBeenCalledExactlyOnceWith("C:\\Users\\jamie\\Pictures\\Jamie's Phone");
+    await userEvent.click(place('C:\\'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(here()).toHaveTextContent(/^C:\\$/);
+    expect(up()).toBeDisabled();
     expect(use()).toBeEnabled();
   });
 
-  it.each(['Pictures', '   '])('starts from the top, without complaint, when what was typed ("%s") is not a folder', async typed => {
+  it.each(['Pictures', '   '])('starts from the places, without complaint, when what was typed ("%s") is not a folder', async typed => {
     open(typed);
     expect(await screen.findByRole('button', { name: 'C:\\' })).toBeInTheDocument();
-    expect(here()).toHaveTextContent('This computer');
+    expect(here()).toHaveTextContent('Choose where to start');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
   });
 
   it.each([
     [new TypeError('Failed to fetch'), 'Cannot reach the PhotoSense server.'],
-    [new Error('Folder not found: E:\\'), 'Folder not found: E:\\'],
+    [new Error('The database is busy'), 'The database is busy'],
     ['The service is shutting down', 'The service is shutting down'],
   ])('says why when the folders cannot be listed', async (failure, message) => {
     api.browseFolders.mockRejectedValue(failure);
     open();
     expect(await screen.findByRole('alert')).toHaveTextContent(message);
-    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
     expect(use()).toBeDisabled();
   });
 
@@ -128,33 +111,25 @@ describe('FolderPicker', () => {
     await screen.findByRole('button', { name: 'Pictures' });
     const opening = deferred<FolderListingDto>();
     api.browseFolders.mockReturnValueOnce(opening.promise);
-
-    await userEvent.click(folder('C:\\'));
-    expect(folder('Pictures')).toBeDisabled();
-    expect(folder('C:\\')).toBeDisabled();
-
+    await userEvent.click(place('C:\\'));
+    expect(place('Pictures')).toBeDisabled();
     opening.resolve(disk['C:\\']);
     expect(await screen.findByRole('button', { name: 'Users' })).toBeEnabled();
-    expect(use()).toBeEnabled();
   });
 
-  it('is dismissed by Cancel, the close button, Escape and a click outside it, and by nothing else', async () => {
+  it('is dismissed by Cancel, Escape and a press outside it, and by nothing else', async () => {
     const { onCancel, onPick, unmount } = open();
     await screen.findByRole('button', { name: 'Pictures' });
-
     await userEvent.click(within(dialog()).getByRole('button', { name: 'Cancel' }));
-    await userEvent.click(within(dialog()).getByRole('button', { name: 'Close' }));
     fireEvent.keyDown(window, { key: 'Escape' });
     fireEvent.mouseDown(dialog().parentElement!);
-    expect(onCancel).toHaveBeenCalledTimes(4);
-
+    expect(onCancel).toHaveBeenCalledTimes(3);
     fireEvent.keyDown(window, { key: 'Enter' });
     fireEvent.mouseDown(dialog());
-    expect(onCancel).toHaveBeenCalledTimes(4);
+    expect(onCancel).toHaveBeenCalledTimes(3);
     expect(onPick).not.toHaveBeenCalled();
-
     unmount();
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(onCancel).toHaveBeenCalledTimes(4);
+    expect(onCancel).toHaveBeenCalledTimes(3);
   });
 });

@@ -91,6 +91,14 @@ export interface FolderListingDto {
   folders: FolderDto[];
 }
 
+/** What the service holds, and the scan it last ran since it was started. */
+export interface ScanStatusDto {
+  instanceId: string;
+  completed?: string | null;
+  /** Files on record from every scan so far. */
+  totalPhotos: number;
+}
+
 export interface StartScanRequest {
   primaryLocation: string;
   secondaryLocation?: string;

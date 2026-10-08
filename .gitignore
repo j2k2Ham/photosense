@@ -364,3 +364,5 @@ FodyWeavers.xsd
 /.azurite
 # Coverage report of the React UI tests
 PhotoSense.ReactUI/coverage/
+# Next.js build and dev-server output: rebuilt on every run (cache packs, fonts, compiled pages)
+PhotoSense.ReactUI/.next/

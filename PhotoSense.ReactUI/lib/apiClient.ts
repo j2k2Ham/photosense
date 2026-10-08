@@ -1,6 +1,6 @@
 import useSWR, { mutate } from 'swr';
 import * as signalR from '@microsoft/signalr';
-import type { BulkRemovalResultDto, FolderListingDto, GroupMode, GroupsPageDto, ScanProgressSnapshotDto, StartScanRequest } from '../types';
+import type { BulkRemovalResultDto, FolderListingDto, GroupMode, GroupsPageDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest } from '../types';
 
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
@@ -27,7 +27,10 @@ async function send(url: string, method: 'POST' | 'DELETE'): Promise<Response> {
   return res;
 }
 
-const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && key.includes('/scan/groups'));
+const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status')));
+
+/** Asks again for everything on screen, for when the service has been out of reach. */
+export const retryNow = () => mutate(() => true);
 
 export const thumbnailUrl = (id: string) => `${API_BASE}/photos/${id}/thumbnail`;
 export const imageUrl = (id: string) => `${API_BASE}/photos/${id}/image`;
@@ -122,6 +125,18 @@ export async function clearResults(): Promise<{ forgotten: number }> {
   const result = await res.json();
   await refreshGroups();
   return result;
+}
+
+/** How many groups of each kind there are now, asked afresh: for saying what a scan found. */
+export async function fetchGroupTotals(): Promise<{ duplicates: number; similar: number }> {
+  const total = async (mode: GroupMode) => (await json<GroupsPageDto>(`${API_BASE}/scan/groups?mode=${mode}&page=1&hideKept=false&q=`)).total;
+  const [duplicates, similar] = await Promise.all([total('duplicates'), total('similar')]);
+  return { duplicates, similar };
+}
+
+/** How many files are on record, and whether the last scan has finished. */
+export function useScanStatus() {
+  return useSWR<ScanStatusDto>(`${API_BASE}/scan/status`, json, { refreshInterval: 5000 });
 }
 
 export function useScanProgress(instanceId?: string) {

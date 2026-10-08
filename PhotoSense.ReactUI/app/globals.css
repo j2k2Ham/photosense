@@ -2,17 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, :root { height: 100%; }
-body { @apply bg-neutral-900 text-neutral-100 antialiased; font-feature-settings: "rlig" 1, "calt" 1; }
-::-webkit-scrollbar { width: 10px; }
-::-webkit-scrollbar-track { background: #1f1f23; }
-::-webkit-scrollbar-thumb { background: #3a3a42; border-radius: 5px; }
+/* Design tokens. Dark is the default; the light values apply when <html> carries the class "light". */
+:root {
+  --bg: #0c0f11; --s1: #121518; --s2: #1a1d20; --s3: #252a2d; --pop: #171b1e;
+  --line: rgba(255, 255, 255, .08);
+  --t1: #eff2f4; --t2: #acb2b7; --t3: #878d92;
+  --stage: #050708;
+  --brand: #3ebfc6; --on-brand: #061415; --sel: #1e292b;
+  --keep: #68d7a1; --keep-bg: rgba(106, 213, 163, .14); --keep-line: rgba(104, 215, 160, .55);
+  --rose: #d3384e; --rose-t: #ff9da0; --rose-bg: rgba(224, 70, 93, .13); --rose-line: rgba(240, 110, 120, .40);
+  --amber: #f7c15f; --amber-bg: rgba(240, 185, 93, .13); --diff: rgba(245, 186, 88, .10);
+  --ident: #80dbeb; --ident-bg: rgba(62, 187, 211, .16);
+  --same: #d8dfe4; --same-bg: rgba(245, 255, 255, .10);
+  --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 1, 1, .72);
+  color-scheme: dark;
+}
+.light {
+  --bg: #f5f7f9; --s1: #fdfeff; --s2: #eef0f3; --s3: #dee2e5; --pop: #ffffff;
+  --line: rgba(27, 36, 36, .11);
+  --t1: #171b1f; --t2: #50565a; --t3: #676d71;
+  --stage: #e8ecee;
+  --brand: #007283; --on-brand: #ffffff; --sel: #d9f0f4;
+  --keep: #006a42; --keep-bg: #cff6e0; --keep-line: rgba(43, 150, 103, .60);
+  --rose: #c5293d; --rose-t: #ac1730; --rose-bg: #ffeae9; --rose-line: rgba(198, 40, 60, .35);
+  --amber: #8a5600; --amber-bg: #ffedc1; --diff: #fff1cc;
+  --ident: #00586b; --ident-bg: #d1f2f8;
+  --same: #292f32; --same-bg: rgba(26, 38, 38, .08);
+  --shadow: rgba(28, 33, 44, .18); --scrim: rgba(30, 35, 37, .40);
+  color-scheme: light;
+}
 
-.panel { @apply bg-neutral-800/80 border border-neutral-700 rounded-lg backdrop-blur-sm; }
-.btn { @apply rounded-md px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed; }
-.btn-primary { @apply btn bg-emerald-500 hover:bg-emerald-400 text-neutral-900; }
-.btn-danger { @apply btn bg-rose-600 hover:bg-rose-500 text-white; }
-.btn-secondary { @apply btn bg-neutral-700 hover:bg-neutral-600 text-neutral-100; }
-.badge { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-semibold tracking-wide; }
-.badge-exact { @apply badge bg-emerald-500/20 text-emerald-300; }
-.badge-near { @apply badge bg-amber-500/20 text-amber-300; }
+html, body, :root { height: 100%; }
+body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 5px; }
+
+@layer components {
+  /* Every button is a pill. */
+  .pill { @apply inline-flex items-center justify-center gap-2 rounded-full font-semibold whitespace-nowrap transition disabled:cursor-not-allowed; }
+  .pill-quiet { @apply pill bg-s2 text-t1 hover:bg-s3 disabled:opacity-40; }
+  .pill-outline { @apply pill border border-line text-t1 hover:bg-s2 disabled:opacity-40; }
+  .pill-brand { @apply pill bg-brand text-on-brand hover:brightness-110 disabled:opacity-55; }
+  .pill-rose { @apply pill bg-rose text-white hover:brightness-110 disabled:opacity-50; }
+  .pill-rose-outline { @apply pill border border-rose-line text-rose-t hover:bg-rose-bg disabled:opacity-40; }
+  .pill-keep { @apply pill border border-keep-line text-keep hover:bg-keep-bg disabled:opacity-50; }
+  .label-caps { @apply text-[12px] font-semibold uppercase tracking-[0.07em] text-t3; }
+  .badge { @apply inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em]; }
+}

@@ -143,9 +143,10 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         var copy = await AddAsync("IMG_1 (1).jpg", "AAAA");
         var analysis = new DuplicateAnalysisService(_repo);
         var deleter = new Mock<IPhotoDeletionService>();
-        deleter.SetupSequence(d => d.DeleteAsync(copy.Id, true, It.IsAny<CancellationToken>()))
+        deleter.SetupSequence(d => d.DeleteAsync(copy.Id, true, It.Is<IReadOnlyList<Photo>?>(of => of!.Single().Id == keeper.Id), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new RemovalResult(RemovalOutcome.NotFound))
-            .ReturnsAsync(new RemovalResult(RemovalOutcome.Failed, Error: "in use"));
+            .ReturnsAsync(new RemovalResult(RemovalOutcome.Failed, Error: "in use"))
+            .ReturnsAsync(new RemovalResult(RemovalOutcome.LastCopy));
         var service = new DuplicateRemovalService(analysis, deleter.Object);
 
         // Already gone, as a Live Photo video is once its picture has taken it along: nothing to report.
@@ -153,7 +154,95 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         var failed = await service.RemoveDuplicatesAsync();
         Assert.Equal(1, failed.Skipped);
         Assert.EndsWith("in use", Assert.Single(failed.Problems));
+        // The copy turned out to be the kept photo itself, recorded under a second path.
+        var itself = await service.RemoveDuplicatesAsync();
+        Assert.Equal((0, 1), (itself.Removed, itself.Skipped));
+        Assert.Equal($"The same file as the photo kept, under another path, so it was left alone: {copy.SourcePath}", Assert.Single(itself.Problems));
         Assert.True(File.Exists(keeper.SourcePath));
+    }
+
+    // ---- one photo at a time
+
+    [Fact]
+    public async Task A_Copy_Removed_On_Its_Own_Goes_And_The_Photo_Kept_Stays()
+    {
+        var keeper = await AddAsync("IMG_0377.JPG", "AAAA");
+        var copy = await AddAsync("IMG_0648.JPG", "AAAA");
+
+        var result = await _service.RemoveAsync(copy.Id, deleteFile: true);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(Held("IMG_0648.JPG"), result.HeldAt);
+        Assert.True(File.Exists(keeper.SourcePath));
+        Assert.False(File.Exists(copy.SourcePath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_Copy_Is_Never_Removed_Once_The_Photo_It_Copies_Is_Gone_Or_Changed(bool changed)
+    {
+        var keeper = await AddAsync("IMG_0377.JPG", "AAAA");
+        var copy = await AddAsync("IMG_0648.JPG", "AAAA");
+        var other = await AddAsync("IMG_0648 (1).JPG", "AAAA");
+        // Done outside PhotoSense, after the scan.
+        if (changed) await File.WriteAllTextAsync(keeper.SourcePath, "edited"); else File.Delete(keeper.SourcePath);
+
+        var result = await _service.RemoveAsync(copy.Id, deleteFile: true);
+
+        // Another copy is still there, but it is the photo kept that each copy was checked against.
+        Assert.Equal(RemovalOutcome.LastCopy, result.Outcome);
+        Assert.True(File.Exists(copy.SourcePath) && File.Exists(other.SourcePath));
+        Assert.NotNull(await _repo.GetAsync(copy.Id));
+    }
+
+    [Fact]
+    public async Task The_Photo_Kept_Can_Be_Removed_Instead_While_One_Of_Its_Copies_Stays()
+    {
+        var keeper = await AddAsync("IMG_1.jpg", "AAAA");
+        var gone = await AddAsync("IMG_1 (1).jpg", "AAAA");
+        var copy = await AddAsync("IMG_1 (2).jpg", "AAAA");
+        File.Delete(gone.SourcePath);
+
+        Assert.True((await _service.RemoveAsync(keeper.Id, deleteFile: true)).Succeeded);
+
+        Assert.False(File.Exists(keeper.SourcePath));
+        Assert.True(File.Exists(copy.SourcePath));
+    }
+
+    [Fact]
+    public async Task The_Photo_Kept_Is_Never_Removed_Once_Its_Copies_Are_Gone()
+    {
+        var keeper = await AddAsync("IMG_1.jpg", "AAAA");
+        var copy = await AddAsync("IMG_1 (1).jpg", "AAAA");
+        File.Delete(copy.SourcePath);
+
+        Assert.Equal(RemovalOutcome.LastCopy, (await _service.RemoveAsync(keeper.Id, deleteFile: true)).Outcome);
+        Assert.True(File.Exists(keeper.SourcePath));
+    }
+
+    [Fact]
+    public async Task A_Photo_That_Is_Nobodys_Copy_Is_Removed_When_Asked_And_An_Unknown_One_Is_Reported()
+    {
+        await AddAsync("IMG_1.jpg", "AAAA");
+        await AddAsync("IMG_1 (1).jpg", "AAAA");
+        var unique = await AddAsync("IMG_2.jpg", "BBBB");
+
+        Assert.True((await _service.RemoveAsync(unique.Id, deleteFile: true)).Succeeded);
+        Assert.False(File.Exists(unique.SourcePath));
+        Assert.Equal(RemovalOutcome.NotFound, (await _service.RemoveAsync(unique.Id, deleteFile: true)).Outcome);
+    }
+
+    [Fact]
+    public async Task Forgetting_A_Copy_Leaves_Its_File_Whatever_Became_Of_The_Photo_Kept()
+    {
+        var keeper = await AddAsync("IMG_1.jpg", "AAAA");
+        var copy = await AddAsync("IMG_1 (1).jpg", "AAAA");
+        File.Delete(keeper.SourcePath);
+
+        Assert.True((await _service.RemoveAsync(copy.Id, deleteFile: false)).Succeeded);
+        Assert.True(File.Exists(copy.SourcePath));
+        Assert.Null(await _repo.GetAsync(copy.Id));
     }
 
     [Fact]

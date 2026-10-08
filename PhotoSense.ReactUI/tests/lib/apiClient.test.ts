@@ -75,6 +75,7 @@ describe('requests that act on photos', () => {
     // Only the group listings are refreshed, whatever else is cached.
     const isGroupListing = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
     expect(isGroupListing(`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`)).toBe(true);
+    expect(isGroupListing(`${API}/scan/status`)).toBe(true);        // the count of files on record changes with them
     expect(isGroupListing(`${API}/scan/progress/scan-1`)).toBe(false);
     expect(isGroupListing(['/scan/groups'])).toBe(false);
     expect(isGroupListing(null)).toBe(false);
@@ -165,6 +166,27 @@ describe('what the page reads', () => {
 
     api.useGroups('similar', 'trip & beach', 3, true);
     expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&hideKept=true&q=trip%20%26%20beach`);
+  });
+
+  it('asks how many files are on record', async () => {
+    swr.useSWR.mockReturnValue({ data: { totalPhotos: 6941 } });
+    const api = await load();
+    expect(api.useScanStatus()).toEqual({ data: { totalPhotos: 6941 } });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/status`, expect.any(Function), { refreshInterval: 5000 });
+  });
+
+  it('asks afresh how many groups of each kind there are', async () => {
+    fetchMock.mockImplementation(async url => reply({ total: String(url).includes('mode=similar') ? 170 : 263 }));
+    const api = await load();
+    await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170 });
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`, `${API}/scan/groups?mode=similar&page=1&hideKept=false&q=`]);
+  });
+
+  it('asks again for everything on screen when told to retry', async () => {
+    const api = await load();
+    await api.retryNow();
+    const everything = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
+    expect(everything('anything')).toBe(true);
   });
 
   it('follows a scan only once one has been started', async () => {

@@ -1,3 +1,6 @@
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
+
 namespace PhotoSense.Application.Scanning.Interfaces;
 
 /// <param name="Removed">Files moved to the holding folder.</param>
@@ -13,4 +16,10 @@ public interface IDuplicateRemovalService
     /// Only identical files and confirmed copies are taken; kept photos and look-alikes never are.
     /// </summary>
     Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes one photo. A photo in a duplicate group goes only while another file of the group stays
+    /// behind as it was scanned: the photo kept for one of its copies, a copy for the photo kept.
+    /// </summary>
+    Task<RemovalResult> RemoveAsync(PhotoId id, bool deleteFile, CancellationToken ct = default);
 }

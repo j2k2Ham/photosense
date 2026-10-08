@@ -33,7 +33,6 @@ public class PhotosFunctions
 
     private readonly IPhotoRepository _repo;
     private readonly IPhotoSearchService _search;
-    private readonly IPhotoDeletionService _deleter;
     private readonly IDuplicateRemovalService _remover;
     private readonly IThumbnailStore _thumbnails;
     private readonly IImageAnalyzer _analyzer;
@@ -43,12 +42,12 @@ public class PhotosFunctions
     private readonly ISystemViewer _viewer;
 
     // Services arrive through the constructor: this Functions model does not pass them as method parameters.
-    public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IPhotoDeletionService deleter, IDuplicateRemovalService remover,
+    public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IDuplicateRemovalService remover,
         IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper, ISystemViewer viewer)
     {
         _mapper = mapper;
         _viewer = viewer;
-        _repo = repo; _search = search; _deleter = deleter; _remover = remover;
+        _repo = repo; _search = search; _remover = remover;
         _thumbnails = thumbnails; _analyzer = analyzer; _audit = audit; _log = log;
     }
 
@@ -232,7 +231,7 @@ public class PhotosFunctions
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         var physical = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("physical") == "true";
         var gid = Guid.Parse(id);
-        var result = await _deleter.DeleteAsync(new PhotoId(gid), physical);
+        var result = await _remover.RemoveAsync(new PhotoId(gid), physical);
         switch (result.Outcome)
         {
             case RemovalOutcome.NotFound:
@@ -240,6 +239,10 @@ public class PhotosFunctions
                 return resp;
             case RemovalOutcome.Changed:
                 await resp.WriteStringAsync("The file has changed since it was scanned, so it was left alone. Scan again.");
+                resp.StatusCode = HttpStatusCode.Conflict;
+                return resp;
+            case RemovalOutcome.LastCopy:
+                await resp.WriteStringAsync("Not removed: the file it is a copy of is no longer there as it was scanned, so this may be the only copy left. Scan again.");
                 resp.StatusCode = HttpStatusCode.Conflict;
                 return resp;
             case RemovalOutcome.Failed:

@@ -58,13 +58,15 @@ Requests that change or remove photos, and the folder listing, must carry the `x
 
 ### Choosing the folders to scan
 
-A scan needs each folder's full path as the service sees it. The **…** button beside a path opens a folder browser that lists the folders of the computer the service runs on and fills in the full path of the one chosen; a path can also be typed or pasted. (A browser's own folder dialog is no use here: it tells a web page the name of the folder that was picked and never where it is.)
+A scan needs each folder's full path as the service sees it. The **Browse** button beside a path opens a folder browser that lists the folders of the computer the service runs on and fills in the full path of the one chosen; a path can also be typed or pasted. (A browser's own folder dialog is no use here: it tells a web page the name of the folder that was picked and never where it is.)
+
+One folder is enough: copies inside it, in the folder itself or in its subfolders, are found. The secondary folder is for comparing a second place with the first, a backup for instance. Giving the same folder as both changes nothing: it is scanned once, the setup screen says so, and a file is never matched with itself.
 
 ### Scanning again, and starting over
 
 A scan builds on the one before it: files that have not changed since are skipped, files that have gone are forgotten at the end, and copies marked keep stay marked. That makes a second scan of a large library take seconds rather than minutes.
 
-To run a scan from nothing instead, tick **Start over** before pressing Scan: everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results** does the forgetting on its own, without scanning. Either way only PhotoSense's record goes, with its previews and keep marks; the photos, and anything already moved to `_PhotoSense_Removed`, stay where they are.
+To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan: everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only PhotoSense's record goes, with its previews and keep marks; the photos, and anything already moved to `_PhotoSense_Removed`, stay where they are.
 
 ### Where the data is kept
 
@@ -80,7 +82,7 @@ Set `PhotoStorage__DatabasePath` to an absolute path to keep the database elsewh
 
 The data must not be inside the folder the service runs from (`PhotoSense.Functions/bin/...`), and the service refuses to start a database there. The Functions host watches that folder and restarts itself when a folder appears in it, as a thumbnail cache does on a scan's first picture; after such a restart it answers every request with an error while the scan carries on unseen.
 
-If the service does stop answering, the page says so in a red bar at the top, since what is already on screen stays there.
+If the service does stop answering, the page says so in a bar under the header, with a Retry button, since what is already on screen stays there. Every error is also kept in the Errors panel (the menu, or the red chip in the header) until it is cleared.
 
 ## How duplicates are found
 
@@ -108,11 +110,18 @@ PhotoSense shows HEIC pictures itself, whatever the computer can open. Outside i
 
 ### Looking at a file before deciding
 
+The look and layout follow the design handoff in `docs/design_handoff_photosense_redesign` (dark and light themes, chosen from the menu and remembered in the browser). The review desk shows the original beside one copy, with a table of what differs between them; clicking either opens the comparison window, where Space flips between the copy and the original in the same spot.
+
+
+A copy and its original are always two files, and each is shown under its own name with the folder it is in: under the two pictures on the review desk, under each thumbnail, and in the heading of the comparison window ("`IMG_0648.JPG`, a copy of `IMG_0377.JPG`"). Two files holding the very same picture can sit side by side in one folder under unrelated names, and look like one file until the names are read.
+
 Hovering over a duplicate lists what sets it apart from the original: its name, folder, format, pixel size, file size or capture date, whichever differ. Two files of one picture can share a name, a folder and a date, as a phone's `IMG_4299.HEIC` and the `IMG_4299.JPG` made from it do, and would otherwise look like one file listed twice. Each thumbnail also carries its format in the corner.
 
 Clicking a picture or a thumbnail opens it in a floating window. A video plays in the page, in the review panel and in the floating window alike. What plays there depends on the browser: MP4 and most iPhone MOV files do; where one does not, the player says so. Either way **Open in default player** (or **Open in default viewer** for a picture) hands the file to the operating system, as double-clicking it would: the file itself through the Windows shell, `open` on macOS, `xdg-open` on Linux. The program starts on the computer the service runs on, so this is for running PhotoSense on your own machine.
 
-Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path; delete that folder to free the space, or move a file back to restore it. A file is left alone if it, or the copy being kept, changed since the scan.
+Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path; delete that folder to free the space, or move a file back to restore it. Every question asked before a removal, and the message after it, names the file that goes and the file that stays.
+
+The last copy of a picture is never removed as a duplicate. A copy goes only while the original it was matched with is still on disk exactly as it was scanned, and the original can be removed "instead" only while one of its copies is. If that file has been deleted, moved or edited since the scan, by PhotoSense or by anything else, the removal is refused and the file is left where it is; scan again to bring the results up to date. The same holds if two records turn out to be one file reached by two paths (a linked folder, or a drive letter standing for a folder): the file is put straight back.
 
 ### Sidecars and Live Photos
 

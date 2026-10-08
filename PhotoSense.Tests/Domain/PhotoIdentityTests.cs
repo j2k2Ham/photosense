@@ -121,7 +121,7 @@ public class PhotoIdentityTests
     public void Only_A_Completed_Removal_Counts_As_Success()
     {
         Assert.True(new RemovalResult(RemovalOutcome.Removed, "held").Succeeded);
-        Assert.All(new[] { RemovalOutcome.NotFound, RemovalOutcome.Changed, RemovalOutcome.Failed }, o => Assert.False(new RemovalResult(o).Succeeded));
+        Assert.All(new[] { RemovalOutcome.NotFound, RemovalOutcome.Changed, RemovalOutcome.Failed, RemovalOutcome.LastCopy }, o => Assert.False(new RemovalResult(o).Succeeded));
     }
 
     [Fact]
