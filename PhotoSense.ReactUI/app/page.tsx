@@ -9,7 +9,7 @@ import { ReviewPanel } from '../components/ReviewPanel';
 import { SetupScreen } from '../components/SetupScreen';
 import { Toaster, useToasts } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
-import { clearResults, connectLogStream, fetchGroupTotals, openInViewer, removeDuplicates, removePhoto, retryNow, setKept, useGroups, useScanProgress, useScanStatus } from '../lib/apiClient';
+import { clearResults, connectLogStream, fetchGroupTotals, openInViewer, prefetchGroups, removeDuplicates, removePhoto, retryNow, setKept, useGroups, useScanProgress, useScanStatus } from '../lib/apiClient';
 import { formatBytes, linkedFiles } from '../lib/format';
 import { loadLastScan } from '../lib/lastScan';
 import { useTheme } from '../lib/theme';
@@ -84,6 +84,13 @@ export default function HomePage() {
   useEffect(() => {
     if (lastPage !== undefined && page > Math.max(1, lastPage)) setPage(Math.max(1, lastPage));
   }, [lastPage, page]);
+
+  // The pages either side of this one are fetched ahead, pictures and all, so that turning to one is immediate.
+  // Done again whenever this page's own contents change, which is when theirs may have too.
+  useEffect(() => {
+    if (lastPage === undefined) return;
+    for (const near of [page + 1, page - 1]) if (near >= 1 && near <= lastPage) void prefetchGroups(mode, filter, near, hideKept);
+  }, [data, lastPage, mode, filter, page, hideKept]);
 
   // When the scan that was started here finishes, say what it found and show it.
   const announced = useRef<string>();

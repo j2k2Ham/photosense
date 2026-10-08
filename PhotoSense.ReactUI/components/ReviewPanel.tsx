@@ -65,41 +65,44 @@ export function ReviewPanel({ group, mode, busy, copyIndex, onSelectCopy, onComp
   const offerCopy = similar || group.members.length > 1;
 
   return (
-    <section aria-label="Review" className="flex min-w-0 flex-1 flex-col gap-[18px] overflow-y-auto px-7 pb-7 pt-[22px]">
-      <div className="flex items-baseline gap-3">
-        <h2 className="truncate text-[20px] font-semibold tracking-[-0.01em]">{original.fileName}</h2>
-        <span className="shrink-0 text-[14px] text-t2">{summary.allKept ? 'All copies marked keep' : similar ? summary.text : `${summary.text} to free`}</span>
-      </div>
+    <section aria-label="Review" className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-7 pb-5 pt-[22px]">
+        <div className="flex items-baseline gap-3">
+          <h2 className="truncate text-[20px] font-semibold tracking-[-0.01em]">{original.fileName}</h2>
+          <span className="shrink-0 text-[14px] text-t2">{summary.allKept ? 'All copies marked keep' : similar ? summary.text : `${summary.text} to free`}</span>
+        </div>
 
-      <div className="grid grid-cols-2 gap-5">
-        <div className="flex min-w-0 flex-col gap-2.5">
-          <div className="flex items-center gap-2.5 text-[13.5px] text-t2">
-            <span className="badge bg-keep-bg text-keep">{similar ? 'Best' : 'Original'}</span>
-            {similar ? 'The best of these similar shots.' : `The best copy of this ${noun}. It stays.`}
+        <div className="grid grid-cols-2 gap-5">
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <div className="flex items-center gap-2.5 text-[13.5px] text-t2">
+              <span className="badge bg-keep-bg text-keep">{similar ? 'Best' : 'Original'}</span>
+              {similar ? 'The best of these similar shots.' : `The best copy of this ${noun}. It stays.`}
+            </div>
+            <Pane photo={original} original onCompare={onCompare} onOpenInViewer={onOpenInViewer} />
           </div>
-          <Pane photo={original} original onCompare={onCompare} onOpenInViewer={onOpenInViewer} />
-        </div>
-        <div className="flex min-w-0 flex-col gap-2.5">
-          <div className="flex items-center gap-2.5 text-[13.5px] text-t2">
-            <MatchChip match={member.match} kept={copy.kept} />
-            Copy {index + 1} of {group.members.length} · {copy.format ?? '?'}
-            <span className="ml-auto text-t3">Click either to compare</span>
+          <div className="flex min-w-0 flex-col gap-2.5">
+            <div className="flex items-center gap-2.5 text-[13.5px] text-t2">
+              <MatchChip match={member.match} kept={copy.kept} />
+              Copy {index + 1} of {group.members.length} · {copy.format ?? '?'}
+              <span className="ml-auto text-t3">Click either to compare</span>
+            </div>
+            <Pane photo={copy} sameFolder={copy.folder === original.folder ? `In the same folder as the ${similar ? 'best shot' : 'original'}` : undefined} onCompare={onCompare} onOpenInViewer={onOpenInViewer} />
           </div>
-          <Pane photo={copy} sameFolder={copy.folder === original.folder ? `In the same folder as the ${similar ? 'best shot' : 'original'}` : undefined} onCompare={onCompare} onOpenInViewer={onOpenInViewer} />
         </div>
+
+        <div>
+          <div className="mb-2.5 flex items-baseline gap-3">
+            <h3 className="text-[15px] font-semibold">{similar ? `Similar shots (${group.members.length})` : `Duplicates of this ${noun} (${group.members.length})`}</h3>
+            <span className="text-[13px] text-t3">Hover for details, click to show it beside the original</span>
+          </div>
+          <DuplicateStrip original={original} members={group.members} selectedIndex={index} onSelect={onSelectCopy} />
+        </div>
+
+        <DiffTable original={original} copy={copy} />
       </div>
 
-      <div>
-        <div className="mb-2.5 flex items-baseline gap-3">
-          <h3 className="text-[15px] font-semibold">{similar ? `Similar shots (${group.members.length})` : `Duplicates of this ${noun} (${group.members.length})`}</h3>
-          <span className="text-[13px] text-t3">Hover for details, click to show it beside the original</span>
-        </div>
-        <DuplicateStrip original={original} members={group.members} selectedIndex={index} onSelect={onSelectCopy} />
-      </div>
-
-      <DiffTable original={original} copy={copy} />
-
-      <div className="flex flex-wrap items-center gap-3 border-t border-line pt-[18px]">
+      {/* What can be done with the group stays in view, however far the details above it are scrolled. */}
+      <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-line px-7 py-[18px]">
         <div className="min-w-[260px] flex-1">
           <p className="text-[14px] text-t2">
             {similar ? 'A burst frame or an edited version. Never removed in bulk.' : <>Original preferred: <span className="font-medium text-keep">{member.keeperReason}</span></>}

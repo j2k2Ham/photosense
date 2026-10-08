@@ -4,7 +4,6 @@ using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Infrastructure.Persistence;
-using Xunit;
 
 namespace PhotoSense.Tests.Infrastructure;
 
@@ -35,8 +34,8 @@ public sealed class CompanionFileFinderTests : IDisposable
 
     private List<string> Names(string path) => _finder.FindFor(path).Select(f => Path.GetFileName(f)!).OrderBy(n => n, StringComparer.Ordinal).ToList();
 
-    [Fact]
-    public void A_Picture_Takes_Its_Live_Photo_Video_And_Both_Sidecars()
+    [Test]
+    public async Task A_Picture_Takes_Its_Live_Photo_Video_And_Both_Sidecars()
     {
         var picture = Put("IMG_1234.HEIC", "id:AAAA");
         Put("IMG_1234.MOV", "id:aaaa"); // identifiers are compared without regard to case
@@ -46,11 +45,11 @@ public sealed class CompanionFileFinderTests : IDisposable
         Put("IMG_1235.MOV", "id:BBBB");
         Put("IMG_1235.AAE");
 
-        Assert.Equal(["IMG_1234.AAE", "IMG_1234.MOV", "IMG_O1234.AAE"], Names(picture));
+        await Assert.That(Names(picture)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.MOV", "IMG_O1234.AAE"], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void Nothing_Goes_While_Another_Picture_Of_The_Same_Shot_Stays()
+    [Test]
+    public async Task Nothing_Goes_While_Another_Picture_Of_The_Same_Shot_Stays()
     {
         // The usual case after an iPhone import: the HEIC, its JPEG conversion, one video, one sidecar.
         var heic = Put("IMG_1234.HEIC", "id:AAAA");
@@ -58,15 +57,15 @@ public sealed class CompanionFileFinderTests : IDisposable
         Put("IMG_1234.MOV", "id:AAAA");
         Put("IMG_1234.AAE");
 
-        Assert.Empty(Names(heic));
-        Assert.Empty(Names(jpeg));
+        await Assert.That(Names(heic)).IsEmpty();
+        await Assert.That(Names(jpeg)).IsEmpty();
 
         File.Delete(heic); // once the other format is gone, the last picture takes them
-        Assert.Equal(["IMG_1234.AAE", "IMG_1234.MOV"], Names(jpeg));
+        await Assert.That(Names(jpeg)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.MOV"], CollectionOrdering.Matching);
     }
 
-    [Fact]
-    public void An_Edited_Version_And_Its_Original_Share_Their_Sidecars()
+    [Test]
+    public async Task An_Edited_Version_And_Its_Original_Share_Their_Sidecars()
     {
         var original = Put("IMG_1234.HEIC", "id:AAAA");
         var edited = Put("IMG_E1234.HEIC", "id:EEEE");
@@ -75,57 +74,57 @@ public sealed class CompanionFileFinderTests : IDisposable
         Put("IMG_1234.AAE");
         Put("IMG_O1234.AAE");
 
-        Assert.Empty(Names(edited));   // the original stays
-        Assert.Empty(Names(original)); // the edited version stays
+        await Assert.That(Names(edited)).IsEmpty();   // the original stays
+        await Assert.That(Names(original)).IsEmpty(); // the edited version stays
     }
 
-    [Fact]
-    public void A_Video_That_Merely_Shares_The_Name_Is_Never_Taken()
+    [Test]
+    public async Task A_Video_That_Merely_Shares_The_Name_Is_Never_Taken()
     {
         // A real 1.3 GB video sat beside a same-numbered picture in the sample library.
         var picture = Put("IMG_0723.JPG");                    // carries no identifier
         Put("IMG_0723.MOV");                                  // nor does the video
-        Assert.Empty(Names(picture));
+        await Assert.That(Names(picture)).IsEmpty();
 
         var live = Put("IMG_3405.JPG", "id:52E3");
         Put("IMG_3405.MOV", "id:FF8F");                       // somebody else's Live Photo video
         Put("IMG_3405.AAE");
-        Assert.Empty(Names(live));                            // and the sidecar stays, since a video of that name remains
+        await Assert.That(Names(live)).IsEmpty();                            // and the sidecar stays, since a video of that name remains
 
         var half = Put("IMG_0001.HEIC");                      // picture without an identifier, video with one
         Put("IMG_0001.MOV", "id:AAAA");
-        Assert.Empty(Names(half));
+        await Assert.That(Names(half)).IsEmpty();
     }
 
-    [Fact]
-    public void Sidecars_Go_With_The_Last_File_Of_Their_Item_Whatever_It_Is()
+    [Test]
+    public async Task Sidecars_Go_With_The_Last_File_Of_Their_Item_Whatever_It_Is()
     {
         var picture = Put("IMG_2000.PNG");
         Put("IMG_2000.AAE");
-        Assert.Equal(["IMG_2000.AAE"], Names(picture));
+        await Assert.That(Names(picture)).IsEquivalentTo(["IMG_2000.AAE"], CollectionOrdering.Matching);
 
         var video = Put("IMG_3000.MOV");
         Put("IMG_3000.AAE");
         Put("IMG_O3000.AAE");
-        Assert.Equal(["IMG_3000.AAE", "IMG_O3000.AAE"], Names(video));
+        await Assert.That(Names(video)).IsEquivalentTo(["IMG_3000.AAE", "IMG_O3000.AAE"], CollectionOrdering.Matching);
 
         var liveVideo = Put("IMG_4000.MOV", "id:AAAA");       // removing just the video half leaves the picture its sidecar
         Put("IMG_4000.HEIC", "id:AAAA");
         Put("IMG_4000.AAE");
-        Assert.Empty(Names(liveVideo));
+        await Assert.That(Names(liveVideo)).IsEmpty();
     }
 
-    [Fact]
-    public void Looks_Only_In_The_Photos_Own_Folder()
+    [Test]
+    public async Task Looks_Only_In_The_Photos_Own_Folder()
     {
         var picture = Put(Path.Combine("a", "IMG_1234.HEIC"), "id:AAAA");
         Put(Path.Combine("b", "IMG_1234.MOV"), "id:AAAA");
         Put(Path.Combine("b", "IMG_1234.AAE"));
-        Assert.Empty(Names(picture));
-        Assert.Empty(_finder.FindFor(Path.Combine(_root.FullName, "missing-folder", "IMG_1.HEIC")));
+        await Assert.That(Names(picture)).IsEmpty();
+        await Assert.That(_finder.FindFor(Path.Combine(_root.FullName, "missing-folder", "IMG_1.HEIC"))).IsEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Removing_A_Photo_Moves_Its_Companions_With_It_And_Forgets_Their_Records()
     {
         var repo = new InMemoryPhotoRepository();
@@ -141,23 +140,23 @@ public sealed class CompanionFileFinderTests : IDisposable
 
         var result = await service.DeleteAsync(picture.Id, deleteFile: true);
 
-        Assert.True(result.Succeeded);
-        Assert.Equal(new[] { sidecarPath, videoPath }.OrderBy(p => p), result.Companions.OrderBy(p => p));
+        await Assert.That(result.Succeeded).IsTrue();
+        await Assert.That(result.Companions.OrderBy(p => p)).IsEquivalentTo(new[] { sidecarPath, videoPath }.OrderBy(p => p), CollectionOrdering.Matching);
         var held = Path.Combine(_root.FullName, PhotoStorageOptions.RemovedFolderName, "2024");
-        Assert.Equal(["IMG_1234.AAE", "IMG_1234.HEIC", "IMG_1234.MOV"], Directory.GetFiles(held).Select(Path.GetFileName).OrderBy(n => n));
-        Assert.False(File.Exists(videoPath) || File.Exists(sidecarPath));
-        Assert.True(File.Exists(otherPath));
-        Assert.Empty(await repo.GetAllAsync());
+        await Assert.That(Directory.GetFiles(held).Select(f => Path.GetFileName(f)!).OrderBy(n => n)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.HEIC", "IMG_1234.MOV"], CollectionOrdering.Matching);
+        await Assert.That(File.Exists(videoPath) || File.Exists(sidecarPath)).IsFalse();
+        await Assert.That(File.Exists(otherPath)).IsTrue();
+        await Assert.That(await repo.GetAllAsync()).IsEmpty();
 
         // Forgetting a record without deleting takes nothing with it.
         var kept = Record(Put("IMG_5000.HEIC", "id:CCCC"));
         Put("IMG_5000.AAE");
         await repo.AddOrUpdateAsync(kept);
-        Assert.Empty((await service.DeleteAsync(kept.Id, deleteFile: false)).Companions);
-        Assert.True(File.Exists(Path.Combine(_root.FullName, "IMG_5000.AAE")));
+        await Assert.That((await service.DeleteAsync(kept.Id, deleteFile: false)).Companions).IsEmpty();
+        await Assert.That(File.Exists(Path.Combine(_root.FullName, "IMG_5000.AAE"))).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task A_Companion_That_Cannot_Be_Moved_Stays_And_The_Photo_Still_Goes()
     {
         var repo = new InMemoryPhotoRepository();
@@ -170,10 +169,10 @@ public sealed class CompanionFileFinderTests : IDisposable
         using (new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.None))
             result = await service.DeleteAsync(picture.Id, deleteFile: true);
 
-        Assert.True(result.Succeeded);
-        Assert.Empty(result.Companions);
-        Assert.True(File.Exists(sidecarPath));
-        Assert.False(File.Exists(picture.SourcePath));
+        await Assert.That(result.Succeeded).IsTrue();
+        await Assert.That(result.Companions).IsEmpty();
+        await Assert.That(File.Exists(sidecarPath)).IsTrue();
+        await Assert.That(File.Exists(picture.SourcePath)).IsFalse();
     }
 
     private Photo Record(string path)
@@ -182,7 +181,7 @@ public sealed class CompanionFileFinderTests : IDisposable
         return new Photo { SourcePath = path, FileName = info.Name, FileSizeBytes = info.Length, FileModifiedUtc = info.LastWriteTimeUtc, ScanRoot = _root.FullName, ContentHash = info.Name };
     }
 
-    [Fact]
-    public void What_Is_Not_Inside_A_Folder_Has_No_Companions()
-        => Assert.Empty(_finder.FindFor(Path.GetPathRoot(_root.FullName)!));
+    [Test]
+    public async Task What_Is_Not_Inside_A_Folder_Has_No_Companions()
+        => await Assert.That(_finder.FindFor(Path.GetPathRoot(_root.FullName)!)).IsEmpty();
 }

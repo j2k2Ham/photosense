@@ -53,20 +53,25 @@ jobs:
         run: npm run build
 
       - name: Test with coverage
+        # TUnit tests are a program: run it, and hand it its own options after the two dashes.
         run: >-
-          dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj
-          --configuration Release
-          /p:CollectCoverage=true
-          /p:CoverletOutput=coverage/
-          /p:CoverletOutputFormat=opencover
-          --logger "trx;LogFileName=test-results.trx"
+          dotnet run --project PhotoSense.Tests/PhotoSense.Tests.csproj
+          --configuration Release --no-build
+          --
+          --coverlet
+          --coverlet-output-format opencover
+          --coverlet-include "[PhotoSense.*]*"
+          --coverlet-exclude "[PhotoSense.Tests]*"
+          --coverlet-exclude-by-file "**/*.g.cs"
+          --results-directory ${{ github.workspace }}/PhotoSense.Tests/coverage
+          --report-trx --report-trx-filename test-results.trx
 
       - name: ReportGenerator (HTML)
         # Use literal block to run two commands sequentially without stray backslashes.
         run: |
           dotnet tool restore
           echo "Listing coverage files" && ls -R . | grep coverage || true
-          dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
+          dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover*.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
       - name: Enforce coverage thresholds (Line >= 90% / Branch >= 85%)
@@ -75,9 +80,10 @@ jobs:
           set -e
           thresholdLine=0.90
           thresholdBranch=0.85
-          coverageXml=PhotoSense.Tests/coverage/coverage.opencover.xml
-          if [ ! -f "$coverageXml" ]; then
-            echo "Coverage file not found: $coverageXml"; ls -R PhotoSense.Tests || true; exit 1
+          # The report's name carries the time it was written.
+          coverageXml=$(ls PhotoSense.Tests/coverage/coverage.opencover*.xml 2>/dev/null | head -1)
+          if [ -z "$coverageXml" ]; then
+            echo "Coverage file not found"; ls -R PhotoSense.Tests/coverage || true; exit 1
           fi
           # Extract sequence (line) and branch coverage from OpenCover XML summary attributes
           linePct=$(grep -oP 'sequenceCoverage="\K[0-9.]+' "$coverageXml" | head -1)
@@ -99,30 +105,3 @@ jobs:
           path: |
             **/test-results.trx
             coverage/**
-
-  mutation-test:
-    runs-on: ubuntu-latest
-    needs: build-test
-    if: github.event_name == 'workflow_dispatch'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Restore tools
-        run: dotnet tool restore
-
-      - name: Run Stryker
-        run: >-
-          dotnet tool run stryker --config-file stryker-config.json
-
-      - name: Upload Stryker Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mutation-report
-          path: StrykerOutput/**

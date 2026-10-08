@@ -5,7 +5,6 @@ using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 using PhotoSense.Functions.Scanning;
-using Xunit;
 using static PhotoSense.Tests.TestPhotos;
 
 namespace PhotoSense.Tests.Functions;
@@ -30,7 +29,7 @@ public class ScanGroupingFacadeTests
         return new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(places.Object), new PhotoRanking());
     }
 
-    [Fact]
+    [Test]
     public async Task Describes_A_Group_With_Its_Keeper_Members_And_Why_The_Keeper_Was_Preferred()
     {
         var group = new DuplicateGroup(
@@ -43,65 +42,63 @@ public class ScanGroupingFacadeTests
 
         var page = await Facade([group]).BuildAsync(similar: false, q: null, hideKept: false, page: 1, pageSize: 10, default);
 
-        Assert.Equal(("duplicates", 1, 10, 1, 1), (page.Mode, page.Page, page.PageSize, page.Total, page.TotalPages));
-        Assert.Equal((2, 9_000L), (page.RemovableCount, page.ReclaimableBytes));
-        var dto = Assert.Single(page.Items);
-        Assert.Equal(group.Key, dto.Key);
-        Assert.Equal(9_000, dto.ReclaimableBytes);
-        Assert.Equal((group.Keeper.Id.Value, "IMG_4198.HEIC", Path.Combine("photos", "2024"), 4032, 3024, "HEIC"),
-            (dto.Keeper.Id, dto.Keeper.FileName, dto.Keeper.Folder, dto.Keeper.Width, dto.Keeper.Height, dto.Keeper.Format));
-        Assert.Equal((Shot, 35.2, -80.8, "iPhone", "Primary", false), (dto.Keeper.TakenOn!.Value, dto.Keeper.Latitude!.Value, dto.Keeper.Longitude!.Value, dto.Keeper.CameraModel, dto.Keeper.Set, dto.Keeper.Kept));
-        Assert.Equal("Charlotte, North Carolina, US", dto.Keeper.PlaceName);
-        Assert.False(dto.Keeper.IsVideo);
-        Assert.Equal(new[] { ("identical", "Identical file"), ("samePicture", "Higher resolution: 4032×3024 vs 1600×1200") },
-            dto.Members.Select(m => (m.Match, m.KeeperReason)));
-        Assert.All(dto.Members, m => Assert.Null(m.Photo.PlaceName)); // no position, so no place
+        await Assert.That((page.Mode, page.Page, page.PageSize, page.Total, page.TotalPages)).IsEqualTo(("duplicates", 1, 10, 1, 1));
+        await Assert.That((page.RemovableCount, page.ReclaimableBytes)).IsEqualTo((2, 9_000L));
+        var dto = page.Items.Single();
+        await Assert.That(dto.Key).IsEqualTo(group.Key);
+        await Assert.That(dto.ReclaimableBytes).IsEqualTo(9_000);
+        await Assert.That((dto.Keeper.Id, dto.Keeper.FileName, dto.Keeper.Folder, dto.Keeper.Width, dto.Keeper.Height, dto.Keeper.Format)).IsEqualTo((group.Keeper.Id.Value, "IMG_4198.HEIC", Path.Combine("photos", "2024"), 4032, 3024, "HEIC"));
+        await Assert.That((dto.Keeper.TakenOn!.Value, dto.Keeper.Latitude!.Value, dto.Keeper.Longitude!.Value, dto.Keeper.CameraModel, dto.Keeper.Set, dto.Keeper.Kept)).IsEqualTo((Shot, 35.2, -80.8, "iPhone", "Primary", false));
+        await Assert.That(dto.Keeper.PlaceName).IsEqualTo("Charlotte, North Carolina, US");
+        await Assert.That(dto.Keeper.IsVideo).IsFalse();
+        await Assert.That(dto.Members.Select(m => (m.Match, m.KeeperReason))).IsEquivalentTo(new[] { ("identical", "Identical file"), ("samePicture", "Higher resolution: 4032×3024 vs 1600×1200") }, CollectionOrdering.Matching);
+        foreach (var m in dto.Members) await Assert.That(m.Photo.PlaceName).IsNull(); // no position, so no place
     }
 
-    [Fact]
+    [Test]
     public async Task Pages_Through_Groups_While_Totals_Cover_Every_Duplicate()
     {
         var facade = Facade(Enumerable.Range(0, 5).Select(i => Group($"IMG_{i}", copies: 2)).ToList());
 
         var last = await facade.BuildAsync(false, null, false, page: 3, pageSize: 2, default);
-        Assert.Equal((3, 5, 3), (last.Page, last.Total, last.TotalPages));
-        Assert.Equal("IMG_4.HEIC", Assert.Single(last.Items).Keeper.FileName); // 5 groups => pages: 2,2,1
-        Assert.Equal((10, 10_000L), (last.RemovableCount, last.ReclaimableBytes));
+        await Assert.That((last.Page, last.Total, last.TotalPages)).IsEqualTo((3, 5, 3));
+        await Assert.That(last.Items.Single().Keeper.FileName).IsEqualTo("IMG_4.HEIC"); // 5 groups => pages: 2,2,1
+        await Assert.That((last.RemovableCount, last.ReclaimableBytes)).IsEqualTo((10, 10_000L));
 
-        Assert.Empty((await facade.BuildAsync(false, null, false, page: 4, pageSize: 2, default)).Items);
+        await Assert.That((await facade.BuildAsync(false, null, false, page: 4, pageSize: 2, default)).Items).IsEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task Search_Matches_File_Names_And_Folders_Of_Keeper_Or_Copies()
     {
         var facade = Facade([Group("IMG_1", 1), Group("DSC_2", 1)]);
-        Assert.Equal("DSC_2.HEIC", Assert.Single((await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).Items).Keeper.FileName);
-        Assert.Equal("IMG_1.HEIC", Assert.Single((await facade.BuildAsync(false, "img_1 (1)", false, 1, 10, default)).Items).Keeper.FileName);
-        Assert.Equal(2, (await facade.BuildAsync(false, "BACKUP", false, 1, 10, default)).Total);
-        Assert.Equal(0, (await facade.BuildAsync(false, "nothing like this", false, 1, 10, default)).Total);
+        await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).Items.Single().Keeper.FileName).IsEqualTo("DSC_2.HEIC");
+        await Assert.That((await facade.BuildAsync(false, "img_1 (1)", false, 1, 10, default)).Items.Single().Keeper.FileName).IsEqualTo("IMG_1.HEIC");
+        await Assert.That((await facade.BuildAsync(false, "BACKUP", false, 1, 10, default)).Total).IsEqualTo(2);
+        await Assert.That((await facade.BuildAsync(false, "nothing like this", false, 1, 10, default)).Total).IsEqualTo(0);
         // Totals describe what a bulk removal would take, whatever is being searched for.
-        Assert.Equal(2, (await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).RemovableCount);
+        await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).RemovableCount).IsEqualTo(2);
     }
 
-    [Fact]
+    [Test]
     public async Task Reviewed_Groups_Can_Be_Hidden()
     {
         var facade = Facade([Group("IMG_1", 2, allKept: true), Group("IMG_2", 1)]);
-        Assert.Equal(2, (await facade.BuildAsync(false, null, hideKept: false, 1, 10, default)).Total);
+        await Assert.That((await facade.BuildAsync(false, null, hideKept: false, 1, 10, default)).Total).IsEqualTo(2);
         var hidden = await facade.BuildAsync(false, null, hideKept: true, 1, 10, default);
-        Assert.Equal("IMG_2.HEIC", Assert.Single(hidden.Items).Keeper.FileName);
-        Assert.Equal(1, hidden.RemovableCount);
+        await Assert.That(hidden.Items.Single().Keeper.FileName).IsEqualTo("IMG_2.HEIC");
+        await Assert.That(hidden.RemovableCount).IsEqualTo(1);
     }
 
-    [Fact]
+    [Test]
     public async Task Similar_Groups_Are_Listed_Separately_And_Never_Counted_As_Removable()
     {
         var facade = Facade([Group("IMG_1", 1)], similar: [Group("IMG_9", 3, MatchKind.Similar)]);
         var page = await facade.BuildAsync(similar: true, null, false, 1, 10, default);
-        Assert.Equal("similar", page.Mode);
-        var group = Assert.Single(page.Items);
-        Assert.Equal("IMG_9.HEIC", group.Keeper.FileName);
-        Assert.All(group.Members, m => Assert.Equal("similar", m.Match));
-        Assert.Equal(1, page.RemovableCount);
+        await Assert.That(page.Mode).IsEqualTo("similar");
+        var group = page.Items.Single();
+        await Assert.That(group.Keeper.FileName).IsEqualTo("IMG_9.HEIC");
+        foreach (var m in group.Members) await Assert.That(m.Match).IsEqualTo("similar");
+        await Assert.That(page.RemovableCount).IsEqualTo(1);
     }
 }

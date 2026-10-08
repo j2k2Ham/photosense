@@ -157,15 +157,41 @@ describe('requests that act on photos', () => {
 });
 
 describe('what the page reads', () => {
-  it('asks for groups by mode, page, search text and whether reviewed ones are hidden', async () => {
+  it('asks for groups fifty to a page, by mode, page, search text and whether reviewed ones are hidden', async () => {
     swr.useSWR.mockReturnValue({ data: 'the groups' });
     const api = await load();
 
     expect(api.useGroups('duplicates', '', 1, false)).toEqual({ data: 'the groups' });
-    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`, expect.any(Function), { refreshInterval: 5000, keepPreviousData: true });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/groups?mode=duplicates&page=1&pageSize=50&hideKept=false&q=`, expect.any(Function), { refreshInterval: 5000, keepPreviousData: true });
 
     api.useGroups('similar', 'trip & beach', 3, true);
-    expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&hideKept=true&q=trip%20%26%20beach`);
+    expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&pageSize=50&hideKept=true&q=trip%20%26%20beach`);
+  });
+
+  it('fetches a page ahead of its being turned to, with the pictures its tiles show', async () => {
+    const pictures: string[] = [];
+    vi.stubGlobal('Image', class { set src(url: string) { pictures.push(url); } });
+    swr.mutate.mockImplementation(async (_key: string, data: Promise<unknown>) => data);
+    answering({ mode: 'duplicates', items: [{ keeper: { id: 'p1', isVideo: false } }, { keeper: { id: 'v1', isVideo: true } }, { keeper: { id: 'p2', isVideo: false } }] });
+    const api = await load();
+
+    await api.prefetchGroups('duplicates', 'trip', 2, true);
+
+    const url = `${API}/scan/groups?mode=duplicates&page=2&pageSize=50&hideKept=true&q=trip`;
+    expect(lastRequest().url).toBe(url);
+    // Left where the page's own request will find it, without asking for it a second time.
+    expect(swr.mutate).toHaveBeenCalledExactlyOnceWith(url, expect.any(Promise), { revalidate: false });
+    expect(pictures).toEqual([api.thumbnailUrl('p1'), api.thumbnailUrl('p2')]);
+  });
+
+  it('makes nothing of a page that could not be fetched ahead', async () => {
+    const pictures: string[] = [];
+    vi.stubGlobal('Image', class { set src(url: string) { pictures.push(url); } });
+    swr.mutate.mockImplementation(async (_key: string, data: Promise<unknown>) => data);
+    answering('The database is busy', 500);
+    const api = await load();
+    await expect(api.prefetchGroups('similar', '', 2, false)).resolves.toBeUndefined();
+    expect(pictures).toEqual([]);
   });
 
   it('asks how many files are on record', async () => {
@@ -179,7 +205,7 @@ describe('what the page reads', () => {
     fetchMock.mockImplementation(async url => reply({ total: String(url).includes('mode=similar') ? 170 : 263 }));
     const api = await load();
     await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170 });
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`, `${API}/scan/groups?mode=similar&page=1&hideKept=false&q=`]);
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([`${API}/scan/groups?mode=duplicates&page=1&pageSize=50&hideKept=false&q=`, `${API}/scan/groups?mode=similar&page=1&pageSize=50&hideKept=false&q=`]);
   });
 
   it('asks again for everything on screen when told to retry', async () => {

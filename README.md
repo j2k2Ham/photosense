@@ -10,18 +10,14 @@ Cross-platform photo duplicate & near-duplicate detection.
 | `PhotoSense.Application` | Application use-cases / orchestration (scanning, grouping) |
 | `PhotoSense.Infrastructure` | Persistence, hashing & metadata extraction implementations |
 | `PhotoSense.Functions` | Azure Functions HTTP endpoints / background scan |
-| `PhotoSense.BlazorServer` | Existing Blazor Server UI (legacy / secondary) |
-| `PhotoSense.ReactUI` | New Next.js (React) web client (primary UI) |
-| `PhotoSense.Tests` | Automated test suite (unit + perf) |
+| `PhotoSense.Contracts` | The JSON shapes the service sends to the UI |
+| `PhotoSense.ReactUI` | Next.js (React) web client |
+| `PhotoSense.Tests` | Automated tests of everything above the UI |
+| `PhotoSense.Benchmarks` | A benchmark of the duplicate analysis, run by hand |
 
-## Dual UI Strategy
+## The UI and the service
 
-The solution now contains two UI fronts:
-
-1. **React (Next.js) UI (`PhotoSense.ReactUI`)** – Primary. Fetches data via REST endpoints (backed by Functions or Blazor acting as an API host). SWR handles polling for scan progress & group listings.
-2. **Blazor Server (`PhotoSense.BlazorServer`)** – Secondary. Can be retired later or kept for purely .NET hosting scenarios.
-
-Both UIs rely on the *same* domain/application layers. Communication contracts are simple JSON DTOs that mirror domain objects (e.g. `DuplicateGroup`, `Photo`, `ScanProgressSnapshot`). The React UI keeps its own `types.ts` file aligned with backend naming. When adding new fields, update both the Application layer DTO & the React `types.ts`.
+The React UI (`PhotoSense.ReactUI`) fetches everything over REST from the Functions service, with SWR polling for scan progress and group listings. What they exchange is plain JSON mirroring the DTOs in `PhotoSense.Contracts`; the UI keeps its own `types.ts` in step with them. When adding a field, update both.
 
 ## Running the React UI
 
@@ -145,10 +141,6 @@ Decoding is done with Magick.NET. iPhone HEIC files decode slowly (about a secon
 2. Update serialization in the API layer (Functions controller or minimal API endpoint).
 3. Update `PhotoSense.ReactUI/types.ts` & adjust component rendering.
 
-## Swapping UIs
-
-Because UIs are isolated projects with no code-level coupling to each other, deployment choice is just a matter of which project you publish. The backend contract stays stable. In multi-environment deployments you can host both side-by-side until the React UI fully supersedes the Blazor experience.
-
 ## Development Notes
 
 - TailwindCSS powers the new React UI styling.
@@ -161,11 +153,21 @@ Both halves are tested to 100% of branches.
 
 ### Service (.NET)
 
-From the repo root:
+The tests are written with [TUnit](https://tunit.dev), which builds them as a program of their own. From the repo root, to run them:
 
 ```bash
-dotnet test PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=opencover
+dotnet run --project PhotoSense.Tests -c Release
 ```
+
+and with coverage (options for the test program go after the `--`):
+
+```bash
+dotnet run --project PhotoSense.Tests -c Release -- --coverlet --coverlet-output-format opencover --coverlet-include "[PhotoSense.*]*" --coverlet-exclude "[PhotoSense.Tests]*" --coverlet-exclude-by-file "**/*.g.cs" --results-directory PhotoSense.Tests/coverage
+```
+
+`dotnet test --project PhotoSense.Tests -c Release` runs them too on the .NET 10 SDK, which `global.json` tells to use the new test platform. One test can be picked out with `--treenode-filter "/*/*/ClassName/*"`.
+
+In a test, every assertion is awaited (`await Assert.That(actual).IsEqualTo(expected)`); one that is not awaited is never checked, so the build treats a forgotten `await` as an error. Tests run side by side, including those of one class; the few that share the in-memory log queue are marked `[NotInParallel("ScanLogQueue")]`.
 
 Coverage thresholds (CI enforced): Line ≥ 90%, Branch ≥ 85%. Measured on Windows the .NET code stands at 100% of lines and 100% of branches. Generated code (`*.g.cs`) and the service's start-up class are left out of the measurement.
 
@@ -190,15 +192,12 @@ Coverage is measured with Istanbul over `app`, `components` and `lib`, and `vite
 Use the PowerShell helper script to spin up the Azure Functions host and the React (Next.js) UI:
 
 ```powershell
-./dev-start.ps1             # build solution + start Functions + React UI
+./dev-start.ps1             # build + start Functions + React UI
 ./dev-start.ps1 -Open       # also open browser to http://localhost:3000
 ./dev-start.ps1 -FunctionsPort 7072
 ./dev-start.ps1 -NoBuild    # skip build for faster restart
 ./dev-start.ps1 -Clean      # clean then build
-./dev-start.ps1 -IncludeBlazor -UseWatch  # (optional) also start legacy Blazor in watch mode
 ```
-
-Creates local photo folders under `PhotoSense.Functions/photos/primary` & `.../secondary` if missing.
 
 To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./dev-start.ps1 -Stop` from any terminal. To restart it, run `./dev-start.ps1` again: it first stops a copy that is still running, since two cannot share the ports and a running service keeps its program files locked against the build. Only PhotoSense's own processes are stopped; if some other program has the UI's port, the UI takes the next free one and the service is told to accept it there.
 
@@ -272,62 +271,9 @@ Behavior:
 - Global rate limiting: simple token bucket (capacity 20, refill 1/sec). Exceeding this returns HTTP 429 with text body.
 - Clients should treat 429 as a signal to back off (e.g. double poll interval briefly).
 
-### React Hook: `useScanLogs`
+### In the UI
 
-Located at `PhotoSense.ReactUI/lib/useScanLogs.ts`.
-
-Features:
-
-- Tries SignalR negotiation first (`/api/scan/logs/negotiate`).
-- Falls back automatically to REST polling (`/api/scan/logs`).
-- Maintains a bounded rolling buffer (`maxItems`, default 500).
-- Provides status lifecycle: `idle | connecting | streaming | polling | error | paused`.
-- Exposes `pause()`, `resume()`, and `clear()` helpers.
-- Handles 429 (rate limit) by temporary backoff (doubling interval for one cycle).
-
-Usage example:
-
-```tsx
-import { useScanLogs } from '../lib/useScanLogs';
-
-export function LiveLogsPanel() {
-  const { logs, status, error, pause, resume, clear } = useScanLogs({ maxItems: 800, restLimit: 300 });
-
-  return (
-    <div className="space-y-2">
-      <div className="flex gap-2 items-center text-sm">
-        <span>Status: <strong>{status}</strong></span>
-        {error && <span className="text-red-500">{error}</span>}
-        {status !== 'paused' ? (
-          <button onClick={pause} className="px-2 py-1 border rounded">Pause</button>
-        ) : (
-          <button onClick={resume} className="px-2 py-1 border rounded">Resume</button>
-        )}
-        <button onClick={clear} className="px-2 py-1 border rounded">Clear</button>
-      </div>
-      <pre className="text-xs bg-black text-green-300 p-2 max-h-96 overflow-auto rounded">
-        {logs.map(l => `${l.timestamp} [${l.level}] ${l.message}`).join('\n')}
-      </pre>
-    </div>
-  );
-}
-```
-
-Options:
-
-| Option | Default | Description |
-|--------|---------|-------------|
-| `maxItems` | 500 | Rolling buffer size (oldest dropped). |
-| `pollIntervalMs` | 1500 | Interval between REST polls when not streaming. |
-| `restLimit` | 200 | `limit` query value per poll request. |
-| `disableSignalR` | false | Force REST polling (testing). |
-| `startPaused` | false | Initialize in paused state. |
-
-Returned state fields: `logs`, `status`, `error`, `pause()`, `resume()`, `clear()`.
-
-### Backwards Compatibility Helper
-
-`connectLogStream` in `lib/apiClient.ts` remains (now marked deprecated) and internally mirrors the hook logic (SignalR then REST) but lacks controls and buffer management. Migrate existing components to the hook for richer state handling.
+`connectLogStream` in `PhotoSense.ReactUI/lib/apiClient.ts` follows the log for the setup screen: over SignalR where the negotiate call succeeds, otherwise by asking the REST endpoint again every few seconds.
 
 ### Future Enhancements
 

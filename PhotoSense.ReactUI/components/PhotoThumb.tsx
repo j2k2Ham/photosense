@@ -13,7 +13,8 @@ export function PhotoThumb({ photo, className = '' }: { readonly photo: PhotoDto
       </span>
     );
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={thumbnailUrl(photo.id)} alt="" loading="lazy" className={`bg-s3 object-cover ${className}`} />;
+  // Fetched at once, not as it scrolls into view: a page holds few enough for that, and none then appears late.
+  return <img src={thumbnailUrl(photo.id)} alt="" decoding="async" className={`bg-s3 object-cover ${className}`} />;
 }
 
 /** The picture letterboxed at its true shape, its preview underneath while it loads; a still tile for a video. */

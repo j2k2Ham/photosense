@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { DuplicateGroupDto, GroupMode } from '../types';
 import { groupSummary } from '../lib/format';
 import { PhotoThumb } from './PhotoThumb';
@@ -24,6 +24,11 @@ function emptyMessage(mode: GroupMode, query: string): string {
 /** The groups as a gallery of their best copies, a page at a time. */
 export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, onSelect, onPage }: Props) {
   const pager = 'pill-outline h-[30px] px-3 text-[13px]';
+  const list = useRef<HTMLUListElement>(null);
+  // A page starts at its top, wherever the one before it was left.
+  useEffect(() => {
+    if (list.current) list.current.scrollTop = 0;
+  }, [page, mode, query]);
   return (
     <section aria-label="Groups" className="flex min-h-0 flex-col border-r border-line bg-s1">
       <div className="flex items-center px-5 py-3.5 text-[13px] text-t2">
@@ -40,7 +45,7 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
       {groups.length === 0
         ? total !== undefined && <p className="px-5 py-10 text-center text-[14px] text-t3">{emptyMessage(mode, query)}</p>
         : (
-          <ul className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-x-3.5 gap-y-5 overflow-y-auto px-5 pb-6 pt-1.5">
+          <ul ref={list} className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-x-3.5 gap-y-5 overflow-y-auto px-5 pb-6 pt-1.5">
             {groups.map(g => {
               const summary = groupSummary(g, mode);
               return (

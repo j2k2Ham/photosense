@@ -84,8 +84,9 @@ export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKee
           <button type="button" onClick={onClose} aria-label="Close" className="pill-quiet h-[38px] w-[38px] text-[18px] leading-none">×</button>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[1fr_420px]">
-          <div className="flex min-w-0 flex-col gap-3 bg-stage p-6">
+        {/* One row, held to the height there is: a video would otherwise open at its own height and push the buttons out of sight. */}
+        <div className="grid min-h-0 flex-1 grid-cols-[1fr_420px] grid-rows-[minmax(0,1fr)]">
+          <div className="flex min-h-0 min-w-0 flex-col gap-3 bg-stage p-6">
             {view === 'side' ? (
               <div className="grid min-h-0 flex-1 grid-cols-2 gap-5">
                 <figure className="flex min-h-0 flex-col gap-2">

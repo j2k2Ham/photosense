@@ -18,11 +18,12 @@ const burst = member({ id: 'm3', fileName: 'IMG_4199.JPG' }, 'similar');
 const keeping = member({ id: 'm4', fileName: 'IMG_4198 (2).JPG', kept: true }, 'identical');
 
 describe('PhotoThumb', () => {
-  it('shows a picture by its cached preview, loaded only when it comes into view', () => {
+  it('shows a picture by its cached preview, fetched at once so that none appears late', () => {
     const { container } = render(<PhotoThumb photo={photo()} className="h-14 w-14" />);
     const img = container.querySelector('img')!;
     expect(img).toHaveAttribute('src', thumbnailUrl('p1'));
-    expect(img).toHaveAttribute('loading', 'lazy');
+    expect(img).not.toHaveAttribute('loading');
+    expect(img).toHaveAttribute('decoding', 'async');
     expect(img).toHaveClass('object-cover', 'h-14');
   });
 
@@ -186,6 +187,17 @@ describe('GroupList', () => {
     expect(screen.getByLabelText('Groups')).toHaveTextContent('0 groups');
   });
 
+  it('starts each page at its top, wherever the one before it was left', () => {
+    const turned = (page: number) => <GroupList groups={[group()]} mode="duplicates" total={120} page={page} totalPages={3} query="" onSelect={() => undefined} onPage={() => undefined} />;
+    const { rerender } = render(turned(1));
+    const list = screen.getByRole('list');
+    list.scrollTop = 640;
+    rerender(turned(1));
+    expect(list.scrollTop).toBe(640);
+    rerender(turned(2));
+    expect(list.scrollTop).toBe(0);
+  });
+
   it('says it is loading until the first answer arrives', () => {
     show({ total: undefined });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
@@ -265,6 +277,10 @@ describe('ReviewPanel', () => {
     expect(desk()).toHaveTextContent('Original preferred: Opens everywhere: JPEG rather than HEIC');
     expect(screen.getByRole('table', { name: 'What differs' })).toBeInTheDocument();
     expect(within(desk()).queryByRole('button', { name: /^Delete this copy/ })).not.toBeInTheDocument();
+
+    // The details scroll; what can be done with the group sits beneath them and does not.
+    expect(screen.getByRole('table', { name: 'What differs' }).closest('.overflow-y-auto')).not.toBeNull();
+    expect(button('Delete this duplicate · 2.9 MB').closest('.overflow-y-auto')).toBeNull();
 
     await userEvent.click(button('Compare IMG_4198.JPG'));
     await userEvent.click(button('Compare IMG_4198.HEIC'));

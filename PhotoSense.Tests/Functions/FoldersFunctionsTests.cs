@@ -2,7 +2,6 @@ using System.Net;
 using Moq;
 using PhotoSense.Domain.Services;
 using PhotoSense.Functions.Api;
-using Xunit;
 
 namespace PhotoSense.Tests.Functions;
 
@@ -13,7 +12,7 @@ public class FoldersFunctionsTests
 
     public FoldersFunctionsTests() => _functions = new FoldersFunctions(_browser.Object);
 
-    [Fact]
+    [Test]
     public async Task Lists_The_Folders_Inside_The_One_Asked_For()
     {
         const string pictures = @"C:\Users\someone\Pictures";
@@ -22,55 +21,55 @@ public class FoldersFunctionsTests
 
         var response = await _functions.BrowseAsync(Http.Get("folders?path=" + Uri.EscapeDataString(pictures)).FromClient());
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         var json = response.Json();
-        Assert.Equal(pictures, json.GetProperty("path").GetString());
-        Assert.Equal(@"C:\Users\someone", json.GetProperty("parent").GetString());
+        await Assert.That(json.GetProperty("path").GetString()).IsEqualTo(pictures);
+        await Assert.That(json.GetProperty("parent").GetString()).IsEqualTo(@"C:\Users\someone");
         var folders = json.GetProperty("folders").EnumerateArray().Select(f => (f.GetProperty("name").GetString()!, f.GetProperty("path").GetString()!)).ToList();
-        Assert.Equal(new[] { ("Jamie's Phone", pictures + @"\Jamie's Phone"), ("Trips & days out", pictures + @"\Trips & days out") }, folders);
+        await Assert.That(folders).IsEquivalentTo(new[] { ("Jamie's Phone", pictures + @"\Jamie's Phone"), ("Trips & days out", pictures + @"\Trips & days out") }, CollectionOrdering.Matching);
     }
 
-    [Fact]
+    [Test]
     public async Task With_No_Folder_Named_It_Lists_The_Places_To_Start_From()
     {
         _browser.Setup(b => b.Browse(null)).Returns(new FolderListing(null, null, [new FolderEntry("Pictures", @"C:\Users\someone\Pictures"), new FolderEntry(@"C:\", @"C:\")]));
 
         var json = (await _functions.BrowseAsync(Http.Get("folders").FromClient())).Json();
 
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, json.GetProperty("path").ValueKind);
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, json.GetProperty("parent").ValueKind);
-        Assert.Equal(2, json.GetProperty("folders").GetArrayLength());
+        await Assert.That(json.GetProperty("path").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
+        await Assert.That(json.GetProperty("parent").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
+        await Assert.That(json.GetProperty("folders").GetArrayLength()).IsEqualTo(2);
     }
 
-    [Theory]
-    [InlineData(typeof(DirectoryNotFoundException))]
-    [InlineData(typeof(PathTooLongException))]
-    [InlineData(typeof(ArgumentException))]         // not something that could be a path
+    [Test]
+    [Arguments(typeof(DirectoryNotFoundException))]
+    [Arguments(typeof(PathTooLongException))]
+    [Arguments(typeof(ArgumentException))]         // not something that could be a path
     public async Task A_Folder_That_Cannot_Be_Found_Is_Reported_By_Name(Type failure)
     {
         _browser.Setup(b => b.Browse(It.IsAny<string?>())).Throws((Exception)Activator.CreateInstance(failure)!);
 
         var response = await _functions.BrowseAsync(Http.Get("folders?path=" + Uri.EscapeDataString(@"D:\gone")).FromClient());
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal(@"Folder not found: D:\gone", response.Text());
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        await Assert.That(response.Text()).IsEqualTo(@"Folder not found: D:\gone");
     }
 
-    [Fact]
+    [Test]
     public async Task Other_Failures_Are_Not_Passed_Off_As_A_Missing_Folder()
     {
         _browser.Setup(b => b.Browse(It.IsAny<string?>())).Throws(new InvalidOperationException("something else"));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _functions.BrowseAsync(Http.Get("folders?path=x").FromClient()));
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => _functions.BrowseAsync(Http.Get("folders?path=x").FromClient()));
     }
 
-    [Fact]
+    [Test]
     public async Task Folder_Names_Are_Told_Only_To_The_UI_Itself()
     {
         // A page on some other site can make a browser ask, but cannot make it send the UI's header.
         var response = await _functions.BrowseAsync(Http.Get("folders"));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Empty(response.Bytes());
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That(response.Bytes()).IsEmpty();
         _browser.Verify(b => b.Browse(It.IsAny<string?>()), Times.Never);
     }
 }

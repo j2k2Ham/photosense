@@ -1,4 +1,3 @@
-using Xunit;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using System.Threading.Tasks;
@@ -11,7 +10,7 @@ namespace PhotoSense.Tests.Functions;
 
 public class FunctionsHostSmokeTests
 {
-    [Fact]
+    [Test]
     public async Task CanResolveGroupingFacadeAndProgressStore()
     {
         using var host = new HostBuilder()
@@ -19,7 +18,7 @@ public class FunctionsHostSmokeTests
             .ConfigureServices((ctx,s)=> s.AddPhotoSenseCore(ctx.Configuration))
             .Build();
         var progress = host.Services.GetRequiredService<IScanProgressStore>();
-        Assert.NotNull(progress.GetLatest());
+        await Assert.That(progress.GetLatest()).IsNotNull();
         await host.StopAsync(CancellationToken.None);
     }
 }

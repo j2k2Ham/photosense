@@ -60,7 +60,6 @@ public static class DependencyInjection
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
         s.AddSingleton<IFolderBrowser, FileSystemFolderBrowser>();
         s.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
-        s.AddSingleton<IPhotoQueryService, PhotoQueryService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
         s.AddSingleton<IScanProgressStore, InMemoryScanProgressStore>();
         s.AddSingleton<IScanLogSink, InMemoryScanLogSink>();
@@ -81,8 +80,7 @@ public static class Program
         var host = new HostBuilder()
             .ConfigureAppConfiguration(cfg =>
             {
-                cfg.AddJsonFile("appsettings.json", optional: true)
-                   .AddEnvironmentVariables();
+                cfg.AddEnvironmentVariables();
             })
             .ConfigureFunctionsWorkerDefaults()
             .ConfigureServices((ctx, s) =>

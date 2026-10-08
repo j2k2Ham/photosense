@@ -3,7 +3,6 @@ using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Infrastructure.Imaging;
 using PhotoSense.Infrastructure.Metadata;
-using Xunit;
 
 namespace PhotoSense.Tests.Infrastructure;
 
@@ -40,30 +39,30 @@ public class MagickImageAnalyzerTests
 
     private static double Difference(byte[] a, byte[] b) => PhotoMatcher.SignatureDifference(a, b);
 
-    [Fact]
+    [Test]
     public async Task Measures_A_Jpeg()
     {
         using var picture = Picture(1);
         var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg, 85));
 
-        Assert.Equal((1200, 900, "JPEG", 85), (analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality));
-        Assert.Equal(MagickImageAnalyzer.SignatureEdge * MagickImageAnalyzer.SignatureEdge * 3, analysis.Signature.Length);
-        Assert.Equal(analysis.PerceptualHash, MagickImageAnalyzer.PerceptualHash(analysis.Signature));
+        await Assert.That((analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality)).IsEqualTo((1200, 900, "JPEG", 85));
+        await Assert.That(analysis.Signature.Length).IsEqualTo(MagickImageAnalyzer.SignatureEdge * MagickImageAnalyzer.SignatureEdge * 3);
+        await Assert.That(MagickImageAnalyzer.PerceptualHash(analysis.Signature)).IsEqualTo(analysis.PerceptualHash);
         using var thumbnail = new MagickImage(analysis.ThumbnailJpeg);
-        Assert.Equal((MagickFormat.Jpeg, 320u, 240u), (thumbnail.Format, thumbnail.Width, thumbnail.Height));
+        await Assert.That((thumbnail.Format, thumbnail.Width, thumbnail.Height)).IsEqualTo((MagickFormat.Jpeg, 320u, 240u));
     }
 
-    [Fact]
+    [Test]
     public async Task Formats_Without_A_Quality_Setting_Report_None_And_Small_Images_Are_Not_Enlarged()
     {
         using var picture = Picture(2, 200, 100);
         var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png));
-        Assert.Equal((200, 100, "PNG", (int?)null), (analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality));
+        await Assert.That((analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality)).IsEqualTo((200, 100, "PNG", (int?)null));
         using var thumbnail = new MagickImage(analysis.ThumbnailJpeg);
-        Assert.Equal((200u, 100u), (thumbnail.Width, thumbnail.Height));
+        await Assert.That((thumbnail.Width, thumbnail.Height)).IsEqualTo((200u, 100u));
     }
 
-    [Fact]
+    [Test]
     public async Task A_Resized_Recompressed_Copy_In_Another_Format_Matches_Its_Original()
     {
         using var picture = Picture(3, 2400, 1800);
@@ -72,11 +71,11 @@ public class MagickImageAnalyzerTests
         small.Resize(600, 450);
         var copy = await _analyzer.AnalyzeAsync(Encode(small, MagickFormat.Jpeg, 80));
 
-        Assert.InRange(PhotoMatcher.HashDistance(original.PerceptualHash, copy.PerceptualHash), 0, PhotoMatcher.CandidateBits);
-        Assert.InRange(Difference(original.Signature, copy.Signature), 0, PhotoMatcher.SameDifference);
+        await Assert.That(PhotoMatcher.HashDistance(original.PerceptualHash, copy.PerceptualHash)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.CandidateBits);
+        await Assert.That(Difference(original.Signature, copy.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
     }
 
-    [Fact]
+    [Test]
     public async Task Different_Pictures_Are_Far_Apart()
     {
         var hashes = new List<ulong>();
@@ -87,10 +86,10 @@ public class MagickImageAnalyzerTests
         }
         for (int i = 0; i < hashes.Count; i++)
             for (int j = i + 1; j < hashes.Count; j++)
-                Assert.True(PhotoMatcher.HashDistance(hashes[i], hashes[j]) > PhotoMatcher.CandidateBits, $"pictures {i} and {j} hash too close");
+                await Assert.That(PhotoMatcher.HashDistance(hashes[i], hashes[j]) > PhotoMatcher.CandidateBits).IsTrue().Because($"pictures {i} and {j} hash too close");
     }
 
-    [Fact]
+    [Test]
     public async Task A_Picture_Stored_Sideways_With_An_Orientation_Tag_Is_Read_Upright()
     {
         using var upright = Picture(4, 800, 600);
@@ -105,14 +104,14 @@ public class MagickImageAnalyzerTests
         sideways.Orientation = OrientationType.RightTop;
         var tagged = await _analyzer.AnalyzeAsync(Encode(sideways, MagickFormat.Jpeg));
 
-        Assert.Equal((800, 600), (tagged.Width, tagged.Height));
-        Assert.InRange(PhotoMatcher.HashDistance(expected.PerceptualHash, tagged.PerceptualHash), 0, PhotoMatcher.CandidateBits);
-        Assert.InRange(Difference(expected.Signature, tagged.Signature), 0, PhotoMatcher.SameDifference);
+        await Assert.That((tagged.Width, tagged.Height)).IsEqualTo((800, 600));
+        await Assert.That(PhotoMatcher.HashDistance(expected.PerceptualHash, tagged.PerceptualHash)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.CandidateBits);
+        await Assert.That(Difference(expected.Signature, tagged.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
         using var thumbnail = new MagickImage(tagged.ThumbnailJpeg);
-        Assert.Equal((320u, 240u), (thumbnail.Width, thumbnail.Height));
+        await Assert.That((thumbnail.Width, thumbnail.Height)).IsEqualTo((320u, 240u));
     }
 
-    [Fact]
+    [Test]
     public async Task A_Copy_Saved_In_Another_Colour_Space_Matches_The_Standard_One()
     {
         using var picture = Picture(5, 800, 600);
@@ -126,47 +125,47 @@ public class MagickImageAnalyzerTests
 
         using var unconverted = new MagickImage(rawNumbers, new PixelReadSettings(800, 600, StorageType.Char, PixelMapping.RGB));
         var misread = await _analyzer.AnalyzeAsync(Encode(unconverted, MagickFormat.Png));
-        Assert.InRange(Difference(standard.Signature, analysed.Signature), 0, PhotoMatcher.SameDifference);
-        Assert.True(Difference(standard.Signature, misread.Signature) > PhotoMatcher.SimilarDifference, "the two colour spaces should differ visibly when the profile is ignored");
+        await Assert.That(Difference(standard.Signature, analysed.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
+        await Assert.That(Difference(standard.Signature, misread.Signature) > PhotoMatcher.SimilarDifference).IsTrue().Because("the two colour spaces should differ visibly when the profile is ignored");
     }
 
-    [Fact]
-    public void An_Image_That_Yields_No_Pixels_Is_Refused()
+    [Test]
+    public async Task An_Image_That_Yields_No_Pixels_Is_Refused()
     {
         var pixels = new byte[] { 1, 2, 3 };
-        Assert.Same(pixels, MagickImageAnalyzer.Required(pixels));
-        Assert.Equal("Image has no pixel data", Assert.Throws<InvalidOperationException>(() => MagickImageAnalyzer.Required(null)).Message);
+        await Assert.That(MagickImageAnalyzer.Required(pixels)).IsSameReferenceAs(pixels);
+        await Assert.That(Assert.ThrowsExactly<InvalidOperationException>(() => MagickImageAnalyzer.Required(null)).Message).IsEqualTo("Image has no pixel data");
     }
 
-    [Fact]
+    [Test]
     public async Task What_Is_Not_An_Image_Is_Refused()
     {
-        await Assert.ThrowsAnyAsync<MagickException>(() => _analyzer.AnalyzeAsync(new MemoryStream("not an image at all"u8.ToArray())));
-        await Assert.ThrowsAnyAsync<MagickException>(() => _analyzer.RenderJpegAsync(new MemoryStream([1, 2, 3, 4]), 100));
+        await Assert.ThrowsAsync<MagickException>(() => _analyzer.AnalyzeAsync(new MemoryStream("not an image at all"u8.ToArray())));
+        await Assert.ThrowsAsync<MagickException>(() => _analyzer.RenderJpegAsync(new MemoryStream([1, 2, 3, 4]), 100));
     }
 
-    [Theory]
-    [InlineData(500, 500, 375)]
-    [InlineData(5000, 1200, 900)] // never enlarged
+    [Test]
+    [Arguments(500, 500, 375)]
+    [Arguments(5000, 1200, 900)] // never enlarged
     public async Task Renders_An_Upright_Jpeg_No_Larger_Than_Asked(int maxEdge, uint width, uint height)
     {
         using var picture = Picture(6);
         using var rendered = new MagickImage(await _analyzer.RenderJpegAsync(Encode(picture, MagickFormat.Png), maxEdge));
-        Assert.Equal((MagickFormat.Jpeg, width, height), (rendered.Format, rendered.Width, rendered.Height));
+        await Assert.That((rendered.Format, rendered.Width, rendered.Height)).IsEqualTo((MagickFormat.Jpeg, width, height));
     }
 
-    [Fact]
-    public void The_Hash_Sets_Half_Its_Bits_And_Ignores_Overall_Brightness()
+    [Test]
+    public async Task The_Hash_Sets_Half_Its_Bits_And_Ignores_Overall_Brightness()
     {
         using var picture = Picture(7, MagickImageAnalyzer.SignatureEdge, MagickImageAnalyzer.SignatureEdge);
         var rgb = picture.GetPixels().ToByteArray(PixelMapping.RGB)!;
         var brighter = rgb.Select(b => (byte)Math.Min(255, b / 2 + 60)).ToArray();
         var hash = MagickImageAnalyzer.PerceptualHash(rgb);
-        Assert.Equal(31, System.Numerics.BitOperations.PopCount(hash)); // terms above the median of 64
-        Assert.InRange(PhotoMatcher.HashDistance(hash, MagickImageAnalyzer.PerceptualHash(brighter)), 0, 4);
+        await Assert.That(System.Numerics.BitOperations.PopCount(hash)).IsEqualTo(31); // terms above the median of 64
+        await Assert.That(PhotoMatcher.HashDistance(hash, MagickImageAnalyzer.PerceptualHash(brighter))).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(4);
     }
 
-    [Fact]
+    [Test]
     public async Task Capture_Details_Are_Read_From_The_File()
     {
         using var picture = Picture(8, 320, 240);
@@ -183,14 +182,14 @@ public class MagickImageAnalyzerTests
 
         await new BasicExifMetadataExtractor().ExtractAsync(photo, Encode(picture, MagickFormat.Jpeg));
 
-        Assert.Equal(TestPhotos.Shot, photo.TakenOn);
-        Assert.Equal(DateTimeKind.Unspecified, photo.TakenOn!.Value.Kind);
-        Assert.Equal("iPhone 15 Pro Max", photo.CameraModel);
-        Assert.Equal(35.225, photo.Latitude!.Value, 3);
-        Assert.Equal(-80.8333, photo.Longitude!.Value, 3);
+        await Assert.That(photo.TakenOn).IsEqualTo(TestPhotos.Shot);
+        await Assert.That(photo.TakenOn!.Value.Kind).IsEqualTo(DateTimeKind.Unspecified);
+        await Assert.That(photo.CameraModel).IsEqualTo("iPhone 15 Pro Max");
+        await Assert.That(Math.Round(photo.Latitude!.Value, 3)).IsEqualTo(35.225);
+        await Assert.That(Math.Round(photo.Longitude!.Value, 3)).IsEqualTo(Math.Round(-80.8333, 3));
     }
 
-    [Fact]
+    [Test]
     public async Task A_Position_Of_Zero_Zero_Is_Treated_As_No_Position()
     {
         using var picture = Picture(9, 320, 240);
@@ -205,12 +204,12 @@ public class MagickImageAnalyzerTests
 
         await new BasicExifMetadataExtractor().ExtractAsync(photo, Encode(picture, MagickFormat.Jpeg));
 
-        Assert.Equal(new DateTime(2024, 4, 7, 17, 35, 59), photo.TakenOn);
-        Assert.Null(photo.Latitude);
-        Assert.Null(photo.Longitude);
+        await Assert.That(photo.TakenOn).IsEqualTo(new DateTime(2024, 4, 7, 17, 35, 59));
+        await Assert.That(photo.Latitude).IsNull();
+        await Assert.That(photo.Longitude).IsNull();
     }
 
-    [Fact]
+    [Test]
     public async Task A_Picture_With_An_Unusable_Colour_Profile_Is_Read_As_It_Is()
     {
         using var picture = Picture(6, 400, 300);
@@ -223,11 +222,11 @@ public class MagickImageAnalyzerTests
         tagged.SetProfile(new ColorProfile(unusable));
         var encoded = Encode(tagged, MagickFormat.Jpeg);
         using (var reread = new MagickImage(encoded.ToArray()))
-            Assert.NotNull(reread.GetColorProfile());
+            await Assert.That(reread.GetColorProfile()).IsNotNull();
 
         var analysed = await _analyzer.AnalyzeAsync(encoded);
 
-        Assert.InRange(Difference(plain.Signature, analysed.Signature), 0, PhotoMatcher.SameDifference);
-        Assert.Equal(plain.PerceptualHash, analysed.PerceptualHash);
+        await Assert.That(Difference(plain.Signature, analysed.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
+        await Assert.That(analysed.PerceptualHash).IsEqualTo(plain.PerceptualHash);
     }
 }

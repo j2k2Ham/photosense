@@ -84,7 +84,7 @@ public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
 
         var meta = directories.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault();
         photo.CameraModel = meta?.GetString(QuickTimeModel);
-        if (meta?.GetString(QuickTimeGpsLocation) is { } position && Iso6709.Match(position) is { Success: true } m)
+        if (meta?.GetString(QuickTimeGpsLocation) is { } position && Iso6709.Match(position) is var m && m.Success)
         {
             var latitude = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
             var longitude = double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);

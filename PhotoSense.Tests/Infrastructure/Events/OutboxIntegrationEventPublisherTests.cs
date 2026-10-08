@@ -2,13 +2,12 @@ using Moq;
 using PhotoSense.Domain.Events;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Events;
-using Xunit;
 
 namespace PhotoSense.Tests.Infrastructure.Events;
 
 public class OutboxIntegrationEventPublisherTests
 {
-    [Fact]
+    [Test]
     public async Task Publish_Adds_To_Outbox()
     {
         var store = new Mock<IOutboxStore>();

@@ -1,4 +1,3 @@
-using Xunit;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.ValueObjects;
@@ -17,7 +16,7 @@ public class AuditEndpointIntegrationTests
     }
 
     // Simple in-memory audit repository used for integration-style verification.
-    [Fact]
+    [Test]
     public async Task KeepOperation_Emits_Audit_Record()
     {
         var photoRepo = new InMemoryPhotoRepository();
@@ -33,10 +32,10 @@ public class AuditEndpointIntegrationTests
             await auditRepo.AddAsync(new AuditEntry { Action = "Keep", PhotoId = photo.Id.Value.ToString(), Details = "" });
         }
 
-        Assert.True(photo.IsKept);
-        Assert.Single(auditRepo.Items);
+        await Assert.That(photo.IsKept).IsTrue();
+        await Assert.That(auditRepo.Items).HasSingleItem();
         var entry = auditRepo.Items[0];
-        Assert.Equal("Keep", entry.Action);
-        Assert.Equal(photo.Id.Value.ToString(), entry.PhotoId);
+        await Assert.That(entry.Action).IsEqualTo("Keep");
+        await Assert.That(entry.PhotoId).IsEqualTo(photo.Id.Value.ToString());
     }
 }

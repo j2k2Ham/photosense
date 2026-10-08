@@ -124,6 +124,14 @@ describe('the comparison window', () => {
     expect(button('Cancel')).toBeEnabled();
   });
 
+  it('holds its content to its own height, so that a video cannot push the buttons out of sight', () => {
+    open({ member: member({ id: 'v2', fileName: 'copy.MOV', isVideo: true, format: 'MOV' }, 'identical') });
+    const content = button('Open in default viewer').closest('.grid')!;
+    expect(content).toHaveClass('min-h-0', 'grid-rows-[minmax(0,1fr)]');
+    expect(content.firstElementChild).toHaveClass('min-h-0');
+    expect(button(/^Delete this copy ·/)).toBeEnabled();
+  });
+
   it('shows working on the other confirmation too', async () => {
     const { rerender, onClose, onToggleKeep, onRemove, onOpenInViewer } = open({ mode: 'similar', member: member({ id: 'm3', fileName: 'IMG_4300.JPG' }, 'similar') });
     await click('Delete the best shot instead');

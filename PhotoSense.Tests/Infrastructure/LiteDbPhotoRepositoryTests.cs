@@ -2,7 +2,6 @@ using LiteDB;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Persistence;
-using Xunit;
 
 namespace PhotoSense.Tests.Infrastructure;
 
@@ -16,7 +15,7 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
             if (File.Exists(file)) File.Delete(file);
     }
 
-    [Fact]
+    [Test]
     public async Task RoundTrip_Persists_And_Maps_Categories()
     {
         using var repo = new LiteDbPhotoRepository(_db);
@@ -24,18 +23,18 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
         photo.AddCategory("Nature");
         await repo.AddOrUpdateAsync(photo);
         var all = await repo.GetAllAsync();
-        Assert.Single(all);
-        Assert.Contains("Nature", all[0].Categories);
+        await Assert.That(all).HasSingleItem();
+        await Assert.That(all[0].Categories).Contains("Nature");
         var byId = await repo.GetAsync(photo.Id);
-        Assert.NotNull(byId);
+        await Assert.That(byId).IsNotNull();
         var byHash = await repo.GetByHashAsync("ABC");
-        Assert.Single(byHash);
+        await Assert.That(byHash).HasSingleItem();
         await repo.DeleteAsync(photo.Id);
         var empty = await repo.GetAllAsync();
-        Assert.Empty(empty);
+        await Assert.That(empty).IsEmpty();
     }
 
-    [Fact]
+    [Test]
     public async Task A_Photo_Read_Back_Has_The_Id_And_Details_It_Was_Saved_With()
     {
         using var repo = new LiteDbPhotoRepository(_db);
@@ -48,22 +47,22 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
         };
         await repo.AddOrUpdateAsync(photo);
 
-        var listed = Assert.Single(await repo.GetAllAsync());
+        var listed = (await repo.GetAllAsync()).Single();
         // The id handed out in a listing must find the same record again, or nothing can be kept or removed.
-        Assert.Equal(photo.Id, listed.Id);
+        await Assert.That(listed.Id).IsEqualTo(photo.Id);
         var read = await repo.GetAsync(listed.Id);
-        Assert.NotNull(read);
-        Assert.Equal(photo.Id, read!.Id);
-        Assert.Equal(modified, read.FileModifiedUtc); // to the tick: an unchanged file must compare equal
-        Assert.Equal(DateTimeKind.Utc, read.FileModifiedUtc!.Value.Kind);
-        Assert.Equal(TestPhotos.Shot, read.TakenOn);
-        Assert.Equal(DateTimeKind.Unspecified, read.TakenOn!.Value.Kind); // not shifted into this computer's zone
-        Assert.Equal((photo.ScanRoot, "00000000000000FF", 4032, 3024, "HEIC", 94), (read.ScanRoot, read.PerceptualHash, read.Width, read.Height, read.Format, read.EncodedQuality));
-        Assert.Equal(new byte[] { 1, 2, 3 }, read.Signature);
-        Assert.Equal(("iPhone", 35.2, -80.8, PhotoSet.Primary, true), (read.CameraModel, read.Latitude, read.Longitude, read.Set, read.IsKept));
+        await Assert.That(read).IsNotNull();
+        await Assert.That(read!.Id).IsEqualTo(photo.Id);
+        await Assert.That(read.FileModifiedUtc).IsEqualTo(modified); // to the tick: an unchanged file must compare equal
+        await Assert.That(read.FileModifiedUtc!.Value.Kind).IsEqualTo(DateTimeKind.Utc);
+        await Assert.That(read.TakenOn).IsEqualTo(TestPhotos.Shot);
+        await Assert.That(read.TakenOn!.Value.Kind).IsEqualTo(DateTimeKind.Unspecified); // not shifted into this computer's zone
+        await Assert.That((read.ScanRoot, read.PerceptualHash, read.Width, read.Height, read.Format, read.EncodedQuality)).IsEqualTo((photo.ScanRoot, "00000000000000FF", 4032, 3024, "HEIC", 94));
+        await Assert.That(read.Signature).IsEquivalentTo(new byte[] { 1, 2, 3 }, CollectionOrdering.Matching);
+        await Assert.That((read.CameraModel, read.Latitude, read.Longitude, read.Set, read.IsKept)).IsEqualTo(("iPhone", 35.2, -80.8, PhotoSet.Primary, true));
     }
 
-    [Fact]
+    [Test]
     public async Task A_File_Has_One_Record_However_It_Is_Saved()
     {
         using var repo = new LiteDbPhotoRepository(_db);
@@ -73,15 +72,15 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
         await repo.AddOrUpdateAsync(first);
         await repo.AddOrUpdateAsync(again);
 
-        var only = Assert.Single(await repo.GetAllAsync());
-        Assert.Equal(again.Id, only.Id);
-        Assert.Equal(again.Id, (await repo.GetByPathAsync(path))!.Id);
-        Assert.Null(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "other.jpg")));
+        var only = (await repo.GetAllAsync()).Single();
+        await Assert.That(only.Id).IsEqualTo(again.Id);
+        await Assert.That((await repo.GetByPathAsync(path))!.Id).IsEqualTo(again.Id);
+        await Assert.That(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "other.jpg"))).IsNull();
         if (OperatingSystem.IsWindows())
-            Assert.Equal(again.Id, (await repo.GetByPathAsync(path.ToLowerInvariant()))!.Id);
+            await Assert.That((await repo.GetByPathAsync(path.ToLowerInvariant()))!.Id).IsEqualTo(again.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task Version_Changes_With_Every_Write()
     {
         using var repo = new LiteDbPhotoRepository(_db);
@@ -90,10 +89,10 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
         await repo.AddOrUpdateAsync(photo);
         var afterAdd = repo.Version;
         await repo.DeleteAsync(photo.Id);
-        Assert.True(start < afterAdd && afterAdd < repo.Version);
+        await Assert.That(start < afterAdd && afterAdd < repo.Version).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task Opening_An_Older_Database_Leaves_One_Record_Per_File()
     {
         // Before records were keyed by path, every scan added a record for every file.
@@ -108,37 +107,37 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
 
         using var shared = new LiteDatabase(_db);
         var repo = new LiteDbPhotoRepository(shared);
-        Assert.Equal(2, (await repo.GetAllAsync()).Count);
-        Assert.NotNull(await repo.GetByPathAsync(path));
+        await Assert.That((await repo.GetAllAsync()).Count).IsEqualTo(2);
+        await Assert.That(await repo.GetByPathAsync(path)).IsNotNull();
         repo.Dispose(); // a shared database stays open for its other users
-        Assert.Equal(2, shared.GetCollection("photos").Count());
+        await Assert.That(shared.GetCollection("photos").Count()).IsEqualTo(2);
     }
 
-    [Fact]
+    [Test]
     public async Task An_Unknown_Id_Or_Path_Finds_Nothing()
     {
         using var repo = new LiteDbPhotoRepository(_db);
-        Assert.Null(await repo.GetAsync(PhotoId.New()));
-        Assert.Null(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "never-scanned.jpg")));
+        await Assert.That(await repo.GetAsync(PhotoId.New())).IsNull();
+        await Assert.That(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "never-scanned.jpg"))).IsNull();
     }
 
-    [Fact]
+    [Test]
     public async Task Clearing_Forgets_Every_Record_And_Counts_Them()
     {
         using var repo = new LiteDbPhotoRepository(_db);
-        Assert.Equal(0, await repo.ClearAsync());
+        await Assert.That(await repo.ClearAsync()).IsEqualTo(0);
         await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "a.jpg"), FileName = "a.jpg", ContentHash = "A" });
         await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "b.jpg"), FileName = "b.jpg", ContentHash = "B" });
         var version = repo.Version;
 
-        Assert.Equal(2, await repo.ClearAsync());
+        await Assert.That(await repo.ClearAsync()).IsEqualTo(2);
 
-        Assert.Empty(await repo.GetAllAsync());
-        Assert.Empty(await repo.GetByHashAsync("A"));
-        Assert.NotEqual(version, repo.Version);
+        await Assert.That(await repo.GetAllAsync()).IsEmpty();
+        await Assert.That(await repo.GetByHashAsync("A")).IsEmpty();
+        await Assert.That(repo.Version).IsNotEqualTo(version);
 
         // And it can be filled again afterwards.
         await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "c.jpg"), FileName = "c.jpg", ContentHash = "C" });
-        Assert.Single(await repo.GetAllAsync());
+        await Assert.That(await repo.GetAllAsync()).HasSingleItem();
     }
 }

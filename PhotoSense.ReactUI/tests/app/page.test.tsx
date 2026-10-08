@@ -10,7 +10,7 @@ import { group, groupsPage, member, photo } from '../fixtures';
 
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
-  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
+  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 
@@ -183,6 +183,20 @@ describe('the results', () => {
     await click('Next');
     await click('Prev');
     expect(mainRequest()).toEqual(['duplicates', 'trip', 1, true]);
+  });
+
+  it('have the pages either side fetched ahead, so that turning to one is immediate', async () => {
+    // As the real listing does, a page that has not changed is the same answer each time it is read.
+    const pages = [1, 2, 3].map(page => groupsPage([groupA], { page, totalPages: 3, total: 120 }));
+    groupsFor = (_m, _f, page) => ({ data: pages[page - 1] });
+    open();
+    // The first page has no page before it.
+    expect(api.prefetchGroups.mock.calls).toEqual([['duplicates', '', 2, false]]);
+    await click('Next');
+    expect(api.prefetchGroups.mock.calls.slice(1)).toEqual([['duplicates', '', 3, false], ['duplicates', '', 1, false]]);
+    await click('Next');
+    // Nor the last one a page after it.
+    expect(api.prefetchGroups.mock.calls.slice(3)).toEqual([['duplicates', '', 2, false]]);
   });
 
   it('step back when the page they were on no longer exists', async () => {

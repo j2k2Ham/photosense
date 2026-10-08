@@ -41,15 +41,32 @@ export async function openInViewer(id: string){
   await send(`${API_BASE}/photos/${id}/open`, 'POST');
 }
 
+/** Groups on one page of the gallery. */
+export const PAGE_SIZE = 50;
+
+const groupsUrl = (mode: GroupMode, filter: string, page: number, hideKept: boolean) =>
+  `${API_BASE}/scan/groups?mode=${mode}&page=${page}&pageSize=${PAGE_SIZE}&hideKept=${hideKept}&q=${encodeURIComponent(filter)}`;
+
 export function useGroups(mode: GroupMode, filter: string, page: number, hideKept: boolean) {
-  const key = `${API_BASE}/scan/groups?mode=${mode}&page=${page}&hideKept=${hideKept}&q=${encodeURIComponent(filter||'')}`;
-  return useSWR<GroupsPageDto>(key, json, { refreshInterval: 5000, keepPreviousData: true });
+  return useSWR<GroupsPageDto>(groupsUrl(mode, filter, page, hideKept), json, { refreshInterval: 5000, keepPreviousData: true });
 }
 
 /**
- * Deprecated. Prefer useScanLogs hook in useScanLogs.ts which handles SignalR vs REST polling.
- * Kept for backward compatibility for any existing components.
+ * Fetches a page of groups before it is asked for, with the pictures its tiles show, so that turning to
+ * it shows it at once. The page's own request finds this waiting, shows it, and still asks for itself.
  */
+export async function prefetchGroups(mode: GroupMode, filter: string, page: number, hideKept: boolean): Promise<void> {
+  const url = groupsUrl(mode, filter, page, hideKept);
+  try {
+    const ahead = json<GroupsPageDto>(url);
+    await mutate(url, ahead, { revalidate: false });
+    for (const group of (await ahead).items) if (!group.keeper.isVideo) new Image().src = thumbnailUrl(group.keeper.id);
+  } catch {
+    // Only a head start: the page asks for itself when it is turned to, and reports what goes wrong then.
+  }
+}
+
+/** Follows the scan's log: over SignalR where the service offers it, otherwise by asking again every few seconds. */
 export function connectLogStream(onLine: (l: string)=>void) {
   const baseRoot = API_BASE.replace(/\/api$/,'');
   let disposed = false;
@@ -129,7 +146,7 @@ export async function clearResults(): Promise<{ forgotten: number }> {
 
 /** How many groups of each kind there are now, asked afresh: for saying what a scan found. */
 export async function fetchGroupTotals(): Promise<{ duplicates: number; similar: number }> {
-  const total = async (mode: GroupMode) => (await json<GroupsPageDto>(`${API_BASE}/scan/groups?mode=${mode}&page=1&hideKept=false&q=`)).total;
+  const total = async (mode: GroupMode) => (await json<GroupsPageDto>(groupsUrl(mode, '', 1, false))).total;
   const [duplicates, similar] = await Promise.all([total('duplicates'), total('similar')]);
   return { duplicates, similar };
 }

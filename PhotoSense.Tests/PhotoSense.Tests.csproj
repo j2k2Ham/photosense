@@ -1,24 +1,19 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
+    <!-- TUnit tests are a program of their own: built as an executable and run on Microsoft.Testing.Platform. -->
+    <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
-    <!-- Coverage counts the code in this repository, not what the Functions SDK's source generators emit. -->
-    <ExcludeByFile>**/*.g.cs</ExcludeByFile>
+    <!-- An assertion that is not awaited is never checked, so a forgotten await stops the build. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS4014</WarningsAsErrors>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageReference Include="xunit" Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="TUnit" Version="1.73.5" />
+    <PackageReference Include="coverlet.MTP" Version="10.1.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="Castle.Core" Version="5.2.1" />
-    <PackageReference Include="coverlet.msbuild" Version="6.0.4">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
@@ -26,10 +21,5 @@
     <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
     <ProjectReference Include="..\PhotoSense.Functions\PhotoSense.Functions.csproj" />
     <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <!-- Exclude deprecated integration test that relied on complex Azure Functions abstractions -->
-    <Compile Remove="Functions\GetScanLogsFunctionTests.cs" />
-    <None Include="Functions\GetScanLogsFunctionTests.cs" />
   </ItemGroup>
 </Project>
