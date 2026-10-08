@@ -74,6 +74,8 @@ export interface ScanProgressSnapshotDto {
   primaryPercent: number;
   secondaryPercent: number;
   overallPercent: number;
+  /** Seconds the scan has left, going by earlier scans and then by its own pace; absent while there is nothing to go by. */
+  secondsLeft?: number | null;
 }
 
 /** A folder on the computer the service runs on. */

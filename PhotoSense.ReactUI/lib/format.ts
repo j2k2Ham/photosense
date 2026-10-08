@@ -55,6 +55,16 @@ export function mapUrl(p: PhotoDto): string | undefined {
   return `https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=15/${p.latitude}/${p.longitude}`;
 }
 
+/** How long a scan has left, in words. The service works it out; while it cannot yet, that is said instead. */
+export function timeLeft(seconds?: number | null): string {
+  if (seconds == null) return 'Working out how long this will take';
+  if (seconds < 45) return 'Less than a minute left';
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `About ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} left`;
+  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  return `About ${hours} h ${rest} min left`;
+}
+
 /** The last part of a path: the folder's own name. */
 export function leaf(path: string): string {
   const parts = path.split(/[\\/]+/).filter(Boolean);

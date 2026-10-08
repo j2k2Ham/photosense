@@ -204,6 +204,15 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
             json.GetProperty("primaryProcessed").GetInt32(), json.GetProperty("secondaryTotal").GetInt32(), json.GetProperty("secondaryProcessed").GetInt32())).IsEqualTo(("scan-1", 4, 1, 2, 1));
         await Assert.That(json.GetProperty("primaryPercent").GetDouble()).IsEqualTo(25);
         await Assert.That(json.GetProperty("completedUtc").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
+        // Nothing to go by yet: no earlier scan, and too little of this one.
+        await Assert.That(json.GetProperty("secondsLeft").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
+
+        // Going by earlier scans, less the moment that has passed since it started.
+        _progress.Expect("scan-1", 780);
+        var left = (await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json().GetProperty("secondsLeft").GetDouble();
+        await Assert.That(left).IsGreaterThanOrEqualTo(720).And.IsLessThanOrEqualTo(780);
+        _progress.ScanCompleted("scan-1");
+        await Assert.That((await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json().GetProperty("secondsLeft").GetDouble()).IsEqualTo(0);
 
         await Assert.That((await function.Get(Http.Get("scan/progress/other"), "other")).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
@@ -306,7 +315,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         foreach (var type in new[]
         {
-            typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
+            typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IScanHistory), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
             typeof(IPhotoMetadataExtractor), typeof(PhotoRanking), typeof(IDuplicateAnalysisService), typeof(IDuplicateRemovalService), typeof(IPlaceNameResolver),
             typeof(PhotoDtoMapper), typeof(ScanGroupingFacade), typeof(IScanRequestPublisher), typeof(IOutboxStore), typeof(IIntegrationEventPublisher),
             typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IFolderBrowser), typeof(IPhotoDeletionService), typeof(IPhotoSearchService),

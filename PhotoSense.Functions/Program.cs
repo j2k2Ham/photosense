@@ -42,6 +42,7 @@ public static class DependencyInjection
         // Every store shares the one database connection.
         s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IAuditRepository>(sp => new LiteDbAuditRepository(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IScanHistory>(sp => new LiteDbScanHistory(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();
         s.AddSingleton<IThumbnailStore>(sp =>
@@ -66,7 +67,7 @@ public static class DependencyInjection
         s.AddSingleton<IScanExecutionService>(sp => new ScanExecutionService(
             sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IImageHashingService>(), sp.GetRequiredService<IImageAnalyzer>(),
             sp.GetRequiredService<IPhotoMetadataExtractor>(), sp.GetRequiredService<IThumbnailStore>(), sp.GetRequiredService<IScanProgressStore>(),
-            sp.GetRequiredService<IScanLogSink>()));
+            sp.GetRequiredService<IScanLogSink>(), history: sp.GetRequiredService<IScanHistory>()));
         return s;
     }
 }

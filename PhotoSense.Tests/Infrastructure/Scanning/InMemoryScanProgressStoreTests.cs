@@ -27,12 +27,26 @@ public class InMemoryScanProgressStoreTests
     {
         IScanProgressStore store = new InMemoryScanProgressStore();
         store.SetTotals("never-started", 10, 5);
+        store.Expect("never-started", 60);
         store.IncrementProcessed("never-started", primary: true);
         store.ScanCompleted("never-started");
 
         var snap = store.Get("never-started");
         await Assert.That((snap.PrimaryTotal, snap.PrimaryProcessed, snap.SecondaryTotal, snap.CompletedUtc)).IsEqualTo((0, 0, 0, (DateTime?)null));
+        await Assert.That(snap.ExpectedSeconds).IsNull();
         await Assert.That(store.GetLatest().InstanceId).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Carries_How_Long_The_Scan_Is_Expected_To_Take_Once_That_Is_Known()
+    {
+        IScanProgressStore store = new InMemoryScanProgressStore();
+        store.ScanStarted("scan");
+        await Assert.That(store.Get("scan").ExpectedSeconds).IsNull();
+        store.Expect("scan", 780);
+        await Assert.That(store.GetLatest().ExpectedSeconds).IsEqualTo(780);
+        store.Expect("scan", null);
+        await Assert.That(store.Get("scan").ExpectedSeconds).IsNull();
     }
 
     [Test]

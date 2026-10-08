@@ -4,6 +4,7 @@ using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Hashing;
 using PhotoSense.Infrastructure.Persistence;
@@ -31,6 +32,60 @@ public sealed class ScanExecutionServiceTests : IDisposable
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         return path;
+    }
+
+    // ---- how long scans take
+
+    /// <summary>Scans kept in a list, newest first, as the real history hands them back.</summary>
+    private sealed class History : IScanHistory
+    {
+        public List<ScanRecord> Scans { get; } = [];
+        public Task AddAsync(ScanRecord scan, CancellationToken ct = default) { Scans.Insert(0, scan); return Task.CompletedTask; }
+        public Task<IReadOnlyList<ScanRecord>> RecentAsync(int take = 10, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ScanRecord>>(Scans.Take(take).ToList());
+    }
+
+    /// <summary>A clock that moves on seven seconds each time it is read.</summary>
+    private sealed class SteppingClock : TimeProvider
+    {
+        private long _seconds;
+        public static readonly DateTimeOffset Day = new(2026, 10, 7, 20, 0, 0, TimeSpan.Zero);
+        public override long TimestampFrequency => 1;
+        public override long GetTimestamp() => _seconds += 7;
+        public override DateTimeOffset GetUtcNow() => Day;
+    }
+
+    [Test]
+    public async Task Keeps_What_Each_Scan_Took_And_Tells_The_Next_How_Long_To_Expect()
+    {
+        var history = new History();
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress,
+            parallelism: 2, history: history, time: new SteppingClock());
+        Write("a.jpg", "picture a");
+
+        // The first scan has nothing to go by, and leaves a record of itself.
+        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "first");
+        await Assert.That(_progress.Get("first").ExpectedSeconds).IsNull();
+        var first = history.Scans.Single();
+        await Assert.That((first.StartedUtc, first.Seconds, first.Total, first.Read, first.Unchanged)).IsEqualTo((SteppingClock.Day.UtcDateTime, 7d, 1, 1, 0));
+
+        // A scan long enough to tell: two seconds a file. The next has two files it has not seen before.
+        history.Scans.Insert(0, new ScanRecord { Seconds = 200, Read = 100, Total = 100 });
+        Write("b.jpg", "picture b");
+        File.WriteAllBytes(Path.Combine(_root.FullName, "c.jpg"), []);   // an empty file: recorded, and nothing in it to analyse
+        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "second");
+
+        await Assert.That(_progress.Get("second").ExpectedSeconds).IsEqualTo(4);
+        var second = history.Scans[0];
+        await Assert.That((second.Total, second.Read + second.Unchanged, second.Unchanged)).IsEqualTo((3, 3, 1));
+    }
+
+    [Test]
+    public async Task A_Scan_That_Was_Not_Started_Leaves_No_Record_Of_Itself()
+    {
+        var history = new History();
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, history: history);
+        await service.RunAsync(new ScanRequest(Path.Combine(_root.FullName, "not-there"), null, true), "missing");
+        await Assert.That(history.Scans).IsEmpty();
     }
 
     private Task<ScanSummary> ScanAsync(string? secondary = null, bool recursive = true, string instance = "scan")

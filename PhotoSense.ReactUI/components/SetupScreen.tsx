@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { startScan } from '../lib/apiClient';
-import { leaf, sameFolder } from '../lib/format';
+import { leaf, sameFolder, timeLeft } from '../lib/format';
 import { loadLastScan, saveLastScan } from '../lib/lastScan';
 import type { ScanProgressSnapshotDto } from '../types';
 import { FolderPicker } from './FolderPicker';
@@ -124,7 +124,7 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
               .map(([folder, n, of]) => (
                 <span key={folder} className="text-[13px] text-t3">{leaf(folder)} <span className="font-mono text-t2">{n.toLocaleString()} / {of.toLocaleString()}</span></span>
               ))}
-            <span className="ml-auto text-[13px] text-t3">About 13 minutes for 7,000 files</span>
+            <span className="ml-auto text-[13px] text-t3">{timeLeft(progress?.secondsLeft)}</span>
           </div>
           <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} className="grid grid-cols-[repeat(30,1fr)] gap-1.5">
             {Array.from({ length: TILES }, (_, i) => (

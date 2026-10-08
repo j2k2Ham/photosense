@@ -24,6 +24,11 @@ public class InMemoryScanProgressStore : IScanProgressStore
         }
     }
 
+    public void Expect(string instanceId, double? seconds)
+    {
+        if (_store.TryGetValue(instanceId, out var p)) p.ExpectedSeconds = seconds;
+    }
+
     public void IncrementProcessed(string instanceId, bool primary)
     {
         if (_store.TryGetValue(instanceId, out var p))
@@ -54,7 +59,8 @@ public class InMemoryScanProgressStore : IScanProgressStore
         public int PrimaryProcessed;
         public int SecondaryTotal;
         public int SecondaryProcessed;
+        public double? ExpectedSeconds;
         public ScanProgressSnapshot ToSnapshot() =>
-            new(InstanceId, StartedUtc, CompletedUtc, PrimaryTotal, PrimaryProcessed, SecondaryTotal, SecondaryProcessed);
+            new(InstanceId, StartedUtc, CompletedUtc, PrimaryTotal, PrimaryProcessed, SecondaryTotal, SecondaryProcessed) { ExpectedSeconds = ExpectedSeconds };
     }
 }

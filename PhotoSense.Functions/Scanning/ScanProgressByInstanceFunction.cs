@@ -1,5 +1,6 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
 using System.Net;
 
@@ -34,7 +35,9 @@ public class ScanProgressByInstanceFunction
             secondaryTotal = snap.SecondaryTotal,
             secondaryProcessed = snap.SecondaryProcessed,
             secondaryPercent = snap.SecondaryPercent,
-            overallPercent = snap.OverallPercent
+            overallPercent = snap.OverallPercent,
+            // Null until there is something to go by: this scan's own pace, or what earlier scans took.
+            secondsLeft = ScanEstimate.SecondsLeft(snap, DateTime.UtcNow)
         };
         await resp.WriteAsJsonAsync(payload);
         return resp;

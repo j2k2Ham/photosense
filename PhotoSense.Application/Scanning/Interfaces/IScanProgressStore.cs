@@ -4,6 +4,8 @@ public interface IScanProgressStore
 {
     void ScanStarted(string instanceId);
     void SetTotals(string instanceId, int primaryTotal, int secondaryTotal);
+    /// <summary>Records how long the scan is expected to take in all, going by earlier scans; null when they say nothing.</summary>
+    void Expect(string instanceId, double? seconds);
     void IncrementProcessed(string instanceId, bool primary);
     void ScanCompleted(string instanceId);
     ScanProgressSnapshot Get(string instanceId);
@@ -19,6 +21,9 @@ public sealed record ScanProgressSnapshot(
     int SecondaryTotal,
     int SecondaryProcessed)
 {
+    /// <summary>How long earlier scans suggest this one will take in all, when they have anything to say.</summary>
+    public double? ExpectedSeconds { get; init; }
+
     public double PrimaryPercent => PrimaryTotal == 0 ? 100 : (double)PrimaryProcessed / PrimaryTotal * 100d;
     public double SecondaryPercent => SecondaryTotal == 0 ? 100 : (double)SecondaryProcessed / SecondaryTotal * 100d;
     public double OverallPercent

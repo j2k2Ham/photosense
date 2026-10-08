@@ -22,12 +22,18 @@ public class ScanExecutionService : IScanExecutionService
     private readonly IThumbnailStore _thumbnails;
     private readonly IScanProgressStore _progress;
     private readonly IScanLogSink? _log;
+    private readonly IScanHistory? _history;
+    private readonly TimeProvider _time;
     private readonly int _parallelism;
 
+    /// <param name="history">Where what each scan took is kept, so that the next can say how long it will be.</param>
     public ScanExecutionService(IPhotoRepository repo, IImageHashingService hash, IImageAnalyzer analyzer, IPhotoMetadataExtractor meta,
-        IThumbnailStore thumbnails, IScanProgressStore progress, IScanLogSink? log = null, int parallelism = 0)
+        IThumbnailStore thumbnails, IScanProgressStore progress, IScanLogSink? log = null, int parallelism = 0,
+        IScanHistory? history = null, TimeProvider? time = null)
     {
         _repo = repo; _hash = hash; _analyzer = analyzer; _meta = meta; _thumbnails = thumbnails; _progress = progress; _log = log;
+        _history = history;
+        _time = time ?? TimeProvider.System;
         // Each decoded image is held in memory, so the number in flight is capped.
         _parallelism = parallelism > 0 ? parallelism : Math.Clamp(Environment.ProcessorCount - 2, 1, 8);
     }
@@ -35,6 +41,8 @@ public class ScanExecutionService : IScanExecutionService
     public async Task<ScanSummary> RunAsync(ScanRequest request, string instanceId, CancellationToken ct = default)
     {
         _progress.ScanStarted(instanceId);
+        var startedUtc = _time.GetUtcNow().UtcDateTime;
+        var began = _time.GetTimestamp();
         try
         {
             // Without this check a mistyped folder would look like an empty one and every record would be pruned.
@@ -61,6 +69,15 @@ public class ScanExecutionService : IScanExecutionService
             _progress.SetTotals(instanceId, primary.Count, secondary.Count);
             _log?.Log(instanceId, "Info", $"Scanning {primary.Count + secondary.Count} files");
 
+            // What a file took to read in earlier scans says how long this one will be: that much for each
+            // file it has not seen before. The files it has seen are mostly skipped, in next to no time.
+            if (_history is not null)
+            {
+                var seen = (await _repo.GetAllAsync(ct)).Select(p => PhotoPath.Key(p.SourcePath)).ToHashSet();
+                var unseen = primary.Concat(secondary).Count(f => !seen.Contains(PhotoPath.Key(f)));
+                _progress.Expect(instanceId, ScanEstimate.SecondsPerFileRead(await _history.RecentAsync(ct: ct)) * unseen);
+            }
+
             // Identical files have identical sizes, so a video whose size no other video shares cannot have a
             // duplicate. Only the others are read in full; videos are large and most of them are unique.
             var sharedVideoSizes = primary.Concat(secondary).Where(MediaFiles.IsVideo)
@@ -80,6 +97,12 @@ public class ScanExecutionService : IScanExecutionService
             var summary = new ScanSummary(run.Total, run.Analyzed, run.Unchanged, run.Unreadable, pruned);
             _log?.Log(instanceId, "Info",
                 $"Scan complete: {summary.Analyzed} analyzed, {summary.Unchanged} unchanged, {summary.Unreadable} unreadable, {summary.Pruned} no longer present");
+            if (_history is not null)
+                await _history.AddAsync(new ScanRecord
+                {
+                    StartedUtc = startedUtc, Seconds = _time.GetElapsedTime(began).TotalSeconds,
+                    Total = summary.Total, Read = summary.Analyzed + summary.Unreadable, Unchanged = summary.Unchanged
+                }, ct);
             return summary;
         }
         finally

@@ -64,6 +64,16 @@ A scan builds on the one before it: files that have not changed since are skippe
 
 To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan: everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only PhotoSense's record goes, with its previews and keep marks; the photos, and anything already moved to `_PhotoSense_Removed`, stay where they are.
 
+### How long a scan will take
+
+While a scan runs, the setup screen says how long is left. The service works that out and sends it with the progress (`secondsLeft` on `GET /api/scan/progress/{id}`):
+
+- At first it goes by earlier scans: what a file took to read in the last three scans that read at least 50 files, for every file this scan has not seen before. Files already on record are mostly skipped and cost next to nothing.
+- Once the scan has run 10 seconds and has 50 files behind it, it goes by its own pace instead.
+- With no earlier scan and too little of this one, it says it is still working it out.
+
+What each scan took is kept with the rest of the data, and is not forgotten by **Start over** or **Clear results**.
+
 ### Where the data is kept
 
 The database (`photosense.db`) and the thumbnail cache are kept in a folder of your own, outside the program:

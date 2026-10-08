@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareRows, differences, groupSummary, leaf, matchMeaning, sameFolder, formatBytes, formatCoordinates, formatDimensions, formatDuration, formatFile, formatPlace, formatTaken, hasCoordinates, linkedFiles, mapUrl, matchLabel } from '../../lib/format';
+import { compareRows, differences, groupSummary, leaf, matchMeaning, sameFolder, timeLeft, formatBytes, formatCoordinates, formatDimensions, formatDuration, formatFile, formatPlace, formatTaken, hasCoordinates, linkedFiles, mapUrl, matchLabel } from '../../lib/format';
 import { group, member, photo, video } from '../fixtures';
 
 describe('formatBytes', () => {
@@ -134,6 +134,21 @@ describe('leaf', () => {
     ['C:\\', 'C:'],
     ['', ''],
   ])('names %j by its last part, %j', (path, name) => expect(leaf(path)).toBe(name));
+});
+
+describe('timeLeft', () => {
+  it('says so while the service has nothing to go by', () => {
+    expect(timeLeft()).toBe('Working out how long this will take');
+    expect(timeLeft(null)).toBe('Working out how long this will take');
+  });
+
+  it.each([
+    [0, 'Less than a minute left'], [44, 'Less than a minute left'], [45, 'About 1 minute left'], [89, 'About 1 minute left'],
+    [90, 'About 2 minutes left'], [780, 'About 13 minutes left'], [3569, 'About 59 minutes left'],
+    [3570, 'About 1 h 0 min left'], [5400, 'About 1 h 30 min left'], [9000, 'About 2 h 30 min left'],
+  ])('puts %d seconds into words', (seconds, words) => {
+    expect(timeLeft(seconds)).toBe(words);
+  });
 });
 
 describe('sameFolder', () => {

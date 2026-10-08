@@ -186,7 +186,7 @@ describe('while a scan runs', () => {
 
   it('shows how far it has come, folder by folder, and holds the Scan button', () => {
     saveLastScan({ root: 'C:\\Users\\jamie\\Phone Pictures', second: "C:\\Users\\jamie\\Pictures\\Jamie's Phone", recursive: true });
-    show({ scanning: true, hasResults: true, log, progress: progress({ primaryTotal: 4212, primaryProcessed: 1737, secondaryTotal: 2729, secondaryProcessed: 1125, overallPercent: 41.2 }) });
+    show({ scanning: true, hasResults: true, log, progress: progress({ primaryTotal: 4212, primaryProcessed: 1737, secondaryTotal: 2729, secondaryProcessed: 1125, overallPercent: 41.2, secondsLeft: 463 }) });
 
     expect(scan()).toHaveTextContent('Scanning…');
     expect(scan()).toBeDisabled();
@@ -194,7 +194,8 @@ describe('while a scan runs', () => {
     expect(block).toHaveTextContent('41%2,862 of 6,941 files');
     expect(block).toHaveTextContent('Phone Pictures 1,737 / 4,212');
     expect(block).toHaveTextContent("Jamie's Phone 1,125 / 2,729");
-    expect(block).toHaveTextContent('About 13 minutes for 7,000 files');
+    // What the service makes of the time left, not a figure of the page's own.
+    expect(block).toHaveTextContent('About 8 minutes left');
     const mosaic = screen.getByRole('progressbar');
     expect(mosaic).toHaveAttribute('aria-valuenow', '41');
     expect(mosaic.children).toHaveLength(120);
@@ -234,6 +235,7 @@ describe('while a scan runs', () => {
     // Before the first report of progress arrives there is only the bar.
     rerender(<SetupScreen scanning log={[]} hasResults={false} onStarted={onStarted} onBack={onBack} notify={notify} />);
     expect(screen.getByLabelText('Scan progress')).toHaveTextContent('0%0 of 0 files');
+    expect(screen.getByLabelText('Scan progress')).toHaveTextContent('Working out how long this will take');
     expect(screen.queryByText(/\d+ \/ \d+/)).not.toBeInTheDocument();
   });
 });
