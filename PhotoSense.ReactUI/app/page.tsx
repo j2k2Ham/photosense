@@ -76,6 +76,7 @@ export default function HomePage() {
   // When the selected group is gone, as it is once its duplicates are removed, the one that took its place is shown.
   const selected = items.find(g => g.key === selection.key) ?? items[Math.min(selection.index, items.length - 1)];
   const compared = comparing ? items.find(g => g.key === comparing) : undefined;
+  const comparedIndex = compared ? Math.min(copyIndex, compared.members.length - 1) : 0;
   const removable = data?.removableCount ?? 0;
   const reclaimable = data?.reclaimableBytes ?? 0;
 
@@ -127,9 +128,12 @@ export default function HomePage() {
   });
   // Every removal says which file went and which file stays, by name: the two can look like one.
   const removeOne = (photo: PhotoDto, stays: PhotoDto) => run(async () => {
+    // Where the file stood among its group's copies. The copy after it takes its place, so the place is
+    // kept: going through a group's copies does not start again from the first after each one.
+    const from = items.find(g => g.members.some(m => m.photo.id === photo.id));
     const result = await removePhoto(photo.id);
     setPending(undefined);
-    setCopyIndex(0);
+    setCopyIndex(from && from.members.length > 1 ? Math.min(from.members.findIndex(m => m.photo.id === photo.id), from.members.length - 2) : 0);
     push(`Moved ${photo.fileName}${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. ${stays.fileName} stays where it is.`, 'ok');
   });
   const removeMany = (group?: DuplicateGroupDto) => run(async () => {
@@ -233,8 +237,8 @@ export default function HomePage() {
       )}
 
       {compared && (
-        <PhotoWindow key={compared.key} original={compared.keeper} member={compared.members[Math.min(copyIndex, compared.members.length - 1)]} mode={mode} busy={busy}
-          onClose={() => setComparing(undefined)} onToggleKeep={toggleKeep} onRemove={removeOne} onOpenInViewer={openExternally} />
+        <PhotoWindow key={compared.key} original={compared.keeper} member={compared.members[comparedIndex]} index={comparedIndex} count={compared.members.length} mode={mode} busy={busy}
+          onClose={() => setComparing(undefined)} onSelectCopy={setCopyIndex} onToggleKeep={toggleKeep} onRemove={removeOne} onOpenInViewer={openExternally} />
       )}
 
       {pending?.scope === 'all' && (

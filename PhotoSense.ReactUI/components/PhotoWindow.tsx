@@ -10,9 +10,14 @@ interface Props {
   readonly original: PhotoDto;
   /** The copy it is being compared with. */
   readonly member: GroupMemberDto;
+  /** Where that copy stands among the group's copies, counting from 0, and how many copies there are. */
+  readonly index: number;
+  readonly count: number;
   readonly mode: GroupMode;
   readonly busy: boolean;
   onClose(): void;
+  /** Shows another of the group's copies in this window. */
+  onSelectCopy(index: number): void;
   onToggleKeep(photo: PhotoDto): void;
   /** Removes one of the two files; the other is the one that stays. */
   onRemove(photo: PhotoDto, stays: PhotoDto): void;
@@ -34,8 +39,19 @@ function Caption({ photo, children }: { readonly photo: PhotoDto; readonly child
   );
 }
 
+/** The way to the copy before or after the one showing, laid over the edge of its picture. */
+function Step({ to, disabled, onClick }: { readonly to: 'Previous' | 'Next'; readonly disabled: boolean; onClick(): void }) {
+  const back = to === 'Previous';
+  return (
+    <button type="button" aria-label={`${to} copy`} title={`${to} copy`} disabled={disabled} onClick={onClick}
+      className={`absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/45 backdrop-blur-sm transition hover:bg-black/75 focus-visible:bg-black/75 disabled:opacity-30 ${back ? 'left-3' : 'right-3'}`}>
+      <span aria-hidden className={`h-2.5 w-2.5 border-b-2 border-white ${back ? 'ml-1 rotate-45 border-l-2' : 'mr-1 -rotate-45 border-r-2'}`} />
+    </button>
+  );
+}
+
 /** The comparison window: the original and a copy side by side, or one at a time in the same spot to flip between. */
-export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKeep, onRemove, onOpenInViewer }: Props) {
+export function PhotoWindow({ original, member, index, count, mode, busy, onClose, onSelectCopy, onToggleKeep, onRemove, onOpenInViewer }: Props) {
   const [view, setView] = useState<View>('side');
   // Which deletion is being asked about a second time, in place of its button, and of which copy. The
   // question is not carried over to the copy that takes this one's place once it has gone.
@@ -49,6 +65,21 @@ export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKee
   const best = similar ? 'best shot' : 'original';
   const panel = useRef<HTMLDivElement>(null);
 
+  // Moves to the copy before or after this one, where there is one. Asked for from the original's own
+  // view, the copy is what comes up: it is the copy that was asked for.
+  const canStep = (by: number) => !busy && index + by >= 0 && index + by < count;
+  const step = (by: number) => {
+    if (!canStep(by)) return;
+    onSelectCopy(index + by);
+    setView(v => (v === 'original' ? 'copy' : v));
+  };
+  const steps = (
+    <>
+      {index > 0 && <Step to="Previous" disabled={busy} onClick={() => step(-1)} />}
+      {index < count - 1 && <Step to="Next" disabled={busy} onClick={() => step(1)} />}
+    </>
+  );
+
   // Focus comes into the window, so that Space flips the view rather than pressing whatever opened it.
   useEffect(() => { panel.current?.focus(); }, []);
 
@@ -60,10 +91,15 @@ export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKee
         e.preventDefault();
         setView(v => (v === 'original' ? 'copy' : 'original'));
       }
+      // The arrow keys move between the copies, except on a player, where they move through the video.
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !(e.target instanceof Element && e.target.closest('video, input'))) {
+        e.preventDefault();
+        step(e.key === 'ArrowLeft' ? -1 : 1);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  });
 
   return (
     <div className="fixed inset-0 z-30 bg-scrim p-10" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -75,6 +111,7 @@ export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKee
             {view === 'original' ? `the ${best} · it stays` : <>{similar ? 'similar to' : 'a copy of'} <span className="font-medium text-keep">{original.fileName}</span></>}
           </span>
           <MatchChip match={member.match} kept={copy.kept} />
+          {count > 1 && <span className="shrink-0 text-[13.5px] text-t2">Copy {index + 1} of {count}</span>}
           <div role="group" aria-label="View" className="mx-auto flex shrink-0 rounded-full bg-s2 p-1">
             {views.map(v => (
               <button key={v.id} type="button" aria-pressed={view === v.id} onClick={() => setView(v.id)}
@@ -97,7 +134,7 @@ export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKee
                   <Caption photo={original}><span className="font-bold text-keep">{similar ? 'BEST' : 'ORIGINAL'}</span></Caption>
                 </figure>
                 <figure className="flex min-h-0 flex-col gap-2">
-                  <div className="min-h-0 flex-1 overflow-hidden rounded-[10px] shadow-[inset_0_0_0_1px_var(--line)] p-px"><PhotoView photo={copy} onOpenInViewer={onOpenInViewer} /></div>
+                  <div className="relative min-h-0 flex-1 overflow-hidden rounded-[10px] shadow-[inset_0_0_0_1px_var(--line)] p-px"><PhotoView photo={copy} onOpenInViewer={onOpenInViewer} />{steps}</div>
                   <Caption photo={copy}><span className="font-bold">THIS COPY</span></Caption>
                 </figure>
               </div>
@@ -108,11 +145,15 @@ export function PhotoWindow({ original, member, mode, busy, onClose, onToggleKee
                   <span className={`badge absolute left-4 top-4 ${view === 'original' ? 'bg-keep text-on-brand' : 'bg-black/60 text-white'}`}>
                     {view === 'original' ? `${similar ? 'Best' : 'Original'} · it stays` : `This copy · ${matchLabel[member.match]}`}
                   </span>
+                  {steps}
                 </div>
                 <Caption photo={shown} />
               </figure>
             )}
-            <p className="text-center text-[12.5px] text-t3">Press <kbd className="rounded border border-line px-1.5 font-mono">Space</kbd> to flip between this copy and the original in the same spot</p>
+            <p className="text-center text-[12.5px] text-t3">
+              Press <kbd className="rounded border border-line px-1.5 font-mono">Space</kbd> to flip between this copy and the original in the same spot
+              {count > 1 && <>, <kbd className="rounded border border-line px-1.5 font-mono">←</kbd> <kbd className="rounded border border-line px-1.5 font-mono">→</kbd> to move between the {count} copies</>}
+            </p>
           </div>
 
           <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-line p-6">

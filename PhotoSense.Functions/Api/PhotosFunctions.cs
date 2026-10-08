@@ -116,7 +116,7 @@ public class PhotosFunctions
             // The cache was cleared since the scan: make the thumbnail again from the file.
             try
             {
-                await using var stream = File.OpenRead(photo.SourcePath);
+                await using var stream = OpenForShowing(photo.SourcePath);
                 jpeg = (await _analyzer.AnalyzeAsync(stream)).ThumbnailJpeg;
                 await _thumbnails.SaveAsync(photo.ContentHash, jpeg);
             }
@@ -138,13 +138,15 @@ public class PhotosFunctions
 
         try
         {
-            if (BrowserFormats.TryGetValue(Path.GetExtension(photo.SourcePath), out var contentType))
-                return await ImageResponseAsync(req, await File.ReadAllBytesAsync(photo.SourcePath), contentType, photo.ContentHash);
-
-            byte[] jpeg;
-            await using (var stream = File.OpenRead(photo.SourcePath))
-                jpeg = await _analyzer.RenderJpegAsync(stream, ReviewImageEdge);
-            return await ImageResponseAsync(req, jpeg, "image/jpeg", photo.ContentHash);
+            // What browsers can show is sent as it is; anything else is converted for viewing.
+            var asItIs = BrowserFormats.TryGetValue(Path.GetExtension(photo.SourcePath), out var contentType);
+            byte[] bytes;
+            await using (var stream = OpenForShowing(photo.SourcePath))
+            {
+                if (asItIs) await stream.ReadExactlyAsync(bytes = new byte[stream.Length]);
+                else bytes = await _analyzer.RenderJpegAsync(stream, ReviewImageEdge);
+            }
+            return await ImageResponseAsync(req, bytes, contentType ?? "image/jpeg", photo.ContentHash);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -162,7 +164,7 @@ public class PhotosFunctions
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null || !photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        await using var file = new FileStream(photo.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await using var file = OpenForShowing(photo.SourcePath);
         var requested = req.Headers.TryGetValues("Range", out var values) ? values.FirstOrDefault() : null;
         if (ByteRange.Parse(requested, file.Length) is not { } range)
         {
@@ -210,6 +212,14 @@ public class PhotosFunctions
         }
         return resp;
     }
+
+    /// <summary>
+    /// Opens a file to show it on the page without holding on to it: while it is being read it can still be
+    /// moved to the holding folder. Opened the usual way, a video could not be deleted at a moment when its
+    /// player was fetching the next piece of it, nor a picture while it was being converted for viewing.
+    /// </summary>
+    public static FileStream OpenForShowing(string path)
+        => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
     // A file's bytes never change under the same content hash, so the browser may keep what it was sent.
     private static async Task<HttpResponseData> ImageResponseAsync(HttpRequestData req, byte[] bytes, string contentType, string? contentHash)

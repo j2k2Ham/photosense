@@ -12,11 +12,12 @@ Main changes from the current UI:
 - **Menu.** The header has a menu button (☰). It holds the **theme toggle (Dark/Light)**, Errors, and "Change folders or rescan".
 - **No GitHub link** in the header.
 - **All buttons are pills** (`border-radius: 9999px`).
+- **New: Organize.** A second area, reached from a Clean up / Organize switch in the header, that suggests folders by place (nearby places combined) or by date, lets you make your own folders, previews every move, resolves name clashes one by one, and can undo. See screen 6 and `ORGANIZE_PROMPT.md`.
 
 ## About the design files
 The files in this bundle are **design references written in HTML**. They are prototypes that show the intended look and behavior. They are not production code to copy. Rebuild the designs in the existing `PhotoSense.ReactUI` codebase using its patterns: React function components, Tailwind classes, the `lib/` API helpers, SWR and SignalR. Keep the existing data flow and replace only the presentation and the interaction behavior described here.
 
-`PhotoSense Prototype.dc.html` opens directly in a browser and needs `support.js` next to it. It is fully clickable and uses fake data (263 duplicate groups and 170 similar groups). Its logic lives in the `class Component` block near the bottom of the file and is useful as a behavior spec. Two props change the starting state: `startAt` ("Results" or "First run") and `offline` (shows the service-down bar and makes every action fail with an error toast).
+`PhotoSense Prototype.dc.html` opens directly in a browser and needs `support.js` next to it. It is fully clickable and uses fake data (263 duplicate groups and 170 similar groups). Its logic lives in the `class Component` block near the bottom of the file and is useful as a behavior spec. Two props change the starting state: `startAt` ("Results", "First run" or "Organize") and `offline` (shows the service-down bar and makes every action fail with an error toast).
 
 `reference/PhotoSense Redesign (explorations).dc.html` holds the three earlier directions, 1a, 1b and 1c. The final design is **1b's layout plus 1a's color scheme, logo mark and "Differs from the original in" content**. Use it for context only.
 
@@ -37,6 +38,13 @@ The files in this bundle are **design references written in HTML**. They are pro
 | `Toaster.tsx` | Pill toasts. Errors are also written to a persistent **errors store** that feeds the Errors panel. |
 | `Footer.tsx` | Remove it. The redesign has no footer. |
 | (new) `AppMenu.tsx`, `ErrorsPanel.tsx`, `ThemeProvider` | Menu popover, errors popover, and the theme stored in `localStorage`. Use Tailwind `darkMode: 'class'`, which is already configured. |
+| (new) `ModeSwitch.tsx` | The Clean up / Organize pill switch in the header. |
+| (new) `organize/OrganizeView.tsx` | Organize toolbar + two-column layout. |
+| (new) `organize/FileGallery.tsx`, `SelectionBar.tsx` | All-files grid with select, Shift-range, drag, tags; the floating selection bar with inline new-folder input. |
+| (new) `organize/SuggestionsPanel.tsx`, `SuggestionCard.tsx`, `ClusterMap.tsx`, `CustomFolderCard.tsx`, `RecentMoves.tsx` | The right panel: grouping controls, map, suggestion and custom-folder cards, drop tray, Recently moved. |
+| (new) `organize/MovePreview.tsx` | The preview window (pagination, destination picker, Move/Copy, clash summary). |
+| (new) `organize/NameClashWindow.tsx` | The name-collision comparison window. Reuse the shell and mode toggle from `PhotoWindow.tsx`. |
+| (new) `lib/organize.ts` | Clustering (haversine, single-linkage), naming templates, destination and clash resolution helpers. |
 
 ---
 
@@ -257,6 +265,22 @@ Centered, 520px, padding 28, radius 20, `--pop` background, gap 16.
 - Buttons: [Cancel] outline pill and [Delete 264 files] rose pill, which reads **"Working…"** while running. Both are disabled while running, and the backdrop and Esc can't close the dialog then.
 - Success toast: "Moved 3 duplicates (8.7 MB) to _PhotoSense_Removed".
 
+### 6. Organize (new feature)
+Reached from the **Clean up / Organize** pill switch next to the logo (selected option: `--t1` background, `--bg` text). Prototype: set the `startAt` tweak to "Organize".
+- **Toolbar** (72px, same as Results): root chip "Phone Pictures · 4,212 files · from today's scan" with a **Choose root folder** pill (opens the folder browser titled "Choose a folder to organize"; only dates and GPS are read, no scan), search ("Search by name, place or month"), filter pills **All / Not organized / No location** with mono counts, and the note "Nothing moves until you preview a folder and confirm."
+- **Left: all files** grid, `minmax(128px,1fr)`, 60 per page with Prev/Next. Tiles have a 20px checkbox (top-left), video duration (top-right), and a bottom tag: "For <your folder>" (blue) or "In <folder>" / "Copied to <folder>" (green). Click selects, Shift-click selects a range, double-click opens in the default viewer, drag moves the file (or the whole selection) onto your folders. A floating **selection bar** shows "N selected", "Select all N shown", **New folder from these** (turns the bar into a name input) and **Clear**.
+- **Right: Suggested folders** panel, `clamp(400px,34vw,540px)`, `--s1`.
+  - Controls: **Group by** Place / Date. Place: **Nearby places** Combine (select: within 1 / 5 / 15 / 25 / 50 km, default 5) or Keep separate; **Folder names** Landmark or area (default, falls back to the town name and says so on the card) / Town, state / State \ landmark; **Structure** Place \ Year (default) or Flat. Date: **One folder per** Year (`2022`) / Month (`2022-07`).
+  - **Map** toggle (on by default): clusters as brand dots sized by file count, dashed circles of the combine distance around each place, small grey dots for merged places, labels "Butte · 812". Clicking a dot or a card filters the left grid (a "Suggested: …" chip with × appears).
+  - **Cards**: 64px 2×2 thumbnail mosaic, name, "N files · size", date range, "Includes Apgar (4 km away)" in `--ident`, and a **Preview** pill.
+  - **No location** card (dashed border): Show / Group by date.
+  - **Your folders**: New folder (inline input, `\` makes subfolders), cards with "Add N here", Preview, × remove; cards and the drag tray accept drops. Suggested folder cards accept drops too: dropped files join that suggestion and show a "For <name>" tag. Files in your folders are left out of suggestions.
+  - **Recently moved**: green rows with **Undo**.
+- **Preview window** (same shell as the comparison window): file grid, 100 per page with Prev/Next, where clicking a tile leaves it out (clashing files carry a NAME TAKEN badge), Leave all out / Include all, editable folder name, **Goes to** path with a **Change** pill (opens the folder browser titled "Choose where the files go" with **Put the files here** and **Make the new folder here**; "Use the default" resets it to the root), **Move / Copy** switch (user picks), "Goes to" path with year split note, Files / Size / Taken / From breakdown, "Name already taken" amber box with a count of each choice and **Review each name**, Live Photo and edit files checkbox, then **Move N files** (brand) and Cancel. After a move: toast with an **Undo** action (9 s), entry in Recently moved.
+- **Name already taken window** (z above the preview, same layout as the Clean up comparison window): header shows the file name, Side by side / Moving file / Already there, Previous · "3 of 17" · Next. The stage shows the moving file (brand ring, MOVING badge) beside every file of that name already in the destination (ALREADY THERE), including any "(1)" copies, so the next free number is shown. The sidebar has a Moving / Already there table (Taken, Size, Pixels, Place, Folder) with differences highlighted, an "identical file" note when they match, and three choices: **Add a number** (default, shows the result), **Rename it** (input plus the fixed extension; a taken or invalid name falls back to a number with a rose warning) or **Leave it where it is**. Then **Next name · 4 of 17** / **Done**, Back to preview, and "Add a number to all the remaining names". Space flips, ← → step through names, Esc returns to the preview.
+- **Clustering**: single-linkage on place coordinates (haversine) with the chosen distance; the folder is named after the place with the most files. Files already in their destination folder are skipped.
+- **Back end needed**: list files with date + GPS for any folder without a scan (reuse `BasicExifMetadataExtractor` and `GeoNamesPlaceResolver`, which would need a landmark/area level), and a move/copy endpoint that also moves companion files (`CompanionFileFinder`, `LivePhotoLink`), resolves name clashes, and records an audit entry so Undo can reverse it.
+
 ---
 
 ## Interactions and behavior
@@ -309,7 +333,19 @@ These were captured from the prototype at 1600×900 and scaled down. They are in
 - `11-errors-panel.png`: the persistent Errors panel
 - `12-scanning.png`: the scan in progress (mosaic, counts and log tail)
 - `13-results-light.png`, `14-compare-light.png`: the Light theme
+- `15-organize-dark.png`: Organize, list view, default settings (Place, combine within 5 km, Landmark or area, Place \ Year)
+- `16-organize-map.png`: the cluster map turned on
+- `17-organize-selection-new-folder.png`: six files selected with Shift-click and the selection bar's inline "New folder" input
+- `18-organize-by-date-your-folders.png`: grouped by date (one folder per year), a custom folder in Your folders, "For …" tags on the tiles
+- `19-organize-folder-name-options.png`: the Folder names dropdown with examples
+- `20-preview.png`: the preview window (page 1 of 8, Move/Copy, Goes to with Change, clash summary)
+- `21-name-taken-identical.png`: the Name already taken window for byte-identical files
+- `22-name-taken-three-files.png`: a clash where "(1)" is also taken, so three files are compared and the next free number is (2)
+- `23-name-taken-rename.png`: the Rename it option with the extension fixed
+- `24-preview-choose-destination.png`: the folder browser opened from Goes to, with Put the files here / Make the new folder here
+- `25-organize-light.png`: Organize in the Light theme
 
 ## Files
-- `PhotoSense Prototype.dc.html` is the clickable spec (it needs `support.js`). Markup with inline styles is at the top and the behavior logic is in `class Component`.
+- `PhotoSense Prototype.dc.html` is the clickable spec (it needs `support.js`). Markup with inline styles is at the top and the behavior logic is in `class Component`. The Organize logic is in `mkOrg`, `suggestions`, `pvCalc`, `clash`, `doMove` and `undoMove`.
+- `ORGANIZE_PROMPT.md` is a ready-to-paste prompt for building the Organize feature.
 - `reference/PhotoSense Redesign (explorations).dc.html` has the earlier directions 1a, 1b and 1c, for context.

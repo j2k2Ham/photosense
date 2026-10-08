@@ -391,6 +391,54 @@ describe('keeping and viewing', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('goes through a group\'s copies in the window, and the desk behind it follows', async () => {
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.JPG' }));
+    expect(win()).toHaveTextContent('Copy 1 of 2');
+    await userEvent.click(within(win()).getByRole('button', { name: 'Next copy' }));
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_4198.HEIC' })).toHaveTextContent('Copy 2 of 2');
+    await userEvent.click(within(win()).getByRole('button', { name: 'Close' }));
+    expect(desk()).toHaveTextContent('Copy 2 of 2 · HEIC');
+  });
+
+  it('keeps its place among a group\'s copies when one is removed, and shows the one that took its place', async () => {
+    const copies = [1, 2, 3].map(n => member({ id: `c${n}`, fileName: `IMG_6000 (${n}).JPG` }));
+    let listed = [group({ key: 'gC', keeper: photo({ id: 'c', fileName: 'IMG_6000.JPG' }), members: copies }), groupB];
+    groupsFor = () => ({ data: groupsPage(listed) });
+    const { refresh } = open();
+    const removeShown = async () => {
+      await userEvent.click(within(win()).getByRole('button', { name: /^Delete this copy ·/ }));
+      await userEvent.click(within(win()).getByRole('button', { name: 'Delete this copy' }));
+    };
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_6000.JPG' }));
+    await userEvent.click(within(win()).getByRole('button', { name: 'Next copy' }));
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_6000 (2).JPG' })).toHaveTextContent('Copy 2 of 3');
+
+    // The middle one of three goes: the third is now the second, and is what the window shows.
+    await removeShown();
+    expect(api.removePhoto).toHaveBeenLastCalledWith('c2');
+    await toast(/^Moved IMG_6000 \(2\)\.JPG/);
+    listed = [group({ ...listed[0], members: [copies[0], copies[2]] }), groupB];
+    refresh();
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_6000 (3).JPG' })).toHaveTextContent('Copy 2 of 2');
+
+    // The last of them goes: the one before it is shown.
+    await removeShown();
+    expect(api.removePhoto).toHaveBeenLastCalledWith('c3');
+    await toast(/^Moved IMG_6000 \(3\)\.JPG/);
+    listed = [group({ ...listed[0], members: [copies[0]] }), groupB];
+    refresh();
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_6000 (1).JPG' })).not.toHaveTextContent(/Copy \d of/);
+
+    // The only one left goes, and its group with it: the window closes and the next group starts at its first copy.
+    await removeShown();
+    await toast(/^Moved IMG_6000 \(1\)\.JPG/);
+    listed = [groupB];
+    refresh();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(desk()).toHaveTextContent('Copy 1 of 1 · JPEG');
+  });
+
   it('removes a copy from the window after its own second question, and closes on request', async () => {
     api.removePhoto.mockResolvedValue({ companions: 2 });
     open();

@@ -244,6 +244,44 @@ public sealed class PhotosFunctionsTests : IDisposable
             await Assert.That((await _api.GetVideoAsync(Http.Get("v"), id)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
+    // ---- showing a file does not hold on to it
+
+    [Test]
+    public async Task A_File_Can_Be_Moved_Away_While_It_Is_Being_Shown()
+    {
+        // A deletion moves the file. One that arrives while the page is still being sent the file must not
+        // fail because of that: each of these is moved at the very moment the service has it open.
+        var held = Directory.CreateDirectory(Path.Combine(_root.FullName, "held")).FullName;
+        string Moved(Photo photo)
+        {
+            var to = Path.Combine(held, photo.FileName);
+            File.Move(photo.SourcePath, to);
+            return to;
+        }
+
+        var heic = await AddAsync("IMG_1.HEIC", contentHash: "H1");
+        _analyzer.Setup(a => a.RenderJpegAsync(It.IsAny<Stream>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Returns(() => { Moved(heic); return Task.FromResult<byte[]>([5, 5]); });
+        await Assert.That((await _api.GetImageAsync(Http.Get("i"), Id(heic))).StatusCode).IsEqualTo(HttpStatusCode.OK);
+
+        var uncached = await AddAsync("IMG_2.JPG", contentHash: "H2");
+        _analyzer.Setup(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()))
+            .Returns(() => { Moved(uncached); return Task.FromResult(new ImageAnalysis(4, 3, "JPEG", null, 0, [], [1, 2])); });
+        await Assert.That((await _api.GetThumbnailAsync(Http.Get("t"), Id(uncached))).StatusCode).IsEqualTo(HttpStatusCode.OK);
+
+        // A video is read a piece at a time, each read as short as the disk allows; the same opening serves it.
+        var video = await AddAsync("clip.MOV", "0123456789", contentHash: "H3");
+        await using (var playing = PhotosFunctions.OpenForShowing(video.SourcePath))
+        {
+            var to = Moved(video);
+            await Assert.That(new StreamReader(playing).ReadToEnd()).IsEqualTo("0123456789");
+            await Assert.That(File.Exists(to)).IsTrue();
+        }
+
+        await Assert.That(Directory.GetFiles(held).Select(f => Path.GetFileName(f)!).Order()).IsEquivalentTo(new[] { "IMG_1.HEIC", "IMG_2.JPG", "clip.MOV" }.Order(), CollectionOrdering.Matching);
+        await Assert.That(new[] { heic, uncached, video }.Any(p => File.Exists(p.SourcePath))).IsFalse();
+    }
+
     // ---- open in the system's viewer
 
     [Test]

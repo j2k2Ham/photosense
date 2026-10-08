@@ -9,10 +9,14 @@ import { member, photo } from '../fixtures';
 const original = photo({ fileName: 'IMG_4299.JPG', fileSizeBytes: 25_165_824 });
 const copy = member({ id: 'm1', fileName: 'IMG_4299.HEIC', folder: 'D:\\backup\\phone', format: 'HEIC', fileSizeBytes: 12_582_912, latitude: 46.1283, longitude: -112.9423, placeName: 'Near Anaconda, Montana, US', cameraModel: 'iPhone 12 Pro Max' }, 'samePicture', 'Opens everywhere: JPEG rather than HEIC');
 
-function open(options: { member?: GroupMemberDto; mode?: GroupMode; busy?: boolean } = {}) {
-  const handlers = { onClose: vi.fn(), onToggleKeep: vi.fn(), onRemove: vi.fn(), onOpenInViewer: vi.fn() };
-  const view = render(<PhotoWindow original={original} member={options.member ?? copy} mode={options.mode ?? 'duplicates'} busy={options.busy ?? false} {...handlers} />);
-  return { ...handlers, ...view };
+type Options = { member?: GroupMemberDto; mode?: GroupMode; busy?: boolean; index?: number; count?: number };
+
+function open(options: Options = {}) {
+  const handlers = { onClose: vi.fn(), onSelectCopy: vi.fn(), onToggleKeep: vi.fn(), onRemove: vi.fn(), onOpenInViewer: vi.fn() };
+  const props = { original, member: copy, mode: 'duplicates' as GroupMode, busy: false, index: 0, count: 1, ...options, ...handlers };
+  const view = render(<PhotoWindow {...props} />);
+  // The same window, drawn again with something about it changed.
+  return { ...handlers, ...view, again: (changes: Options) => view.rerender(<PhotoWindow {...props} {...changes} />) };
 }
 const win = () => screen.getByRole('dialog');
 const button = (name: string | RegExp) => within(win()).getByRole('button', { name });
@@ -105,13 +109,12 @@ describe('the comparison window', () => {
   });
 
   it('asks afresh about the copy that takes the place of one just deleted', async () => {
-    const { rerender, onClose, onToggleKeep, onRemove, onOpenInViewer } = open();
+    const { again, onRemove } = open();
     await click('Delete this copy · 12.0 MB');
     expect(button('Delete this copy')).toBeInTheDocument();
 
     // The copy has gone and the group's next one is shown in the same window: nothing is armed for it.
-    const next = member({ id: 'm9', fileName: 'IMG_4299 (1).JPG', fileSizeBytes: 25_165_824 }, 'identical');
-    rerender(<PhotoWindow original={original} member={next} mode="duplicates" busy={false} onClose={onClose} onToggleKeep={onToggleKeep} onRemove={onRemove} onOpenInViewer={onOpenInViewer} />);
+    again({ member: member({ id: 'm9', fileName: 'IMG_4299 (1).JPG', fileSizeBytes: 25_165_824 }, 'identical') });
     expect(button('Delete this copy · 24.0 MB')).toBeEnabled();
     expect(within(win()).queryByRole('button', { name: 'Delete this copy' })).not.toBeInTheDocument();
     expect(within(win()).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
@@ -129,10 +132,9 @@ describe('the comparison window', () => {
   });
 
   it('shows that it is working, and lets nothing else be started meanwhile', async () => {
-    const { rerender, onClose, onToggleKeep, onRemove, onOpenInViewer } = open();
+    const { again } = open();
     await click('Delete this copy · 12.0 MB');
-    const busy = <PhotoWindow original={original} member={copy} mode="duplicates" busy onClose={onClose} onToggleKeep={onToggleKeep} onRemove={onRemove} onOpenInViewer={onOpenInViewer} />;
-    rerender(busy);
+    again({ busy: true });
     expect(button('Working…')).toBeDisabled();
     for (const name of ['Open in default viewer', 'Keep this copy too', 'Delete the original instead']) expect(button(name)).toBeDisabled();
     expect(button('Cancel')).toBeEnabled();
@@ -147,11 +149,11 @@ describe('the comparison window', () => {
   });
 
   it('shows working on the other confirmation too', async () => {
-    const { rerender, onClose, onToggleKeep, onRemove, onOpenInViewer } = open({ mode: 'similar', member: member({ id: 'm3', fileName: 'IMG_4300.JPG' }, 'similar') });
+    const { again } = open({ mode: 'similar', member: member({ id: 'm3', fileName: 'IMG_4300.JPG' }, 'similar') });
     await click('Delete the best shot instead');
     expect(win()).toHaveTextContent(/to _PhotoSense_Removed\?/);
     expect(button('Delete the best shot')).toBeEnabled();
-    rerender(<PhotoWindow original={original} member={member({ id: 'm3', fileName: 'IMG_4300.JPG' }, 'similar')} mode="similar" busy onClose={onClose} onToggleKeep={onToggleKeep} onRemove={onRemove} onOpenInViewer={onOpenInViewer} />);
+    again({ busy: true });
     expect(button('Working…')).toBeDisabled();
   });
 
@@ -167,6 +169,74 @@ describe('the comparison window', () => {
     await click('Original');
     expect(win()).toHaveTextContent('Best · it stays');
     expect(win()).toHaveTextContent(/^IMG_4299\.JPGthe best shot · it stays/);
+  });
+
+  describe('with several copies in the group', () => {
+    const steps = () => within(win()).queryAllByRole('button', { name: /^(Previous|Next) copy$/ }).map(b => b.getAttribute('aria-label'));
+
+    it('says which copy this is, and steps to the one before or after it from the picture or the keyboard', async () => {
+      const { onSelectCopy } = open({ index: 1, count: 3 });
+      expect(win()).toHaveTextContent(/^IMG_4299\.HEICa copy of IMG_4299\.JPGSame pictureCopy 2 of 3/);
+      expect(win()).toHaveTextContent('to flip between this copy and the original in the same spot, ← → to move between the 3 copies');
+      expect(steps()).toEqual(['Previous copy', 'Next copy']);
+
+      await click('Next copy');
+      expect(onSelectCopy).toHaveBeenLastCalledWith(2);
+      await click('Previous copy');
+      expect(onSelectCopy).toHaveBeenLastCalledWith(0);
+      fireEvent.keyDown(win(), { key: 'ArrowRight' });
+      expect(onSelectCopy).toHaveBeenLastCalledWith(2);
+      fireEvent.keyDown(window, { key: 'ArrowLeft' });
+      expect(onSelectCopy).toHaveBeenLastCalledWith(0);
+      expect(onSelectCopy).toHaveBeenCalledTimes(4);
+      // The two stay side by side: only the copy changes.
+      expect(pressed()).toEqual(['Side by side']);
+    });
+
+    it('offers only the way there is from the first copy and from the last', () => {
+      const { again, onSelectCopy } = open({ index: 0, count: 3 });
+      expect(steps()).toEqual(['Next copy']);
+      fireEvent.keyDown(win(), { key: 'ArrowLeft' });
+      again({ index: 2 });
+      expect(steps()).toEqual(['Previous copy']);
+      fireEvent.keyDown(win(), { key: 'ArrowRight' });
+      expect(onSelectCopy).not.toHaveBeenCalled();
+    });
+
+    it('brings up the copy when another one is asked for from the original\'s own view', async () => {
+      const { onSelectCopy } = open({ index: 0, count: 2 });
+      await click('Original');
+      expect(steps()).toEqual(['Next copy']);
+      await click('Next copy');
+      expect(onSelectCopy).toHaveBeenCalledExactlyOnceWith(1);
+      expect(pressed()).toEqual(['This copy']);
+      expect(steps()).toEqual(['Next copy']);
+    });
+
+    it('leaves the arrow keys to a video\'s player, where they move through the video', () => {
+      const { onSelectCopy, container } = open({ index: 0, count: 2, member: member({ id: 'v2', fileName: 'copy.MOV', isVideo: true, format: 'MOV' }, 'identical') });
+      fireEvent.keyDown(container.querySelector('video')!, { key: 'ArrowRight' });
+      expect(onSelectCopy).not.toHaveBeenCalled();
+      fireEvent.keyDown(button('Next copy'), { key: 'ArrowRight' });
+      expect(onSelectCopy).toHaveBeenCalledExactlyOnceWith(1);
+    });
+
+    it('stays on the copy it is working on', () => {
+      const { onSelectCopy } = open({ index: 1, count: 3, busy: true });
+      expect(button('Previous copy')).toBeDisabled();
+      expect(button('Next copy')).toBeDisabled();
+      fireEvent.keyDown(win(), { key: 'ArrowRight' });
+      expect(onSelectCopy).not.toHaveBeenCalled();
+    });
+  });
+
+  it('with a single copy, has nowhere to step to and does not say so', () => {
+    const { onSelectCopy } = open();
+    expect(within(win()).queryByRole('button', { name: /^(Previous|Next) copy$/ })).not.toBeInTheDocument();
+    expect(win()).not.toHaveTextContent(/Copy 1 of 1|to move between/);
+    fireEvent.keyDown(win(), { key: 'ArrowRight' });
+    fireEvent.keyDown(win(), { key: 'ArrowLeft' });
+    expect(onSelectCopy).not.toHaveBeenCalled();
   });
 
   it('closes on the close button, on Escape and on a press outside it, and not on one inside', async () => {

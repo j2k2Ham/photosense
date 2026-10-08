@@ -116,7 +116,7 @@ PhotoSense shows HEIC pictures itself, whatever the computer can open. Outside i
 
 ### Looking at a file before deciding
 
-The look and layout follow the design handoff in `docs/design_handoff_photosense_redesign` (dark and light themes, chosen from the menu and remembered in the browser). The review desk shows the original beside one copy, with a table of what differs between them; clicking either opens the comparison window, where Space flips between the copy and the original in the same spot.
+The look and layout follow the design handoff in `docs/design_handoff_photosense_redesign` (dark and light themes, chosen from the menu and remembered in the browser). The review desk shows the original beside one copy, with a table of what differs between them; clicking either opens the comparison window, where Space flips between the copy and the original in the same spot. When a group has several copies, the window says which one is showing ("Copy 2 of 3") and the arrows over the copy's picture, or the left and right arrow keys, move to the one before or after it. Deleting a copy from the window closes it when that was the group's only copy; otherwise the copy that took its place is shown.
 
 
 A copy and its original are always two files, and each is shown under its own name with the folder it is in: under the two pictures on the review desk, under each thumbnail, and in the heading of the comparison window ("`IMG_0648.JPG`, a copy of `IMG_0377.JPG`"). Two files holding the very same picture can sit side by side in one folder under unrelated names, and look like one file until the names are read.
