@@ -12,3 +12,14 @@ export function saveLastScan(scan: LastScan): void {
   // A browser that refuses storage only loses the reminder.
   try { localStorage.setItem(KEY, JSON.stringify(scan)); } catch { /* not remembered */ }
 }
+
+const ORGANIZE_KEY = 'photosense-organize-root';
+
+/** The folder last chosen to organize in this browser; empty when none was. */
+export function loadOrganizeRoot(): string {
+  try { return localStorage.getItem(ORGANIZE_KEY) ?? ''; } catch { return ''; }
+}
+
+export function saveOrganizeRoot(root: string): void {
+  try { localStorage.setItem(ORGANIZE_KEY, root); } catch { /* not remembered */ }
+}

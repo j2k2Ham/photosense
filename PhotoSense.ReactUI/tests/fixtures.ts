@@ -1,4 +1,4 @@
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, PhotoDto } from '../types';
+import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto } from '../types';
 
 /** A picture as the server describes it; tests override only what they are about. */
 export function photo(overrides: Partial<PhotoDto> = {}): PhotoDto {
@@ -48,4 +48,13 @@ export function groupsPage(items: DuplicateGroupDto[], overrides: Partial<Groups
 export function reply(body?: unknown, status = 200): Response {
   if (body === undefined) return new Response(null, { status });
   return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
+}
+
+/** A file as the Organize listing describes it. */
+export function organizeFile(overrides: Partial<OrganizeFileDto> = {}): OrganizeFileDto {
+  return { id: 'o1', name: 'IMG_4198.JPG', folder: 'C:\photos', sizeBytes: 6_093_000, isVideo: false, date: '2023-06-09T14:03:22', dateFromFile: false, width: 4032, height: 3024, ...overrides };
+}
+
+export function organizePlace(overrides: Partial<OrganizePlaceDto> = {}): OrganizePlaceDto {
+  return { town: 'Anaconda', state: 'Montana', country: 'US', latitude: 46.1283, longitude: -112.9423, ...overrides };
 }

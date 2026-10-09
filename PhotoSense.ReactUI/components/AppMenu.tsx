@@ -9,6 +9,9 @@ interface Props {
   onErrors(): void;
   onChangeFolders(): void;
   onClearResults(): void;
+  onSettings(): void;
+  /** Asks to erase what has been removed; nothing goes until that is confirmed. */
+  onDeletePermanently(): void;
   onClose(): void;
 }
 
@@ -17,7 +20,7 @@ const themes: { id: Theme; name: string; swatch: string }[] = [
   { id: 'light', name: 'Light', swatch: '#f5f7f9' },
 ];
 
-export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders, onClearResults, onClose }: Props) {
+export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders, onClearResults, onSettings, onDeletePermanently, onClose }: Props) {
   const ref = useDismiss<HTMLDivElement>(onClose);
   // Choosing something from the menu puts the menu away.
   const pick = (action: () => void) => () => { action(); onClose(); };
@@ -40,8 +43,10 @@ export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders,
       </button>
       <button type="button" role="menuitem" onClick={pick(onChangeFolders)} className={item}>Change folders or rescan</button>
       <button type="button" role="menuitem" onClick={pick(onClearResults)} className={item}>Clear results</button>
+      <button type="button" role="menuitem" onClick={pick(onSettings)} className={item}>Settings</button>
       <div className="my-1 border-t border-line" />
-      <p className="px-3 py-2 text-[12.5px] text-t3">Removed files are in <span className="font-mono">_PhotoSense_Removed</span> inside each scanned folder.</p>
+      <button type="button" role="menuitem" onClick={pick(onDeletePermanently)} className={`${item} text-rose-t hover:bg-rose-bg`}
+        title="Removed files wait in _PhotoSense_Removed inside each folder they were removed from. Delete permanently erases them.">Delete permanently</button>
     </div>
   );
 }

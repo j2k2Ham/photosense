@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FolderPicker } from '../../components/FolderPicker';
@@ -67,6 +67,27 @@ describe('FolderPicker', () => {
     expect(screen.getByText('No folders inside this one.')).toBeInTheDocument();
     await userEvent.click(use());
     expect(onPick).toHaveBeenCalledExactlyOnceWith("C:\\Users\\jamie\\Pictures\\Jamie's Phone");
+  });
+
+  it('can offer two things to do with the folder, each under its own name', async () => {
+    const onPick = vi.fn(), onOther = vi.fn();
+    render(<FolderPicker title="Choose the secondary folder" startAt={'C:\\Users\\jamie\\Pictures'} pickLabel="Make the new folder here" other={{ label: 'Put the files here', onPick: onOther }} onPick={onPick} onCancel={vi.fn()} />);
+    const put = await within(dialog()).findByRole('button', { name: 'Put the files here' }), make = within(dialog()).getByRole('button', { name: 'Make the new folder here' });
+    expect(within(dialog()).queryByRole('button', { name: 'Use this folder' })).not.toBeInTheDocument();
+    await waitFor(() => expect(put).toBeEnabled());
+    await userEvent.click(put);
+    await userEvent.click(make);
+    expect(onOther).toHaveBeenCalledExactlyOnceWith('C:\\Users\\jamie\\Pictures');
+    expect(onPick).toHaveBeenCalledExactlyOnceWith('C:\\Users\\jamie\\Pictures');
+  });
+
+  it('offers neither before a folder is open', async () => {
+    const onOther = vi.fn();
+    render(<FolderPicker title="Choose the secondary folder" other={{ label: 'Put the files here', onPick: onOther }} onPick={vi.fn()} onCancel={vi.fn()} />);
+    const put = await within(dialog()).findByRole('button', { name: 'Put the files here' });
+    expect(put).toBeDisabled();
+    fireEvent.click(put);
+    expect(onOther).not.toHaveBeenCalled();
   });
 
   it('goes up a folder at a time, says so when a folder cannot be opened, and stops at the top of a disk', async () => {

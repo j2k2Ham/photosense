@@ -1,7 +1,11 @@
 import React from 'react';
 import { leaf } from '../lib/format';
+import { ModeSwitch, type Area } from './ModeSwitch';
 
 interface Props {
+  /** Which of the two areas is showing. */
+  readonly area: Area;
+  onArea(area: Area): void;
   /** There are results: the chip that names them, with the way back to the folders, is shown. */
   readonly showScan: boolean;
   /** The folders that were scanned, when this browser remembers them. */
@@ -16,7 +20,7 @@ interface Props {
   onToggleMenu(): void;
 }
 
-export function TopBar({ showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu }: Props) {
+export function TopBar({ area, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu }: Props) {
   return (
     <header className="flex h-16 shrink-0 items-center gap-4 border-b border-line px-6">
       <div className="flex items-center gap-[11px]">
@@ -25,6 +29,7 @@ export function TopBar({ showScan, folders, files, scanned, errorCount, menuOpen
         </span>
         <h1 className="text-[17px] font-semibold">PhotoSense</h1>
       </div>
+      <ModeSwitch area={area} onArea={onArea} />
 
       {showScan && (
         <div className="flex h-10 min-w-0 items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2">

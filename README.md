@@ -46,9 +46,20 @@ The API the UI uses (Functions host, `http://localhost:7071/api`):
 | `/photos/{id}/image` | GET | The picture for viewing; HEIC and TIFF are converted to JPEG on the fly |
 | `/photos/{id}/video` | GET | The video for the in-app player, sent in pieces of up to 4 MB as the player asks for them (`Range` requests) |
 | `/photos/{id}/open` | POST | Open the file in the default application of the computer the service runs on |
+| `/organize/files?root=` | GET | Every picture and video under a folder, with when and where each was taken; no scan is needed. Each file has an `id` that stands for it in the calls below |
+| `/organize/progress?root=&from=&places=` | GET | What has been read of a folder while `/organize/files` is still answering: `{ reading, readingId, total, done, from, more, files, places }`. `from` and `places` say how many files and places the page already has, so each answer holds only what was read since (at most 4,000 files; `more` says to ask again at once) |
+| `/organize/plan` | POST | Where a set of files would go and which names are already taken there. Body `{ basePath, folderName, direct, files: [{ id, subfolder }] }`; `subfolder` puts a file in a folder inside the destination (`2022`, `2022\Butte`). Nothing is moved |
+| `/organize/apply` | POST | Move or copy the files. The same body plus `mode` (`move` or `copy`), `companions`, `label` and a `name` for each file; returns `{ batchId, done, renamed, skipped, ... }` |
+| `/organize/remove` | POST | Take files out of the folder being organized. Body `{ root, files: [{ id }] }`. They go to `_PhotoSense_Removed` inside the root, with the Live Photo videos and edit files that belong to them alone; the answer has the same shape as for `apply`, and names every file asked for that went, one that went along with its picture among them |
+| `/organize/undo/{batchId}` | POST | Take one move, copy or removal back |
+| `/organize/batches` | GET | The latest moves, copies and removals that can still be undone |
+| `/organize/files/{id}/thumbnail`, `/image` | GET | A file's preview, and the picture for viewing |
+| `/organize/files/{id}/open` | POST | Open the file in the default application of the computer the service runs on |
 | `/photos/{id}/keep?kept=true\|false` | POST | Mark a copy to keep (bulk removal skips it) |
 | `/photos/{id}?physical=true` | DELETE | Remove one file, with the sidecars and Live Photo video that belong to it alone |
 | `/photos/bulk/remove-duplicates?group=` | POST | Remove the duplicates of one group, or of all groups |
+| `/removed?root=&root=` | GET | The `_PhotoSense_Removed` folders that hold files, with how much is in each: `{ folders: [{ path, files, bytes }], files, bytes }`. Looked for at any depth inside the folders given and inside every folder a scan on record covered, and wherever Organize put removed files |
+| `/removed/erase` | POST | Erase everything in those folders, and the folders. Body `{ folders: [path] }`, the paths as `/removed` listed them; returns `{ erased, bytes, skipped, problems }`. This is the one request that erases files. A path that is not a folder named `_PhotoSense_Removed` is refused with 400, and nothing is erased then |
 
 Requests that change or remove photos, and the folder listing, must carry the `x-photosense-client` header (the React client sends it). Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
 
@@ -63,6 +74,10 @@ One folder is enough: copies inside it, in the folder itself or in its subfolder
 A scan builds on the one before it: files that have not changed since are skipped, files that have gone are forgotten at the end, and copies marked keep stay marked. That makes a second scan of a large library take seconds rather than minutes.
 
 To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan: everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only PhotoSense's record goes, with its previews and keep marks; the photos, and anything already moved to `_PhotoSense_Removed`, stay where they are.
+
+A scan runs in the service, not in the page. A page that is loaded again while one is running, or opened in another tab, shows that scan's progress and says when it has finished, as the page that started it does.
+
+When a scan finds no duplicates, the Duplicates tab, which is the one that opens, is empty; it then offers a button to the similar shots when there are any (and the Similar tab does the same the other way about).
 
 ### How long a scan will take
 
@@ -127,9 +142,42 @@ Clicking a picture or a thumbnail opens it in a floating window. A video plays i
 
 On either tab the review desk offers **Delete this copy**, which takes the one file shown beside the original (or the best shot) and nothing else, and, when a group has more than one, **Delete all N copies**, which takes every copy in that group and leaves the original. On the Similar tab the files are different shots or edited versions and not copies of one file; the question asked first says so. They go a group at a time, and **Delete all duplicates** never takes them.
 
-Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path; delete that folder to free the space, or move a file back to restore it. Every question asked before a removal, and the message after it, names the file that goes and the file that stays.
+Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path; move a file back to restore it, or use **Delete permanently** (below) to free the space. Every question asked before a removal, and the message after it, names the file that goes and the file that stays.
+
+### Deleting permanently
+
+**Delete permanently**, in the menu, erases everything that Clean up and Organize have removed and that is still waiting in a `_PhotoSense_Removed` folder. It is the one thing in PhotoSense that erases files: they do not go to the Recycle Bin, and a removal whose files are erased can no longer be undone (it leaves Recently moved).
+
+It first looks for those folders: inside the folders last scanned and the folder being organized, inside every folder a scan on record covered, and wherever Organize put a removed file. A warning then lists the folders it found with the number of files in each and what they come to. Confirming it brings a second, small question, **Are you sure?**, and only that one erases. The second question has a switch, **Do not ask me this second time again**; with it on, the warning alone is asked from then on. **Settings**, in the menu, turns the second question back on. Settings are kept in the browser.
+
+A file that cannot be erased (in use, say) is left, with the folders it is in, and the message says so. Only folders named `_PhotoSense_Removed` are ever emptied, and a link to another folder is neither followed nor removed.
 
 The last copy of a picture is never removed as a duplicate. A copy goes only while the original it was matched with is still on disk exactly as it was scanned, and the original can be removed "instead" only while one of its copies is. If that file has been deleted, moved or edited since the scan, by PhotoSense or by anything else, the removal is refused and the file is left where it is; scan again to bring the results up to date. The same holds if two records turn out to be one file reached by two paths (a linked folder, or a drive letter standing for a folder): the file is put straight back.
+
+### Organize
+
+The **Clean up / Organize** switch in the header leads to a second area that sorts the files of a folder into folders. It starts with the folder last scanned; **Choose root folder** takes any other. Only dates and positions are read, never the pictures themselves. Files a scan has been through are listed from what the scan recorded. Any other file is read once, and what was read is kept in the database, so a folder is slow to list only the first time: about 30 files a second on an external hard disk, which for 16,000 unscanned files is some nine minutes, and a few seconds after that. While a folder is being read the page shows how many of its files have been gone through, and shows the files as they are read: it asks every second or so for the ones read since it last asked. They come in the order they were read; the whole list, latest first, takes their place when the reading is over. Files can be selected and put in folders of your own meanwhile, but a folder can only be previewed, and so moved, once every file is in.
+
+- **Suggested folders** group the files by place or by date, and then, inside each folder, by the other. **Group by Place** makes a folder for each place, with a subfolder for each year or each month inside it, or none (`Butte\2022`). **Group by Date** makes a folder for each year or each month, with a subfolder for each place inside it, or none (`2022\Butte`); a file with no location stays in the year's or month's own folder. Places within 1, 5, 15, 25 or 50 miles of each other share a folder (or every place gets its own), named after the place with the most files: by its landmark or area where one is known, otherwise by its town, or as "Town, state", or as a state folder with the place inside. When the folders are by place, the map shows them as dots; clicking a dot or a card shows that folder's files alone. The folder picked is named above the files, with a × to let it go; **Clear all**, beside it, puts away the folder, the search and the filter together, so that every file shows again.
+- **The map** is Google's when a Google Maps key is set (see below): streets, or satellite pictures with **Satellite**, to zoom and move about in. Without a key, or when Google cannot be reached or refuses the key, a plain map drawn by the page is shown instead, and the page asks Google for nothing. A click on the map itself, or on the button in its corner, opens it large in a window of its own, where it does all that it does small (on Google's map, the whole screen as well). Clicking a dot there shows that folder's files and closes the window; Esc closes it too.
+- **Deleting.** As soon as a file is selected, a bin appears in the bar at the foot of the files. It asks first, then takes every selected file out of the folder, with the Live Photo videos and edit files that belong to them alone, and the selection is over. Nothing is erased: the files go to `_PhotoSense_Removed` inside the root folder, the same folder Clean up uses, each keeping its place relative to the root. **Undo** (in the message, or under Recently moved) puts them back; **Delete permanently**, in the menu, frees the space. What a scan recorded of a deleted file is dropped, so after an undo the file is listed by Clean up again once the folder has been scanned again.
+- **Your folders** are folders of your own: name one, then select files (click, Shift-click for a range) or drag them onto it. Files in your folders are left out of the suggestions. Files can be dragged onto a suggested folder as well.
+- **Preview** shows every file a folder would take before anything moves: click a file to leave it where it is, rename the folder (`\` makes subfolders), choose another place for it, and choose between moving and copying. Files already in the folder they would go to are left alone.
+- **Nothing is ever replaced.** A file going where its name is taken is given a number, as in `IMG_6435 (1).JPG`. **Review each name** shows the file beside whatever has the name, says when the two are byte for byte the same, and lets each be given a number, another name, or left where it is. The service applies the same rule again when the files are moved, whatever it is asked. Under each of the files shown there is a small bin, for when the two are the same file or one is not wanted: it asks first, naming the file that goes and the one that stays by their folders, and then removes that one file as **Deleting** above does. The window goes on to the next name, or closes when that was the last, and the file is gone from the preview and from the page.
+- A picture's Live Photo video and edit files can be brought along with it (see below); they follow the picture's new name.
+- **Recently moved** lists what was done, each with **Undo**: moved files go back under the names they had, copies are removed, and the folders that were made for them go again if that leaves them empty. A copy that has changed since it was made is left, and so is a file whose old place has been taken by another.
+
+#### A Google Maps key
+
+The map of the suggested folders uses the Google Maps JavaScript API, which needs a key from a Google Cloud project with billing enabled (Google gives a monthly allowance of free map loads). Make one under *APIs & Services > Credentials* with the *Maps JavaScript API* enabled, restrict it to `http://localhost:3000/*`, and put it in `PhotoSense.ReactUI/.env.local` (which git ignores):
+
+```
+NEXT_PUBLIC_GOOGLE_MAPS_KEY=your-key
+```
+
+Start the UI again afterwards: the key is read when it starts. With a key set, the page fetches the map from Google, so Google sees which parts of the world are looked at. The pictures, their names and their positions are not sent; the dots are drawn by the page. The large map is a second map as far as Google's count of map loads goes: one more each time it is opened.
+
+What was arranged but not carried out (your folders, files dropped on a suggestion, the names given to suggested folders) lives in the page and is gone when it is reloaded; what was moved is on record in the service and can still be undone after a reload.
 
 ### Sidecars and Live Photos
 
@@ -142,6 +190,8 @@ An iPhone item can be several files: `IMG_1234.HEIC` (the picture), `IMG_1234.MO
 A Live Photo's video is also left out of duplicate matching while its picture is beside it, so it can only ever leave together with that picture.
 
 ### Place names
+
+Organize also names the landmark or area a picture was taken at, when the position is at one: a sight, a park, a beach, a district ("Old Faithful Geyser", "Caras Park", "Rehoboth Beach"). The list gives every landmark a single point, so a picture counts as taken there only within a short distance of that point (200 m to 1 km, by kind). A large park is therefore named only near the point the list has for it, and most places are named after their town; the card says so when it is.
 
 Where a picture was taken is shown as the nearest town ("Buxton, North Carolina, US", or "Near Anaconda, Montana, US" when the town is more than 3 km away; nothing beyond 80 km). The lookup uses a list bundled with the application, so positions are never sent anywhere. The list is an extract of [GeoNames](https://www.geonames.org/) data, licensed CC BY 4.0; see `PhotoSense.Infrastructure/Places/README.md`.
 
@@ -183,7 +233,7 @@ In a test, every assertion is awaited (`await Assert.That(actual).IsEqualTo(expe
 
 Coverage thresholds (CI enforced): Line ≥ 90%, Branch ≥ 85%. Measured on Windows the .NET code stands at 100% of lines and 100% of branches. Generated code (`*.g.cs`) and the service's start-up class are left out of the measurement.
 
-Some code is shaped so that every branch can be exercised from one operating system: `PhotoPath.Key(path, ignoreCase)`, `ShellSystemViewer.DesktopOf` and `BasicExifMetadataExtractor.Read(photo, directories)` take as an argument what they would otherwise ask the system or a file for. Two guards against a library handing back nothing (`OutboxIntegrationEventPublisher.NameOf`, `MagickImageAnalyzer.Required`) are callable on their own for the same reason.
+Some code is shaped so that every branch can be exercised from one operating system: `PhotoPath.Key(path, ignoreCase)`, `ShellSystemViewer.DesktopOf` and `BasicExifMetadataExtractor.Read(photo, directories)` take as an argument what they would otherwise ask the system or a file for. `RemovedFiles` takes the way a file is erased for the same reason, so that a file that cannot be erased can be tested without one that is really locked. Two guards against a library handing back nothing (`OutboxIntegrationEventPublisher.NameOf`, `MagickImageAnalyzer.Required`) are callable on their own for the same reason.
 
 ### UI (React)
 

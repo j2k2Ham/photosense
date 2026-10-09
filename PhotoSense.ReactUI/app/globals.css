@@ -38,6 +38,10 @@ body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 5px; }
 
+/* The bar that sweeps across while something of unknown length is under way. */
+@keyframes reading-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
+.reading-sweep { animation: reading-sweep 1.4s ease-in-out infinite; }
+
 @layer components {
   /* Every button is a pill. */
   .pill { @apply inline-flex items-center justify-center gap-2 rounded-full font-semibold whitespace-nowrap transition disabled:cursor-not-allowed; }

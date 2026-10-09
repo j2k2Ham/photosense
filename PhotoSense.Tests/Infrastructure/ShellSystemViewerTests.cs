@@ -52,7 +52,8 @@ public sealed class ShellSystemViewerTests : IDisposable
         var path = File_("IMG_2.JPG");
         var relative = Path.GetRelativePath(Directory.GetCurrentDirectory(), path);
         Viewer(Desktop.Windows).Open(relative);
-        await Assert.That(_started.Single().FileName).IsEqualTo(path);
+        // The full path is built on the folder the tests were started from, and a terminal may spell its drive "c:".
+        await Assert.That(_started.Single().FileName).IsEqualTo(path).IgnoringCase();
     }
 
     [Test]

@@ -252,6 +252,110 @@ describe('what the page reads', () => {
   });
 });
 
+describe('organize', () => {
+  const destination = { basePath: 'C:\\photos', folderName: 'Trips\\Glacier 2022', direct: false };
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('shows a file by its id', async () => {
+    const api = await load();
+    expect(api.organizeThumbnailUrl('abc')).toBe(`${API}/organize/files/abc/thumbnail`);
+    expect(api.organizeImageUrl('abc')).toBe(`${API}/organize/files/abc/image`);
+  });
+
+  it('lists a folder only once one is chosen, and does not ask again merely because the window came forward', async () => {
+    swr.useSWR.mockReturnValue({ data: 'listing' });
+    const api = await load();
+    expect(api.useOrganizeFiles()).toEqual({ data: 'listing' });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(null, expect.any(Function), { revalidateOnFocus: false, shouldRetryOnError: false });
+    api.useOrganizeFiles('C:\\Phone Pictures');
+    expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/organize/files?root=C%3A%5CPhone%20Pictures`);
+    api.useOrganizeBatches();
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/organize/batches`, expect.any(Function), { revalidateOnFocus: false });
+  });
+
+  it('asks how far the reading of a folder has got, saying how much of it the page already has', async () => {
+    const progress = { reading: true, readingId: 'r1', total: 9000, done: 4100, from: 4000, more: false, files: [], places: [] };
+    answering(progress);
+    const api = await load();
+    await expect(api.fetchOrganizeProgress('C:\\Phone Pictures', 4000, 12)).resolves.toEqual(progress);
+    expect(lastRequest()).toEqual({ url: `${API}/organize/progress?root=C%3A%5CPhone%20Pictures&from=4000&places=12`, init: { headers: json } });
+  });
+
+  it('asks where files would go without moving them', async () => {
+    answering({ destination: 'C:\\photos\\Trips', items: [] });
+    const api = await load();
+    await expect(api.planOrganize(destination, [{ id: 'a', subfolder: '2022' }, { id: 'b' }])).resolves.toEqual({ destination: 'C:\\photos\\Trips', items: [] });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/plan`, init: { method: 'POST', body: JSON.stringify({ ...destination, files: [{ id: 'a', subfolder: '2022' }, { id: 'b' }] }), headers: json } });
+    expect(swr.mutate).not.toHaveBeenCalled();
+  });
+
+  it('moves or copies files, undoes that, and each time asks again for what both areas show', async () => {
+    const api = await load();
+    const request = { ...destination, mode: 'move' as const, companions: true, label: 'Trips\\Glacier 2022', files: [{ id: 'a', name: 'IMG_1.JPG' }] };
+    answering({ batchId: 'b1', done: 1 });
+    await expect(api.applyOrganize(request)).resolves.toEqual({ batchId: 'b1', done: 1 });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/apply`, init: { method: 'POST', body: JSON.stringify(request), headers: json } });
+
+    const [organize, groups] = swr.mutate.mock.calls.map(c => c[0] as (key: unknown) => boolean);
+    // The listing and what was moved are asked for again; how far a reading has got is not something a move changes.
+    expect([`${API}/organize/files?root=x`, `${API}/organize/batches`, `${API}/organize/progress?root=x`, `${API}/scan/groups?mode=duplicates`, 7].map(organize)).toEqual([true, true, false, false, false]);
+    expect(groups(`${API}/scan/groups?mode=duplicates`)).toBe(true);
+
+    // Deleting files changes the same lists.
+    swr.mutate.mockClear();
+    answering({ batchId: 'b2', done: 2 });
+    await expect(api.removeOrganize('C:\\photos', ['a', 'b'])).resolves.toEqual({ batchId: 'b2', done: 2 });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/remove`, init: { method: 'POST', body: JSON.stringify({ root: 'C:\\photos', files: [{ id: 'a' }, { id: 'b' }] }), headers: json } });
+    expect(swr.mutate).toHaveBeenCalledTimes(2);
+
+    swr.mutate.mockClear();
+    answering({ restored: 1, skipped: 0, problems: [] });
+    await expect(api.undoOrganize('b 1')).resolves.toEqual({ restored: 1, skipped: 0, problems: [] });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/undo/b%201`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    expect(swr.mutate).toHaveBeenCalledTimes(2);
+
+    answering('There is nothing to undo: this was undone already, or was never done.', 404);
+    await expect(api.undoOrganize('b1')).rejects.toMatchObject({ message: 'There is nothing to undo: this was undone already, or was never done.' });
+  });
+
+  it('opens a file in the default viewer of the service\'s machine', async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.openOrganizeFile('abc');
+    expect(lastRequest()).toEqual({ url: `${API}/organize/files/abc/open`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+  });
+});
+
+describe('removed files', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('are counted in and around the folders the page knows of', async () => {
+    const found = { folders: [{ path: 'C:\\photos\\_PhotoSense_Removed', files: 3, bytes: 900 }], files: 3, bytes: 900 };
+    answering(found);
+    const api = await load();
+    await expect(api.fetchRemoved(['C:\\photos', 'D:\\Trips & days'])).resolves.toEqual(found);
+    expect(lastRequest()).toEqual({ url: `${API}/removed?root=C%3A%5Cphotos&root=D%3A%5CTrips%20%26%20days`, init: { headers: json } });
+    // With no folder known here, the service goes by what it has on record.
+    await api.fetchRemoved([]);
+    expect(lastRequest().url).toBe(`${API}/removed?`);
+  });
+
+  it('are erased from the folders named, and what could have been undone is listed afresh', async () => {
+    const erased = { erased: 3, bytes: 900, skipped: 0, problems: [] };
+    answering(erased);
+    const api = await load();
+    await expect(api.eraseRemoved(['C:\\photos\\_PhotoSense_Removed'])).resolves.toEqual(erased);
+    expect(lastRequest()).toEqual({ url: `${API}/removed/erase`, init: { method: 'POST', body: JSON.stringify({ folders: ['C:\\photos\\_PhotoSense_Removed'] }), headers: json } });
+    const matches = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
+    expect([`${API}/organize/batches`, `${API}/organize/files?root=x`, 7].map(matches)).toEqual([true, false, false]);
+
+    swr.mutate.mockClear();
+    answering('Not a folder of removed files: C:\\photos', 400);
+    await expect(api.eraseRemoved(['C:\\photos'])).rejects.toMatchObject({ message: 'Not a folder of removed files: C:\\photos' });
+    expect(swr.mutate).not.toHaveBeenCalled();
+  });
+});
+
 describe('the log stream', () => {
   const negotiate = `${API}/scan/logs/negotiate`;
   const polled = `${API}/scan/logs?limit=200`;

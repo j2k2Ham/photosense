@@ -12,8 +12,12 @@ interface Props {
   readonly totalPages: number;
   readonly query: string;
   readonly selectedKey?: string;
+  /** Groups of the other kind, similar shots when these are duplicates: said when there are none of this kind to show. */
+  readonly otherTotal?: number;
   onSelect(key: string): void;
   onPage(page: number): void;
+  /** Shows the groups of the other kind. */
+  onOther?(): void;
 }
 
 function emptyMessage(mode: GroupMode, query: string): string {
@@ -22,7 +26,7 @@ function emptyMessage(mode: GroupMode, query: string): string {
 }
 
 /** The groups as a gallery of their best copies, a page at a time. */
-export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, onSelect, onPage }: Props) {
+export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, otherTotal = 0, onSelect, onPage, onOther }: Props) {
   const pager = 'pill-outline h-[30px] px-3 text-[13px]';
   const list = useRef<HTMLUListElement>(null);
   // A page starts at its top, wherever the one before it was left.
@@ -43,7 +47,17 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
       </div>
 
       {groups.length === 0
-        ? total !== undefined && <p className="px-5 py-10 text-center text-[14px] text-t3">{emptyMessage(mode, query)}</p>
+        ? total !== undefined && (
+          <div className="flex flex-col items-center gap-3.5 px-5 py-10 text-center">
+            <p className="text-[14px] text-t3">{emptyMessage(mode, query)}</p>
+            {/* An empty tab is not an empty result: what was found may all be under the other one. */}
+            {!query.trim() && otherTotal > 0 && (
+              <button type="button" onClick={onOther} className="pill-outline h-9 px-4 text-[13.5px] font-medium">
+                Show the {otherTotal.toLocaleString()} {mode === 'similar' ? 'duplicate' : 'similar'} {otherTotal === 1 ? 'group' : 'groups'}
+              </button>
+            )}
+          </div>
+        )
         : (
           <ul ref={list} className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-x-3.5 gap-y-5 overflow-y-auto px-5 pb-6 pt-1.5">
             {groups.map(g => {

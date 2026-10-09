@@ -1,6 +1,9 @@
 import useSWR, { mutate } from 'swr';
 import * as signalR from '@microsoft/signalr';
-import type { BulkRemovalResultDto, FolderListingDto, GroupMode, GroupsPageDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest } from '../types';
+import type {
+  BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
+} from '../types';
 
 // Base URL can point at Blazor server (proxy) or Functions API.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
@@ -174,4 +177,76 @@ export function browseFolders(path?: string) {
 
 export async function startScan(req: StartScanRequest) {
   return json<{ instanceId: string }>(`${API_BASE}/scan/start`, { method: 'POST', body: JSON.stringify(req) });
+}
+
+// ---- Organize
+
+export const organizeThumbnailUrl = (id: string) => `${API_BASE}/organize/files/${id}/thumbnail`;
+export const organizeImageUrl = (id: string) => `${API_BASE}/organize/files/${id}/image`;
+
+// Everything Organize shows changes when files are moved, and so does what Clean up lists of the same files.
+const refreshOrganize = () => Promise.all([mutate((key: unknown) => typeof key === 'string' && (key.includes('/organize/files?') || key.includes('/organize/batches'))), refreshGroups()]);
+
+/** The pictures and videos of a folder, with when and where each was taken. Nothing is asked until a folder is chosen. */
+export function useOrganizeFiles(root?: string) {
+  const key = root ? `${API_BASE}/organize/files?root=${encodeURIComponent(root)}` : null;
+  // Listing a large folder takes a moment: it is asked for again when files move, not each time the window comes forward.
+  return useSWR<OrganizeFilesDto>(key, json, { revalidateOnFocus: false, shouldRetryOnError: false });
+}
+
+/** How far the reading of a folder has got, with the files read beyond the ones the page says it already has. */
+export function fetchOrganizeProgress(root: string, from: number, places: number) {
+  return json<OrganizeProgressDto>(`${API_BASE}/organize/progress?root=${encodeURIComponent(root)}&from=${from}&places=${places}`);
+}
+
+/** The latest moves and copies that can still be undone. */
+export function useOrganizeBatches() {
+  return useSWR<OrganizeBatchDto[]>(`${API_BASE}/organize/batches`, json, { revalidateOnFocus: false });
+}
+
+/** Where each file would go, and which names are already taken there. Nothing is moved. */
+export function planOrganize(destination: OrganizeDestination, files: OrganizePlanFile[]) {
+  return json<OrganizePlanDto>(`${API_BASE}/organize/plan`, { method: 'POST', body: JSON.stringify({ ...destination, files }) });
+}
+
+/** Moves or copies the files. */
+export async function applyOrganize(request: OrganizeApplyRequest) {
+  const result = await json<OrganizeApplyDto>(`${API_BASE}/organize/apply`, { method: 'POST', body: JSON.stringify(request) });
+  await refreshOrganize();
+  return result;
+}
+
+/** Takes files out of the folder being organized: they go to the folder inside it that holds removed files. */
+export async function removeOrganize(root: string, fileIds: string[]) {
+  const result = await json<OrganizeApplyDto>(`${API_BASE}/organize/remove`, { method: 'POST', body: JSON.stringify({ root, files: fileIds.map(id => ({ id })) }) });
+  await refreshOrganize();
+  return result;
+}
+
+/** Takes one move, copy or removal back. */
+export async function undoOrganize(batchId: string): Promise<OrganizeUndoDto> {
+  const res = await send(`${API_BASE}/organize/undo/${encodeURIComponent(batchId)}`, 'POST');
+  const result = await res.json();
+  await refreshOrganize();
+  return result;
+}
+
+/** Opens a file in the default viewer or player of the machine the server runs on. */
+export async function openOrganizeFile(id: string) {
+  await send(`${API_BASE}/organize/files/${id}/open`, 'POST');
+}
+
+// ---- Removed files
+
+/** How much is waiting in the folders that hold removed files: inside the folders given, and wherever else the service knows of. */
+export function fetchRemoved(roots: string[]) {
+  return json<RemovedFilesDto>(`${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`);
+}
+
+/** Erases everything in those folders. This cannot be taken back. */
+export async function eraseRemoved(folders: string[]) {
+  const result = await json<EraseRemovedDto>(`${API_BASE}/removed/erase`, { method: 'POST', body: JSON.stringify({ folders }) });
+  // A deletion whose files are erased can no longer be undone, so it leaves the list of what can be.
+  await mutate((key: unknown) => typeof key === 'string' && key.includes('/organize/batches'));
+  return result;
 }

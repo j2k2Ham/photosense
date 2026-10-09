@@ -4,16 +4,22 @@ import { AppMenu } from '../components/AppMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
+import type { Area } from '../components/ModeSwitch';
+import { OrganizeView } from '../components/organize/OrganizeView';
 import { PhotoWindow } from '../components/PhotoWindow';
 import { ReviewPanel } from '../components/ReviewPanel';
+import { SettingsWindow } from '../components/SettingsWindow';
 import { SetupScreen } from '../components/SetupScreen';
 import { Toaster, useToasts } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
-import { clearResults, connectLogStream, fetchGroupTotals, openInViewer, prefetchGroups, removeDuplicates, removePhoto, retryNow, setKept, useGroups, useScanProgress, useScanStatus } from '../lib/apiClient';
+import {
+  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removePhoto, retryNow, setKept, useGroups, useScanProgress, useScanStatus,
+} from '../lib/apiClient';
 import { formatBytes, linkedFiles } from '../lib/format';
-import { loadLastScan } from '../lib/lastScan';
+import { loadLastScan, loadOrganizeRoot } from '../lib/lastScan';
+import { useAppSettings } from '../lib/settings';
 import { useTheme } from '../lib/theme';
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto } from '../types';
+import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, RemovedFilesDto } from '../types';
 
 // Removed files are moved here, inside the scanned folder, rather than erased.
 const REMOVED_FOLDER = '_PhotoSense_Removed';
@@ -23,17 +29,25 @@ type Pending =
   | { scope: 'all'; count: number; bytes: number }
   | { scope: 'group'; group: DuplicateGroupDto }
   | { scope: 'copy'; group: DuplicateGroupDto; member: GroupMemberDto }
-  | { scope: 'clear' };
+  | { scope: 'clear' }
+  // Erasing what was removed: the warning first, then the question that makes sure.
+  | { scope: 'erase'; sure: boolean };
 
 const files = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'}`;
 // As many names as a confirmation has room for.
 const NAMED = 4;
 const groupsOf = (n: number, kind: string) => `${n.toLocaleString()} ${kind} ${n === 1 ? 'group' : 'groups'}`;
+const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export default function HomePage() {
   const [theme, setTheme] = useTheme();
+  const [settings, changeSettings] = useAppSettings();
   const { toasts, errors, push, remove, clearError, clearErrors } = useToasts();
 
+  // Clean up or Organize. Organize is made the first time it is turned to and then kept, with all that was arranged in it.
+  const [area, setArea] = useState<Area>('clean');
+  const [organizing, setOrganizing] = useState(false);
+  const turnTo = (next: Area) => { setArea(next); if (next === 'organize') setOrganizing(true); };
   const [instanceId, setInstanceId] = useState<string>();
   // Where the person chose to be; until they choose, the screen follows whether there is anything to show.
   const [chosen, setChosen] = useState<'setup' | 'results'>();
@@ -49,6 +63,10 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
+  const [held, setHeld] = useState<RemovedFilesDto>();
+  const [askOnce, setAskOnce] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
 
   const groups = useGroups(mode, filter, page, hideKept);
@@ -63,6 +81,11 @@ export default function HomePage() {
     setFolders([last.root, last.second].filter(Boolean));
   }, []);
   useEffect(readFolders, [readFolders]);
+
+  // A scan the service is running that this page did not start, as after the page was loaded again, is followed all
+  // the same: without that the results would show half made, with nothing to say a scan was still at work.
+  const running = status.data?.instanceId && !status.data.completed ? status.data.instanceId : undefined;
+  useEffect(() => { if (running) setInstanceId(running); }, [running]);
 
   const scanning = !!instanceId && !progress.data?.completedUtc;
   const hasResults = (status.data?.totalPhotos ?? 0) > 0;
@@ -110,7 +133,7 @@ export default function HomePage() {
   const run = useCallback(async (action: () => Promise<void>) => {
     setBusy(true);
     try { await action(); }
-    catch (e) { push(e instanceof Error ? e.message : String(e), 'error'); }
+    catch (e) { push(messageOf(e), 'error'); }
     finally { setBusy(false); }
   }, [push]);
 
@@ -119,7 +142,7 @@ export default function HomePage() {
     setCopyIndex(0);
   }
   function switchMode(next: GroupMode) { setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); }
-  function turnTo(next: number) { setPage(next); setSelection({ index: 0 }); setCopyIndex(0); }
+  function turnPage(next: number) { setPage(next); setSelection({ index: 0 }); setCopyIndex(0); }
 
   const openExternally = (photo: PhotoDto) => run(() => openInViewer(photo.id));
   const toggleKeep = (photo: PhotoDto) => run(async () => {
@@ -156,21 +179,43 @@ export default function HomePage() {
     push(`Cleared the results: ${files(result.forgotten)} forgotten. Your photos were not touched.`, 'ok');
   });
 
+  function askToErase() {
+    setHeld(undefined);
+    setAskOnce(false);
+    setPending({ scope: 'erase', sure: false });
+    const last = loadLastScan();
+    // The folders this browser knows of; the service adds the ones it has on record.
+    fetchRemoved([...new Set([last.root, last.second, loadOrganizeRoot()].filter(Boolean))]).then(setHeld, e => {
+      setPending(now => (now?.scope === 'erase' ? undefined : now));
+      push(messageOf(e), 'error');
+    });
+  }
+  const erase = () => run(async () => {
+    if (askOnce) changeSettings({ eraseAskTwice: false });
+    const result = await eraseRemoved(held!.folders.map(f => f.path));
+    setPending(undefined);
+    if (result.erased > 0) push(`Deleted ${files(result.erased)} (${formatBytes(result.bytes)}) permanently.`, 'ok');
+    if (result.skipped > 0) push(`${files(result.skipped)} could not be deleted. ${result.problems[0] ?? ''}`.trim(), 'error');
+    if (result.erased + result.skipped === 0) push('There was nothing left to delete.', 'info');
+  });
+
   function started(id: string) {
     setInstanceId(id);
     setLogs([]);
     readFolders();
   }
 
+  // Scanning is part of Clean up, wherever it is asked for from.
+  const changeFolders = () => { setArea('clean'); setChosen('setup'); };
   const offline = !!(groups.error || status.error);
   const cancel = () => setPending(undefined);
-  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder. Moving a file back restores it.</>;
+  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder. Moving a file back restores it; Delete permanently, in the menu, erases them.</>;
   const best = mode === 'similar' ? 'best shot' : 'original';
 
   return (
     <div className="flex h-screen min-w-[1100px] flex-col bg-bg text-t1">
-      <TopBar showScan={hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
-        errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={() => setChosen('setup')}
+      <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
+        errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
         onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }} />
 
       {offline && (
@@ -180,7 +225,11 @@ export default function HomePage() {
         </div>
       )}
 
-      {screen === 'setup' ? (
+      {organizing && (
+        <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} notify={push} /></div>
+      )}
+
+      {area === 'organize' ? null : screen === 'setup' ? (
         <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
       ) : (
         <>
@@ -196,12 +245,12 @@ export default function HomePage() {
             </div>
             <label className="my-auto flex h-[42px] w-[clamp(220px,22vw,380px)] items-center gap-2.5 rounded-full border border-line bg-s1 px-4">
               <span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-2 border-t3" />
-              <input value={filter} onChange={e => { setFilter(e.target.value); turnTo(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
+              <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
                 className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
             </label>
             {mode === 'duplicates' && (
               <label className="my-auto flex cursor-pointer items-center gap-2.5 text-[13.5px] text-t2" title="Hide groups where every copy is marked keep">
-                <input type="checkbox" role="switch" checked={hideKept} onChange={e => { setHideKept(e.target.checked); turnTo(1); }} className="peer sr-only" />
+                <input type="checkbox" role="switch" checked={hideKept} onChange={e => { setHideKept(e.target.checked); turnPage(1); }} className="peer sr-only" />
                 <span aria-hidden className="relative h-[18px] w-8 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-3.5 peer-checked:after:bg-on-brand" />
                 Hide reviewed
               </label>
@@ -227,7 +276,8 @@ export default function HomePage() {
 
           <div className="grid min-h-0 flex-1 grid-cols-[clamp(380px,32vw,620px)_1fr]">
             <GroupList groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
-              selectedKey={selected?.key} onSelect={select} onPage={turnTo} />
+              selectedKey={selected?.key} otherTotal={mode === 'duplicates' ? totals.similar : totals.duplicates} onSelect={select} onPage={turnPage}
+              onOther={() => switchMode(mode === 'duplicates' ? 'similar' : 'duplicates')} />
             <ReviewPanel group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
               onCompare={() => selected && setComparing(selected.key)} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
               onDeleteCopy={member => selected && setPending({ scope: 'copy', group: selected, member })}
@@ -263,10 +313,42 @@ export default function HomePage() {
         </ConfirmDialog>
       )}
 
+      {pending?.scope === 'erase' && !pending.sure && (
+        <ConfirmDialog busy={busy} ready={!!held && held.files > 0} title="Delete removed files permanently?" confirmLabel="Delete permanently" onCancel={cancel}
+          onConfirm={() => (settings.eraseAskTwice ? setPending({ scope: 'erase', sure: true }) : erase())}
+          note={<>This cannot be undone. The files are erased, not moved: they do not go to the Recycle Bin, and Undo can no longer bring them back.</>}>
+          {!held ? <p role="status">Looking for removed files…</p> : held.files === 0 ? (
+            <p>There is nothing to delete: no <span className="font-mono text-t1">{REMOVED_FOLDER}</span> folder holds any files.</p>
+          ) : (
+            <>
+              <p><Name>{files(held.files)}</Name> taking {formatBytes(held.bytes)} will be erased: everything Clean up and Organize have removed that is still waiting in {held.folders.length === 1 ? 'this folder' : `these ${held.folders.length} folders`}.</p>
+              <ul aria-label="Folders that will be emptied" className="space-y-1 pt-1">
+                {held.folders.slice(0, NAMED).map(f => (
+                  <li key={f.path} className="flex gap-3 text-[13px]"><span className="min-w-0 flex-1 font-mono text-t1 [overflow-wrap:anywhere]">{f.path}</span><span className="shrink-0">{files(f.files)}</span></li>
+                ))}
+              </ul>
+              {held.folders.length > NAMED && <p className="text-[13.5px]">and {held.folders.length - NAMED} more</p>}
+            </>
+          )}
+        </ConfirmDialog>
+      )}
+      {pending?.scope === 'erase' && pending.sure && (
+        <ConfirmDialog small busy={busy} title="Are you sure?" confirmLabel="Delete permanently" onCancel={cancel} onConfirm={erase}>
+          <p>{files(held!.files)} ({formatBytes(held!.bytes)}) will be erased for good.</p>
+          <label className="flex cursor-pointer select-none items-center gap-2.5 pt-2 text-[13.5px] text-t1">
+            <input type="checkbox" role="switch" checked={askOnce} onChange={e => setAskOnce(e.target.checked)} className="peer sr-only" />
+            <span aria-hidden className="relative h-[18px] w-8 shrink-0 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-3.5 peer-checked:after:bg-on-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand" />
+            Do not ask me this second time again
+          </label>
+          <p className="text-[12.5px] text-t3">It can be turned back on under Settings in the menu.</p>
+        </ConfirmDialog>
+      )}
+
       {menuOpen && (
         <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-          onChangeFolders={() => setChosen('setup')} onClearResults={() => setPending({ scope: 'clear' })} />
+          onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onDeletePermanently={askToErase} />
       )}
+      {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
       {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}
 
       <Toaster toasts={toasts} remove={remove} />

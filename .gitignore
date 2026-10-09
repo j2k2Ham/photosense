@@ -366,3 +366,6 @@ FodyWeavers.xsd
 PhotoSense.ReactUI/coverage/
 # Next.js build and dev-server output: rebuilt on every run (cache packs, fonts, compiled pages)
 PhotoSense.ReactUI/.next/
+
+# Local settings of the UI, such as a Google Maps key
+.env*.local

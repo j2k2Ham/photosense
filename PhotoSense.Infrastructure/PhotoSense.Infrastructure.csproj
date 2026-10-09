@@ -11,6 +11,7 @@
   <ItemGroup>
     <!-- Place names for where a picture was taken: GeoNames cities1000, CC BY 4.0 (see Places/README.md). -->
     <EmbeddedResource Include="Places\places.tsv.gz" />
+    <EmbeddedResource Include="Places\landmarks.tsv.gz" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />

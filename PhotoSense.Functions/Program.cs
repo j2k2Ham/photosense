@@ -19,6 +19,8 @@ using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Application.Scanning;
+using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Removal;
 using PhotoSense.Infrastructure.Scanning;
 using LiteDB;
 using Microsoft.Extensions.Options; // added for IValidateOptions
@@ -43,6 +45,7 @@ public static class DependencyInjection
         s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IAuditRepository>(sp => new LiteDbAuditRepository(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IScanHistory>(sp => new LiteDbScanHistory(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IOrganizeBatchStore>(sp => new LiteDbOrganizeBatchStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();
         s.AddSingleton<IThumbnailStore>(sp =>
@@ -57,11 +60,22 @@ public static class DependencyInjection
         s.AddSingleton<IScanRequestPublisher, ScanRequestPublisher>();
         s.AddSingleton<IOutboxStore, LiteDbOutboxStore>();
         s.AddSingleton<IIntegrationEventPublisher, OutboxIntegrationEventPublisher>();
-        s.AddSingleton<ICompanionFileFinder, CompanionFileFinder>();
+        // Which picture a video belongs to is told by an identifier in both files. Organize knows it for every file
+        // it has listed; for any other it is read from the file, once, and kept.
+        s.AddSingleton<ICompanionFileFinder>(sp => new CompanionFileFinder(sp.GetRequiredService<OrganizeLibrary>().LivePhotoIds(new LivePhotoIdCache().Read)));
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
         s.AddSingleton<IFolderBrowser, FileSystemFolderBrowser>();
         s.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
+        s.AddSingleton<IMediaDetailsReader, ExifMediaDetailsReader>();
+        s.AddSingleton<IMediaDetailsStore>(sp => new LiteDbMediaDetailsStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton(sp => new OrganizeLibrary(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IMediaDetailsReader>(), sp.GetRequiredService<IImageHashingService>(),
+            sp.GetRequiredService<IMediaDetailsStore>()));
+        s.AddSingleton<PlaceLookup>();
+        s.AddSingleton<Api.OrganizeListingMapper>();
+        s.AddSingleton<OrganizePlanner>();
+        s.AddSingleton<OrganizeMover>();
+        s.AddSingleton(sp => new RemovedFiles(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IOrganizeBatchStore>(), sp.GetRequiredService<IAuditRepository>()));
         s.AddSingleton<IScanProgressStore, InMemoryScanProgressStore>();
         s.AddSingleton<IScanLogSink, InMemoryScanLogSink>();
         s.AddSingleton<IScanExecutionService>(sp => new ScanExecutionService(

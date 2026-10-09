@@ -3,16 +3,26 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePage from '../../app/page';
-import { saveLastScan } from '../../lib/lastScan';
-import type { GroupMode, GroupsPageDto, ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
+import { saveLastScan, saveOrganizeRoot } from '../../lib/lastScan';
+import type { EraseRemovedDto, GroupMode, GroupsPageDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
 import { deferred } from '../fakeSignalR';
 import { group, groupsPage, member, photo } from '../fixtures';
 
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
+  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
+// The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
+vi.mock('../../components/organize/OrganizeView', () => ({
+  OrganizeView: ({ startRoot, notify }: { startRoot?: string; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => (
+    <section aria-label="Organize">
+      Organizing {startRoot ?? 'no folder'}
+      <button type="button" onClick={() => notify('Moved 13 files to Butte', 'ok', { label: 'Undo', run: () => notify('Moved 13 files back', 'ok') })}>Move some</button>
+    </section>
+  ),
+}));
 
 // Two groups: a picture with two copies, and another with one.
 const copyA1 = member({ id: 'a1', fileName: 'IMG_4198 (1).JPG' }, 'identical', 'Same quality; kept the one with the plainer name');
@@ -148,6 +158,23 @@ describe('the results', () => {
     refresh();
     expect(screen.getByText('No duplicates waiting to be removed.')).toBeInTheDocument();
     expect(button('Delete all duplicates')).toBeDisabled();
+  });
+
+  it('point to the similar shots when no duplicates were found, and back again', async () => {
+    groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([burst], {}, 'similar') : groupsPage([]) });
+    open();
+    expect(gallery()).toHaveTextContent('0 groupsNo duplicates to showShow the 1 similar group');
+    currentMode = 'similar';
+    await userEvent.click(within(gallery()).getByRole('button', { name: 'Show the 1 similar group' }));
+    expect(tab(/Similar/)).toHaveAttribute('aria-selected', 'true');
+    expect(tile('IMG_7001.JPG')).toBeInTheDocument();
+
+    // And the other way about, when it is the similar shots there are none of.
+    groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([], {}, 'similar') : groupsPage([groupA, groupB]) });
+    await userEvent.click(tab(/Duplicates/));
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(within(gallery()).getByRole('button', { name: 'Show the 2 duplicate groups' }));
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
   });
 
   it('show the group that is picked and its first copy; when it goes, the one that took its place', async () => {
@@ -291,6 +318,25 @@ describe('scanning', () => {
     await userEvent.type(screen.getByLabelText('Root folder'), 'C:\\photos');
     await click('Scan');
     expect(await toast(message)).toBeInTheDocument();
+  });
+
+  it('follows a scan it did not start, as when the page is loaded again while one is running, and says when that one finishes', async () => {
+    // The service holds a few files already, so without knowing of the scan the page would show results half made.
+    statusNow = { data: { instanceId: 'scan-9', totalPhotos: 40, completed: null } };
+    let done = false;
+    progressFor = id => (id === 'scan-9' ? { data: snapshot({ instanceId: 'scan-9', ...(done ? { completedUtc: '2026-10-07T12:01:00Z', overallPercent: 100 } : {}) }) } : {});
+    const { refresh } = open();
+    expect(await screen.findByLabelText('Scan progress')).toHaveTextContent('34%34 of 100 files');
+    expect(api.useScanProgress).toHaveBeenLastCalledWith('scan-9');
+    expect(button('Scanning…')).toBeDisabled();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(api.startScan).not.toHaveBeenCalled();
+
+    done = true;
+    statusNow = { data: { instanceId: 'scan-9', totalPhotos: 100, completed: '2026-10-07T12:01:00Z' } };
+    refresh();
+    expect(await toast('Scan finished: 263 duplicate groups and 170 similar groups')).toBeInTheDocument();
+    expect(tab(/Duplicates/)).toBeInTheDocument();
   });
 
   it('keeps a failed start as an error, in the toast and in the list', async () => {
@@ -458,7 +504,7 @@ describe('deleting', () => {
     await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
     expect(screen.getByRole('alertdialog', { name: 'Delete IMG_4198 (1).JPG?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent('IMG_4198 (1).JPG (5.8 MB) will be removed.The original, IMG_4198.JPG, stays in C:\\photos\\2024.');
-    expect(question()).toHaveTextContent('Files go to _PhotoSense_Removed inside the scanned folder. Moving a file back restores it.');
+    expect(question()).toHaveTextContent('Files go to _PhotoSense_Removed inside the scanned folder. Moving a file back restores it; Delete permanently, in the menu, erases them.');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
     expect(api.removePhoto).toHaveBeenCalledExactlyOnceWith('a1');
     expect(await toast('Moved IMG_4198 (1).JPG to _PhotoSense_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
@@ -618,5 +664,201 @@ describe('clearing the results', () => {
     open();
     await userEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
     expect(api.clearResults).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting permanently', () => {
+  const PHONE = 'C:\\Users\\jamie\\Phone Pictures', HELD = `${PHONE}\\_PhotoSense_Removed`;
+  const found = (...folders: [path: string, files: number, bytes: number][]): RemovedFilesDto => ({
+    folders: folders.map(([path, files, bytes]) => ({ path, files, bytes })), files: folders.reduce((n, f) => n + f[1], 0), bytes: folders.reduce((n, f) => n + f[2], 0),
+  });
+  const erased = (changes: Partial<EraseRemovedDto> = {}): EraseRemovedDto => ({ erased: 0, bytes: 0, skipped: 0, problems: [], ...changes });
+  const warning = () => screen.getByRole('alertdialog', { name: 'Delete removed files permanently?' });
+  const sure = () => screen.getByRole('alertdialog', { name: 'Are you sure?' });
+  const ask = async () => {
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently' }));
+    return warning();
+  };
+  /** Says yes to the warning, once what would be erased has been found. */
+  const confirm = async () => {
+    const go = within(await ask()).getByRole('button', { name: 'Delete permanently' });
+    await waitFor(() => expect(go).toBeEnabled());
+    await userEvent.click(go);
+  };
+  const askOnce = () => localStorage.setItem('photosense-settings', JSON.stringify({ eraseAskTwice: false }));
+
+  it('looks for what was removed in the folders this browser knows of, warns, makes sure, and only then erases', async () => {
+    saveLastScan({ root: PHONE, second: 'D:\\Backup', recursive: true });
+    saveOrganizeRoot(PHONE);
+    const looking = deferred<RemovedFilesDto>();
+    api.fetchRemoved.mockReturnValue(looking.promise);
+    api.eraseRemoved.mockResolvedValue(erased({ erased: 1234, bytes: 6_012_954_214 }));
+    open();
+
+    await ask();
+    // A folder that is both scanned and organized is named once.
+    expect(api.fetchRemoved).toHaveBeenCalledExactlyOnceWith([PHONE, 'D:\\Backup']);
+    expect(within(warning()).getByRole('status')).toHaveTextContent('Looking for removed files…');
+    expect(within(warning()).getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+    await act(async () => looking.resolve(found([HELD, 1234, 6_012_954_214])));
+    expect(warning()).toHaveTextContent('1,234 files taking 5.60 GB will be erased: everything Clean up and Organize have removed that is still waiting in this folder.');
+    expect(within(warning()).getAllByRole('listitem').map(i => i.textContent)).toEqual([`${HELD}1,234 files`]);
+    expect(warning()).toHaveTextContent('This cannot be undone. The files are erased, not moved: they do not go to the Recycle Bin, and Undo can no longer bring them back.');
+
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Delete permanently' }));
+    expect(api.eraseRemoved).not.toHaveBeenCalled();
+    expect(sure()).toHaveClass('w-[400px]');
+    expect(sure()).toHaveTextContent('1,234 files (5.60 GB) will be erased for good.');
+    expect(within(sure()).getByRole('switch', { name: 'Do not ask me this second time again' })).not.toBeChecked();
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
+    expect(api.eraseRemoved).toHaveBeenCalledExactlyOnceWith([HELD]);
+    expect(await toast('Deleted 1,234 files (5.60 GB) permanently.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // Nothing was said about not asking again, so the next time it is asked twice again; and no at the second question erases nothing.
+    await confirm();
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.eraseRemoved).toHaveBeenCalledOnce();
+  });
+
+  it('stops asking a second time when told so at the second question, until that is turned back on in the settings', async () => {
+    api.fetchRemoved.mockResolvedValue(found([HELD, 2, 2048]));
+    api.eraseRemoved.mockResolvedValue(erased({ erased: 2, bytes: 2048 }));
+    open();
+    await confirm();
+    await userEvent.click(within(sure()).getByRole('switch', { name: 'Do not ask me this second time again' }));
+    expect(sure()).toHaveTextContent('It can be turned back on under Settings in the menu.');
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
+    expect(await toast('Deleted 2 files (2 KB) permanently.')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false });
+
+    // Now the warning is all there is.
+    await confirm();
+    await waitFor(() => expect(api.eraseRemoved).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Settings' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(within(settings).getByRole('switch')).not.toBeChecked();
+    await userEvent.click(within(settings).getByRole('switch'));
+    expect(within(settings).getByRole('switch')).toBeChecked();
+    await userEvent.click(within(settings).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+
+    await confirm();
+    expect(sure()).toBeInTheDocument();
+    expect(within(sure()).getByRole('switch')).not.toBeChecked();
+    expect(api.eraseRemoved).toHaveBeenCalledTimes(2);
+  });
+
+  it('names the first few of the folders when there are many', async () => {
+    api.fetchRemoved.mockResolvedValue(found(...[1, 2, 3, 4, 5, 6].map((n): [string, number, number] => [`D:\\Trip ${n}\\_PhotoSense_Removed`, n, 1024 * n])));
+    open();
+    await ask();
+    expect(await within(warning()).findAllByRole('listitem')).toHaveLength(4);
+    expect(warning()).toHaveTextContent('21 files taking 21 KB will be erased: everything Clean up and Organize have removed that is still waiting in these 6 folders.');
+    expect(within(warning()).getAllByRole('listitem')[0]).toHaveTextContent('D:\\Trip 1\\_PhotoSense_Removed1 file');
+    expect(warning()).toHaveTextContent('and 2 more');
+  });
+
+  it('has nothing to confirm when no removed files are found', async () => {
+    api.fetchRemoved.mockResolvedValue(found());
+    open();
+    await ask();
+    expect(await within(warning()).findByText(/^There is nothing to delete/)).toHaveTextContent('There is nothing to delete: no _PhotoSense_Removed folder holds any files.');
+    expect(within(warning()).getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+    // This browser knew of no folder, so the service had only what is on record to go by.
+    expect(api.fetchRemoved).toHaveBeenCalledExactlyOnceWith([]);
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [erased({ erased: 3, bytes: 3072, skipped: 2, problems: ['IMG_1.JPG: The file is in use.'] }), ['Deleted 3 files (3 KB) permanently.', '2 files could not be deleted. IMG_1.JPG: The file is in use.']],
+    [erased({ skipped: 1 }), ['1 file could not be deleted.']],
+    [erased(), ['There was nothing left to delete.']],
+  ])('says what was erased and what could not be: %#', async (result, messages) => {
+    askOnce();
+    api.fetchRemoved.mockResolvedValue(found([HELD, 5, 5120]));
+    api.eraseRemoved.mockResolvedValue(result);
+    open();
+    await confirm();
+    for (const message of messages) expect(await toast(message)).toBeInTheDocument();
+    expect([...screen.queryAllByRole('status'), ...screen.queryAllByRole('alert')].filter(e => /Deleted|could not|nothing left/.test(e.textContent!))).toHaveLength(messages.length);
+  });
+
+  it('says why when the removed files cannot be looked for, or cannot be erased', async () => {
+    askOnce();
+    api.fetchRemoved.mockRejectedValueOnce(new Error('The service is busy'));
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently' }));
+    expect(await toast('The service is busy')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // The answer is of no more use once the question was put away: it is said, and nothing else on screen is touched.
+    const looking = deferred<RemovedFilesDto>();
+    api.fetchRemoved.mockReturnValueOnce(looking.promise);
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
+    await act(async () => looking.reject(new Error('The service has stopped')));
+    expect(await toast('The service has stopped')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // The warning stays up when erasing failed, so that it can be tried again.
+    api.fetchRemoved.mockResolvedValue(found([HELD, 2, 2048]));
+    api.eraseRemoved.mockRejectedValue(new Error('Not a folder of removed files: C:\\photos'));
+    await confirm();
+    expect(await toast('Not a folder of removed files: C:\\photos')).toBeInTheDocument();
+    expect(within(warning()).getByRole('button', { name: 'Delete permanently' })).toBeEnabled();
+  });
+});
+
+describe('the two areas', () => {
+  const area = (name: string) => within(screen.getByRole('group', { name: 'Area' })).getByRole('button', { name });
+  const organize = () => screen.queryByRole('region', { name: 'Organize', hidden: true });
+
+  it('are switched between in the header; Organize starts with the folder last scanned and is kept once opened', async () => {
+    saveLastScan({ root: 'C:\Users\jamie\Phone Pictures', second: '', recursive: true });
+    open();
+    expect(area('Clean up')).toHaveAttribute('aria-pressed', 'true');
+    expect(organize()).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Scanned folders')).toBeInTheDocument();
+
+    await userEvent.click(area('Organize'));
+    expect(organize()).toHaveTextContent('Organizing C:\Users\jamie\Phone Pictures');
+    expect(organize()!.parentElement).toHaveClass('flex', 'flex-1');
+    // Nothing of Clean up is on the page meanwhile: not its results, and not the chip that names what was scanned.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Scanned folders')).not.toBeInTheDocument();
+
+    await userEvent.click(area('Clean up'));
+    expect(tab(/Duplicates/)).toBeInTheDocument();
+    expect(organize()).toBeInTheDocument();
+    expect(organize()!.parentElement).toHaveClass('hidden');
+  });
+
+  it('share the messages: what Organize says shows as a toast, with whatever it offers to do', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    expect(organize()).toHaveTextContent('Organizing no folder');
+    await userEvent.click(screen.getByRole('button', { name: 'Move some' }));
+    const moved = await toast('Moved 13 files to Butte');
+    await userEvent.click(within(moved.parentElement!).getByRole('button', { name: 'Undo' }));
+    expect(await toast('Moved 13 files back')).toBeInTheDocument();
+    expect(screen.queryByText('Moved 13 files to Butte')).not.toBeInTheDocument();
+  });
+
+  it('go back to Clean up when the folders are to be changed or scanned again', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Change folders or rescan' }));
+    expect(area('Clean up')).toHaveAttribute('aria-pressed', 'true');
+    expect(setupHeading()).toBeInTheDocument();
   });
 });

@@ -135,18 +135,23 @@ public class PhotosFunctions
     {
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null || photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
+        return await ShowImageAsync(req, photo.SourcePath, photo.ContentHash, _analyzer);
+    }
 
+    /// <summary>The picture in a file, in a form a browser can show at full size.</summary>
+    public static async Task<HttpResponseData> ShowImageAsync(HttpRequestData req, string path, string? contentHash, IImageAnalyzer analyzer)
+    {
         try
         {
             // What browsers can show is sent as it is; anything else is converted for viewing.
-            var asItIs = BrowserFormats.TryGetValue(Path.GetExtension(photo.SourcePath), out var contentType);
+            var asItIs = BrowserFormats.TryGetValue(Path.GetExtension(path), out var contentType);
             byte[] bytes;
-            await using (var stream = OpenForShowing(photo.SourcePath))
+            await using (var stream = OpenForShowing(path))
             {
                 if (asItIs) await stream.ReadExactlyAsync(bytes = new byte[stream.Length]);
-                else bytes = await _analyzer.RenderJpegAsync(stream, ReviewImageEdge);
+                else bytes = await analyzer.RenderJpegAsync(stream, ReviewImageEdge);
             }
-            return await ImageResponseAsync(req, bytes, contentType ?? "image/jpeg", photo.ContentHash);
+            return await ImageResponseAsync(req, bytes, contentType ?? "image/jpeg", contentHash);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -222,7 +227,7 @@ public class PhotosFunctions
         => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
     // A file's bytes never change under the same content hash, so the browser may keep what it was sent.
-    private static async Task<HttpResponseData> ImageResponseAsync(HttpRequestData req, byte[] bytes, string contentType, string? contentHash)
+    public static async Task<HttpResponseData> ImageResponseAsync(HttpRequestData req, byte[] bytes, string contentType, string? contentHash)
     {
         var resp = req.CreateResponse(HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", contentType);

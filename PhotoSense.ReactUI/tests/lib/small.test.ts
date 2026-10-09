@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadLastScan, saveLastScan } from '../../lib/lastScan';
+import { loadLastScan, loadOrganizeRoot, saveLastScan, saveOrganizeRoot } from '../../lib/lastScan';
+import { loadAppSettings, useAppSettings } from '../../lib/settings';
 import { useTheme } from '../../lib/theme';
 import { THEME_KEY } from '../../lib/themeKey';
 
@@ -43,6 +44,48 @@ describe('the theme', () => {
     act(() => result.current[1]('light'));
     expect(result.current[0]).toBe('light');
     expect(document.documentElement).toHaveClass('light');
+  });
+});
+
+describe('the settings', () => {
+  it('ask twice before deleting permanently until told not to, and the change is remembered', () => {
+    const { result } = renderHook(() => useAppSettings());
+    expect(result.current[0]).toEqual({ eraseAskTwice: true });
+
+    act(() => result.current[1]({ eraseAskTwice: false }));
+    expect(result.current[0]).toEqual({ eraseAskTwice: false });
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false });
+    // The next visit starts from what was left.
+    expect(renderHook(() => useAppSettings()).result.current[0]).toEqual({ eraseAskTwice: false });
+    // A change that names nothing leaves everything as it is.
+    act(() => result.current[1]({}));
+    expect(result.current[0]).toEqual({ eraseAskTwice: false });
+  });
+
+  it('have their defaults for anything not saved, or saved in a way that cannot be read', () => {
+    localStorage.setItem('photosense-settings', '{"somethingOlder":1}');
+    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, somethingOlder: 1 });
+    localStorage.setItem('photosense-settings', 'not json');
+    expect(loadAppSettings()).toEqual({ eraseAskTwice: true });
+  });
+
+  it('still work for this visit where the browser refuses to remember them', () => {
+    refuseStorage();
+    const { result } = renderHook(() => useAppSettings());
+    expect(result.current[0]).toEqual({ eraseAskTwice: true });
+    act(() => result.current[1]({ eraseAskTwice: false }));
+    expect(result.current[0]).toEqual({ eraseAskTwice: false });
+  });
+});
+
+describe('the folder last organized', () => {
+  it('is remembered, and simply not known where the browser refuses storage', () => {
+    expect(loadOrganizeRoot()).toBe('');
+    saveOrganizeRoot('C:\\Phone Pictures');
+    expect(loadOrganizeRoot()).toBe('C:\\Phone Pictures');
+    refuseStorage();
+    saveOrganizeRoot('D:\\other');
+    expect(loadOrganizeRoot()).toBe('');
   });
 });
 

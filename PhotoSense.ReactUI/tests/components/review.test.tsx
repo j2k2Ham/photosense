@@ -187,6 +187,22 @@ describe('GroupList', () => {
     expect(screen.getByLabelText('Groups')).toHaveTextContent('0 groups');
   });
 
+  it.each([
+    ['duplicates', 117, 'Show the 117 similar groups'], ['similar', 1, 'Show the 1 duplicate group'], ['duplicates', 1234, 'Show the 1,234 similar groups'],
+  ] as const)('points to the other kind of group when there are none of %s and %i of the other', async (mode, otherTotal, label) => {
+    const onOther = vi.fn();
+    show({ mode, otherTotal, onOther });
+    await userEvent.click(screen.getByRole('button', { name: label }));
+    expect(onOther).toHaveBeenCalledOnce();
+  });
+
+  it('does not point elsewhere when the other kind has none either, when a search came to nothing, or while there are groups to show', () => {
+    show({ otherTotal: 0 });
+    show({ otherTotal: 5, query: 'beach' });
+    render(<GroupList groups={[group()]} mode="duplicates" total={1} page={1} totalPages={1} query="" otherTotal={5} onSelect={() => undefined} onPage={() => undefined} />);
+    expect(screen.queryByRole('button', { name: /^Show the / })).not.toBeInTheDocument();
+  });
+
   it('starts each page at its top, wherever the one before it was left', () => {
     const turned = (page: number) => <GroupList groups={[group()]} mode="duplicates" total={120} page={page} totalPages={3} query="" onSelect={() => undefined} onPage={() => undefined} />;
     const { rerender } = render(turned(1));

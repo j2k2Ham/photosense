@@ -7,6 +7,10 @@ interface Props {
   readonly title: string;
   /** Where to open: what is already typed, when that is a folder. */
   readonly startAt?: string;
+  /** What choosing the folder is called here, when it is not simply "Use this folder". */
+  readonly pickLabel?: string;
+  /** A second thing that can be done with the folder, offered beside the first. */
+  readonly other?: { readonly label: string; onPick(path: string): void };
   onPick(path: string): void;
   onCancel(): void;
 }
@@ -17,7 +21,7 @@ const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the Ph
  * Browses the folders of the computer the service runs on. A browser's own folder dialog tells a web page
  * the name of the folder that was picked but never where it is, and a scan needs the full path.
  */
-export function FolderPicker({ title, startAt, onPick, onCancel }: Props) {
+export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', other, onPick, onCancel }: Props) {
   const [places, setPlaces] = useState<FolderDto[]>([]);
   const [listing, setListing] = useState<FolderListingDto>();
   const [error, setError] = useState<string>();
@@ -97,7 +101,8 @@ export function FolderPicker({ title, startAt, onPick, onCancel }: Props) {
         <div className="flex items-center gap-2.5 border-t border-line px-6 py-4">
           <span className="mr-auto text-[12.5px] text-t3">Folders of the computer PhotoSense runs on.</span>
           <button type="button" onClick={onCancel} className="pill-outline h-11 px-5 text-[15px]">Cancel</button>
-          <button type="button" disabled={loading || !here} onClick={() => here && onPick(here)} className="pill-brand h-11 px-5 text-[15px]">Use this folder</button>
+          {other && <button type="button" disabled={loading || !here} onClick={() => here && other.onPick(here)} className="pill-outline h-11 px-5 text-[15px]">{other.label}</button>}
+          <button type="button" disabled={loading || !here} onClick={() => here && onPick(here)} className="pill-brand h-11 px-5 text-[15px]">{pickLabel}</button>
         </div>
       </div>
     </div>,
