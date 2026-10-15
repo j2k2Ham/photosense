@@ -13,7 +13,7 @@ interface Props {
 export function ErrorsPanel({ errors, onClear, onClearAll, onClose }: Props) {
   const ref = useDismiss<HTMLDivElement>(onClose);
   return (
-    <div ref={ref} role="dialog" aria-label="Errors" className="fixed right-6 top-[58px] z-40 flex max-h-[480px] w-[440px] flex-col rounded-2xl border border-line bg-pop shadow-pop">
+    <div ref={ref} role="dialog" aria-label="Errors" className="fixed right-3 top-[58px] z-40 flex max-h-[min(480px,calc(100dvh-80px))] w-[min(440px,calc(100vw-24px))] flex-col sm:right-6 rounded-2xl border border-line bg-pop shadow-pop">
       <div className="flex items-center px-4 pb-2 pt-3.5">
         <h2 className="text-[15px] font-semibold">Errors</h2>
         {errors.length > 0 && <button type="button" onClick={onClearAll} className="pill-quiet ml-auto h-[30px] px-3.5 text-[13px]">Clear all</button>}

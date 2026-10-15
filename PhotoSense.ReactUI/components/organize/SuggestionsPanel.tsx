@@ -48,6 +48,8 @@ interface Props {
   onAddPicked(folderId: string): void;
   onRemoveFolder(folderId: string): void;
   onUndo(batch: OrganizeBatchDto): void;
+  /** Whether the panel shows, as a display class: on a narrow screen it takes turns with the files. */
+  readonly className?: string;
 }
 
 const FORMATS: { value: NameFormat; name: string; example: string }[] = [
@@ -56,8 +58,9 @@ const FORMATS: { value: NameFormat; name: string; example: string }[] = [
   { value: 'nest', name: 'State \\ landmark or area', example: 'Montana\\Uptown Butte' },
 ];
 
+// The label beside its choices; on a narrow screen above them, so the choices have the width.
 const Row = ({ label, children }: { readonly label: string; readonly children: React.ReactNode }) => (
-  <div className="flex items-center gap-3"><span className="w-[104px] shrink-0 text-t2">{label}</span>{children}</div>
+  <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-3"><span className="shrink-0 text-t2 sm:w-[104px]">{label}</span>{children}</div>
 );
 
 /** The menu of ways to name a place's folder, each with an example. */
@@ -104,7 +107,7 @@ export function SuggestionsPanel(p: Props) {
   const focusOf = (kind: 'suggested' | 'own', key: string) => p.focus?.kind === kind && p.focus.key === key;
   const [showMoves, setShowMoves] = useState(false);
   return (
-    <aside aria-label="Suggested folders" className="flex min-h-0 flex-col border-l border-line bg-s1">
+    <aside aria-label="Suggested folders" className={`${p.className ?? 'flex'} min-h-0 flex-col border-line bg-s1 lg:border-l`}>
       <div className="flex shrink-0 flex-col gap-3.5 border-b border-line px-5 pb-4 pt-[18px]">
         <div className="flex items-center gap-3">
           <div className="flex min-w-0 flex-1 items-baseline gap-2.5">

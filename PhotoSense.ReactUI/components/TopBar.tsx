@@ -22,17 +22,19 @@ interface Props {
 
 export function TopBar({ area, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu }: Props) {
   return (
-    <header className="flex h-16 shrink-0 items-center gap-4 border-b border-line px-6">
+    // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)
+    // and the note that nothing leaves the computer.
+    <header className="flex h-16 shrink-0 items-center gap-2.5 border-b border-line px-3 sm:gap-4 sm:px-6">
       <div className="flex items-center gap-[11px]">
         <span aria-hidden className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-brand">
           <span className="h-2.5 w-2.5 rounded-full border-2 border-on-brand" />
         </span>
-        <h1 className="text-[17px] font-semibold">PhotoSense</h1>
+        <h1 className="text-[17px] font-semibold max-sm:sr-only">PhotoSense</h1>
       </div>
       <ModeSwitch area={area} onArea={onArea} />
 
       {showScan && (
-        <div className="flex h-10 min-w-0 items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2">
+        <div className="hidden h-10 min-w-0 items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2 md:flex">
           <span className="truncate" aria-label="Scanned folders">
             {folders.map((f, i) => (
               <React.Fragment key={f}>{i > 0 && ' + '}<span className="font-medium text-t1" title={f}>{leaf(f)}</span></React.Fragment>
@@ -46,7 +48,7 @@ export function TopBar({ area, onArea, showScan, folders, files, scanned, errorC
 
       <span className="flex-1" />
 
-      <span className="flex h-9 shrink-0 items-center gap-2 rounded-full bg-s2 px-3.5 text-[13px] text-t2">
+      <span className="hidden h-9 shrink-0 items-center gap-2 rounded-full bg-s2 px-3.5 text-[13px] text-t2 xl:flex">
         <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-keep" />Runs on this computer. Nothing is uploaded.
       </span>
 

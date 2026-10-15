@@ -22,14 +22,13 @@ function MapWindow({ folders, children, onClose }: { readonly folders: number; r
   }, [onClose]);
 
   return (
-    <WindowShell label="Map" columns="grid-cols-1" onClose={onClose} header={(
+    <WindowShell label="Map" columns="" onClose={onClose} header={(
       <>
         <span className="whitespace-nowrap text-[18px] font-semibold">Map</span>
-        <span className="truncate text-[14px] text-t3">{folders.toLocaleString()} suggested {folders === 1 ? 'folder' : 'folders'} · click a dot to see that folder&apos;s files</span>
-        <span className="flex-1" />
+        <span className="min-w-0 flex-1 truncate text-[14px] text-t3">{folders.toLocaleString()} suggested {folders === 1 ? 'folder' : 'folders'} · click a dot to see that folder&apos;s files</span>
       </>
     )}>
-      <div className="min-h-0 min-w-0 bg-stage p-5">{children}</div>
+      <div className="min-h-0 min-w-0 bg-stage p-3 max-lg:h-[calc(100dvh-60px)] lg:p-5">{children}</div>
     </WindowShell>
   );
 }

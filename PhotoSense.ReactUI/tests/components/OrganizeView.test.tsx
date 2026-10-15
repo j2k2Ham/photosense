@@ -218,6 +218,29 @@ describe('looking through the files', () => {
     expect(tiles()).toHaveLength(7);
   });
 
+  it('on a narrow screen shows the files or the folders in turn, and a folder picked among the folders by its files', async () => {
+    open();
+    const filesPane = () => screen.getByRole('region', { name: 'All files' });
+    const shows = (el: HTMLElement) => !el.classList.contains('hidden');
+    const switcher = () => within(screen.getByRole('group', { name: 'Files or folders' }));
+    expect(switcher().getAllByRole('button').map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Files7', 'true'], ['Folders2', 'false']]);
+    expect([shows(filesPane()), shows(panel())]).toEqual([true, false]);
+    expect(panel()).toHaveClass('lg:flex');
+
+    await userEvent.click(switcher().getByRole('button', { name: /^Folders/ }));
+    expect([shows(filesPane()), shows(panel())]).toEqual([false, true]);
+    expect(filesPane()).toHaveClass('lg:flex');
+
+    // Picking a folder shows its files; putting it down again leaves the folders showing.
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }));
+    expect([shows(filesPane()), shows(panel())]).toEqual([true, false]);
+    expect(shownNames()).toEqual(['b1.JPG', 'b2.JPG']);
+    await userEvent.click(switcher().getByRole('button', { name: /^Folders/ }));
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }));
+    expect([shows(filesPane()), shows(panel())]).toEqual([false, true]);
+    expect(tiles()).toHaveLength(7);
+  });
+
   it('shows photos alone or videos alone, together with the other filter, each count saying what a click would show', async () => {
     listings[ROOT] = { data: listing(ROOT, [...FILES, at('v1', 1, { name: 'v1.MOV', isVideo: true, durationSeconds: 9 }), at('v2', null, { name: 'v2.MOV', isVideo: true, durationSeconds: 4 })]) };
     open();

@@ -131,7 +131,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
 
   return (
     <>
-      <WindowShell label="Preview" columns="grid-cols-[minmax(0,1fr)_400px]" onClose={() => { if (!busy) onClose(); }} header={(
+      <WindowShell label="Preview" columns="lg:grid-cols-[minmax(0,1fr)_400px]" onClose={() => { if (!busy) onClose(); }} header={(
         <>
           <span className="whitespace-nowrap text-[18px] font-semibold">Preview</span>
           <span className="whitespace-nowrap rounded-md bg-s2 px-[9px] py-[3px] text-[12px] font-semibold text-t2">{kind}</span>
@@ -140,7 +140,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
         </>
       )}>
         <div className="flex min-h-0 min-w-0 flex-col bg-bg">
-          <div className="flex shrink-0 flex-wrap items-center gap-3 px-6 pb-3.5 pt-4">
+          <div className="flex shrink-0 flex-wrap items-center gap-3 px-4 pb-3.5 pt-4 lg:px-6">
             <p className="text-[15px]">
               <span className="font-semibold">{going.length.toLocaleString()}</span> {all ? `${going.length === 1 ? 'file' : 'files'} will ${verb}` : `of ${movable.length.toLocaleString()} files will ${verb}`}
             </p>
@@ -149,7 +149,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
             <span className="flex-1" />
             <Pager page={Math.min(page, pages)} pages={pages} onPage={setPage} />
           </div>
-          <ul aria-label="Files in this folder" className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(112px,1fr))] content-start gap-x-2.5 gap-y-4 overflow-y-auto px-6 pb-6">
+          <ul aria-label="Files in this folder" className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] content-start gap-x-2.5 gap-y-4 overflow-y-auto px-4 pb-6 sm:grid-cols-[repeat(auto-fill,minmax(112px,1fr))] lg:px-6">
             {files.slice(from, from + PREVIEW_PAGE).map(f => {
               const settled = planned !== undefined && !planned.has(f.id), off = !!excluded[f.id];
               return (
@@ -173,7 +173,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
           </ul>
         </div>
 
-        <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-line p-6">
+        <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line p-4 max-lg:border-t lg:border-l lg:p-6">
           {direct ? (
             <div className="flex flex-col gap-1.5 rounded-xl bg-s2 px-3.5 py-3 text-[13.5px]">
               <p>The files go straight into {leaf(basePath)}, without a new folder.</p>

@@ -24,7 +24,7 @@ export function Differences({ original, copy }: { readonly original: PhotoDto; r
 
 /** The original and a copy side by side, detail by detail; what differs comes first and is marked. */
 export function DiffTable({ original, copy }: { readonly original: PhotoDto; readonly copy: PhotoDto }) {
-  const cols = 'grid grid-cols-[150px_1fr_1fr] items-center gap-x-4 px-3.5';
+  const cols = 'grid grid-cols-[84px_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-2.5 px-2.5 sm:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)] sm:gap-x-4 sm:px-3.5';
   return (
     <div role="table" aria-label="What differs">
       <div role="row" className={`${cols} label-caps pb-1.5`}>

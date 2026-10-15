@@ -37,17 +37,18 @@ export function HelpWindow({ onGo, onClose }: Props) {
 
   const step = 'flex min-w-0 max-w-[48%] flex-col gap-0.5 rounded-xl border border-line px-4 py-2.5 text-left hover:bg-s2';
   return (
-    <WindowShell label="Help" columns="grid-cols-[300px_minmax(0,1fr)]" onClose={onClose} header={(
+    <WindowShell label="Help" columns="lg:grid-cols-[300px_minmax(0,1fr)]" onClose={onClose} header={(
       <>
         <span className="whitespace-nowrap text-[18px] font-semibold">User guide</span>
-        <label className="ml-3 flex h-[38px] w-[clamp(200px,24vw,340px)] items-center gap-2.5 rounded-full border border-line bg-bg px-3.5">
+        {/* On a narrow screen the search takes a line of its own, under the title and the close button. */}
+        <label className="flex h-[38px] w-full items-center gap-2.5 rounded-full border border-line bg-bg px-3.5 max-lg:order-last lg:ml-3 lg:w-[clamp(200px,24vw,340px)]">
           <span aria-hidden className="h-[11px] w-[11px] shrink-0 rounded-full border-[1.5px] border-t3" />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search the guide" aria-label="Search the guide" className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
         </label>
         <span className="flex-1" />
       </>
     )}>
-      <nav aria-label="Topics" className="flex min-h-0 flex-col gap-1 overflow-y-auto border-r border-line bg-s1 p-3">
+      <nav aria-label="Topics" className="flex min-h-0 flex-col gap-1 overflow-y-auto border-line bg-s1 p-3 max-lg:max-h-[38dvh] max-lg:border-b lg:border-r">
         {found.map(t => (
           <button key={t.id} type="button" aria-current={t === topic ? 'page' : undefined} onClick={() => setAt(t.id)}
             className={`flex flex-col gap-0.5 rounded-xl px-3.5 py-2.5 text-left ${t === topic ? 'bg-sel' : 'hover:bg-s2'}`}>
@@ -63,12 +64,12 @@ export function HelpWindow({ onGo, onClose }: Props) {
         )}
       </nav>
 
-      <article ref={page} aria-label={topic ? topic.title : 'Nothing found'} className="min-h-0 overflow-y-auto bg-bg px-10 py-9">
+      <article ref={page} aria-label={topic ? topic.title : 'Nothing found'} className="min-h-0 overflow-y-auto bg-bg px-5 py-6 lg:px-10 lg:py-9">
         {topic && (
           <div className="mx-auto flex max-w-[760px] flex-col gap-7">
             <header className="flex flex-col gap-3">
               <p className="label-caps">{index + 1} of {found.length}</p>
-              <h2 className="text-[30px] font-semibold leading-tight tracking-[-0.01em]">{topic.title}</h2>
+              <h2 className="text-[24px] font-semibold leading-tight tracking-[-0.01em] lg:text-[30px]">{topic.title}</h2>
               <p className="text-[16px] text-t2">{topic.summary}</p>
               {topic.go && <button type="button" onClick={() => onGo(topic.go!.place)} className="pill-brand mt-1 h-10 self-start px-5 text-[14px]">{topic.go.label}</button>}
             </header>

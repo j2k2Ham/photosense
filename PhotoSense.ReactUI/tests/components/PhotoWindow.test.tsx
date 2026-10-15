@@ -140,11 +140,12 @@ describe('the comparison window', () => {
     expect(button('Cancel')).toBeEnabled();
   });
 
-  it('holds its content to its own height, so that a video cannot push the buttons out of sight', () => {
+  it('holds its content to its own height on a wide screen, so that a video cannot push the buttons out of sight, and scrolls it on a narrow one', () => {
     open({ member: member({ id: 'v2', fileName: 'copy.MOV', isVideo: true, format: 'MOV' }, 'identical') });
     const content = button('Open in default viewer').closest('.grid')!;
-    expect(content).toHaveClass('min-h-0', 'grid-rows-[minmax(0,1fr)]');
-    expect(content.firstElementChild).toHaveClass('min-h-0');
+    expect(content).toHaveClass('min-h-0', 'lg:grid-rows-[minmax(0,1fr)]', 'lg:overflow-hidden', 'overflow-y-auto');
+    // On a narrow screen the pictures keep a height of their own, with the details and buttons under them.
+    expect(content.firstElementChild).toHaveClass('min-h-0', 'max-lg:h-[62dvh]');
     expect(button(/^Delete this copy ·/)).toBeEnabled();
   });
 

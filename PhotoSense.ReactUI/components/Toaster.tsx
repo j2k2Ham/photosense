@@ -38,13 +38,14 @@ interface ToasterProps { readonly toasts: Toast[]; readonly remove: (id: number)
 
 export function Toaster({ toasts, remove }: ToasterProps) {
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-2.5">
+    // On a phone the messages run the width of the screen, above its foot; on a wide screen they sit in the corner.
+    <div className="fixed inset-x-3 bottom-3 z-50 flex flex-col items-stretch gap-2.5 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:items-end">
       {toasts.slice(-4).map(t => (
         <div key={t.id} role={t.kind === 'error' ? 'alert' : 'status'}
-          className={`flex items-center gap-3 max-w-[540px] rounded-full bg-pop py-2.5 pl-4 pr-2.5 text-[14px] shadow-toast border ${t.kind === 'error' ? 'border-rose-line' : 'border-line'}`}>
+          className={`flex items-center gap-3 rounded-2xl bg-pop py-2.5 pl-4 pr-2.5 text-[14px] shadow-toast border sm:max-w-[540px] sm:rounded-full ${t.kind === 'error' ? 'border-rose-line' : 'border-line'}`}>
           <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${dot[t.kind]}`} />
-          <span className="min-w-0 break-words">{t.message}</span>
-          {t.kind === 'error' && <span className="shrink-0 text-[12.5px] text-t3">Kept in Errors</span>}
+          <span className="min-w-0 flex-1 break-words">{t.message}</span>
+          {t.kind === 'error' && <span className="hidden shrink-0 text-[12.5px] text-t3 sm:inline">Kept in Errors</span>}
           {t.action && <button type="button" onClick={() => { remove(t.id); t.action!.run(); }} className="pill-outline h-7 shrink-0 px-3 text-[13px]">{t.action.label}</button>}
           <button type="button" aria-label="Dismiss" onClick={() => remove(t.id)} className="pill-quiet h-7 w-7 shrink-0 text-[15px] leading-none">×</button>
         </div>

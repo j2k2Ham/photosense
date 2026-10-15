@@ -19,6 +19,17 @@ Cross-platform photo duplicate & near-duplicate detection.
 
 How to use PhotoSense is told in the app itself: **Help**, in the menu, opens the user guide. It has a topic for each part of the app (scanning, reviewing duplicates and similar shots, Organize, deleting permanently, what to do when something looks wrong), can be searched, is read from one topic to the next, and most topics have a button that goes to the place they describe. Its text is in `PhotoSense.ReactUI/lib/guide.ts`; when something on screen is renamed or added, the guide is changed there.
 
+## Phones and narrow windows
+
+The page fits whatever window it is in, and follows a window as it is resized. From 1024 pixels wide it is laid out as on a desktop. Narrower, it switches to a layout for a phone:
+
+- **Clean up** shows the groups; tapping one shows its review in their place, with **All groups** to go back.
+- **Organize** has **Files** and **Folders** at the top to switch between the gallery and the panel of folders; tapping a folder shows its files.
+- The large windows (comparing, previewing a move, names already taken, the guide, the map) fill the screen, with their details under the picture instead of beside it.
+- The header keeps the logo, **Clean up | Organize**, the errors and the menu; the scanned folders' chip is in the menu as **Change folders or rescan**.
+
+Opening PhotoSense from a phone needs more than the layout: as set up, the UI asks for the service at `http://localhost:7071/api`, which on a phone is the phone itself, and the service lets only `http://localhost:3000` call it (`Host:CORS`). Reaching it from another device means serving both on the computer's network address, with `NEXT_PUBLIC_API_BASE` and the CORS list changed to match, and `PHOTOSENSE_API_KEY` set so that other devices on the network cannot use the service: it has no other login.
+
 ## The UI and the service
 
 The React UI (`PhotoSense.ReactUI`) fetches everything over REST from the Functions service, with SWR polling for scan progress and group listings. What they exchange is plain JSON mirroring the DTOs in `PhotoSense.Contracts`; the UI keeps its own `types.ts` in step with them. When adding a field, update both.

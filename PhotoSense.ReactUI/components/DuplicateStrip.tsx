@@ -15,7 +15,7 @@ interface Props {
   onSelect(index: number): void;
 }
 
-interface Hover { member: GroupMemberDto; left: number; bottom: number; }
+interface Hover { member: GroupMemberDto; left: number; bottom: number; width: number; }
 
 const CARD_WIDTH = 420;
 
@@ -23,19 +23,19 @@ const CARD_WIDTH = 420;
 export function DuplicateStrip({ original, members, selectedIndex, onSelect }: Props) {
   const [hover, setHover] = useState<Hover>();
 
-  // The card sits above the tile it describes, held inside the window.
+  // The card sits above the tile it describes, held inside the window, and is never wider than the window.
   function show(member: GroupMemberDto, e: React.MouseEvent<HTMLElement>) {
-    const tile = e.currentTarget.getBoundingClientRect();
-    setHover({ member, left: Math.max(12, Math.min(tile.left, window.innerWidth - CARD_WIDTH - 12)), bottom: window.innerHeight - tile.top + 10 });
+    const tile = e.currentTarget.getBoundingClientRect(), width = Math.min(CARD_WIDTH, window.innerWidth - 24);
+    setHover({ member, width, left: Math.max(12, Math.min(tile.left, window.innerWidth - width - 12)), bottom: window.innerHeight - tile.top + 10 });
   }
 
   return (
     <div className="flex flex-wrap gap-3">
       {members.map((m, i) => (
-        <div key={m.photo.id} className="w-[120px]">
+        <div key={m.photo.id} className="w-[100px] sm:w-[120px]">
           <button type="button" aria-label={`Show ${m.photo.fileName}`} aria-pressed={i === selectedIndex}
             onClick={() => { setHover(undefined); onSelect(i); }} onMouseEnter={e => show(m, e)} onMouseLeave={() => setHover(undefined)}
-            className={`relative block h-[84px] w-[120px] overflow-hidden rounded-[10px] bg-s3 ${i === selectedIndex ? 'ring-2 ring-brand' : ''}`}>
+            className={`relative block h-[70px] w-[100px] overflow-hidden sm:h-[84px] sm:w-[120px] rounded-[10px] bg-s3 ${i === selectedIndex ? 'ring-2 ring-brand' : ''}`}>
             <PhotoThumb photo={m.photo} className="h-full w-full" />
             {/* The format in plain sight: a HEIC and its JPEG conversion are otherwise told apart only by their names. */}
             {m.photo.format && <span className="absolute left-1.5 top-1.5 rounded bg-black/55 px-1.5 font-mono text-[11px] text-white">{m.photo.format}</span>}
@@ -55,7 +55,7 @@ export function DuplicateStrip({ original, members, selectedIndex, onSelect }: P
 function HoverCard({ hover, original }: { hover: Hover; original: PhotoDto }) {
   const { photo, keeperReason, match } = hover.member;
   return (
-    <div role="tooltip" style={{ left: hover.left, bottom: hover.bottom, width: CARD_WIDTH }}
+    <div role="tooltip" style={{ left: hover.left, bottom: hover.bottom, width: hover.width }}
       className="pointer-events-none fixed z-40 rounded-[14px] border border-line bg-pop p-4 text-[13.5px] shadow-pop">
       <div className="flex items-start gap-2">
         <span className="min-w-0 flex-1 text-[14.5px] font-semibold [overflow-wrap:anywhere]">{photo.fileName}</span>

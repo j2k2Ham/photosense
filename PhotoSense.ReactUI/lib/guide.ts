@@ -41,7 +41,8 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'The switch at the top left, **Clean up | Organize**, moves between the two areas. Each keeps what you were doing in it.',
           'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help** and **Delete permanently**.',
-          'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
+          'Messages appear at the bottom right, or across the bottom on a phone. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
+          'On a phone, or in a narrow window, the screen rearranges itself to fit. In **Clean up**, tap a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and tapping a folder shows its files. Make the window wider and the two sit side by side again.',
         ],
       },
       {

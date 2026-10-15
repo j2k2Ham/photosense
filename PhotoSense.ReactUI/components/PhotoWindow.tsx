@@ -102,33 +102,34 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
   });
 
   return (
-    <div className="fixed inset-0 z-30 bg-scrim p-10" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Compare ${shown.fileName}`} className="flex h-full outline-none flex-col overflow-hidden rounded-[18px] border border-line bg-s1 shadow-dialog">
-        <div className="flex h-[72px] shrink-0 items-center gap-3 border-b border-line px-6">
-          <span className="truncate text-[18px] font-semibold">{shown.fileName}</span>
+    // On a narrow screen the window is the whole screen: the pictures on top, the details under them, scrolling together.
+    <div className="fixed inset-0 z-30 bg-scrim lg:p-10" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Compare ${shown.fileName}`} className="flex h-full flex-col overflow-hidden border-line bg-s1 shadow-dialog outline-none lg:rounded-[18px] lg:border">
+        <div className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2.5 lg:h-[72px] lg:flex-nowrap lg:px-6 lg:py-0">
+          <span className="min-w-0 truncate text-[18px] font-semibold max-lg:flex-1">{shown.fileName}</span>
           {/* Said outright: the copy and the original are two files, each with a name of its own. */}
-          <span className="shrink-0 text-[14px] text-t2">
+          <span className="hidden shrink-0 text-[14px] text-t2 lg:inline">
             {view === 'original' ? `the ${best} · it stays` : <>{similar ? 'similar to' : 'a copy of'} <span className="font-medium text-keep">{original.fileName}</span></>}
           </span>
           <MatchChip match={member.match} kept={copy.kept} />
           {count > 1 && <span className="shrink-0 text-[13.5px] text-t2">Copy {index + 1} of {count}</span>}
-          <div role="group" aria-label="View" className="mx-auto flex shrink-0 rounded-full bg-s2 p-1">
+          <button type="button" onClick={onClose} aria-label="Close" className="pill-quiet h-[38px] w-[38px] shrink-0 text-[18px] leading-none lg:order-last">×</button>
+          <div role="group" aria-label="View" className="flex shrink-0 rounded-full bg-s2 p-1 max-lg:w-full lg:mx-auto">
             {views.map(v => (
               <button key={v.id} type="button" aria-pressed={view === v.id} onClick={() => setView(v.id)}
-                className={`pill h-9 px-[18px] text-[14px] ${view === v.id ? 'bg-t1 text-bg' : 'font-medium text-t2'}`}>
+                className={`pill h-9 px-3 text-[13.5px] max-lg:flex-1 lg:px-[18px] lg:text-[14px] ${view === v.id ? 'bg-t1 text-bg' : 'font-medium text-t2'}`}>
                 {v.id === 'original' && <span aria-hidden className="h-2 w-2 rounded-full bg-keep" />}{v.name}
               </button>
             ))}
           </div>
-          <kbd className="rounded-md border border-line px-2 py-0.5 font-mono text-[12px] text-t3">Esc</kbd>
-          <button type="button" onClick={onClose} aria-label="Close" className="pill-quiet h-[38px] w-[38px] text-[18px] leading-none">×</button>
+          <kbd className="hidden rounded-md border border-line px-2 py-0.5 font-mono text-[12px] text-t3 lg:inline">Esc</kbd>
         </div>
 
-        {/* One row, held to the height there is: a video would otherwise open at its own height and push the buttons out of sight. */}
-        <div className="grid min-h-0 flex-1 grid-cols-[1fr_420px] grid-rows-[minmax(0,1fr)]">
-          <div className="flex min-h-0 min-w-0 flex-col gap-3 bg-stage p-6">
+        {/* On a wide screen one row, held to the height there is: a video would otherwise open at its own height and push the buttons out of sight. */}
+        <div className="grid min-h-0 flex-1 auto-rows-max grid-cols-1 overflow-y-auto lg:auto-rows-auto lg:grid-cols-[1fr_420px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-col gap-3 bg-stage p-3 max-lg:h-[62dvh] lg:p-6">
             {view === 'side' ? (
-              <div className="grid min-h-0 flex-1 grid-cols-2 gap-5">
+              <div className="grid min-h-0 flex-1 grid-cols-2 gap-2.5 lg:gap-5">
                 <figure className="flex min-h-0 flex-col gap-2">
                   <div className="min-h-0 flex-1 overflow-hidden rounded-[10px] shadow-[inset_0_0_0_3px_var(--keep-line)] p-[3px]"><PhotoView photo={original} onOpenInViewer={onOpenInViewer} /></div>
                   <Caption photo={original}><span className="font-bold text-keep">{similar ? 'BEST' : 'ORIGINAL'}</span></Caption>
@@ -150,13 +151,13 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
                 <Caption photo={shown} />
               </figure>
             )}
-            <p className="text-center text-[12.5px] text-t3">
+            <p className="hidden text-center text-[12.5px] text-t3 lg:block">
               Press <kbd className="rounded border border-line px-1.5 font-mono">Space</kbd> to flip between this copy and the original in the same spot
               {count > 1 && <>, <kbd className="rounded border border-line px-1.5 font-mono">←</kbd> <kbd className="rounded border border-line px-1.5 font-mono">→</kbd> to move between the {count} copies</>}
             </p>
           </div>
 
-          <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-line p-6">
+          <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line p-4 max-lg:border-t lg:border-l lg:p-6">
             <div>
               <div className="label-caps">Match</div>
               <p className="mt-1 text-[14px] text-t2"><span className="font-semibold text-t1">{matchLabel[member.match]}.</span> {matchMeaning[member.match]}</p>

@@ -54,7 +54,7 @@ export function FileGallery({ files, places, page, filter, counts, kind, kindCou
   const pickedHere = picked.size === 0 ? 0 : files.reduce((n, f) => n + (picked.has(f.id) ? 1 : 0), 0);
   return (
     <>
-      <div className="flex shrink-0 flex-wrap items-center gap-3 px-6 py-3.5 text-[13px] text-t2">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-4 py-3.5 text-[13px] text-t2 lg:px-6">
         <span className="whitespace-nowrap"><span className="font-semibold text-t1">{files.length.toLocaleString()}</span> {files.length === 1 ? 'file' : 'files'}</span>
         {files.length > 0 && (
           <SelectAll label="Select all" checked={pickedHere === files.length} partial={pickedHere > 0} onChange={onPickAll}
@@ -81,8 +81,8 @@ export function FileGallery({ files, places, page, filter, counts, kind, kindCou
         <Pager page={page} pages={pages} onPage={onPage} />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-1">
-        <ul aria-label="Files" className="grid grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-x-3 gap-y-[18px]">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-1 lg:px-6">
+        <ul aria-label="Files" className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-x-2.5 gap-y-4 sm:grid-cols-[repeat(auto-fill,minmax(128px,1fr))] sm:gap-x-3 sm:gap-y-[18px]">
           {files.slice(from, from + GALLERY_PAGE).map((f, i) => {
             const on = picked.has(f.id), tag = tagOf(f);
             return (

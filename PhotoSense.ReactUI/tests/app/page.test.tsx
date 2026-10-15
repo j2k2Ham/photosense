@@ -84,6 +84,39 @@ const question = () => screen.getByRole('alertdialog');
 const toast = (name: string | RegExp) => screen.findByText(name);
 const setupHeading = () => screen.queryByRole('heading', { name: 'Find duplicate photos and videos' });
 
+describe('on a narrow screen', () => {
+  // The two panes are told apart by their display classes: below the wide breakpoint only one of them shows.
+  const shows = (el: HTMLElement) => !el.classList.contains('hidden');
+
+  it('shows the groups, and a tapped group\'s review in their place, with the way back to the list', async () => {
+    const { refresh } = open();
+    const toolbar = () => tab(/Duplicates/).parentElement!.parentElement!;
+    expect([shows(gallery()), shows(desk()), shows(toolbar())]).toEqual([true, false, true]);
+    // Wide enough, both are there side by side.
+    expect(desk()).toHaveClass('lg:flex');
+
+    await userEvent.click(tile('IMG_5000.JPG'));
+    expect([shows(gallery()), shows(desk()), shows(toolbar())]).toEqual([false, true, false]);
+    expect(gallery()).toHaveClass('lg:flex');
+    expect(within(desk()).getByRole('heading', { level: 2 })).toHaveTextContent('IMG_5000.JPG');
+
+    await click('All groups');
+    expect([shows(gallery()), shows(desk())]).toEqual([true, false]);
+
+    // The other tab starts from its list.
+    await userEvent.click(tile('IMG_4198.JPG'));
+    await userEvent.click(tab(/Similar/));
+    expect(shows(gallery())).toBe(true);
+
+    // A review whose group has gone gives way to the list.
+    await userEvent.click(tab(/Duplicates/));
+    await userEvent.click(tile('IMG_4198.JPG'));
+    groupsFor = mode => ({ data: groupsPage([], {}, mode) });
+    refresh();
+    expect(shows(gallery())).toBe(true);
+  });
+});
+
 describe('which screen is shown', () => {
   it('is the setup screen when nothing has been scanned yet', () => {
     statusNow = { data: { instanceId: '', totalPhotos: 0 } };

@@ -19,8 +19,8 @@ export function RecentMovesWindow({ batches, busy, onUndo, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label="Recently moved" className="flex max-h-full w-[560px] max-w-full flex-col gap-4 rounded-[20px] border border-line bg-pop p-7 shadow-dialog">
+    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-label="Recently moved" className="flex max-h-full w-[560px] max-w-full flex-col gap-4 rounded-[20px] border border-line bg-pop p-5 shadow-dialog sm:p-7">
         <div className="flex items-start gap-3">
           <h2 className="flex-1 text-[21px] font-semibold">Recently moved</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="pill-quiet -mr-2 -mt-1 h-[38px] w-[38px] shrink-0 text-[18px] leading-none">×</button>

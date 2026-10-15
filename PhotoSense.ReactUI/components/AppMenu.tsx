@@ -28,7 +28,7 @@ export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders,
   const item = 'flex w-full items-center rounded-[10px] px-3 py-2.5 text-left text-[14px] hover:bg-s2';
 
   return (
-    <div ref={ref} role="menu" aria-label="Menu" className="fixed right-6 top-[58px] z-40 w-[300px] rounded-2xl border border-line bg-pop p-2 shadow-[0_20px_50px_var(--shadow)]">
+    <div ref={ref} role="menu" aria-label="Menu" className="fixed right-3 top-[58px] z-40 w-[min(300px,calc(100vw-24px))] rounded-2xl sm:right-6 border border-line bg-pop p-2 shadow-[0_20px_50px_var(--shadow)]">
       <div className="label-caps px-3 pb-2 pt-2">Theme</div>
       <div className="mx-2 mb-2 flex rounded-full bg-s2 p-1" role="group" aria-label="Theme">
         {themes.map(t => (

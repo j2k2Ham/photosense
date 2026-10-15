@@ -27,6 +27,8 @@ interface Props {
   onChooseAll(all: boolean): void;
   /** Shows the groups of the other kind. */
   onOther?(): void;
+  /** Whether the list shows, as a display class: on a narrow screen it gives way to the review. */
+  readonly className?: string;
 }
 
 function emptyMessage(mode: GroupMode, query: string): string {
@@ -35,7 +37,7 @@ function emptyMessage(mode: GroupMode, query: string): string {
 }
 
 /** The groups as a gallery of their best copies, a page at a time. */
-export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, chosen, footer, otherTotal = 0, onSelect, onPage, onChoose, onChooseAll, onOther }: Props) {
+export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, chosen, footer, otherTotal = 0, onSelect, onPage, onChoose, onChooseAll, onOther, className = 'flex' }: Props) {
   const pager = 'pill-outline h-[30px] px-3 text-[13px]';
   const chosenHere = groups.filter(g => chosen.has(g.key)).length;
   const list = useRef<HTMLUListElement>(null);
@@ -44,8 +46,8 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
     if (list.current) list.current.scrollTop = 0;
   }, [page, mode, query]);
   return (
-    <section aria-label="Groups" className="flex min-h-0 flex-col border-r border-line bg-s1">
-      <div className="flex items-center gap-4 px-5 py-3.5 text-[13px] text-t2">
+    <section aria-label="Groups" className={`${className} min-h-0 flex-col border-line bg-s1 lg:border-r`}>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 text-[13px] text-t2 lg:px-5">
         <span>{total === undefined ? 'Loading…' : <><span className="font-semibold text-t1">{total.toLocaleString()}</span> {total === 1 ? 'group' : 'groups'}</>}</span>
         {groups.length > 0 && (
           <SelectAll label={totalPages > 1 ? 'Select all on this page' : 'Select all'} checked={chosenHere === groups.length} partial={chosenHere > 0} onChange={onChooseAll}
@@ -73,7 +75,7 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
           </div>
         )
         : (
-          <ul ref={list} className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-x-3.5 gap-y-5 overflow-y-auto px-5 pb-6 pt-1.5">
+          <ul ref={list} className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] content-start gap-x-3 gap-y-5 overflow-y-auto px-4 pb-6 pt-1.5 lg:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] lg:gap-x-3.5 lg:px-5">
             {groups.map(g => {
               const summary = groupSummary(g, mode), on = chosen.has(g.key);
               return (

@@ -32,7 +32,7 @@ export function ReadingOverlay({ folder, progress, compact }: Props) {
 
   if (compact) {
     return (
-      <div role="status" aria-label={`Reading ${folder}`} className="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-1.5 border-b border-line bg-s1 px-6 py-2.5 text-[13px]">
+      <div role="status" aria-label={`Reading ${folder}`} className="flex shrink-0 flex-wrap items-center gap-x-3.5 gap-y-1.5 border-b border-line bg-s1 px-4 py-2.5 text-[13px] lg:px-6">
         <span aria-hidden className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-s3 border-t-brand" />
         <span className="shrink-0 font-semibold">Still reading {folder}…</span>
         {bar}

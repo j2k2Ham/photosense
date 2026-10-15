@@ -78,13 +78,14 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
   const lines = log.slice(-200);
 
   return (
-    <div className="flex flex-1 flex-col items-center gap-10 overflow-y-auto px-6 pb-12 pt-[clamp(32px,8vh,96px)]">
+    <div className="flex flex-1 flex-col items-center gap-8 overflow-y-auto px-4 pb-12 pt-[clamp(24px,6vh,96px)] sm:gap-10 sm:px-6">
       <div className="flex flex-col items-center gap-4 text-center">
-        <h2 className="text-[clamp(40px,4.2vw,60px)] font-semibold leading-[1.05] tracking-[-0.03em]">Find duplicate photos and videos</h2>
-        <p className="max-w-[680px] text-[18px] text-t2">PhotoSense compares the pictures and videos in your folders, keeps the best copy of each, and lets you check the rest before anything moves.</p>
+        <h2 className="text-[clamp(30px,4.2vw,60px)] font-semibold leading-[1.05] tracking-[-0.03em]">Find duplicate photos and videos</h2>
+        <p className="max-w-[680px] text-[16px] text-t2 sm:text-[18px]">PhotoSense compares the pictures and videos in your folders, keeps the best copy of each, and lets you check the rest before anything moves.</p>
       </div>
 
-      <div className="grid w-[min(1240px,100%)] grid-cols-[1fr_1fr_auto] items-end gap-4 rounded-[20px] border border-line bg-s1 p-[22px] shadow-setup">
+      {/* The two folders and the scan side by side on a wide screen, one under another on a narrow one. */}
+      <div className="grid w-[min(1240px,100%)] grid-cols-1 items-end gap-4 rounded-[20px] border border-line bg-s1 p-4 shadow-setup sm:p-[22px] lg:grid-cols-[1fr_1fr_auto]">
         <div className="flex min-w-0 flex-col gap-2">
           <label htmlFor="rootPath" className="text-[13px] text-t2">Root folder</label>
           <div className={field('root')}>
@@ -117,7 +118,7 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
       {scanning && (
         <div className="flex w-[min(1240px,100%)] flex-col gap-4" aria-label="Scan progress">
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
-            <span className="text-[40px] font-semibold tabular-nums leading-none">{Math.round(percent)}%</span>
+            <span className="text-[32px] font-semibold tabular-nums leading-none sm:text-[40px]">{Math.round(percent)}%</span>
             <span className="text-[14px] text-t2">{done.toLocaleString()} of {total.toLocaleString()} files</span>
             {progress && [[root, progress.primaryProcessed, progress.primaryTotal] as const, [other, progress.secondaryProcessed, progress.secondaryTotal] as const]
               .filter(([folder]) => folder.trim())
@@ -126,7 +127,7 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
               ))}
             <span className="ml-auto text-[13px] text-t3">{timeLeft(progress?.secondsLeft)}</span>
           </div>
-          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} className="grid grid-cols-[repeat(30,1fr)] gap-1.5">
+          <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(percent)} className="grid grid-cols-[repeat(30,1fr)] gap-1 sm:gap-1.5">
             {Array.from({ length: TILES }, (_, i) => (
               <span key={i} className={`aspect-square rounded ${i < filled ? 'bg-brand' : 'bg-s3 opacity-60'}`} style={i < filled ? { opacity: 0.45 + ((i * 7) % 10) / 18 } : undefined} />
             ))}

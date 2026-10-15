@@ -63,7 +63,7 @@ describe('the help window', () => {
     expect(page()).not.toHaveTextContent('**');
     // A numbered list for what is done in order, a plain one for what is worth knowing.
     expect(within(page()).getByRole('heading', { level: 3, name: 'A good first run' }).parentElement!.querySelector('ol')!.children).toHaveLength(5);
-    expect(within(page()).getByRole('heading', { level: 3, name: 'Finding your way' }).parentElement!.querySelector('ul')!.children).toHaveLength(3);
+    expect(within(page()).getByRole('heading', { level: 3, name: 'Finding your way' }).parentElement!.querySelector('ul')!.children).toHaveLength(4);
     // The first topic describes no one place, so it has no button to one.
     expect(within(page()).queryByRole('button', { name: /^(Go to|Show|Open)/ })).not.toBeInTheDocument();
   });

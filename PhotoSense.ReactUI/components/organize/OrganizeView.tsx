@@ -9,6 +9,7 @@ import { loadOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
 import { useOrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeApplyRequest, OrganizeFileDto } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { FileGallery, type FileFilter, type FileKind } from './FileGallery';
@@ -67,6 +68,8 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const [companions, setCompanions] = useState(true);
   const [busy, setBusy] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  // On a narrow screen the files and the folders take turns.
+  const [pane, setPane] = useState<'files' | 'folders'>('files');
   // Files deleted here, until the list that no longer has them arrives; and the ones a deletion is being asked about.
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   // For one of two files that share a name, the question also says which of them stays.
@@ -140,6 +143,8 @@ export function OrganizeView({ startRoot, notify }: Props) {
   // Everything that keeps some of the files from showing, put away at once.
   const showEverything = () => { setFocus(undefined); setQuery(''); setFilter('all'); setKind('any'); setPage(1); };
   const turnTo = (focusNow?: Focus) => { setFocus(focusNow); setPage(1); };
+  // A folder picked in the panel is shown by its files, which on a narrow screen are the other pane.
+  const showFolder = (focusNow?: Focus) => { turnTo(focusNow); if (focusNow) setPane('files'); };
 
   function chooseRoot(path: string) {
     setBrowsing(false);
@@ -302,21 +307,29 @@ export function OrganizeView({ startRoot, notify }: Props) {
 
   return (
     <>
-      <div className="flex min-h-[72px] shrink-0 items-center gap-4 border-b border-line px-6 py-3">
-        <div className="flex h-10 shrink-0 items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2">
-          <span className="whitespace-nowrap" aria-label="Folder being organized">
+      <div className="flex min-h-[72px] shrink-0 flex-wrap items-center gap-x-4 gap-y-2.5 border-b border-line px-4 py-3 lg:flex-nowrap lg:px-6">
+        <div className="flex h-10 min-w-0 max-w-full items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2 lg:shrink-0">
+          <span className="min-w-0 truncate" aria-label="Folder being organized">
             {root
               ? <><span className="font-medium text-t1" title={root}>{leaf(root)}</span>{data && <> · {reading ? `${files.length.toLocaleString()} of ${soFar!.total.toLocaleString()} files so far` : `${countFiles(files.length)} · ${data.fromScan ? 'from your last scan' : 'read just now'}`}</>}</>
               : 'No folder chosen yet'}
           </span>
           <button type="button" onClick={() => setBrowsing(true)} className="pill-quiet h-[30px] shrink-0 px-3.5 text-[13px] font-medium">Choose root folder</button>
         </div>
-        <label className="flex h-[42px] w-[clamp(200px,20vw,340px)] shrink-0 items-center gap-2.5 rounded-full border border-line bg-s1 px-3.5">
+        <label className="flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-3.5 sm:w-[clamp(200px,20vw,340px)] sm:shrink-0">
           <span aria-hidden className="h-[11px] w-[11px] shrink-0 rounded-full border-[1.5px] border-t3" />
           <input value={query} onChange={e => { setQuery(e.target.value); setPage(1); }} placeholder="Search by name, place or month" aria-label="Search by name, place or month"
             className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
         </label>
-        <p className="min-w-0 flex-1 text-right text-[13px] text-t3">Click to select, Shift-click for a range, drag onto your folders. Nothing moves until you preview and confirm.</p>
+        <p className="hidden min-w-0 flex-1 text-right text-[13px] text-t3 xl:block">Click to select, Shift-click for a range, drag onto your folders. Nothing moves until you preview and confirm.</p>
+        {root !== undefined && (
+          <div className="w-full lg:hidden">
+            <Segmented<'files' | 'folders'> label="Files or folders" size="wide" value={pane} onChange={setPane} options={[
+              { value: 'files', name: <>Files<span className="font-mono text-[12px] font-medium opacity-75">{files.length.toLocaleString()}</span></> },
+              { value: 'folders', name: <>Folders<span className="font-mono text-[12px] font-medium opacity-75">{(suggestions.length + folders.length).toLocaleString()}</span></> },
+            ]} />
+          </div>
+        )}
       </div>
 
       {root === undefined ? (
@@ -326,9 +339,9 @@ export function OrganizeView({ startRoot, notify }: Props) {
           <button type="button" onClick={() => setBrowsing(true)} className="pill-brand h-11 px-6 text-[15px]">Choose a folder</button>
         </div>
       ) : (
-        <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_clamp(400px,34vw,540px)]">
+        <div className="relative grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_clamp(400px,34vw,540px)]">
           {reading && !data && <ReadingOverlay folder={leaf(root)} progress={soFar} />}
-          <section aria-label="All files" className="flex min-h-0 min-w-0 flex-col">
+          <section aria-label="All files" className={`${pane === 'files' ? 'flex' : 'hidden lg:flex'} min-h-0 min-w-0 flex-col`}>
             {reading && data && <ReadingOverlay compact folder={leaf(root)} progress={soFar} />}
             <FileGallery files={shown} places={places} page={Math.min(page, pages)} filter={filter} counts={counts} kind={kind} kindCounts={kindCounts} focus={focusLabel} narrowed={focusLabel !== undefined || q !== '' || filter !== 'all' || kind !== 'any'} picked={picked}
               reading={reading && !data} empty={listing.error ? 'This folder could not be read.' : q ? `No files match “${query.trim()}”` : 'No files here'}
@@ -340,9 +353,9 @@ export function OrganizeView({ startRoot, notify }: Props) {
                 onCreate={createFolder} onDelete={askToDelete} onClear={clearPicks} />
             )}
           </section>
-          <SuggestionsPanel settings={settings} showMap={showMap} suggestions={suggestions} map={map} focus={focus} unplaced={noPlace.length} folders={own} picked={picked.size}
+          <SuggestionsPanel className={pane === 'folders' ? 'flex' : 'hidden lg:flex'} settings={settings} showMap={showMap} suggestions={suggestions} map={map} focus={focus} unplaced={noPlace.length} folders={own} picked={picked.size}
             dragging={dragging.length} naming={naming === 'panel'} name={newName} batches={batches.data ?? []} busy={busy} reading={reading} rootName={leaf(root)}
-            onSettings={changeSettings} onShowMap={setShowMap} onFocus={turnTo} onPreview={showPreview} onDrop={drop} onGroupByDate={() => changeSettings({ group: 'date' })}
+            onSettings={changeSettings} onShowMap={setShowMap} onFocus={showFolder} onPreview={showPreview} onDrop={drop} onGroupByDate={() => changeSettings({ group: 'date' })}
             onName={setNewName} onStartNaming={() => setNaming('panel')} onCancelNaming={() => { setNaming(undefined); setNewName(''); }} onCreate={createFolder}
             onAddPicked={id => addToOwn(id, [...picked])} onRemoveFolder={removeFolder} onUndo={b => void undo(b.id, b.label, b.mode === 'copy')} />
         </div>

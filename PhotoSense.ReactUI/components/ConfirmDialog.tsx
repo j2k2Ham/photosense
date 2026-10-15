@@ -25,12 +25,12 @@ export function ConfirmDialog({ title, confirmLabel, busy, tone = 'rose', small 
   }, [busy, onCancel]);
 
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-6" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
-      <div role="alertdialog" aria-modal="true" aria-label={title} className={`flex max-w-full flex-col gap-4 rounded-[20px] border border-line bg-pop shadow-dialog ${small ? 'w-[400px] p-6' : 'w-[520px] p-7'}`}>
+    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
+      <div role="alertdialog" aria-modal="true" aria-label={title} className={`flex max-h-full max-w-full flex-col gap-4 overflow-y-auto rounded-[20px] border border-line bg-pop p-5 shadow-dialog ${small ? 'w-[400px] sm:p-6' : 'w-[520px] sm:p-7'}`}>
         <h2 className={`font-semibold ${small ? 'text-[18px]' : 'text-[21px]'}`}>{title}</h2>
         <div className="space-y-1.5 text-[15px] text-t2">{children}</div>
         {note && <div className="rounded-xl bg-s2 px-4 py-3 text-[13.5px] text-t2">{note}</div>}
-        <div className="flex justify-end gap-2.5 pt-1">
+        <div className="flex flex-wrap justify-end gap-2.5 pt-1">
           <button type="button" disabled={busy} onClick={onCancel} className="pill-outline h-11 px-5 text-[15px]">Cancel</button>
           <button type="button" disabled={busy || !ready} onClick={onConfirm} className={`${tone === 'rose' ? 'pill-rose' : 'pill-brand'} h-11 px-5 text-[15px]`}>{busy ? 'Working…' : confirmLabel}</button>
         </div>

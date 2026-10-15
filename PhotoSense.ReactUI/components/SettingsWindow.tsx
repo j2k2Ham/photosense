@@ -30,8 +30,8 @@ export function SettingsWindow({ settings, onChange, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div role="dialog" aria-modal="true" aria-label="Settings" className="flex w-[560px] max-w-full flex-col gap-5 rounded-[20px] border border-line bg-pop p-7 shadow-dialog">
+    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-label="Settings" className="flex max-h-full w-[560px] max-w-full flex-col gap-5 overflow-y-auto rounded-[20px] border border-line bg-pop p-5 shadow-dialog sm:p-7">
         <h2 className="text-[21px] font-semibold">Settings</h2>
         <div className="flex flex-col gap-3">
           <div className="label-caps">Deleting permanently</div>

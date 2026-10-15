@@ -25,12 +25,13 @@ export function Segmented<T extends string | number>({ label, value, options, si
   readonly size?: 'small' | 'medium' | 'wide';
   onChange(value: T): void;
 }) {
-  const shape = { small: 'h-7 px-[13px] text-[12.5px]', medium: 'h-8 px-3.5 text-[13px]', wide: 'h-[34px] flex-1 text-[14px]' }[size];
+  // The medium size closes up on the smallest screens, so that a row of three choices still fits.
+  const shape = { small: 'h-7 px-[13px] text-[12.5px]', medium: 'h-8 px-2.5 text-[12.5px] sm:px-3.5 sm:text-[13px]', wide: 'h-[34px] flex-1 text-[14px]' }[size];
   return (
     <div role="group" aria-label={label} className={`flex rounded-full border border-line p-[3px] ${size === 'small' ? 'bg-bg' : 'bg-s2'} ${size === 'wide' ? '' : 'shrink-0'}`}>
       {options.map(o => (
         <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}
-          className={`pill gap-[7px] ${shape} ${value === o.value ? 'bg-t1 text-bg' : 'text-t2'}`}>{o.name}</button>
+          className={`pill gap-1.5 sm:gap-[7px] ${shape} ${value === o.value ? 'bg-t1 text-bg' : 'text-t2'}`}>{o.name}</button>
       ))}
     </div>
   );

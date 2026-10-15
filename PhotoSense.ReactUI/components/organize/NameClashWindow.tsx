@@ -120,7 +120,7 @@ export function NameClashWindow({ clashes, index, root, frozen, placeOf, onIndex
   ];
 
   return (
-    <WindowShell raised label={`Name already taken: ${file.name}`} columns="grid-cols-[minmax(0,1fr)_420px]" onClose={onClose} header={(
+    <WindowShell raised label={`Name already taken: ${file.name}`} columns="lg:grid-cols-[minmax(0,1fr)_420px]" onClose={onClose} header={(
       <>
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="truncate text-[18px] font-semibold">Name already taken</span>
@@ -134,7 +134,7 @@ export function NameClashWindow({ clashes, index, root, frozen, placeOf, onIndex
         </div>
       </>
     )}>
-      <div className="flex min-h-0 min-w-0 flex-col gap-3 bg-stage p-6">
+      <div className="flex min-h-0 min-w-0 flex-col gap-3 bg-stage p-4 max-lg:h-[60dvh] lg:p-6">
         {view === 'side' ? (
           <div className="grid min-h-0 flex-1 gap-5" style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))` }}>
             {shown.map(s => (
@@ -158,10 +158,10 @@ export function NameClashWindow({ clashes, index, root, frozen, placeOf, onIndex
             <figcaption className="flex items-center justify-center gap-3 text-[14px] text-t2"><span className="min-w-0 [overflow-wrap:anywhere]">{one.name} · {formatBytes(one.sizeBytes)}</span>{bin(one)}</figcaption>
           </figure>
         )}
-        <p className="text-center text-[13px] text-t3">Press <Key>Space</Key> to flip between the two files in the same spot · <Key>←</Key> <Key>→</Key> for the previous or next name</p>
+        <p className="hidden text-center text-[13px] text-t3 lg:block">Press <Key>Space</Key> to flip between the two files in the same spot · <Key>←</Key> <Key>→</Key> for the previous or next name</p>
       </div>
 
-      <aside className="flex min-h-0 flex-col gap-[18px] overflow-y-auto border-l border-line p-6">
+      <aside className="flex min-h-0 flex-col gap-[18px] overflow-y-auto border-line p-4 max-lg:border-t lg:border-l lg:p-6">
         <p className="text-[14.5px] text-t2">
           {first.incoming
             ? `${file.name} is going to ${goingTo}, and so is another file of this move with the same name.`

@@ -62,6 +62,8 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [hideKept, setHideKept] = useState(false);
   const [selection, setSelection] = useState<{ key?: string; index: number }>({ index: 0 });
+  // On a narrow screen the groups and the review take turns: a group that was tapped is reviewed, with the way back.
+  const [reviewing, setReviewing] = useState(false);
   const [copyIndex, setCopyIndex] = useState(0);
   const [comparing, setComparing] = useState<string>();
   const [pending, setPending] = useState<Pending>();
@@ -149,9 +151,10 @@ export default function HomePage() {
   function select(key: string) {
     setSelection({ key, index: items.findIndex(g => g.key === key) });
     setCopyIndex(0);
+    setReviewing(true);
   }
   // A tick is on a group of one kind: the other tab starts with none.
-  function switchMode(next: GroupMode) { setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); setTicked(new Map()); }
+  function switchMode(next: GroupMode) { setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); setTicked(new Map()); setReviewing(false); }
   const untick = (key?: string) => setTicked(before => new Map([...before].filter(([k]) => k !== key)));
   const tick = (group: DuplicateGroupDto) => (ticked.has(group.key) ? untick(group.key) : setTicked(before => new Map(before).set(group.key, group)));
   function tickAll(all: boolean) {
@@ -255,15 +258,18 @@ export default function HomePage() {
   const cancel = () => setPending(undefined);
   const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder. Moving a file back restores it; Delete permanently, in the menu, erases them.</>;
   const best = mode === 'similar' ? 'best shot' : 'original';
+  // Once there is no group left to review, a narrow screen goes back to the list.
+  const showReview = reviewing && selected !== undefined;
 
   return (
-    <div className="flex h-screen min-w-[1100px] flex-col bg-bg text-t1">
+    // The height the browser shows, which on a phone leaves out its own bars.
+    <div className="flex h-dvh flex-col bg-bg text-t1">
       <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
         errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
         onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }} />
 
       {offline && (
-        <div role="alert" className="flex items-center gap-4 border-b border-rose-line bg-rose-bg px-6 py-2.5 text-[14px] text-rose-t">
+        <div role="alert" className="flex items-center gap-4 border-b border-rose-line bg-rose-bg px-4 py-2.5 text-[14px] text-rose-t sm:px-6">
           <span className="flex-1">The PhotoSense service is not answering, so what is shown here may be out of date.</span>
           <button type="button" onClick={() => void retryNow()} className="pill-rose-outline h-8 px-4 text-[13px]">Retry</button>
         </div>
@@ -277,8 +283,9 @@ export default function HomePage() {
         <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
       ) : (
         <>
-          <div className="flex min-h-[72px] shrink-0 items-stretch gap-5 border-b border-line px-6">
-            <div className="flex gap-6" role="tablist">
+          {/* On a narrow screen the bar wraps: the tabs and the switch, then the search, then what deleting would free. */}
+          <div className={`min-h-[72px] shrink-0 flex-wrap items-stretch gap-x-5 gap-y-2.5 border-b border-line px-4 pb-3 lg:flex-nowrap lg:px-6 lg:pb-0 ${showReview ? 'hidden lg:flex' : 'flex'}`}>
+            <div className="flex h-12 gap-6 lg:h-auto" role="tablist">
               {(['duplicates', 'similar'] as const).map(m => (
                 <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => switchMode(m)}
                   className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${mode === m ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
@@ -287,39 +294,40 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-            <label className="my-auto flex h-[42px] w-[clamp(220px,22vw,380px)] items-center gap-2.5 rounded-full border border-line bg-s1 px-4">
+            <label className="my-auto flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-4 max-lg:order-1 lg:w-[clamp(220px,22vw,380px)]">
               <span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-2 border-t3" />
               <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
                 className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
             </label>
             {mode === 'duplicates' && (
-              <label className="my-auto flex cursor-pointer items-center gap-2.5 text-[13.5px] text-t2" title="Hide groups where every copy is marked keep">
+              <label className="my-auto flex cursor-pointer items-center gap-2.5 whitespace-nowrap text-[13.5px] text-t2" title="Hide groups where every copy is marked keep">
                 <input type="checkbox" role="switch" checked={hideKept} onChange={e => { setHideKept(e.target.checked); turnPage(1); }} className="peer sr-only" />
                 <span aria-hidden className="relative h-[18px] w-8 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-3.5 peer-checked:after:bg-on-brand" />
                 Hide reviewed
               </label>
             )}
-            <span className="flex-1" />
+            <span className="hidden flex-1 lg:block" />
             {mode === 'duplicates' ? (
               <>
-                <div className="my-auto text-right">
-                  <p className="text-[14.5px]">
+                {/* Between the narrow layout and a wide screen the bar is tight: only the count and the size are said there. */}
+                <div className="my-auto min-w-0 flex-1 max-lg:order-2 lg:flex-initial lg:text-right">
+                  <p className="text-[13.5px] lg:text-[14.5px]">
                     {removable > 0
-                      ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span>. The best copy of each picture or video is kept.</>
+                      ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span><span className="lg:hidden xl:inline">. The best copy of each picture or video is kept.</span></>
                       : <span className="text-t2">{data ? 'No duplicates waiting to be removed.' : 'Loading…'}</span>}
                   </p>
-                  <p className="text-[12.5px] text-t3">Deleted files move to {REMOVED_FOLDER} and can be moved back.</p>
+                  <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER} and can be moved back.</p>
                 </div>
                 <button type="button" disabled={busy || removable === 0} onClick={() => setPending({ scope: 'all', count: removable, bytes: reclaimable })}
-                  className="pill-rose my-auto h-11 px-[22px] text-[15px]">Delete all duplicates</button>
+                  className="pill-rose my-auto h-11 shrink-0 px-[22px] text-[15px] max-lg:order-2">Delete all duplicates</button>
               </>
             ) : (
-              <p className="my-auto max-w-[520px] text-right text-[14px] text-t2">Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.</p>
+              <p className="my-auto text-[13px] text-t2 max-lg:order-2 lg:max-w-[520px] lg:text-right lg:text-[14px]">Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.</p>
             )}
           </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[clamp(380px,32vw,620px)_1fr]">
-            <GroupList groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
+          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[clamp(380px,32vw,620px)_1fr]">
+            <GroupList className={showReview ? 'hidden lg:flex' : 'flex'} groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
               selectedKey={selected?.key} otherTotal={mode === 'duplicates' ? totals.similar : totals.duplicates} onSelect={select} onPage={turnPage}
               onOther={() => switchMode(mode === 'duplicates' ? 'similar' : 'duplicates')} chosen={ticked} onChoose={tick} onChooseAll={tickAll}
               footer={ticked.size > 0 && (
@@ -332,7 +340,7 @@ export default function HomePage() {
                   <button type="button" onClick={() => setTicked(new Map())} className="pill-outline h-9 px-3.5 text-[13.5px] font-medium">Clear</button>
                 </div>
               )} />
-            <ReviewPanel group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
+            <ReviewPanel className={showReview ? 'flex' : 'hidden lg:flex'} onBack={() => setReviewing(false)} group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
               onCompare={() => selected && setComparing(selected.key)} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
               onDeleteCopy={member => selected && setPending({ scope: 'copy', group: selected, member })}
               onDeleteGroup={group => setPending({ scope: 'group', group })} />

@@ -61,9 +61,9 @@ export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', ot
 
   // Rendered on the page body, over everything else.
   return createPortal(
-    <div className="fixed inset-0 z-[46] flex items-center justify-center bg-scrim p-6" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
+    <div className="fixed inset-0 z-[46] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
       <div role="dialog" aria-modal="true" aria-label={title} className="flex h-[560px] max-h-full w-[720px] max-w-full flex-col rounded-[20px] border border-line bg-pop shadow-dialog">
-        <div className="flex flex-col gap-3 px-6 pb-4 pt-5">
+        <div className="flex flex-col gap-3 px-4 pb-4 pt-5 sm:px-6">
           <h2 className="text-[20px] font-semibold">{title}</h2>
           <div className="flex items-center gap-2.5">
             <button type="button" disabled={loading || !parent} onClick={() => parent && open(parent)} className="pill-quiet h-10 shrink-0 px-4 text-[14px]">Up</button>
@@ -71,12 +71,13 @@ export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', ot
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[180px_1fr] border-t border-line">
-          <nav aria-label="Start from" className="flex flex-col gap-1 overflow-y-auto border-r border-line p-3">
-            <div className="label-caps px-2 pb-1">Start from</div>
+        {/* On a narrow screen the places to start from are a row of their own above the folders. */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] border-t border-line sm:grid-cols-[180px_1fr] sm:grid-rows-1">
+          <nav aria-label="Start from" className="flex gap-1 overflow-x-auto border-line p-3 max-sm:border-b sm:flex-col sm:overflow-y-auto sm:border-r">
+            <div className="label-caps hidden px-2 pb-1 sm:block">Start from</div>
             {places.map(p => (
               <button key={p.path} type="button" disabled={loading} onClick={() => open(p.path)} title={p.path}
-                className={`truncate rounded-full px-3 py-2 text-left text-[14px] hover:bg-s2 ${here === p.path ? 'bg-sel font-semibold' : ''}`}>{p.name}</button>
+                className={`shrink-0 truncate rounded-full px-3 py-2 text-left text-[14px] hover:bg-s2 max-sm:border max-sm:border-line ${here === p.path ? 'bg-sel font-semibold' : ''}`}>{p.name}</button>
             ))}
           </nav>
           <div className="overflow-y-auto p-3">
@@ -98,8 +99,8 @@ export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', ot
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 border-t border-line px-6 py-4">
-          <span className="mr-auto text-[12.5px] text-t3">Folders of the computer PhotoSense runs on.</span>
+        <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-line px-4 py-4 sm:px-6">
+          <span className="text-[12.5px] text-t3 max-sm:w-full sm:mr-auto">Folders of the computer PhotoSense runs on.</span>
           <button type="button" onClick={onCancel} className="pill-outline h-11 px-5 text-[15px]">Cancel</button>
           {other && <button type="button" disabled={loading || !here} onClick={() => here && other.onPick(here)} className="pill-outline h-11 px-5 text-[15px]">{other.label}</button>}
           <button type="button" disabled={loading || !here} onClick={() => here && onPick(here)} className="pill-brand h-11 px-5 text-[15px]">{pickLabel}</button>
