@@ -113,6 +113,15 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const counts = useMemo(() => ({ all: files.length, todo: files.filter(f => !choices.organized[pathOf(f)]).length, noloc: files.filter(f => f.place == null).length }), [files, choices.organized]);
 
   const clearPicks = () => { setPicked(new Set()); lastPick.current = -1; };
+  // Every file shown is selected, or let go; what is selected among the files not shown stays as it is.
+  function pickAll(all: boolean) {
+    setPicked(before => {
+      const next = new Set(before);
+      for (const f of shown) { if (all) next.add(f.id); else next.delete(f.id); }
+      return next;
+    });
+    lastPick.current = -1;
+  }
   // Everything that keeps some of the files from showing, put away at once.
   const showEverything = () => { setFocus(undefined); setQuery(''); setFilter('all'); setPage(1); };
   const turnTo = (focusNow?: Focus) => { setFocus(focusNow); setPage(1); };
@@ -308,7 +317,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
             {reading && data && <ReadingOverlay compact folder={leaf(root)} progress={soFar} />}
             <FileGallery files={shown} places={places} page={Math.min(page, pages)} filter={filter} counts={counts} focus={focusLabel} narrowed={focusLabel !== undefined || q !== '' || filter !== 'all'} picked={picked}
               reading={reading && !data} empty={listing.error ? 'This folder could not be read.' : q ? `No files match “${query.trim()}”` : 'No files here'}
-              tagOf={f => fileTag(f, choices, folderNames, suggestedNames)} onPage={setPage} onFilter={f => { setFilter(f); setPage(1); }} onClearFocus={() => turnTo(undefined)} onClearAll={showEverything}
+              tagOf={f => fileTag(f, choices, folderNames, suggestedNames)} onPage={setPage} onFilter={f => { setFilter(f); setPage(1); }} onClearFocus={() => turnTo(undefined)} onClearAll={showEverything} onPickAll={pickAll}
               onPick={pick} onOpen={open} onDragStart={f => setDragging(picked.has(f.id) ? [...picked] : [f.id])} onDragEnd={() => setDragging([])} />
             {picked.size > 0 && (
               <SelectionBar count={picked.size} shown={shown.length} hint={folders.length > 0 ? 'or add them to one of your folders' : ''} naming={naming === 'bar'} name={newName} onName={setNewName}

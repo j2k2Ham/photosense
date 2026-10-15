@@ -4,6 +4,7 @@ import { AppMenu } from '../components/AppMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
+import { HelpWindow } from '../components/HelpWindow';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
 import { PhotoWindow } from '../components/PhotoWindow';
@@ -13,9 +14,11 @@ import { SetupScreen } from '../components/SetupScreen';
 import { Toaster, useToasts } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
 import {
-  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removePhoto, retryNow, setKept, useGroups, useScanProgress, useScanStatus,
+  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, useGroups, useScanProgress,
+  useScanStatus,
 } from '../lib/apiClient';
 import { formatBytes, linkedFiles } from '../lib/format';
+import type { GuidePlace } from '../lib/guide';
 import { loadLastScan, loadOrganizeRoot } from '../lib/lastScan';
 import { useAppSettings } from '../lib/settings';
 import { useTheme } from '../lib/theme';
@@ -30,6 +33,8 @@ type Pending =
   | { scope: 'group'; group: DuplicateGroupDto }
   | { scope: 'copy'; group: DuplicateGroupDto; member: GroupMemberDto }
   | { scope: 'clear' }
+  // The copies of every group that is ticked.
+  | { scope: 'ticked' }
   // Erasing what was removed: the warning first, then the question that makes sure.
   | { scope: 'erase'; sure: boolean };
 
@@ -64,6 +69,9 @@ export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [errorsOpen, setErrorsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
+  const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
   // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
   const [held, setHeld] = useState<RemovedFilesDto>();
   const [askOnce, setAskOnce] = useState(false);
@@ -124,6 +132,7 @@ export default function HomePage() {
     announced.current = instanceId;
     setChosen('results');
     setSelection({ index: 0 });
+    setTicked(new Map());
     void retryNow();
     fetchGroupTotals().then(
       t => push(`Scan finished: ${groupsOf(t.duplicates, 'duplicate')} and ${groupsOf(t.similar, 'similar')}`, 'ok'),
@@ -141,7 +150,21 @@ export default function HomePage() {
     setSelection({ key, index: items.findIndex(g => g.key === key) });
     setCopyIndex(0);
   }
-  function switchMode(next: GroupMode) { setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); }
+  // A tick is on a group of one kind: the other tab starts with none.
+  function switchMode(next: GroupMode) { setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); setTicked(new Map()); }
+  const untick = (key?: string) => setTicked(before => new Map([...before].filter(([k]) => k !== key)));
+  const tick = (group: DuplicateGroupDto) => (ticked.has(group.key) ? untick(group.key) : setTicked(before => new Map(before).set(group.key, group)));
+  function tickAll(all: boolean) {
+    setTicked(before => {
+      const next = new Map(before);
+      for (const g of items) { if (all) next.set(g.key, g); else next.delete(g.key); }
+      return next;
+    });
+  }
+  // Each ticked group as it is now, where this page shows it; otherwise as it was when it was ticked.
+  const tickedGroups = [...ticked.values()].map(g => items.find(x => x.key === g.key) ?? g);
+  const tickedFiles = tickedGroups.reduce((n, g) => n + g.members.filter(m => !m.photo.kept).length, 0);
+  const tickedBytes = tickedGroups.reduce((n, g) => n + g.reclaimableBytes, 0);
   function turnPage(next: number) { setPage(next); setSelection({ index: 0 }); setCopyIndex(0); }
 
   const openExternally = (photo: PhotoDto) => run(() => openInViewer(photo.id));
@@ -156,6 +179,7 @@ export default function HomePage() {
     const from = items.find(g => g.members.some(m => m.photo.id === photo.id));
     const result = await removePhoto(photo.id);
     setPending(undefined);
+    untick(from?.key);
     setCopyIndex(from && from.members.length > 1 ? Math.min(from.members.findIndex(m => m.photo.id === photo.id), from.members.length - 2) : 0);
     push(`Moved ${photo.fileName}${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. ${stays.fileName} stays where it is.`, 'ok');
   });
@@ -163,6 +187,8 @@ export default function HomePage() {
     const result = await removeDuplicates(group?.key, mode);
     setPending(undefined);
     setCopyIndex(0);
+    // The group's copies have gone, or every group's have: there is nothing left there to be ticked.
+    if (group) untick(group.key); else setTicked(new Map());
     const going = group?.members.filter(m => !m.photo.kept) ?? [];
     const kind = mode === 'similar' ? 'similar shot' : 'duplicate';
     const what = going.length === 1 ? going[0].photo.fileName : `${result.removed} ${kind}${result.removed === 1 ? '' : 's'}`;
@@ -170,9 +196,19 @@ export default function HomePage() {
     if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}${stays}`, 'ok');
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
+  const removeTicked = () => run(async () => {
+    const result = await removeGroups([...ticked.keys()], mode);
+    setPending(undefined);
+    setCopyIndex(0);
+    setTicked(new Map());
+    const kind = mode === 'similar' ? 'similar shot' : 'duplicate';
+    if (result.removed > 0) push(`Moved ${result.removed.toLocaleString()} ${kind}${result.removed === 1 ? '' : 's'} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. The ${mode === 'similar' ? 'best shot' : 'original'} of each group stays where it is.`, 'ok');
+    if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
+  });
   const clear = () => run(async () => {
     const result = await clearResults();
     setPending(undefined);
+    setTicked(new Map());
     setComparing(undefined);
     setSelection({ index: 0 });
     setPage(1);
@@ -207,6 +243,14 @@ export default function HomePage() {
 
   // Scanning is part of Clean up, wherever it is asked for from.
   const changeFolders = () => { setArea('clean'); setChosen('setup'); };
+  // The guide is put away, and what it was describing is shown.
+  function goTo(place: GuidePlace) {
+    setHelpOpen(false);
+    if (place === 'scan') changeFolders();
+    else if (place === 'organize') turnTo('organize');
+    else if (place === 'settings') setSettingsOpen(true);
+    else { setArea('clean'); setChosen('results'); if (mode !== place) switchMode(place); }
+  }
   const offline = !!(groups.error || status.error);
   const cancel = () => setPending(undefined);
   const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder. Moving a file back restores it; Delete permanently, in the menu, erases them.</>;
@@ -270,14 +314,24 @@ export default function HomePage() {
                   className="pill-rose my-auto h-11 px-[22px] text-[15px]">Delete all duplicates</button>
               </>
             ) : (
-              <p className="my-auto max-w-[520px] text-right text-[14px] text-t2">Similar shots are burst frames or edited versions. They are never removed all at once; go through them a group at a time.</p>
+              <p className="my-auto max-w-[520px] text-right text-[14px] text-t2">Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.</p>
             )}
           </div>
 
           <div className="grid min-h-0 flex-1 grid-cols-[clamp(380px,32vw,620px)_1fr]">
             <GroupList groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
               selectedKey={selected?.key} otherTotal={mode === 'duplicates' ? totals.similar : totals.duplicates} onSelect={select} onPage={turnPage}
-              onOther={() => switchMode(mode === 'duplicates' ? 'similar' : 'duplicates')} />
+              onOther={() => switchMode(mode === 'duplicates' ? 'similar' : 'duplicates')} chosen={ticked} onChoose={tick} onChooseAll={tickAll}
+              footer={ticked.size > 0 && (
+                <div role="region" aria-label="Selected groups" className="m-3 flex shrink-0 flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-pop px-4 py-2.5 shadow-toast">
+                  <span className="min-w-0 flex-1 text-[13.5px]">
+                    <span className="font-semibold">{ticked.size.toLocaleString()} {ticked.size === 1 ? 'group' : 'groups'} selected</span>
+                    <span className="text-t2"> · {tickedFiles > 0 ? `${files(tickedFiles)}, ${formatBytes(tickedBytes)}` : 'every copy is marked keep'}</span>
+                  </span>
+                  <button type="button" disabled={busy || tickedFiles === 0} onClick={() => setPending({ scope: 'ticked' })} className="pill-rose h-9 px-4 text-[13.5px]">Delete their {mode === 'similar' ? 'similar shots' : 'duplicates'}</button>
+                  <button type="button" onClick={() => setTicked(new Map())} className="pill-outline h-9 px-3.5 text-[13.5px] font-medium">Clear</button>
+                </div>
+              )} />
             <ReviewPanel group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
               onCompare={() => selected && setComparing(selected.key)} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
               onDeleteCopy={member => selected && setPending({ scope: 'copy', group: selected, member })}
@@ -303,6 +357,14 @@ export default function HomePage() {
           onCancel={cancel} onConfirm={() => removeOne(pending.member.photo, pending.group.keeper)}>
           <p><Name>{pending.member.photo.fileName}</Name> ({formatBytes(pending.member.photo.fileSizeBytes)}) will be removed.</p>
           <Stays what={best} photo={pending.group.keeper} />
+        </ConfirmDialog>
+      )}
+      {pending?.scope === 'ticked' && (
+        <ConfirmDialog busy={busy} title={`Delete the ${mode === 'similar' ? 'similar shots' : 'duplicates'} of ${ticked.size.toLocaleString()} ${ticked.size === 1 ? 'group' : 'groups'}?`}
+          confirmLabel={`Delete ${files(tickedFiles)}`} note={note} onCancel={cancel} onConfirm={removeTicked}>
+          <p>{files(tickedFiles)} taking {formatBytes(tickedBytes)} will be removed.</p>
+          <p>The {best} of each group stays. Copies you marked keep are skipped.</p>
+          {mode === 'similar' && <p>These are different shots or edited versions, not copies of one file.</p>}
         </ConfirmDialog>
       )}
       {pending?.scope === 'clear' && (
@@ -346,8 +408,9 @@ export default function HomePage() {
 
       {menuOpen && (
         <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-          onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onDeletePermanently={askToErase} />
+          onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onDeletePermanently={askToErase} />
       )}
+      {helpOpen && <HelpWindow onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
       {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}
 

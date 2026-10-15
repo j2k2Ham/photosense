@@ -22,6 +22,13 @@ public interface IDuplicateRemovalService
     Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, bool similar = false, CancellationToken ct = default);
 
     /// <summary>
+    /// Removes the duplicates of each of the groups named, or with <paramref name="similar"/> their
+    /// look-alikes, as <see cref="RemoveDuplicatesAsync"/> does for one. The groups are worked out once for
+    /// all of them; a name that is no group's is passed over.
+    /// </summary>
+    Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar = false, CancellationToken ct = default);
+
+    /// <summary>
     /// Removes one photo. A photo in a duplicate group goes only while another file of the group stays
     /// behind as it was scanned: the photo kept for one of its copies, a copy for the photo kept.
     /// </summary>

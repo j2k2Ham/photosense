@@ -173,11 +173,15 @@ describe('DuplicateStrip', () => {
 });
 
 describe('GroupList', () => {
+  // Nothing ticked, and nothing done about a tick: what the tests that are not about ticking give the list.
+  const unticked = { chosen: new Set<string>(), onChoose: () => undefined, onChooseAll: () => undefined };
   const show = (props: Partial<React.ComponentProps<typeof GroupList>> = {}) => {
-    const onSelect = vi.fn(), onPage = vi.fn();
-    render(<GroupList groups={[]} mode="duplicates" total={0} page={1} totalPages={1} query="" onSelect={onSelect} onPage={onPage} {...props} />);
-    return { onSelect, onPage };
+    const onSelect = vi.fn(), onPage = vi.fn(), onChoose = vi.fn(), onChooseAll = vi.fn();
+    const view = render(<GroupList groups={[]} mode="duplicates" total={0} page={1} totalPages={1} query="" chosen={new Set()} onSelect={onSelect} onPage={onPage} onChoose={onChoose} onChooseAll={onChooseAll} {...props} />);
+    return { onSelect, onPage, onChoose, onChooseAll, ...view };
   };
+  const ticks = () => screen.getAllByRole('checkbox', { name: /^Select the group of / });
+  const all = (name = 'Select all') => screen.getByRole('checkbox', { name }) as HTMLInputElement;
 
   it.each([
     ['duplicates', '', 'No duplicates to show'], ['similar', '', 'No similar shots found'], ['duplicates', ' beach ', 'No groups match "beach"'],
@@ -199,12 +203,12 @@ describe('GroupList', () => {
   it('does not point elsewhere when the other kind has none either, when a search came to nothing, or while there are groups to show', () => {
     show({ otherTotal: 0 });
     show({ otherTotal: 5, query: 'beach' });
-    render(<GroupList groups={[group()]} mode="duplicates" total={1} page={1} totalPages={1} query="" otherTotal={5} onSelect={() => undefined} onPage={() => undefined} />);
+    render(<GroupList groups={[group()]} mode="duplicates" total={1} page={1} totalPages={1} query="" otherTotal={5} onSelect={() => undefined} onPage={() => undefined} {...unticked} />);
     expect(screen.queryByRole('button', { name: /^Show the / })).not.toBeInTheDocument();
   });
 
   it('starts each page at its top, wherever the one before it was left', () => {
-    const turned = (page: number) => <GroupList groups={[group()]} mode="duplicates" total={120} page={page} totalPages={3} query="" onSelect={() => undefined} onPage={() => undefined} />;
+    const turned = (page: number) => <GroupList groups={[group()]} mode="duplicates" total={120} page={page} totalPages={3} query="" onSelect={() => undefined} onPage={() => undefined} {...unticked} />;
     const { rerender } = render(turned(1));
     const list = screen.getByRole('list');
     list.scrollTop = 640;
@@ -240,6 +244,42 @@ describe('GroupList', () => {
     expect(onSelect).toHaveBeenCalledExactlyOnceWith('g1');
   });
 
+  it('has a tick on every group, apart from showing it, and a box that ticks every group on the page', async () => {
+    const groups = [group(), group({ key: 'g2', keeper: photo({ id: 'p2', fileName: 'IMG_5000.JPG' }) })];
+    const { onSelect, onChoose, onChooseAll } = show({ groups, total: 2, chosen: new Set(['g2']), footer: <p>1 group selected</p> });
+    expect(ticks().map(t => [t.getAttribute('aria-label'), t.getAttribute('aria-checked'), t.textContent])).toEqual([
+      ['Select the group of IMG_4198.JPG', 'false', ''], ['Select the group of IMG_5000.JPG', 'true', '✓'],
+    ]);
+    await userEvent.click(ticks()[0]);
+    expect(onChoose).toHaveBeenCalledExactlyOnceWith(groups[0]);
+    // Ticking a group is not looking at it.
+    expect(onSelect).not.toHaveBeenCalled();
+
+    // With some ticked the box is neither on nor off; a click on it asks for all of them.
+    expect([all().checked, all().indeterminate]).toEqual([false, true]);
+    expect(all().closest('label')).toHaveAttribute('title', 'Select every group on this page, to delete their duplicates together');
+    await userEvent.click(all());
+    expect(onChooseAll).toHaveBeenLastCalledWith(true);
+    // What can be done with the ticked groups is under them.
+    expect(screen.getByLabelText('Groups')).toHaveTextContent('1 group selected');
+  });
+
+  it('shows the box on when every group of the page is ticked, off when none is, and not at all with no groups', async () => {
+    const { onChooseAll, unmount } = show({ groups: [group()], mode: 'similar', total: 60, totalPages: 2, chosen: new Set(['g1', 'on another page']) });
+    const box = all('Select all on this page');
+    expect([box.checked, box.indeterminate]).toEqual([true, false]);
+    expect(box.closest('label')).toHaveAttribute('title', 'Select every group on this page, to delete their similar shots together');
+    await userEvent.click(box);
+    expect(onChooseAll).toHaveBeenLastCalledWith(false);
+    unmount();
+
+    const none = show({ groups: [group()], total: 1 });
+    expect([all().checked, all().indeterminate]).toEqual([false, false]);
+    none.unmount();
+    show();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
   it('pages through the groups, fifty at a time', async () => {
     const { onPage } = show({ groups: [group()], total: 263, page: 2, totalPages: 6 });
     expect(screen.getByLabelText('Groups')).toHaveTextContent('263 groups');
@@ -250,11 +290,11 @@ describe('GroupList', () => {
   });
 
   it('stops at the first page and the last, and shows no pager for a single page', () => {
-    const first = render(<GroupList groups={[group()]} mode="duplicates" total={60} page={1} totalPages={2} query="" onSelect={() => undefined} onPage={() => undefined} />);
+    const first = render(<GroupList groups={[group()]} mode="duplicates" total={60} page={1} totalPages={2} query="" onSelect={() => undefined} onPage={() => undefined} {...unticked} />);
     expect(screen.getByRole('button', { name: 'Prev' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
     first.unmount();
-    const last = render(<GroupList groups={[group()]} mode="duplicates" total={60} page={2} totalPages={2} query="" onSelect={() => undefined} onPage={() => undefined} />);
+    const last = render(<GroupList groups={[group()]} mode="duplicates" total={60} page={2} totalPages={2} query="" onSelect={() => undefined} onPage={() => undefined} {...unticked} />);
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
     last.unmount();
     show({ groups: [group()], total: 1 });

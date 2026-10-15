@@ -146,7 +146,7 @@ public sealed class RemovedFilesTests : IDisposable
         foreach (var other in new[] { null, " ", Held, _f.In("Phone"), _f.In("Phone", Held, "2022") })
         {
             var refused = await Assert.ThrowsAsync<ArgumentException>(() => _f.Removed().EraseAsync([_f.In("Phone", Held), other]));
-            await Assert.That(refused.Message).IsEqualTo($"Not a folder of removed files: {other}");
+            await Assert.That(refused!.Message).IsEqualTo($"Not a folder of removed files: {other}");
         }
 
         await Assert.That((File.Exists(held), File.Exists(photo))).IsEqualTo((true, true));

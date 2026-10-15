@@ -87,7 +87,7 @@ describe('TopBar', () => {
 
 describe('AppMenu', () => {
   function show(theme: 'dark' | 'light' = 'dark') {
-    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
     render(<div><span>elsewhere</span><AppMenu theme={theme} errorCount={2} {...handlers} /></div>);
     return handlers;
   }
@@ -107,7 +107,7 @@ describe('AppMenu', () => {
   });
 
   it.each([
-    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Delete permanently', 'onDeletePermanently'],
+    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['Delete permanently', 'onDeletePermanently'],
   ] as const)('does what is chosen and closes', async (name, handler) => {
     const handlers = show();
     await userEvent.click(screen.getByRole('menuitem', { name }));
@@ -118,7 +118,7 @@ describe('AppMenu', () => {
   it('shows the error count, and says on hovering Delete permanently where removed files wait', () => {
     show();
     expect(screen.getByRole('menuitem', { name: /^Errors/ })).toHaveTextContent('Errors2');
-    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Delete permanently']);
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Help', 'Delete permanently']);
     // The one thing in the menu that erases files is marked as such.
     expect(screen.getByRole('menuitem', { name: 'Delete permanently' })).toHaveClass('text-rose-t');
     expect(screen.getByRole('menuitem', { name: 'Delete permanently' })).toHaveAttribute('title', 'Removed files wait in _PhotoSense_Removed inside each folder they were removed from. Delete permanently erases them.');

@@ -135,6 +135,45 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That((await _service.RemoveDuplicatesAsync("no-such-group")).Removed).IsEqualTo(0);
     }
 
+    [Test]
+    public async Task Can_Take_The_Groups_Named_Together_And_No_Others()
+    {
+        var keeperA = await AddAsync("a.jpg", "AAAA");
+        var copyA = await AddAsync("a (1).jpg", "AAAA");
+        var keeperB = await AddAsync("b.jpg", "BBBB");
+        var copyB = await AddAsync("b (1).jpg", "BBBB");
+        await AddAsync("c.jpg", "CCCC");
+        var copyC = await AddAsync("c (1).jpg", "CCCC");
+
+        // Named as groups of similar shots they are no groups at all, and neither is a name that was never a group's.
+        await Assert.That((await _service.RemoveGroupsAsync([keeperA.Id.ToString(), keeperB.Id.ToString()], similar: true)).Removed).IsEqualTo(0);
+        await Assert.That((await _service.RemoveGroupsAsync([])).Removed).IsEqualTo(0);
+
+        var result = await _service.RemoveGroupsAsync([keeperA.Id.ToString(), "no-such-group", keeperB.Id.ToString()]);
+
+        await Assert.That((result.Removed, result.Skipped)).IsEqualTo((2, 0));
+        await Assert.That((File.Exists(copyA.SourcePath), File.Exists(copyB.SourcePath), File.Exists(copyC.SourcePath))).IsEqualTo((false, false, true));
+        await Assert.That((File.Exists(keeperA.SourcePath), File.Exists(keeperB.SourcePath))).IsEqualTo((true, true));
+    }
+
+    [Test]
+    public async Task The_Similar_Shots_Of_Several_Groups_Go_Together_When_Each_Is_Named()
+    {
+        // Three bursts of three different views.
+        var bursts = new List<Photo[]>();
+        foreach (var (name, difference, at) in new[] { ("A", 0d, 0), ("B", 5d, 3600), ("C", 10d, 7200) })
+            bursts.Add([await AddShotAsync($"{name}1.JPG", TestPhotos.Signature(difference), at), await AddShotAsync($"{name}2.JPG", TestPhotos.Signature(difference), at + 2)]);
+        var groups = (await new DuplicateAnalysisService(_repo).GetAsync()).Similar;
+        await Assert.That(groups.Count).IsEqualTo(3);
+        string KeyOf(int burst) => groups.Single(g => g.Keeper.FileName.StartsWith(bursts[burst][0].FileName[..1], StringComparison.Ordinal)).Key;
+
+        var result = await _service.RemoveGroupsAsync([KeyOf(0), KeyOf(2)], similar: true);
+
+        await Assert.That((result.Removed, result.Skipped)).IsEqualTo((2, 0));
+        // One shot of each of the two bursts named is left, and both of the one that was not.
+        await Assert.That(bursts.Select(b => b.Count(p => File.Exists(p.SourcePath)))).IsEquivalentTo(new[] { 1, 2, 1 }, CollectionOrdering.Matching);
+    }
+
     // ---- similar shots, a group at a time
 
     // A picture as a scan records it, with what similar shots are told by: a hash, a signature and a capture time.

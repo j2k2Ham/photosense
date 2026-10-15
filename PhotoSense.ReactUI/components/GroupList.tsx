@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { DuplicateGroupDto, GroupMode } from '../types';
 import { groupSummary } from '../lib/format';
 import { PhotoThumb } from './PhotoThumb';
+import { SelectAll } from './SelectAll';
 
 interface Props {
   readonly groups: DuplicateGroupDto[];
@@ -12,10 +13,18 @@ interface Props {
   readonly totalPages: number;
   readonly query: string;
   readonly selectedKey?: string;
+  /** The groups that are ticked, on this page or another, by key. */
+  readonly chosen: { has(key: string): boolean };
+  /** What can be done with the ticked groups, shown under the groups. */
+  readonly footer?: React.ReactNode;
   /** Groups of the other kind, similar shots when these are duplicates: said when there are none of this kind to show. */
   readonly otherTotal?: number;
   onSelect(key: string): void;
   onPage(page: number): void;
+  /** Ticks a group, or takes its tick off. */
+  onChoose(group: DuplicateGroupDto): void;
+  /** Ticks every group on this page (true), or takes the tick off every one of them (false). */
+  onChooseAll(all: boolean): void;
   /** Shows the groups of the other kind. */
   onOther?(): void;
 }
@@ -26,8 +35,9 @@ function emptyMessage(mode: GroupMode, query: string): string {
 }
 
 /** The groups as a gallery of their best copies, a page at a time. */
-export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, otherTotal = 0, onSelect, onPage, onOther }: Props) {
+export function GroupList({ groups, mode, total, page, totalPages, query, selectedKey, chosen, footer, otherTotal = 0, onSelect, onPage, onChoose, onChooseAll, onOther }: Props) {
   const pager = 'pill-outline h-[30px] px-3 text-[13px]';
+  const chosenHere = groups.filter(g => chosen.has(g.key)).length;
   const list = useRef<HTMLUListElement>(null);
   // A page starts at its top, wherever the one before it was left.
   useEffect(() => {
@@ -35,8 +45,12 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
   }, [page, mode, query]);
   return (
     <section aria-label="Groups" className="flex min-h-0 flex-col border-r border-line bg-s1">
-      <div className="flex items-center px-5 py-3.5 text-[13px] text-t2">
+      <div className="flex items-center gap-4 px-5 py-3.5 text-[13px] text-t2">
         <span>{total === undefined ? 'Loading…' : <><span className="font-semibold text-t1">{total.toLocaleString()}</span> {total === 1 ? 'group' : 'groups'}</>}</span>
+        {groups.length > 0 && (
+          <SelectAll label={totalPages > 1 ? 'Select all on this page' : 'Select all'} checked={chosenHere === groups.length} partial={chosenHere > 0} onChange={onChooseAll}
+            title={`Select every group on this page, to delete their ${mode === 'similar' ? 'similar shots' : 'duplicates'} together`} />
+        )}
         {totalPages > 1 && (
           <span className="ml-auto flex items-center gap-2.5">
             <button type="button" disabled={page <= 1} onClick={() => onPage(page - 1)} className={pager}>Prev</button>
@@ -61,23 +75,29 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
         : (
           <ul ref={list} className="grid min-h-0 flex-1 grid-cols-[repeat(auto-fill,minmax(150px,1fr))] content-start gap-x-3.5 gap-y-5 overflow-y-auto px-5 pb-6 pt-1.5">
             {groups.map(g => {
-              const summary = groupSummary(g, mode);
+              const summary = groupSummary(g, mode), on = chosen.has(g.key);
               return (
-                <li key={g.key}>
+                <li key={g.key} className="relative">
                   <button type="button" aria-pressed={g.key === selectedKey} onClick={() => onSelect(g.key)} className="block w-full text-left">
                     <span className={`relative block aspect-square overflow-hidden rounded-[10px] ${g.key === selectedKey ? 'shadow-selected' : ''}`}>
                       <PhotoThumb photo={g.keeper} className="h-full w-full" />
-                      {g.keeper.isVideo && <span className="absolute left-2 top-2 rounded bg-white/15 px-1.5 text-[11px] font-bold text-white">VIDEO</span>}
+                      {g.keeper.isVideo && <span className="absolute bottom-2 left-2 rounded bg-white/15 px-1.5 text-[11px] font-bold text-white">VIDEO</span>}
                       <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 font-mono text-[11.5px] text-white">+{g.members.length}</span>
                     </span>
                     <span className="mt-2 block truncate text-[14px] font-medium">{g.keeper.fileName}</span>
                     <span className={`block truncate text-[12.5px] ${summary.allKept ? 'text-keep' : 'text-t2'}`}>{summary.text}</span>
+                  </button>
+                  {/* Beside the tile, not inside it: the tile shows the group, the tick selects it. */}
+                  <button type="button" role="checkbox" aria-checked={on} aria-label={`Select the group of ${g.keeper.fileName}`} onClick={() => onChoose(g)}
+                    className={`absolute left-[7px] top-[7px] flex h-[22px] w-[22px] items-center justify-center rounded-md border-[1.5px] text-[12px] font-bold text-on-brand ${on ? 'border-brand bg-brand' : 'border-white/85 bg-black/35 hover:bg-black/55'}`}>
+                    {on && '✓'}
                   </button>
                 </li>
               );
             })}
           </ul>
         )}
+      {footer}
     </section>
   );
 }

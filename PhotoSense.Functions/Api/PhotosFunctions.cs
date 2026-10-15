@@ -324,26 +324,27 @@ public class PhotosFunctions
         return resp;
     }
 
-    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group, and &mode=similar for its look-alikes)
+    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group, once for each of several, and &mode=similar for their look-alikes)
     public async Task<HttpResponseData> RemoveDuplicatesAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/remove-duplicates")] HttpRequestData req)
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        // No group, or a blank one, means every group.
-        var group = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("group");
-        if (string.IsNullOrWhiteSpace(group)) group = null;
-        var similar = string.Equals(System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
-        if (similar && group is null)
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        // No group, or only blank ones, means every group.
+        var groups = (query.GetValues("group") ?? []).Where(g => !string.IsNullOrWhiteSpace(g)).ToList();
+        var group = groups.Count == 1 ? groups[0] : null;
+        var similar = string.Equals(query.Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
+        if (similar && groups.Count == 0)
         {
             await resp.WriteStringAsync("Similar shots are removed one group at a time: name the group.");
             resp.StatusCode = HttpStatusCode.BadRequest;
             return resp;
         }
-        var result = await _remover.RemoveDuplicatesAsync(group, similar);
+        var result = groups.Count > 1 ? await _remover.RemoveGroupsAsync(groups, similar) : await _remover.RemoveDuplicatesAsync(group, similar);
         var what = similar ? "similar shots" : "duplicates";
         _log.Log("audit", "Info", $"Removed {result.Removed} {what} ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
-        await _audit.AddAsync(new AuditEntry { Action = similar ? "RemoveSimilar" : "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}" });
+        await _audit.AddAsync(new AuditEntry { Action = similar ? "RemoveSimilar" : "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}{(groups.Count > 1 ? $" groups={groups.Count}" : "")}" });
         await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems });
         return resp;
     }

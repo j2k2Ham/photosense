@@ -13,12 +13,20 @@ public class DuplicateRemovalService : IDuplicateRemovalService
     public DuplicateRemovalService(IDuplicateAnalysisService analysis, IPhotoDeletionService deleter)
     { _analysis = analysis; _deleter = deleter; }
 
-    public async Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, bool similar = false, CancellationToken ct = default)
+    public Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, bool similar = false, CancellationToken ct = default)
+        => RemoveFromAsync(groupKey is null ? null : [groupKey], similar, ct);
+
+    public Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar = false, CancellationToken ct = default)
+        => RemoveFromAsync(groupKeys, similar, ct);
+
+    // With no groups named: every duplicate group, and no group of similar shots at all.
+    private async Task<BulkRemovalResult> RemoveFromAsync(IReadOnlyCollection<string>? groupKeys, bool similar, CancellationToken ct)
     {
         var analysis = await _analysis.GetAsync(ct);
         // A photo can head a group of each kind under the one key, so the kind is asked for, never guessed.
         var groups = similar ? analysis.Similar : analysis.Duplicates;
-        if (groupKey is not null || similar) groups = groups.Where(g => g.Key == groupKey).ToList();
+        var named = groupKeys ?? (similar ? [] : null);
+        if (named is not null) groups = groups.Where(g => named.Contains(g.Key)).ToList();
         // Pictures first: a picture takes its Live Photo video with it, and a video that has just gone that
         // way must be seen to be gone before any copy of it is judged redundant.
         groups = groups.OrderBy(g => g.Keeper.IsVideo).ToList();

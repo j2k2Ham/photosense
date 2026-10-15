@@ -2,6 +2,7 @@ import React from 'react';
 import { GALLERY_PAGE, placeOf, shortDate } from '../../lib/organize';
 import type { OrganizeFileDto, OrganizePlaceDto } from '../../types';
 import { Segmented } from '../ModeSwitch';
+import { SelectAll } from '../SelectAll';
 import { Check, Pager, Thumb } from './shared';
 
 export type FileFilter = 'all' | 'todo' | 'noloc';
@@ -29,6 +30,8 @@ interface Props {
   onClearFocus(): void;
   /** Puts away the folder picked, the search and the filter together, so that every file shows again. */
   onClearAll(): void;
+  /** Selects every file shown, on every page (true), or lets every one of them go (false). */
+  onPickAll(all: boolean): void;
   /** A file was clicked; with Shift held, everything from the last one clicked to it is meant. */
   onPick(file: OrganizeFileDto, index: number, range: boolean): void;
   onOpen(file: OrganizeFileDto): void;
@@ -39,12 +42,18 @@ interface Props {
 const count = (n: number) => <span className="font-mono text-[11.5px] font-medium opacity-75">{n.toLocaleString()}</span>;
 
 /** Every file of the folder as a grid of pictures, a page at a time, to select from and drag out of. */
-export function FileGallery({ files, places, page, filter, counts, focus, narrowed, picked, reading, empty, tagOf, onPage, onFilter, onClearFocus, onClearAll, onPick, onOpen, onDragStart, onDragEnd }: Props) {
+export function FileGallery({ files, places, page, filter, counts, focus, narrowed, picked, reading, empty, tagOf, onPage, onFilter, onClearFocus, onClearAll, onPickAll, onPick, onOpen, onDragStart, onDragEnd }: Props) {
   const pages = Math.max(1, Math.ceil(files.length / GALLERY_PAGE)), from = (page - 1) * GALLERY_PAGE;
+  // How many of the files shown are selected: all of them, some, or none.
+  const pickedHere = picked.size === 0 ? 0 : files.reduce((n, f) => n + (picked.has(f.id) ? 1 : 0), 0);
   return (
     <>
       <div className="flex shrink-0 flex-wrap items-center gap-3 px-6 py-3.5 text-[13px] text-t2">
         <span className="whitespace-nowrap"><span className="font-semibold text-t1">{files.length.toLocaleString()}</span> {files.length === 1 ? 'file' : 'files'}</span>
+        {files.length > 0 && (
+          <SelectAll label="Select all" checked={pickedHere === files.length} partial={pickedHere > 0} onChange={onPickAll}
+            title={pages > 1 ? `Select all ${files.length.toLocaleString()} files shown, on every page` : 'Select every file shown'} />
+        )}
         <Segmented label="Show" size="medium" value={filter} onChange={onFilter} options={[
           { value: 'all', name: <>All{count(counts.all)}</> },
           { value: 'todo', name: <>Not organized{count(counts.todo)}</> },

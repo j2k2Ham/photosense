@@ -145,6 +145,33 @@ export async function removeDuplicates(groupKey?: string, mode: GroupMode = 'dup
   return result;
 }
 
+/** How many groups one request names, so that no request grows longer than a server will take. */
+export const GROUPS_AT_ONCE = 40;
+
+/**
+ * Moves the duplicates of each of the groups named to the holding folder, or their similar shots when
+ * asked for those. The best of each group stays.
+ */
+export async function removeGroups(groupKeys: string[], mode: GroupMode): Promise<BulkRemovalResultDto> {
+  const total: BulkRemovalResultDto = { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
+  try {
+    for (let from = 0; from < groupKeys.length; from += GROUPS_AT_ONCE) {
+      const named = groupKeys.slice(from, from + GROUPS_AT_ONCE).map(key => `group=${encodeURIComponent(key)}`).join('&');
+      const res = await send(`${API_BASE}/photos/bulk/remove-duplicates?${named}${mode === 'similar' ? '&mode=similar' : ''}`, 'POST');
+      const part: BulkRemovalResultDto = await res.json();
+      total.removed += part.removed;
+      total.bytes += part.bytes;
+      total.skipped += part.skipped;
+      total.companions += part.companions;
+      total.problems.push(...part.problems);
+    }
+  } finally {
+    // What went before a request failed has gone all the same.
+    await refreshGroups();
+  }
+  return total;
+}
+
 /** Forgets everything earlier scans recorded. The photos themselves are not touched. */
 export async function clearResults(): Promise<{ forgotten: number }> {
   const res = await send(`${API_BASE}/scan/reset`, 'POST');

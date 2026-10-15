@@ -474,6 +474,20 @@ public sealed class PhotosFunctionsTests : IDisposable
     }
 
     [Test]
+    [Arguments("b?group=abc&group=%20&group=def", false, "RemoveDuplicates")]
+    [Arguments("b?group=abc&mode=similar&group=def", true, "RemoveSimilar")]
+    public async Task Several_Groups_Named_At_Once_Are_Removed_Together(string url, bool similar, string action)
+    {
+        _remover.Setup(r => r.RemoveGroupsAsync(It.Is<IReadOnlyCollection<string>>(g => g.SequenceEqual(new[] { "abc", "def" })), similar, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkRemovalResult(5, 1500, 0, [], 1));
+
+        var json = (await _api.RemoveDuplicatesAsync(Http.Post(url).FromClient())).Json();
+
+        await Assert.That((json.GetProperty("removed").GetInt32(), json.GetProperty("bytes").GetInt64(), json.GetProperty("companions").GetInt32())).IsEqualTo((5, 1500L, 1));
+        await Assert.That((_audited[0].Action, _audited[0].PhotoId, _audited[0].Details)).IsEqualTo((action, (string?)null, "removed=5 bytes=1500 linked=1 skipped=0 groups=2"));
+    }
+
+    [Test]
     [Arguments("b?mode=similar")]
     [Arguments("b?mode=similar&group=%20")]
     public async Task Similar_Shots_Are_Never_Removed_Without_Naming_A_Group(string url)

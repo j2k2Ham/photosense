@@ -10,7 +10,7 @@ import { group, groupsPage, member, photo } from '../fixtures';
 
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
-  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
+  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
   fetchRemoved: vi.fn(), eraseRemoved: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
@@ -257,7 +257,7 @@ describe('similar shots', () => {
     expect(gallery()).toHaveTextContent('Loading…');
     expect(tab(/Duplicates/)).toHaveTextContent('Duplicates2');
     expect(tab(/Similar/)).toHaveTextContent(/^Similar$/);
-    expect(screen.getByText(/^Similar shots are burst frames or edited versions\. They are never removed all at once/)).toBeInTheDocument();
+    expect(screen.getByText('Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete all duplicates' })).not.toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 
@@ -632,6 +632,161 @@ describe('deleting', () => {
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
     expect(await toast('The database is busy')).toBeInTheDocument();
     expect(within(question()).getByRole('button', { name: 'Delete 3 files' })).toBeEnabled();
+  });
+});
+
+describe('ticking groups', () => {
+  const tickOf = (fileName: string) => within(gallery()).getByRole('checkbox', { name: `Select the group of ${fileName}` });
+  const all = (name = 'Select all') => within(gallery()).getByRole('checkbox', { name }) as HTMLInputElement;
+  const selection = () => screen.getByRole('region', { name: 'Selected groups' });
+  const noSelection = () => expect(screen.queryByRole('region', { name: 'Selected groups' })).not.toBeInTheDocument();
+  const removed = (changes: Partial<{ removed: number; bytes: number; skipped: number; companions: number; problems: string[] }> = {}) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], ...changes });
+
+  it('selects groups one by one or all at once, says what they come to, and deletes their duplicates together after asking', async () => {
+    api.removeGroups.mockResolvedValue(removed({ removed: 3, bytes: 15_232_000, companions: 1 }));
+    open();
+    noSelection();
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+    expect(selection()).toHaveTextContent('1 group selected · 1 file, 5.8 MB');
+    expect([all().checked, all().indeterminate]).toEqual([false, true]);
+    // The group being looked at is still the first: a tick does not change it.
+    expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(all());
+    expect(selection()).toHaveTextContent('2 groups selected · 3 files, 14.5 MB');
+    expect(all().checked).toBe(true);
+    await userEvent.click(all());
+    noSelection();
+    await userEvent.click(all());
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Delete their duplicates' }));
+    expect(question()).toHaveAccessibleName('Delete the duplicates of 2 groups?');
+    expect(question()).toHaveTextContent('3 files taking 14.5 MB will be removed.The original of each group stays. Copies you marked keep are skipped.');
+    expect(question()).not.toHaveTextContent('different shots');
+    expect(api.removeGroups).not.toHaveBeenCalled();
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['gA', 'gB'], 'duplicates');
+    expect(await toast('Moved 3 duplicates (14.5 MB) and 1 linked file to _PhotoSense_Removed. The original of each group stays where it is.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    noSelection();
+  });
+
+  it('deletes the similar shots of the ticked groups, saying that they are not copies, and what was left alone', async () => {
+    currentMode = 'similar';
+    api.removeGroups.mockResolvedValueOnce(removed({ removed: 1, bytes: 6_093_000, skipped: 2, problems: ['Changed since the scan, left alone: C:\\photos\\IMG_7003.JPG'] })).mockResolvedValueOnce(removed({ skipped: 1 }));
+    open();
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(tickOf('IMG_7001.JPG'));
+    expect(selection()).toHaveTextContent('1 group selected · 1 file');
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Delete their similar shots' }));
+    expect(question()).toHaveAccessibleName('Delete the similar shots of 1 group?');
+    expect(question()).toHaveTextContent('The best shot of each group stays. Copies you marked keep are skipped.These are different shots or edited versions, not copies of one file.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['gS'], 'similar');
+    expect(await toast('Moved 1 similar shot (5.8 MB) to _PhotoSense_Removed. The best shot of each group stays where it is.')).toBeInTheDocument();
+    expect(await toast('2 left alone. Changed since the scan, left alone: C:\\photos\\IMG_7003.JPG')).toBeInTheDocument();
+
+    // Nothing moved, and no reason given: only that is said.
+    await userEvent.click(tickOf('IMG_7001.JPG'));
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Delete their similar shots' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(await toast('1 left alone.')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Moved 1 similar shot/)).toHaveLength(1);
+  });
+
+  it('keeps a tick over a turn of the page, lets it all go with Clear or a change of tab, and has nothing to delete where every copy is kept', async () => {
+    const kept = group({ key: 'gK', keeper: photo({ id: 'k', fileName: 'IMG_6000.JPG' }), members: [member({ id: 'k1', fileName: 'IMG_6000 (1).JPG', kept: true })], reclaimableBytes: 0 });
+    groupsFor = (mode, _filter, page) => ({ data: mode === 'similar' ? groupsPage([burst], {}, 'similar') : groupsPage(page === 2 ? [kept] : [groupA, groupB], { total: 3, totalPages: 2, page }) });
+    open();
+    await userEvent.click(all('Select all on this page'));
+    await click('Next');
+    // The two ticked on the first page are still counted; none on this page is ticked.
+    expect(selection()).toHaveTextContent('2 groups selected · 3 files, 14.5 MB');
+    expect([all('Select all on this page').checked, all('Select all on this page').indeterminate]).toEqual([false, false]);
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Clear' }));
+    noSelection();
+
+    await userEvent.click(tickOf('IMG_6000.JPG'));
+    expect(selection()).toHaveTextContent('1 group selected · every copy is marked keep');
+    expect(within(selection()).getByRole('button', { name: 'Delete their duplicates' })).toBeDisabled();
+    currentMode = 'similar';
+    await userEvent.click(tab(/Similar/));
+    noSelection();
+  });
+
+  it('takes the tick off a group whose copies are deleted on their own, and off every group when all duplicates are', async () => {
+    api.removeDuplicates.mockResolvedValue(removed({ removed: 1, bytes: 6_093_000 }));
+    open();
+    await userEvent.click(all());
+    await userEvent.click(tile('IMG_5000.JPG'));
+    await click(/^Delete this duplicate/);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    await waitFor(() => expect(selection()).toHaveTextContent('1 group selected'));
+
+    // One copy of the other group goes on its own: that group is no longer as it was ticked.
+    await userEvent.click(tile('IMG_4198.JPG'));
+    await click(/^Delete this copy/);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    await waitFor(noSelection);
+
+    await userEvent.click(all());
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: /^Delete \d files$/ }));
+    await waitFor(noSelection);
+  });
+});
+
+describe('help', () => {
+  const help = () => screen.queryByRole('dialog', { name: 'Help' });
+  const openHelp = async () => {
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Help' }));
+    return screen.getByRole('dialog', { name: 'Help' });
+  };
+  /** Opens the guide at a topic and presses the button that goes to what the topic describes. */
+  const go = async (topic: RegExp, label: string) => {
+    const guide = await openHelp();
+    await userEvent.click(within(within(guide).getByRole('navigation', { name: 'Topics' })).getByRole('button', { name: topic }));
+    await userEvent.click(within(guide).getByRole('button', { name: label }));
+    expect(help()).not.toBeInTheDocument();
+  };
+
+  it('opens the user guide from the menu, and closes on Escape', async () => {
+    open();
+    const guide = await openHelp();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(within(guide).getByRole('heading', { level: 2 })).toHaveTextContent('Getting started');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(help()).not.toBeInTheDocument();
+  });
+
+  it('goes from a topic to what the topic describes, putting the guide away', async () => {
+    open();
+    await go(/^Similar shots/, 'Show the similar shots');
+    currentMode = 'similar';
+    expect(tab(/Similar/)).toHaveAttribute('aria-selected', 'true');
+    // Already there: it stays there, with what was ticked.
+    await userEvent.click(within(gallery()).getByRole('checkbox', { name: 'Select the group of IMG_7001.JPG' }));
+    await go(/^Similar shots/, 'Show the similar shots');
+    expect(screen.getByRole('region', { name: 'Selected groups' })).toBeInTheDocument();
+    currentMode = 'duplicates';
+    await go(/^Reviewing duplicates/, 'Show the duplicates');
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
+
+    await go(/^Scanning for duplicates/, 'Go to the scan screen');
+    expect(setupHeading()).toBeInTheDocument();
+    await go(/^Reviewing duplicates/, 'Show the duplicates');
+    expect(setupHeading()).not.toBeInTheDocument();
+
+    await go(/^Organize: suggested folders/, 'Open Organize');
+    expect(screen.getByRole('region', { name: 'Organize' })).toBeInTheDocument();
+    await go(/^Reviewing duplicates/, 'Show the duplicates');
+    expect(tab(/Duplicates/)).toBeInTheDocument();
+
+    await go(/^Settings, theme and errors/, 'Open Settings');
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
   });
 });
 

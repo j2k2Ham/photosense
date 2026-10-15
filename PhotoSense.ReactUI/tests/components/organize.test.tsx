@@ -68,7 +68,7 @@ describe('the small parts', () => {
 
 describe('the file gallery', () => {
   function show(props: Partial<React.ComponentProps<typeof FileGallery>> = {}) {
-    const handlers = { onPage: vi.fn(), onFilter: vi.fn(), onClearFocus: vi.fn(), onClearAll: vi.fn(), onPick: vi.fn(), onOpen: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn() };
+    const handlers = { onPage: vi.fn(), onFilter: vi.fn(), onClearFocus: vi.fn(), onClearAll: vi.fn(), onPickAll: vi.fn(), onPick: vi.fn(), onOpen: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn() };
     const view = render(<FileGallery files={FILES} places={PLACES} page={1} filter="all" counts={{ all: 9, todo: 8, noloc: 1 }} narrowed={false} picked={new Set()} empty="No files here" tagOf={() => undefined} {...handlers} {...props} />);
     return { ...handlers, ...view };
   }
@@ -85,6 +85,34 @@ describe('the file gallery', () => {
     ]);
     expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
     expect(screen.queryByText('No files here')).not.toBeInTheDocument();
+  });
+
+  it('has a box that selects every file shown, or lets them all go', async () => {
+    const box = () => screen.getByRole('checkbox', { name: 'Select all' }) as HTMLInputElement;
+    const first = show();
+    expect([box().checked, box().indeterminate]).toEqual([false, false]);
+    expect(box().closest('label')).toHaveAttribute('title', 'Select every file shown');
+    await userEvent.click(box());
+    expect(first.onPickAll).toHaveBeenLastCalledWith(true);
+    first.unmount();
+
+    // With some selected it is neither on nor off; a file selected that is not among those shown does not count.
+    const some = show({ picked: new Set(['a2', 'not shown']) });
+    expect([box().checked, box().indeterminate]).toEqual([false, true]);
+    some.unmount();
+
+    const every = show({ picked: new Set(FILES.map(f => f.id)) });
+    expect([box().checked, box().indeterminate]).toEqual([true, false]);
+    await userEvent.click(box());
+    expect(every.onPickAll).toHaveBeenLastCalledWith(false);
+    every.unmount();
+
+    // Over several pages it says that it means all of them; with no files there is nothing to select.
+    const many = show({ files: Array.from({ length: 61 }, (_, i) => at(`m${i}`, 0)) });
+    expect(box().closest('label')).toHaveAttribute('title', 'Select all 61 files shown, on every page');
+    many.unmount();
+    show({ files: [] });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
   it('marks the selected files, and tags the ones a folder is arranged for or that have gone to one', () => {
@@ -154,7 +182,7 @@ describe('the file gallery', () => {
     // With every file showing there is nothing to clear.
     expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
     rerender(<FileGallery files={[]} places={PLACES} page={1} filter="todo" counts={{ all: 0, todo: 0, noloc: 0 }} narrowed picked={new Set()} empty="No files match “zz”" tagOf={() => undefined}
-      onPage={handlers.onPage} onFilter={handlers.onFilter} onClearFocus={handlers.onClearFocus} onClearAll={handlers.onClearAll} onPick={handlers.onPick} onOpen={handlers.onOpen} onDragStart={handlers.onDragStart} onDragEnd={handlers.onDragEnd} />);
+      onPage={handlers.onPage} onFilter={handlers.onFilter} onClearFocus={handlers.onClearFocus} onClearAll={handlers.onClearAll} onPickAll={handlers.onPickAll} onPick={handlers.onPick} onOpen={handlers.onOpen} onDragStart={handlers.onDragStart} onDragEnd={handlers.onDragEnd} />);
     expect(screen.getByText('No files match “zz”')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
   });

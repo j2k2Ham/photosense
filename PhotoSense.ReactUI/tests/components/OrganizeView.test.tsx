@@ -218,6 +218,29 @@ describe('looking through the files', () => {
     expect(tiles()).toHaveLength(7);
   });
 
+  it('selects every file shown with Select all, and lets them go again, leaving alone what else was selected', async () => {
+    open();
+    const box = () => screen.getByRole('checkbox', { name: 'Select all' }) as HTMLInputElement;
+    await userEvent.click(box());
+    expect(bar()).toHaveTextContent('7 selected');
+    expect(box().checked).toBe(true);
+    await userEvent.click(box());
+    expect(screen.queryByRole('region', { name: 'Selection' })).not.toBeInTheDocument();
+
+    // With one folder's files showing, it is those it selects and lets go; a file selected before stays selected.
+    await userEvent.click(tile('n1.JPG'));
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }));
+    expect([box().checked, box().indeterminate]).toEqual([false, false]);
+    await userEvent.click(box());
+    expect(bar()).toHaveTextContent('3 selected');
+    expect(selected()).toEqual(['b1.JPG', 'b2.JPG']);
+    await userEvent.click(box());
+    expect(bar()).toHaveTextContent('1 selected');
+    await userEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    expect(selected()).toEqual(['n1.JPG']);
+    expect([box().checked, box().indeterminate]).toEqual([false, true]);
+  });
+
   it('goes back to every file with Clear all, whatever was keeping some from showing', async () => {
     open();
     const clearAll = () => screen.queryByRole('button', { name: 'Clear all' });
