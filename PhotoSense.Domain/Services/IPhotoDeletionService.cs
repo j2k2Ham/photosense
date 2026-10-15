@@ -25,6 +25,7 @@ public sealed record RemovalResult(RemovalOutcome Outcome, string? HeldAt = null
     public IReadOnlyList<string> Companions { get; init; } = [];
 }
 
+/// <summary>Removes one scanned photo: moves its file aside and forgets its record.</summary>
 public interface IPhotoDeletionService
 {
     /// <summary>

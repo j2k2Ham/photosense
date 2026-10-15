@@ -10,6 +10,7 @@ public sealed record ImageAnalysis(
     byte[] Signature,
     byte[] ThumbnailJpeg);
 
+/// <summary>Decodes pictures: to compare them, and to show them where a browser cannot.</summary>
 public interface IImageAnalyzer
 {
     /// <summary>Decodes the image once and measures it. Throws when the image cannot be decoded.</summary>

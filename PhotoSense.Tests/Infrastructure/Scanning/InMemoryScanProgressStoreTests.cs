@@ -50,6 +50,19 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
+    public async Task A_Scan_Is_Marked_With_When_It_Started_And_Finished()
+    {
+        var clock = new TestClock();
+        var store = new InMemoryScanProgressStore(clock);
+        store.ScanStarted("scan");
+        clock.Now += TimeSpan.FromMinutes(13);
+        store.ScanCompleted("scan");
+
+        var snap = store.Get("scan");
+        await Assert.That((snap.StartedUtc, snap.CompletedUtc)).IsEqualTo((TestClock.Day.UtcDateTime, (DateTime?)TestClock.Day.AddMinutes(13).UtcDateTime));
+    }
+
+    [Test]
     public async Task Latest_Default_When_None()
     {
         IScanProgressStore store = new InMemoryScanProgressStore();

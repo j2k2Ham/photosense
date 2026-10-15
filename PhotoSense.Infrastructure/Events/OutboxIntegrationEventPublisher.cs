@@ -7,8 +7,13 @@ namespace PhotoSense.Infrastructure.Events;
 public class OutboxIntegrationEventPublisher : IIntegrationEventPublisher
 {
     private readonly IOutboxStore _outbox;
+    private readonly TimeProvider _time;
 
-    public OutboxIntegrationEventPublisher(IOutboxStore outbox) => _outbox = outbox;
+    public OutboxIntegrationEventPublisher(IOutboxStore outbox, TimeProvider? time = null)
+    {
+        _outbox = outbox;
+        _time = time ?? TimeProvider.System;
+    }
 
     public Task PublishAsync<T>(T evt, CancellationToken ct = default) where T : class
     {
@@ -16,7 +21,7 @@ public class OutboxIntegrationEventPublisher : IIntegrationEventPublisher
         {
             Type = NameOf(typeof(T)),
             Payload = JsonSerializer.Serialize(evt),
-            OccurredUtc = DateTime.UtcNow
+            OccurredUtc = _time.GetUtcNow().UtcDateTime
         };
         return _outbox.AddAsync(message, ct);
     }

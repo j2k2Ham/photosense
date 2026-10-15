@@ -78,7 +78,7 @@ export function connectLogStream(onLine: (l: string)=>void) {
   (async () => {
     try {
       // Updated negotiate route path to match backend (scan/logs/negotiate)
-      const r = await fetch(`${baseRoot}/api/scan/logs/negotiate`, { method: 'POST' });
+      const r = await fetch(`${baseRoot}/api/scan/logs/negotiate`, { method: 'POST', headers: authHeaders });
       if (!r.ok) throw new Error('negotiate failed');
       const info = await r.json();
       if (disposed) return;
@@ -95,7 +95,7 @@ export function connectLogStream(onLine: (l: string)=>void) {
       // Fallback to simple polling REST endpoint as SSE stream not implemented.
       const poll = async () => {
         try {
-          const res = await fetch(`${baseRoot}/api/scan/logs?limit=200`);
+          const res = await fetch(`${baseRoot}/api/scan/logs?limit=200`, { headers: authHeaders });
           if (res.ok) {
             const json = await res.json();
             for (const i of json.items ?? []) {

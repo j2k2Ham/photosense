@@ -16,7 +16,9 @@ internal sealed class FakeHttpRequest : HttpRequestData
 {
     private static readonly FunctionContext Context = CreateContext();
 
-    public FakeHttpRequest(string method, string pathAndQuery, string? body = null) : base(Context)
+    /// <param name="cancelled">The invocation's token, as the host cancels it when the caller has gone away.</param>
+    public FakeHttpRequest(string method, string pathAndQuery, string? body = null, CancellationToken cancelled = default)
+        : base(cancelled.CanBeCanceled ? CreateContext(cancelled) : Context)
     {
         Method = method;
         Url = new Uri("http://localhost:7071/api/" + pathAndQuery.TrimStart('/'));
@@ -46,12 +48,13 @@ internal sealed class FakeHttpRequest : HttpRequestData
     }
 
     // Writing JSON to a response looks up the worker's serializer through the function context.
-    private static FunctionContext CreateContext()
+    private static FunctionContext CreateContext(CancellationToken cancelled = default)
     {
         var services = new ServiceCollection();
         services.AddOptions<WorkerOptions>().Configure(o => o.Serializer = new JsonObjectSerializer());
         var context = new Mock<FunctionContext>();
         context.SetupProperty(c => c.InstanceServices, services.BuildServiceProvider());
+        context.SetupGet(c => c.CancellationToken).Returns(cancelled);
         return context.Object;
     }
 }
@@ -70,6 +73,8 @@ internal static class Http
     public static FakeHttpRequest Get(string pathAndQuery) => new("GET", pathAndQuery);
     public static FakeHttpRequest Post(string pathAndQuery, string? body = null) => new("POST", pathAndQuery, body);
     public static FakeHttpRequest Delete(string pathAndQuery) => new("DELETE", pathAndQuery);
+    /// <summary>A GET whose caller has already gone away.</summary>
+    public static FakeHttpRequest Abandoned(string pathAndQuery) => new("GET", pathAndQuery, cancelled: new CancellationToken(true));
 
     public static byte[] Bytes(this HttpResponseData response) => ((MemoryStream)response.Body).ToArray();
     public static string Text(this HttpResponseData response) => Encoding.UTF8.GetString(response.Bytes());

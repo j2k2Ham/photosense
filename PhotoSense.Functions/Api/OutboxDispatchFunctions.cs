@@ -14,6 +14,7 @@ public class OutboxDispatchFunctions
     public async Task<HttpResponseData> RunManualAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "outbox/dispatch")] HttpRequestData req)
     {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         await LogPendingAsync();
         var resp = req.CreateResponse(HttpStatusCode.Accepted);
         await resp.WriteStringAsync("Logged pending outbox messages (simulation)." );

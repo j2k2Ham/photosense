@@ -52,7 +52,7 @@ public sealed class PhotosFunctionsTests : IDisposable
     // ---- changes need the client header
 
     [Test]
-    public async Task Requests_That_Change_Anything_Are_Refused_Without_The_Client_Header()
+    public async Task Requests_That_Show_Or_Change_Photos_Are_Refused_Without_The_Client_Header()
     {
         var photo = await AddAsync("IMG_1.JPG");
         var id = Id(photo);
@@ -62,6 +62,9 @@ public sealed class PhotosFunctionsTests : IDisposable
         await Assert.That((await _api.MovePhotoAsync(Http.Post($"photos/{id}/move?target={_root.FullName}"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _api.OpenPhotoAsync(Http.Post($"photos/{id}/open"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _api.RemoveDuplicatesAsync(Http.Post("photos/bulk/remove-duplicates"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        // Listing photos shows where each file is.
+        await Assert.That((await _api.GetPhotosAsync(Http.Get("photos"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.GetPhotoAsync(Http.Get($"photos/{id}"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 
         _remover.VerifyNoOtherCalls();
         _viewer.VerifyNoOtherCalls();
@@ -87,26 +90,37 @@ public sealed class PhotosFunctionsTests : IDisposable
         await AddAsync("dog.JPG", contentHash: "BB");
         await AddAsync("cat2.JPG", contentHash: "CC");
 
-        var all = (await _api.GetPhotosAsync(Http.Get("photos"))).Json();
+        var all = (await _api.GetPhotosAsync(Http.Get("photos").FromClient())).Json();
         await Assert.That((all.GetProperty("Page").GetInt32(), all.GetProperty("PageSize").GetInt32(), all.GetProperty("TotalCount").GetInt32())).IsEqualTo((1, 50, 3));
 
-        var cats = (await _api.GetPhotosAsync(Http.Get("photos?text=cat&page=2&pageSize=1&set=Unknown"))).Json();
+        var cats = (await _api.GetPhotosAsync(Http.Get("photos?text=cat&page=2&pageSize=1&set=Unknown").FromClient())).Json();
         await Assert.That((cats.GetProperty("Page").GetInt32(), cats.GetProperty("PageSize").GetInt32(), cats.GetProperty("TotalCount").GetInt32(), cats.GetProperty("TotalPages").GetInt32())).IsEqualTo((2, 1, 2, 2));
         await Assert.That(cats.GetProperty("items").EnumerateArray().Single().GetProperty("fileName").GetString()).StartsWith("cat");
 
-        var byHash = (await _api.GetPhotosAsync(Http.Get("photos?hash=BB&phash=&page=x&pageSize=y"))).Json();
+        var byHash = (await _api.GetPhotosAsync(Http.Get("photos?hash=BB&phash=&page=x&pageSize=y").FromClient())).Json();
         await Assert.That((byHash.GetProperty("Page").GetInt32(), byHash.GetProperty("PageSize").GetInt32(), byHash.GetProperty("TotalCount").GetInt32())).IsEqualTo((1, 50, 1));
 
-        var capped = (await _api.GetPhotosAsync(Http.Get("photos?pageSize=9999"))).Json();
+        var capped = (await _api.GetPhotosAsync(Http.Get("photos?pageSize=9999").FromClient())).Json();
         await Assert.That(capped.GetProperty("PageSize").GetInt32()).IsEqualTo(500);
+    }
+
+    [Test]
+    public async Task A_Listing_Nobody_Is_Waiting_For_Any_More_Is_Given_Up()
+    {
+        var search = new Mock<PhotoSense.Application.Photos.Interfaces.IPhotoSearchService>();
+        search.Setup(s => s.SearchAsync(It.IsAny<PhotoSense.Application.Photos.Interfaces.PhotoSearchQuery>(), It.Is<CancellationToken>(t => t.IsCancellationRequested)))
+            .ThrowsAsync(new OperationCanceledException());
+        var api = new PhotosFunctions(_repo, search.Object, _remover.Object, _thumbnails, _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => api.GetPhotosAsync(Http.Abandoned("photos").FromClient()));
     }
 
     [Test]
     public async Task One_Photo_Can_Be_Fetched_By_Id()
     {
         var photo = await AddAsync("IMG_1.JPG");
-        await Assert.That((await _api.GetPhotoAsync(Http.Get("photos/x"), Id(photo))).Json().GetProperty("fileName").GetString()).IsEqualTo("IMG_1.JPG");
-        await Assert.That((await _api.GetPhotoAsync(Http.Get("photos/x"), UnknownId)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        await Assert.That((await _api.GetPhotoAsync(Http.Get("photos/x").FromClient(), Id(photo))).Json().GetProperty("fileName").GetString()).IsEqualTo("IMG_1.JPG");
+        await Assert.That((await _api.GetPhotoAsync(Http.Get("photos/x").FromClient(), UnknownId)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     // ---- thumbnails

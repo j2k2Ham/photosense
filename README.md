@@ -65,7 +65,7 @@ The API the UI uses (Functions host, `http://localhost:7071/api`):
 | `/removed?root=&root=` | GET | The `_PhotoSense_Removed` folders that hold files, with how much is in each: `{ folders: [{ path, files, bytes }], files, bytes }`. Looked for at any depth inside the folders given and inside every folder a scan on record covered, and wherever Organize put removed files |
 | `/removed/erase` | POST | Erase everything in those folders, and the folders. Body `{ folders: [path] }`, the paths as `/removed` listed them; returns `{ erased, bytes, skipped, problems }`. This is the one request that erases files. A path that is not a folder named `_PhotoSense_Removed` is refused with 400, and nothing is erased then |
 
-Requests that change or remove photos, and the folder listing, must carry the `x-photosense-client` header (the React client sends it). Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
+Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the photo listings (`/photos`, `/photos/{id}`), the scan log (`/scan/logs` and its negotiation and stream) and `/outbox/dispatch`, as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
 
 ### Choosing the folders to scan
 
@@ -307,7 +307,7 @@ Next version: bump `<Version>` inside `PhotoSense.Contracts.csproj` (semantic ve
 
 There are two mechanisms for consuming scan log lines:
 
-1. REST Polling (always on): `GET /api/scan/logs` returns and drains queued log events.
+1. REST Polling (always on): `GET /api/scan/logs` returns and drains queued log events. Like the negotiation below, it answers only requests that carry the `x-photosense-client` header.
 2. SignalR (optional): Behind `ENABLE_SIGNALR`, a negotiation endpoint `POST|GET /api/scan/logs/negotiate` plus a timer-driven broadcast (`BroadcastScanLogs`) attempts to push logs to hub `scanlogs` every 5s.
 
 The broadcast is switched off in `local.settings.json` (`AzureWebJobs.BroadcastScanLogs.Disabled`). Without an Azure SignalR connection string it fails every 5 seconds and throws away the log lines it took from the queue, so the polling endpoint would show only some of them. Remove that setting once `AzureSignalRConnectionString` is configured.

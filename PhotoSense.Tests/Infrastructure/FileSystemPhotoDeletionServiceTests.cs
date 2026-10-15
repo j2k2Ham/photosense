@@ -51,6 +51,17 @@ public sealed class FileSystemPhotoDeletionServiceTests : IDisposable
     }
 
     [Test]
+    public async Task The_Removal_Is_Recorded_At_The_Time_It_Happened()
+    {
+        var photo = await AddAsync("IMG_1.jpg");
+        var service = new FileSystemPhotoDeletionService(_repo, _publisher.Object, new CompanionFileFinder(_ => null), new TestClock());
+
+        await service.DeleteAsync(photo.Id, deleteFile: true);
+
+        _publisher.Verify(p => p.PublishAsync(It.Is<PhotoSense.Domain.Events.PhotoDeletedEvent>(e => e.OccurredUtc == TestClock.Day.UtcDateTime && e.PhotoId == photo.Id), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
     public async Task Does_Not_Overwrite_A_File_Already_Held_Under_The_Same_Name()
     {
         var first = await AddAsync("IMG_1.jpg", content: "first");

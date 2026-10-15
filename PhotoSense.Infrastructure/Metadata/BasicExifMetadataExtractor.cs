@@ -22,7 +22,8 @@ public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
             imageStream.Position = 0;
             Read(photo, ImageMetadataReader.ReadMetadata(imageStream));
         }
-        catch { /* swallow - metadata optional */ }
+        // A file whose details cannot be read is still recorded; a malformed one must not stop the whole scan.
+        catch (Exception ex) when (ex is not OperationCanceledException) { }
         return Task.CompletedTask;
     }
 

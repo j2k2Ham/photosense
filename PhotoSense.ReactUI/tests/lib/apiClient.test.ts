@@ -399,7 +399,8 @@ describe('the log stream', () => {
     const dispose = api.connectLogStream(l => lines.push(l));
     await settle();
 
-    expect(lastRequest()).toEqual({ url: negotiate, init: { method: 'POST' } });
+    // The service shows its log only to the UI, so both requests say where they come from.
+    expect(lastRequest()).toEqual({ url: negotiate, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
     expect(hub.connection.url).toBe('https://hub.example/client');
     expect(hub.connection.options.accessTokenFactory()).toBe('token-1');
     expect(hub.connection.start).toHaveBeenCalledOnce();
@@ -457,6 +458,7 @@ describe('the log stream', () => {
     await settle();
 
     expect(fetchMock.mock.calls.map(c => c[0])).toEqual([negotiate, polled]);
+    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { 'x-photosense-client': 'web' } });
     expect(lines).toEqual(['12:00:01 Info line 1', '12:00:02 Info line 2']);
 
     // Every second and a half, through empty answers, refusals and a lost connection alike.

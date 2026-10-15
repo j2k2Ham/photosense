@@ -8,6 +8,7 @@ public sealed record PlaceMatch(
     string Town, string Region, string Country, double Latitude, double Longitude,
     string? Landmark = null, double? LandmarkLatitude = null, double? LandmarkLongitude = null);
 
+/// <summary>Names the place a position is at, from place names kept on this machine.</summary>
 public interface IPlaceNameResolver
 {
     /// <summary>The nearest named place to a position, in words, or null when nothing is near.</summary>

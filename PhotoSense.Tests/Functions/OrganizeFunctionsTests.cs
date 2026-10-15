@@ -128,6 +128,26 @@ public sealed class OrganizeFunctionsTests : IDisposable
     }
 
     [Test]
+    public async Task A_Page_That_Goes_Away_Stops_Waiting_But_The_Reading_Goes_On_For_Whoever_Asks_Next()
+    {
+        _f.Put("IMG_1.JPG");
+        _f.Put("IMG_2.JPG");
+        using var hold = new ManualResetEventSlim();
+        using var begun = new SemaphoreSlim(0);
+        var reads = 0;
+        _f.Reader.OnRead = _ => { Interlocked.Increment(ref reads); begun.Release(); hold.Wait(); };
+        var waiting = _api.FilesAsync(Files(_f.Root.FullName));
+        await begun.WaitAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => _api.FilesAsync(Http.Abandoned($"organize/files?root={Uri.EscapeDataString(_f.Root.FullName)}").FromClient()));
+        await Assert.That(_f.Library.ProgressOf(_f.Root.FullName)).IsNotNull();
+
+        hold.Set();
+        await Assert.That((await waiting).Json().GetProperty("files").GetArrayLength()).IsEqualTo(2);
+        await Assert.That(reads).IsEqualTo(2); // each file was read once, for both pages
+    }
+
+    [Test]
     public async Task Hands_Over_The_Files_Read_So_Far_To_A_Page_That_Says_What_It_Already_Has()
     {
         foreach (var name in new[] { "IMG_1.JPG", "IMG_2.JPG", "IMG_3.JPG", "IMG_4.JPG" }) _f.Put(name);

@@ -33,6 +33,8 @@ public static class DependencyInjection
     public static IServiceCollection AddPhotoSenseCore(this IServiceCollection s, IConfiguration cfg)
     {
         s.Configure<PhotoStorageOptions>(cfg.GetSection("PhotoStorage"));
+        // Services that take an optional clock are given the real one; tests give their own.
+        s.AddSingleton(TimeProvider.System);
         s.Configure<MessagingOptions>(cfg.GetSection("Messaging"));
         s.AddSingleton<IValidateOptions<PhotoStorageOptions>, PhotoStorageOptionsValidator>();
         s.AddSingleton<LiteDatabase>(sp =>

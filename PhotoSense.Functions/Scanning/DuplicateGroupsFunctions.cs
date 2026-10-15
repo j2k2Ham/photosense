@@ -6,6 +6,7 @@ using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
+using PhotoSense.Functions.Api;
 using D = PhotoSense.Contracts.Duplicates; // alias for shared duplicate group DTOs
 
 namespace PhotoSense.Functions.Scanning;
@@ -94,13 +95,14 @@ public class DuplicateGroupsFunctions
     public async Task<HttpResponseData> GetDuplicateGroups(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/groups")] HttpRequestData req)
     {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var q = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
         bool similar = string.Equals(q.Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
         int page = int.TryParse(q.Get("page"), out var p) ? Math.Max(1, p) : 1;
         int pageSize = int.TryParse(q.Get("pageSize"), out var ps) ? Math.Clamp(ps, 1, 200) : 50;
         var text = q.Get("q");
         var hideKept = q.Get("hideKept") == "true";
-        var payload = await _facade.BuildAsync(similar, text, hideKept, page, pageSize, CancellationToken.None);
+        var payload = await _facade.BuildAsync(similar, text, hideKept, page, pageSize, req.FunctionContext.CancellationToken);
         var resp = req.CreateResponse(HttpStatusCode.OK);
         await resp.WriteAsJsonAsync(payload);
         return resp;
@@ -111,7 +113,8 @@ public class ScanLogsStubFunction
 {
     private readonly IScanLogSink _sink;
     private readonly IScanProgressStore _progress;
-    public ScanLogsStubFunction(IScanLogSink sink, IScanProgressStore progress) { _sink = sink; _progress = progress; }
+    private readonly TimeProvider _time;
+    public ScanLogsStubFunction(IScanLogSink sink, IScanProgressStore progress, TimeProvider? time = null) { _sink = sink; _progress = progress; _time = time ?? TimeProvider.System; }
 
     /// <summary>How long a followed stream stays open, and how often it looks for new lines.</summary>
     public TimeSpan FollowFor { get; init; } = TimeSpan.FromSeconds(30);
@@ -121,6 +124,7 @@ public class ScanLogsStubFunction
     [Function("GetScanLogsByInstance")]
     public async Task<HttpResponseData> GetLogs([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/{instanceId?}")] HttpRequestData req, string? instanceId)
     {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var snap = _progress.GetLatest();
         var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
         var resp = req.CreateResponse(HttpStatusCode.OK);
@@ -140,6 +144,7 @@ public class ScanLogsStubFunction
     [Function("GetScanLogsStream")] // GET /api/scan/logs/stream
     public async Task<HttpResponseData> GetLogsStream([HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs/stream/{instanceId?}")] HttpRequestData req, string? instanceId)
     {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var snap = _progress.GetLatest();
         var id = string.IsNullOrWhiteSpace(instanceId) ? snap.InstanceId : instanceId;
         var resp = req.CreateResponse(System.Net.HttpStatusCode.OK);
@@ -151,11 +156,11 @@ public class ScanLogsStubFunction
         await resp.WriteStringAsync(string.Join(string.Empty, recent));
         if (follow)
         {
-            var start = DateTime.UtcNow;
+            var start = _time.GetUtcNow();
             var lastCount = _sink.GetRecent(id).Count;
-            while (DateTime.UtcNow - start < FollowFor)
+            while (_time.GetUtcNow() - start < FollowFor)
             {
-                await Task.Delay(PollEvery);
+                await Task.Delay(PollEvery, _time);
                 var nowLogs = _sink.GetRecent(id);
                 if (nowLogs.Count > lastCount)
                 {

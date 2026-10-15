@@ -7,10 +7,13 @@ public class InMemoryScanProgressStore : IScanProgressStore
 {
     private readonly ConcurrentDictionary<string, MutableProgress> _store = new();
     private volatile string? _latest;
+    private readonly TimeProvider _time;
+
+    public InMemoryScanProgressStore(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
 
     public void ScanStarted(string instanceId)
     {
-        var prog = new MutableProgress { InstanceId = instanceId, StartedUtc = DateTime.UtcNow };
+        var prog = new MutableProgress { InstanceId = instanceId, StartedUtc = _time.GetUtcNow().UtcDateTime };
         _store[instanceId] = prog;
         _latest = instanceId;
     }
@@ -41,7 +44,7 @@ public class InMemoryScanProgressStore : IScanProgressStore
     public void ScanCompleted(string instanceId)
     {
         if (_store.TryGetValue(instanceId, out var p))
-            p.CompletedUtc = DateTime.UtcNow;
+            p.CompletedUtc = _time.GetUtcNow().UtcDateTime;
     }
 
     public ScanProgressSnapshot Get(string instanceId)

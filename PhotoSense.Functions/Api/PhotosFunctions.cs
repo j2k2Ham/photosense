@@ -66,6 +66,7 @@ public class PhotosFunctions
     public async Task<HttpResponseData> GetPhotosAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos")] HttpRequestData req)
     {
+        if (!Authorize(req)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var qs = HttpUtility.ParseQueryString(req.Url.Query);
         int page = int.TryParse(qs.Get("page"), out var p) ? p : 1;
         int pageSize = int.TryParse(qs.Get("pageSize"), out var ps) ? Math.Clamp(ps,1,500) : 50;
@@ -73,7 +74,7 @@ public class PhotosFunctions
         var hash = qs.Get("hash");
         var phash = qs.Get("phash");
         var set = qs.Get("set");
-        var result = await _search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set));
+        var result = await _search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set), req.FunctionContext.CancellationToken);
         var resp = req.CreateResponse(HttpStatusCode.OK);
         await resp.WriteAsJsonAsync(new {
             result.Page,
@@ -90,6 +91,7 @@ public class PhotosFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos/{id:guid}")] HttpRequestData req,
         string id)
     {
+        if (!Authorize(req)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var resp = req.CreateResponse();
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null)

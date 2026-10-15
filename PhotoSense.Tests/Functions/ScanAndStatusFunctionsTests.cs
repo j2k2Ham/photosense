@@ -109,7 +109,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var (starter, client) = Starter();
         var backup = _root.CreateSubdirectory("backup").FullName;
 
-        var response = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, backup)), client.Object);
+        var response = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, backup)).FromClient(), client.Object);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Accepted);
         await Assert.That(response.Json().GetProperty("instanceId").GetString()).IsEqualTo("instance-1");
@@ -122,16 +122,16 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     public async Task A_Second_Scan_Is_Refused_While_One_Runs()
     {
         var (starter, client) = Starter();
-        await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object);
+        await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), client.Object);
 
-        var second = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object);
+        var second = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), client.Object);
 
         await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
         await Assert.That(second.Json().GetProperty("error").GetString()).Contains("already running");
         client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), It.IsAny<object?>(), It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
 
         _progress.ScanCompleted("instance-1");
-        await Assert.That((await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
+        await Assert.That((await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
     }
 
     [Test]
@@ -140,9 +140,9 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var (starter, client) = Starter();
         var missing = Path.Combine(_root.FullName, "no-such-folder");
 
-        var noPrimary = await starter.StartAsync(Http.Post("scan/start", "{}"), client.Object);
-        var badPrimary = await starter.StartAsync(Http.Post("scan/start", Body("Phone Pictures")), client.Object);
-        var badSecondary = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, missing)), client.Object);
+        var noPrimary = await starter.StartAsync(Http.Post("scan/start", "{}").FromClient(), client.Object);
+        var badPrimary = await starter.StartAsync(Http.Post("scan/start", Body("Phone Pictures")).FromClient(), client.Object);
+        var badSecondary = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, missing)).FromClient(), client.Object);
 
         await Assert.That((noPrimary.StatusCode, noPrimary.Json().GetProperty("error").GetString())).IsEqualTo((HttpStatusCode.BadRequest, "A folder to scan is required."));
         await Assert.That((badPrimary.StatusCode, badPrimary.Json().GetProperty("error").GetString())).IsEqualTo((HttpStatusCode.BadRequest, "Folder not found on the server: Phone Pictures"));
@@ -152,10 +152,26 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     }
 
     [Test]
+    public async Task Scans_Groups_And_The_Outbox_Answer_Only_The_UI()
+    {
+        var (starter, client) = Starter();
+        var store = new Mock<IOutboxStore>();
+        var groups = new DuplicateGroupsFunctions(new ScanGroupingFacade(Mock.Of<IDuplicateAnalysisService>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+
+        await Assert.That((await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await new OutboxDispatchFunctions(store.Object).RunManualAsync(Http.Post("outbox/dispatch"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await groups.GetDuplicateGroups(Http.Get("scan/groups"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+
+        client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), It.IsAny<object?>(), It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        store.Verify(s => s.GetUnprocessedAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        await Assert.That(ScanHttpStarter.IsRunning(_progress.GetLatest())).IsFalse();
+    }
+
+    [Test]
     public async Task With_No_Folder_In_The_Request_The_Configured_One_Is_Scanned()
     {
         var (starter, client) = Starter(new PhotoStorageOptions { PrimaryPath = _root.FullName });
-        await Assert.That((await starter.StartAsync(Http.Post("scan/start", ""), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
+        await Assert.That((await starter.StartAsync(Http.Post("scan/start", "").FromClient(), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
         client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), new ScanRequest(_root.FullName, null, true, false),
             It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
@@ -218,6 +234,20 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     }
 
     [Test]
+    public async Task The_Time_Left_Counts_Down_From_What_Earlier_Scans_Took()
+    {
+        var clock = new TestClock();
+        var progress = new InMemoryScanProgressStore(clock);
+        progress.ScanStarted("scan-1");
+        progress.Expect("scan-1", 780);
+        clock.Now += TimeSpan.FromMinutes(1);
+
+        var json = (await new ScanProgressByInstanceFunction(progress, clock).Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json();
+
+        await Assert.That(json.GetProperty("secondsLeft").GetDouble()).IsEqualTo(720);
+    }
+
+    [Test]
     public async Task Status_Describes_The_Latest_Scan_And_Counts_The_Photos()
     {
         var repo = new InMemoryPhotoRepository();
@@ -250,7 +280,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var store = new Mock<IOutboxStore>();
         store.Setup(s => s.GetUnprocessedAsync(100, It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
 
-        var response = await new OutboxDispatchFunctions(store.Object).RunManualAsync(Http.Post("outbox/dispatch"));
+        var response = await new OutboxDispatchFunctions(store.Object).RunManualAsync(Http.Post("outbox/dispatch").FromClient());
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Accepted);
         store.Verify(s => s.MarkProcessedAsync(first.Id, It.IsAny<CancellationToken>()), Times.Once);
@@ -271,10 +301,20 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis([], []));
         var function = new DuplicateGroupsFunctions(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
 
-        var json = (await function.GetDuplicateGroups(Http.Get(url))).Json();
+        var json = (await function.GetDuplicateGroups(Http.Get(url).FromClient())).Json();
 
         await Assert.That((json.GetProperty("mode").GetString(), json.GetProperty("page").GetInt32(), json.GetProperty("pageSize").GetInt32())).IsEqualTo((similar ? "similar" : "duplicates", page, pageSize));
         _ = (text, hideKept); // both only filter, and there is nothing here to filter
+    }
+
+    [Test]
+    public async Task Groups_Nobody_Is_Waiting_For_Any_More_Are_Given_Up()
+    {
+        var analysis = new Mock<IDuplicateAnalysisService>();
+        analysis.Setup(a => a.GetAsync(It.Is<CancellationToken>(t => t.IsCancellationRequested))).ThrowsAsync(new OperationCanceledException());
+        var function = new DuplicateGroupsFunctions(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => function.GetDuplicateGroups(Http.Abandoned("scan/groups").FromClient()));
     }
 
     [Test]

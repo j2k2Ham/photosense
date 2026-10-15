@@ -16,4 +16,12 @@ public class OutboxIntegrationEventPublisherTests
         await publisher.PublishAsync(evt);
         store.Verify(s => s.AddAsync(It.Is<OutboxMessage>(m => m.Type.Contains("AnonymousType") && m.Payload.Contains("Test")), It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Test]
+    public async Task A_Message_Says_When_It_Was_Published()
+    {
+        var store = new Mock<IOutboxStore>();
+        await new OutboxIntegrationEventPublisher(store.Object, new TestClock()).PublishAsync(new { Name = "Test" });
+        store.Verify(s => s.AddAsync(It.Is<OutboxMessage>(m => m.OccurredUtc == TestClock.Day.UtcDateTime), It.IsAny<CancellationToken>()), Times.Once);
+    }
 }

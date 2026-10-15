@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Configuration;
+using PhotoSense.Functions.Api;
 
 namespace PhotoSense.Functions.Scanning;
 
@@ -20,6 +21,7 @@ public class ScanHttpStarter
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "scan/start")] HttpRequestData req,
         [DurableClient] DurableTaskClient client)
     {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var body = await new StreamReader(req.Body).ReadToEndAsync();
         var request = ParseBody(body, _options.Value);
 

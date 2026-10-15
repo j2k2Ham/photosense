@@ -7,13 +7,18 @@ public class InMemoryScanLogSink : IScanLogSink
 {
     private readonly ConcurrentDictionary<string, ConcurrentQueue<(DateTime,string,string)>> _logs = new();
     private static readonly ConcurrentQueue<(string instanceId, DateTime ts, string level, string message)> _pendingBroadcast = new();
+    private readonly TimeProvider _time;
+
+    public InMemoryScanLogSink(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
+
     public void Log(string instanceId, string level, string message)
     {
         var q = _logs.GetOrAdd(instanceId, _ => new ConcurrentQueue<(DateTime,string,string)>());
-        q.Enqueue((DateTime.UtcNow, level, message));
+        var now = _time.GetUtcNow().UtcDateTime;
+        q.Enqueue((now, level, message));
     // Bound per-instance log size
     while (q.Count > 400 && q.TryDequeue(out _)) { /* trim */ }
-        _pendingBroadcast.Enqueue((instanceId, DateTime.UtcNow, level, message));
+        _pendingBroadcast.Enqueue((instanceId, now, level, message));
     }
     public IReadOnlyList<(DateTime ts,string level,string message)> GetRecent(string instanceId, int max = 200)
     {

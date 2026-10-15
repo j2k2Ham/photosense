@@ -12,8 +12,9 @@ public class FileSystemPhotoDeletionService : IPhotoDeletionService
     private readonly IPhotoRepository _repo;
     private readonly IIntegrationEventPublisher _publisher;
     private readonly ICompanionFileFinder _companions;
-    public FileSystemPhotoDeletionService(IPhotoRepository repo, IIntegrationEventPublisher publisher, ICompanionFileFinder companions)
-    { _repo = repo; _publisher = publisher; _companions = companions; }
+    private readonly TimeProvider _time;
+    public FileSystemPhotoDeletionService(IPhotoRepository repo, IIntegrationEventPublisher publisher, ICompanionFileFinder companions, TimeProvider? time = null)
+    { _repo = repo; _publisher = publisher; _companions = companions; _time = time ?? TimeProvider.System; }
 
     public async Task<RemovalResult> DeleteAsync(PhotoId id, bool deleteFile, IReadOnlyList<Photo>? copyOf = null, CancellationToken ct = default)
     {
@@ -63,7 +64,7 @@ public class FileSystemPhotoDeletionService : IPhotoDeletionService
         }
 
         await _repo.DeleteAsync(id, ct);
-        await _publisher.PublishAsync(new PhotoDeletedEvent(Guid.NewGuid(), DateTime.UtcNow, id, photo.SourcePath), ct);
+        await _publisher.PublishAsync(new PhotoDeletedEvent(Guid.NewGuid(), _time.GetUtcNow().UtcDateTime, id, photo.SourcePath), ct);
         return new RemovalResult(RemovalOutcome.Removed, heldAt) { Companions = moved };
     }
 

@@ -9,7 +9,8 @@ namespace PhotoSense.Functions.Scanning;
 public class ScanProgressByInstanceFunction
 {
     private readonly IScanProgressStore _progress;
-    public ScanProgressByInstanceFunction(IScanProgressStore progress) => _progress = progress;
+    private readonly TimeProvider _time;
+    public ScanProgressByInstanceFunction(IScanProgressStore progress, TimeProvider? time = null) { _progress = progress; _time = time ?? TimeProvider.System; }
 
     [Function("GetScanProgressByInstance")] // GET /api/scan/progress/{instanceId}
     public async Task<HttpResponseData> Get(
@@ -37,7 +38,7 @@ public class ScanProgressByInstanceFunction
             secondaryPercent = snap.SecondaryPercent,
             overallPercent = snap.OverallPercent,
             // Null until there is something to go by: this scan's own pace, or what earlier scans took.
-            secondsLeft = ScanEstimate.SecondsLeft(snap, DateTime.UtcNow)
+            secondsLeft = ScanEstimate.SecondsLeft(snap, _time.GetUtcNow().UtcDateTime)
         };
         await resp.WriteAsJsonAsync(payload);
         return resp;

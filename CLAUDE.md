@@ -13,7 +13,18 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 | `PhotoSense.Contracts` | JSON DTOs sent to the UI; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
 | `PhotoSense.ReactUI` | Next.js 14 / React 18 / SWR / Tailwind UI: `app/page.tsx`, `components/`, `components/organize/`, `lib/` |
 | `PhotoSense.Tests` | TUnit tests of everything except the UI |
+| `PhotoSense.Benchmarks` | BenchmarkDotNet runs of near-duplicate matching |
 | `docs/design_handoff_photosense_redesign` | Jamie's design handoff. Leave it alone and out of commits unless asked |
+
+## Architecture and stack
+
+- **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Functions` as the host that wires them together. Domain and Application never reference Infrastructure or Functions; new storage or OS access goes behind an interface in Domain.
+- **.NET 10**, Azure Functions isolated worker with Durable Functions and SignalR. Not ASP.NET Core minimal APIs: endpoints are `[Function]` methods on `HttpRequestData`.
+- **Storage:** LiteDB in one file. No EF Core, no SQL server, no migrations.
+- **Auth:** none. The service runs on the user's own machine; `RequestGuard` is the only gate (see Service patterns). No JWT, OIDC or cookies.
+- **Tests:** TUnit with Moq and coverlet (`coverlet.MTP`), not xUnit, FluentAssertions or Testcontainers.
+- **Imaging and metadata:** Magick.NET (Q8) and MetadataExtractor.
+- Generic .NET advice that assumes another stack (EF Core, minimal APIs, xUnit) does not apply here; follow this file.
 
 ## Running and testing
 

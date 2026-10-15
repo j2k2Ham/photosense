@@ -1,5 +1,6 @@
 namespace PhotoSense.Domain.Services;
 
+/// <summary>Finds the sidecars and Live Photo videos that go wherever their picture goes.</summary>
 public interface ICompanionFileFinder
 {
     /// <summary>

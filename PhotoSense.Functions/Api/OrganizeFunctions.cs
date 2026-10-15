@@ -63,7 +63,8 @@ public class OrganizeFunctions
         if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var root = HttpUtility.ParseQueryString(req.Url.Query).Get("root");
         IReadOnlyList<LibraryFile> files;
-        try { files = await _library.ListAsync(root ?? string.Empty); }
+        // A caller that goes away only stops waiting: the reading goes on, and asking again joins it.
+        try { files = await _library.ListAsync(root ?? string.Empty).WaitAsync(req.FunctionContext.CancellationToken); }
         // Not there, or not something that could be a path at all.
         catch (Exception ex) when (ex is IOException or ArgumentException) { return await RefuseAsync(req, HttpStatusCode.NotFound, $"Folder not found: {root}"); }
 

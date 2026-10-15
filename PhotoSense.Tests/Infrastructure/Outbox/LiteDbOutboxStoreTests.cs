@@ -35,6 +35,20 @@ public class LiteDbOutboxStoreTests
     }
 
     [Test]
+    public async Task A_Message_Is_Marked_With_The_Time_It_Was_Processed()
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var store = new LiteDbOutboxStore(db, new TestClock());
+        var msg = new OutboxMessage { Type = "Test", Payload = "{}", OccurredUtc = DateTime.UtcNow };
+        await store.AddAsync(msg);
+
+        await store.MarkProcessedAsync(msg.Id);
+
+        var processed = db.GetCollection<OutboxMessage>("outbox").FindById(msg.Id).ProcessedUtc;
+        await Assert.That(processed!.Value.ToUniversalTime()).IsEqualTo(TestClock.Day.UtcDateTime);
+    }
+
+    [Test]
     public async Task Marking_A_Message_That_Is_Not_There_Changes_Nothing()
     {
         var store = CreateStore(out _);
