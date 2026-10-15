@@ -372,3 +372,6 @@ PhotoSense.ReactUI/.next/
 
 # Local settings of the UI, such as a Google Maps key
 .env*.local
+
+# Backup of CLAUDE.md made when the kit's section was merged into it
+CLAUDE.md.bak
