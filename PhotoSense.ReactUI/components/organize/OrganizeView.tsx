@@ -11,7 +11,7 @@ import type { OrganizeApplyRequest, OrganizeFileDto } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { FolderPicker } from '../FolderPicker';
 import type { ToastAction, ToastKind } from '../Toaster';
-import { FileGallery, type FileFilter } from './FileGallery';
+import { FileGallery, type FileFilter, type FileKind } from './FileGallery';
 import { MovePreview } from './MovePreview';
 import { ReadingOverlay } from './ReadingOverlay';
 import { SelectionBar } from './SelectionBar';
@@ -51,6 +51,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const [showMap, setShowMap] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FileFilter>('all');
+  const [kind, setKind] = useState<FileKind>('any');
   const [page, setPage] = useState(1);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const lastPick = useRef(-1);
@@ -93,11 +94,16 @@ export function OrganizeView({ startRoot, notify }: Props) {
     notify(`Read dates and places for ${countFiles(whole.files.length)} in ${leaf(whole.root)}. No scan was needed.`, 'ok');
   }, [whole, notify]);
 
-  const suggestions = useMemo(() => (data ? suggest(data, settings, choices) : []), [data, settings, choices]);
+  // What the folders take while one kind is shown. A Live Photo's video is never taken on its own: it goes
+  // with its picture, which brings it along.
+  const goes = useMemo(() => (f: OrganizeFileDto) => kind === 'any' || (kind === 'photo' ? !f.isVideo : f.isVideo && !f.livePhoto), [kind]);
+  const arranged = useMemo(() => (data && kind !== 'any' ? { ...data, files: data.files.filter(goes) } : data), [data, kind, goes]);
+  const suggestions = useMemo(() => (arranged ? suggest(arranged, settings, choices) : []), [arranged, settings, choices]);
   const byKey = useMemo(() => new Map(suggestions.map(s => [s.key, s])), [suggestions]);
-  const own: OwnFolder[] = useMemo(() => folders.map(f => ({ ...f, files: files.filter(x => choices.assigned[x.id] === f.id) })), [folders, files, choices.assigned]);
+  // Files of the other kind stay in the person's folder, for when that kind is shown.
+  const own: OwnFolder[] = useMemo(() => folders.map(f => ({ ...f, files: files.filter(x => choices.assigned[x.id] === f.id && goes(x)) })), [folders, files, choices.assigned, goes]);
   const folderNames = useMemo(() => Object.fromEntries(folders.map(f => [f.id, f.name])), [folders]);
-  const noPlace = useMemo(() => (data ? unplaced(data, choices, suggestions) : []), [data, choices, suggestions]);
+  const noPlace = useMemo(() => (arranged ? unplaced(arranged, choices, suggestions) : []), [arranged, choices, suggestions]);
   const searchable = useMemo(() => new Map(files.map(f => [f.id, searchText(f, places)])), [files, places]);
   const map = useMemo(() => (settings.group === 'place' && showMap ? mapLayout(suggestions, places, settings) : undefined), [suggestions, places, settings, showMap]);
 
@@ -106,11 +112,20 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const focusFiles = focused?.files ?? focusedOwn?.files ?? (focus?.kind === 'unplaced' ? noPlace : undefined);
   const focusLabel = focused ? `Suggested: ${focused.name}` : focusedOwn ? `Your folder: ${focusedOwn.name}` : focus?.kind === 'unplaced' ? 'No location' : undefined;
   const q = query.trim().toLowerCase();
-  const shown = useMemo(() => (focusFiles ?? files)
-    .filter(f => (filter === 'todo' ? !choices.organized[pathOf(f)] : filter === 'noloc' ? f.place == null : true))
-    .filter(f => !q || searchable.get(f.id)!.includes(q)), [focusFiles, files, filter, choices.organized, q, searchable]);
+  const passes = useMemo(() => (f: OrganizeFileDto) => (filter === 'todo' ? !choices.organized[pathOf(f)] : filter === 'noloc' ? f.place == null : true), [filter, choices.organized]);
+  const ofKind = useMemo(() => (f: OrganizeFileDto) => kind === 'any' || f.isVideo === (kind === 'video'), [kind]);
+  const shown = useMemo(() => (focusFiles ?? files).filter(passes).filter(ofKind)
+    .filter(f => !q || searchable.get(f.id)!.includes(q)), [focusFiles, files, passes, ofKind, q, searchable]);
   const pages = Math.max(1, Math.ceil(shown.length / GALLERY_PAGE));
-  const counts = useMemo(() => ({ all: files.length, todo: files.filter(f => !choices.organized[pathOf(f)]).length, noloc: files.filter(f => f.place == null).length }), [files, choices.organized]);
+  // Each row of choices counts within what the other row leaves, so a number says what a click would show.
+  const counts = useMemo(() => {
+    const these = files.filter(ofKind);
+    return { all: these.length, todo: these.filter(f => !choices.organized[pathOf(f)]).length, noloc: these.filter(f => f.place == null).length };
+  }, [files, ofKind, choices.organized]);
+  const kindCounts = useMemo(() => {
+    const these = files.filter(passes), videos = these.filter(f => f.isVideo).length;
+    return { any: these.length, photo: these.length - videos, video: videos };
+  }, [files, passes]);
 
   const clearPicks = () => { setPicked(new Set()); lastPick.current = -1; };
   // Every file shown is selected, or let go; what is selected among the files not shown stays as it is.
@@ -123,7 +138,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
     lastPick.current = -1;
   }
   // Everything that keeps some of the files from showing, put away at once.
-  const showEverything = () => { setFocus(undefined); setQuery(''); setFilter('all'); setPage(1); };
+  const showEverything = () => { setFocus(undefined); setQuery(''); setFilter('all'); setKind('any'); setPage(1); };
   const turnTo = (focusNow?: Focus) => { setFocus(focusNow); setPage(1); };
 
   function chooseRoot(path: string) {
@@ -315,9 +330,9 @@ export function OrganizeView({ startRoot, notify }: Props) {
           {reading && !data && <ReadingOverlay folder={leaf(root)} progress={soFar} />}
           <section aria-label="All files" className="flex min-h-0 min-w-0 flex-col">
             {reading && data && <ReadingOverlay compact folder={leaf(root)} progress={soFar} />}
-            <FileGallery files={shown} places={places} page={Math.min(page, pages)} filter={filter} counts={counts} focus={focusLabel} narrowed={focusLabel !== undefined || q !== '' || filter !== 'all'} picked={picked}
+            <FileGallery files={shown} places={places} page={Math.min(page, pages)} filter={filter} counts={counts} kind={kind} kindCounts={kindCounts} focus={focusLabel} narrowed={focusLabel !== undefined || q !== '' || filter !== 'all' || kind !== 'any'} picked={picked}
               reading={reading && !data} empty={listing.error ? 'This folder could not be read.' : q ? `No files match “${query.trim()}”` : 'No files here'}
-              tagOf={f => fileTag(f, choices, folderNames, suggestedNames)} onPage={setPage} onFilter={f => { setFilter(f); setPage(1); }} onClearFocus={() => turnTo(undefined)} onClearAll={showEverything} onPickAll={pickAll}
+              tagOf={f => fileTag(f, choices, folderNames, suggestedNames)} onPage={setPage} onFilter={f => { setFilter(f); setPage(1); }} onKind={k => { setKind(k); setPage(1); }} onClearFocus={() => turnTo(undefined)} onClearAll={showEverything} onPickAll={pickAll}
               onPick={pick} onOpen={open} onDragStart={f => setDragging(picked.has(f.id) ? [...picked] : [f.id])} onDragEnd={() => setDragging([])} />
             {picked.size > 0 && (
               <SelectionBar count={picked.size} shown={shown.length} hint={folders.length > 0 ? 'or add them to one of your folders' : ''} naming={naming === 'bar'} name={newName} onName={setNewName}

@@ -5,7 +5,7 @@ import type { OrganizeBatchDto } from '../../types';
 import { Segmented } from '../ModeSwitch';
 import { CustomFolderCard, type OwnFolder } from './CustomFolderCard';
 import { FolderMap } from './FolderMap';
-import { RecentMoves } from './RecentMoves';
+import { RecentMovesWindow } from './RecentMoves';
 import { SuggestionCard } from './SuggestionCard';
 import { countFiles, useDrop } from './shared';
 
@@ -102,6 +102,7 @@ export function SuggestionsPanel(p: Props) {
   const placed = byPlace || s.dateThen === 'place';
   const suggestedFiles = suggestions.reduce((n, x) => n + x.files.length, 0);
   const focusOf = (kind: 'suggested' | 'own', key: string) => p.focus?.kind === kind && p.focus.key === key;
+  const [showMoves, setShowMoves] = useState(false);
   return (
     <aside aria-label="Suggested folders" className="flex min-h-0 flex-col border-l border-line bg-s1">
       <div className="flex shrink-0 flex-col gap-3.5 border-b border-line px-5 pb-4 pt-[18px]">
@@ -210,11 +211,18 @@ export function SuggestionsPanel(p: Props) {
         ))}
         {p.folders.length === 0 && !p.naming && <p className="px-0.5 pt-0.5 text-[13px] text-t3">Make a folder of your own, then select or drag files onto it. Files you add are left out of the suggestions.</p>}
 
-        {p.batches.length > 0 && <RecentMoves batches={p.batches} busy={p.busy} onUndo={p.onUndo} />}
+        {p.batches.length > 0 && (
+          <div className="mt-2 border-t border-line pt-[18px]">
+            <button type="button" onClick={() => setShowMoves(true)} className="pill-outline h-[34px] gap-2 px-4 text-[13.5px]">
+              Recently moved <span className="text-t3">· {p.batches.length.toLocaleString()}</span>
+            </button>
+          </div>
+        )}
         <p className="pt-3.5 text-[12.5px] text-t3">
           Folders are made inside <span className="font-mono text-t2">{p.rootName}</span>. Files already in the right folder are left alone, and nothing is ever replaced: if a name is taken, (1) is added.
         </p>
       </div>
+      {showMoves && <RecentMovesWindow batches={p.batches} busy={p.busy} onUndo={p.onUndo} onClose={() => setShowMoves(false)} />}
     </aside>
   );
 }

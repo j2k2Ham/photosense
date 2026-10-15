@@ -139,6 +139,8 @@ export interface OrganizeFileDto {
   durationSeconds?: number | null;
   /** Which of the listing's places it was taken at; absent with no position, or none near a known place. */
   place?: number | null;
+  /** The video half of a Live Photo whose picture is beside it: it goes wherever the picture goes. Told once the whole folder is read. */
+  livePhoto?: boolean;
 }
 
 export interface OrganizeFilesDto {

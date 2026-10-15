@@ -1,5 +1,7 @@
 using System.Globalization;
 using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Scanning.Services;
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Contracts.Organize;
 using PhotoSense.Domain.Services;
 
@@ -25,7 +27,10 @@ public sealed class OrganizeListingMapper
     public OrganizeFilesDto Whole(string root, IReadOnlyList<LibraryFile> files)
     {
         var places = new PlaceList();
-        var listed = files.Select(f => Map(f, places)).ToList();
+        // A video is a Live Photo's half when a picture of the same name beside it carries its identifier,
+        // which is how the half is found when the picture is moved with what belongs to it.
+        var pictures = files.Where(f => !f.IsVideo && f.Details.LivePhotoId is not null).Select(PairKey).ToHashSet();
+        var listed = files.Select(f => Map(f, places, f.IsVideo && f.Details.LivePhotoId is not null && pictures.Contains(PairKey(f)))).ToList();
         return new OrganizeFilesDto { Root = root, FromScan = files.All(f => f.FromScan), Places = places.From(0), Files = listed };
     }
 
@@ -48,12 +53,15 @@ public sealed class OrganizeListingMapper
         };
     }
 
-    private OrganizeFileDto Map(LibraryFile f, PlaceList places) => new()
+    private OrganizeFileDto Map(LibraryFile f, PlaceList places, bool livePhoto = false) => new()
     {
         Id = f.Id, Name = f.Name, Folder = f.Folder, SizeBytes = f.SizeBytes, IsVideo = f.IsVideo, Date = Wall(f.Date), DateFromFile = f.DateFromFile,
         Width = f.Details.Width, Height = f.Details.Height, DurationSeconds = f.Details.DurationSeconds,
-        Place = places.NumberOf(_places.At(f.Details.Latitude, f.Details.Longitude)),
+        Place = places.NumberOf(_places.At(f.Details.Latitude, f.Details.Longitude)), LivePhoto = livePhoto,
     };
+
+    private static (string, string, string) PairKey(LibraryFile f)
+        => (PhotoPath.Key(f.Folder), PhotoNaming.ItemOf(f.Name), f.Details.LivePhotoId!.ToUpperInvariant());
 
     // The places of one listing, each given a number the first time a file turns out to have been taken there.
     private sealed class PlaceList

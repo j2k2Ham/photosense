@@ -218,6 +218,45 @@ describe('looking through the files', () => {
     expect(tiles()).toHaveLength(7);
   });
 
+  it('shows photos alone or videos alone, together with the other filter, each count saying what a click would show', async () => {
+    listings[ROOT] = { data: listing(ROOT, [...FILES, at('v1', 1, { name: 'v1.MOV', isVideo: true, durationSeconds: 9 }), at('v2', null, { name: 'v2.MOV', isVideo: true, durationSeconds: 4 })]) };
+    open();
+    const type = () => within(screen.getByRole('group', { name: 'Type' }));
+    const filters = () => within(screen.getByRole('group', { name: 'Show' }));
+    const texts = (row: ReturnType<typeof type>) => row.getAllByRole('button').map(b => b.textContent);
+    expect(texts(type())).toEqual(['Photos & videos9', 'Photos7', 'Videos2']);
+    expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
+
+    await userEvent.click(type().getByRole('button', { name: /^Videos/ }));
+    expect(shownNames()).toEqual(['v1.MOV', 'v2.MOV']);
+    // The other row now counts videos alone.
+    expect(texts(filters())).toEqual(['All2', 'Not organized2', 'No location1']);
+
+    await userEvent.click(filters().getByRole('button', { name: /^No location/ }));
+    expect(shownNames()).toEqual(['v2.MOV']);
+    expect(texts(type())).toEqual(['Photos & videos3', 'Photos2', 'Videos1']);
+    await userEvent.click(type().getByRole('button', { name: /^Photos\d/ }));
+    expect(shownNames()).toEqual(['n1.JPG', 'n2.JPG']);
+    // Back to both kinds by the row itself, or by Clear all with everything else.
+    await userEvent.click(type().getByRole('button', { name: /^Photos & videos/ }));
+    expect(shownNames()).toEqual(['n1.JPG', 'n2.JPG', 'v2.MOV']);
+    await userEvent.click(type().getByRole('button', { name: /^Videos/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Clear all' }));
+    expect(tiles()).toHaveLength(9);
+    expect(type().getAllByRole('button').map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+    expect(filters().getAllByRole('button').map(b => b.getAttribute('aria-pressed'))).toEqual(['true', 'false', 'false']);
+  });
+
+  it('turns back to the first page when the kind shown changes', async () => {
+    const many = Array.from({ length: 70 }, (_, i) => at(`m${String(i).padStart(2, '0')}`, 0));
+    listings[ROOT] = { data: listing(ROOT, [...many, at('v1', 0, { name: 'v1.MOV', isVideo: true })]) };
+    open();
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('group', { name: 'Type' })).getByRole('button', { name: /^Photos\d/ }));
+    expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+  });
+
   it('selects every file shown with Select all, and lets them go again, leaving alone what else was selected', async () => {
     open();
     const box = () => screen.getByRole('checkbox', { name: 'Select all' }) as HTMLInputElement;
@@ -746,6 +785,43 @@ describe('moving, copying and undoing', () => {
     expect(shownNames()).toEqual(['a1.JPG', 'a2.JPG', 'a3.JPG', 'n1.JPG', 'n2.JPG']);
   });
 
+  it('lets the kind shown decide what each folder takes, and leaves a Live Photo\'s video to go with its picture', async () => {
+    // b3 is a video taken in Butte, b1.MOV the video half of the Live Photo b1.JPG, a4 a video taken in Anaconda.
+    listings[ROOT] = { data: listing(ROOT, [...FILES, at('b3', 1, { name: 'b3.MOV', isVideo: true }), at('b1v', 1, { name: 'b1.MOV', isVideo: true, livePhoto: true }), at('a4', 0, { name: 'a4.MOV', isVideo: true })]) };
+    api.applyOrganize.mockImplementation(async (request: OrganizeApplyRequest) => butte(request));
+    open();
+    const type = (name: RegExp) => within(screen.getByRole('group', { name: 'Type' })).getByRole('button', { name });
+    const going = () => (api.applyOrganize.mock.calls.at(-1)![0] as OrganizeApplyRequest).files.map(f => f.id).sort();
+    async function move(folder: string) {
+      await previewOf(folder);
+      await userEvent.click(moveButton());
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    }
+    // Both kinds: the suggestion takes the pictures and the videos.
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte4 files/);
+
+    // One of the person's own folders, with a picture and a video in it.
+    await userEvent.click(tile('a1.JPG'));
+    await userEvent.click(tile('a4.MOV'));
+    await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
+    await userEvent.type(within(bar()).getByRole('textbox'), 'Trips{Enter}');
+
+    await userEvent.click(type(/^Photos\d/));
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' })).toHaveTextContent('1 file');
+    await move('Uptown Butte');
+    expect(going()).toEqual(['b1', 'b2']);
+    await move('Trips');
+    expect(going()).toEqual(['a1']);
+
+    // The videos wait for their turn, in the suggestion and in the person's folder; the Live Photo's video is not among them.
+    await userEvent.click(type(/^Videos/));
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte1 file/);
+    await move('Uptown Butte');
+    expect(going()).toEqual(['b3']);
+    await move('Trips');
+    expect(going()).toEqual(['a4']);
+  });
+
   it('takes a move back from its message, putting back what had been arranged for the files', async () => {
     api.applyOrganize.mockImplementation(async (request: OrganizeApplyRequest) => butte(request));
     api.undoOrganize.mockResolvedValue({ restored: 3, skipped: 0, problems: [] });
@@ -797,7 +873,8 @@ describe('moving, copying and undoing', () => {
 
     batches = [{ id: 'b7', label: 'Trips 2022', mode: 'copy', count: 1, bytes: 6_093_000, utc: '2026-10-08T18:20:35Z' }];
     refresh();
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Undo Trips 2022' }));
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Recently moved · 1' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Recently moved' })).getByRole('button', { name: 'Undo Trips 2022' }));
     await waitFor(() => expect(notify).toHaveBeenLastCalledWith('Removed the 1 copy from Trips 2022', 'ok'));
     expect(tile('a1.JPG')).toHaveTextContent('For Trips 2022');
   });
@@ -807,6 +884,8 @@ describe('moving, copying and undoing', () => {
     api.undoOrganize.mockResolvedValueOnce({ restored: 9, skipped: 0, problems: [] }).mockResolvedValueOnce({ restored: 1, skipped: 2, problems: ['IMG_1.JPG is no longer where it was put.'] })
       .mockResolvedValueOnce({ restored: 0, skipped: 1, problems: [] }).mockRejectedValueOnce(new Error('There is nothing to undo: this was undone already, or was never done.'));
     open();
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Recently moved · 2' }));
+    // The window stays up through every undo below.
     await userEvent.click(within(panel()).getByRole('button', { name: 'Undo Anaconda' }));
     await waitFor(() => expect(said()).toEqual([['Removed the 9 copies from Anaconda', 'ok']]));
     await userEvent.click(within(panel()).getByRole('button', { name: 'Undo 2023' }));
@@ -821,7 +900,7 @@ describe('moving, copying and undoing', () => {
   it('lists nothing as moved until the service has said what was', () => {
     api.useOrganizeBatches.mockImplementation(() => ({}));
     open();
-    expect(within(panel()).queryByRole('heading', { name: 'Recently moved' })).not.toBeInTheDocument();
+    expect(within(panel()).queryByRole('button', { name: /^Recently moved/ })).not.toBeInTheDocument();
   });
 
   it('says what was left where it was, and offers no undo when nothing was moved', async () => {

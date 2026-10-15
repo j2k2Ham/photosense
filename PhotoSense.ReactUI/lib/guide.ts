@@ -180,8 +180,10 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'The search box finds files by name, place or month.',
           '**All**, **Not organized** and **No location**, above the files, filter them.',
+          '**Photos & videos**, **Photos** and **Videos**, beside them, show both kinds or only one. The two work together: **Not organized** with **Videos** shows the videos still to sort. Each count says how many a click would show.',
+          'The kind shown is also what the folders take. With **Photos** on, the suggested folders and your own folders move only pictures, and with **Videos** only videos; the rest wait for their turn. A Live Photo’s video is never moved on its own: it goes with its picture.',
           'A folder you picked is named above the files, with a × to let it go.',
-          '**Clear all** puts away the folder, the search and the filter together, and shows every file again.',
+          '**Clear all** puts away the folder, the search, the filter and the kind together, and shows every file again. **Photos & videos** alone shows both kinds again.',
           'Files with no place in their details are counted on the **No location** card. Group by date to sort those.',
         ],
       },
@@ -241,7 +243,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Undoing',
         tips: [
           'The message after a move has an **Undo** button.',
-          '**Recently moved**, at the foot of the panel on the right, lists what was moved, copied or deleted, each with **Undo**. Moved files go back under the names they had, and the folders made for them go again if that leaves them empty.',
+          'The **Recently moved** button, at the foot of the panel on the right, says how many moves can still be undone and opens a list of what was moved, copied or deleted, each with **Undo**. Moved files go back under the names they had, and the folders made for them go again if that leaves them empty. **Done**, the **×** in its corner or **Esc** closes the list.',
         ],
       },
     ],
@@ -287,7 +289,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Putting a file back',
         tips: [
-          'In Organize, press **Undo** in the message, or beside the deletion under **Recently moved**.',
+          'In Organize, press **Undo** in the message, or open **Recently moved** and press **Undo** beside the deletion.',
           'Otherwise, move the file out of **_PhotoSense_Removed** back to where it was, with the computer’s own file manager. Scan again for Clean up to list it once more.',
         ],
       },

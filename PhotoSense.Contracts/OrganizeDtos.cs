@@ -31,6 +31,8 @@ public sealed class OrganizeFileDto
     [JsonPropertyName("durationSeconds")] public double? DurationSeconds { get; init; }
     /// <summary>Which of the listing's places it was taken at; absent with no position, or none near a known place.</summary>
     [JsonPropertyName("place")] public int? Place { get; init; }
+    /// <summary>The video half of a Live Photo whose picture is beside it: it goes wherever the picture goes. Told once the whole folder is read.</summary>
+    [JsonPropertyName("livePhoto")] public bool LivePhoto { get; init; }
 }
 
 public sealed class OrganizeFilesDto

@@ -6,6 +6,8 @@ import { SelectAll } from '../SelectAll';
 import { Check, Pager, Thumb } from './shared';
 
 export type FileFilter = 'all' | 'todo' | 'noloc';
+/** Which kind of file is shown: both, pictures alone, or videos alone. */
+export type FileKind = 'any' | 'photo' | 'video';
 
 interface Props {
   /** The files to show, on every page together: what the filter, the search and the folder picked leave. */
@@ -13,8 +15,11 @@ interface Props {
   readonly places: readonly OrganizePlaceDto[];
   readonly page: number;
   readonly filter: FileFilter;
-  /** How many files each filter would show. */
+  /** How many files each filter would show, of the kind chosen. */
   readonly counts: Readonly<Record<FileFilter, number>>;
+  readonly kind: FileKind;
+  /** How many files each kind would show, under the filter chosen. */
+  readonly kindCounts: Readonly<Record<FileKind, number>>;
   /** The folder whose files alone are showing, named: "Suggested: Anaconda". */
   readonly focus?: string;
   /** Not every file is showing: a folder is picked, something is searched for, or a filter is on. */
@@ -27,8 +32,9 @@ interface Props {
   tagOf(file: OrganizeFileDto): { text: string; done: boolean } | undefined;
   onPage(page: number): void;
   onFilter(filter: FileFilter): void;
+  onKind(kind: FileKind): void;
   onClearFocus(): void;
-  /** Puts away the folder picked, the search and the filter together, so that every file shows again. */
+  /** Puts away the folder picked, the search, the filter and the kind together, so that every file shows again. */
   onClearAll(): void;
   /** Selects every file shown, on every page (true), or lets every one of them go (false). */
   onPickAll(all: boolean): void;
@@ -42,7 +48,7 @@ interface Props {
 const count = (n: number) => <span className="font-mono text-[11.5px] font-medium opacity-75">{n.toLocaleString()}</span>;
 
 /** Every file of the folder as a grid of pictures, a page at a time, to select from and drag out of. */
-export function FileGallery({ files, places, page, filter, counts, focus, narrowed, picked, reading, empty, tagOf, onPage, onFilter, onClearFocus, onClearAll, onPickAll, onPick, onOpen, onDragStart, onDragEnd }: Props) {
+export function FileGallery({ files, places, page, filter, counts, kind, kindCounts, focus, narrowed, picked, reading, empty, tagOf, onPage, onFilter, onKind, onClearFocus, onClearAll, onPickAll, onPick, onOpen, onDragStart, onDragEnd }: Props) {
   const pages = Math.max(1, Math.ceil(files.length / GALLERY_PAGE)), from = (page - 1) * GALLERY_PAGE;
   // How many of the files shown are selected: all of them, some, or none.
   const pickedHere = picked.size === 0 ? 0 : files.reduce((n, f) => n + (picked.has(f.id) ? 1 : 0), 0);
@@ -59,13 +65,18 @@ export function FileGallery({ files, places, page, filter, counts, focus, narrow
           { value: 'todo', name: <>Not organized{count(counts.todo)}</> },
           { value: 'noloc', name: <>No location{count(counts.noloc)}</> },
         ]} />
+        <Segmented label="Type" size="medium" value={kind} onChange={onKind} options={[
+          { value: 'any', name: <>Photos &amp; videos{count(kindCounts.any)}</> },
+          { value: 'photo', name: <>Photos{count(kindCounts.photo)}</> },
+          { value: 'video', name: <>Videos{count(kindCounts.video)}</> },
+        ]} />
         {focus && (
           <span className="flex h-[30px] max-w-[360px] items-center gap-1.5 rounded-full border border-brand bg-sel pl-3 pr-1 font-medium text-t1">
             <span className="truncate">{focus}</span>
             <button type="button" aria-label="Show every folder's files again" onClick={onClearFocus} className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full hover:bg-s3">×</button>
           </span>
         )}
-        {narrowed && <button type="button" title="Show every file again: no folder picked, no search, no filter" onClick={onClearAll} className="pill-outline h-[30px] px-3.5 text-[13px] font-medium">Clear all</button>}
+        {narrowed && <button type="button" title="Show every file again: no folder picked, no search, no filter, photos and videos alike" onClick={onClearAll} className="pill-outline h-[30px] px-3.5 text-[13px] font-medium">Clear all</button>}
         <span className="flex-1" />
         <Pager page={page} pages={pages} onPage={onPage} />
       </div>

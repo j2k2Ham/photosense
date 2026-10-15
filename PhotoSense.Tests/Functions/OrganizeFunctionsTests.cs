@@ -81,6 +81,25 @@ public sealed class OrganizeFunctionsTests : IDisposable
     }
 
     [Test]
+    public async Task Marks_The_Video_Half_Of_A_Live_Photo_Only_Beside_Its_Own_Picture()
+    {
+        foreach (var name in new[] { "IMG_1.HEIC", "IMG_1.MOV", "IMG_2.MOV", "IMG_3.MOV", "IMG_4.JPG", "Trip/IMG_1.MOV" }) _f.Put(name);
+        MediaDetails Live(string? id) => new(null, 0, 0, null, null, null, id);
+        _f.Reader.Says["IMG_1.HEIC"] = Live("A1");
+        _f.Reader.Says["IMG_1.MOV"] = Live("a1");   // the same identifier, written in another case
+        _f.Reader.Says["IMG_2.MOV"] = Live("A1");   // the identifier, but not the picture's name
+        _f.Reader.Says["IMG_3.MOV"] = Live(null);
+        _f.Reader.Says["IMG_4.JPG"] = Live(null);
+
+        var files = (await _api.FilesAsync(Files(_f.Root.FullName))).Json().GetProperty("files").EnumerateArray()
+            .ToDictionary(f => Path.Combine(Path.GetRelativePath(_f.Root.FullName, f.GetProperty("folder").GetString()!), f.GetProperty("name").GetString()!), f => f.GetProperty("livePhoto").GetBoolean());
+
+        // Trip\IMG_1.MOV carries the identifier and the name, but its picture is in another folder.
+        await Assert.That(files.Where(f => f.Value).Select(f => f.Key)).IsEquivalentTo(new[] { Path.Combine(".", "IMG_1.MOV") }, CollectionOrdering.Matching);
+        await Assert.That(files).Count().IsEqualTo(6);
+    }
+
+    [Test]
     public async Task Says_When_Everything_Was_Already_On_Record_From_A_Scan()
     {
         await _f.ScannedAsync(_f.Put("IMG_1.JPG"));

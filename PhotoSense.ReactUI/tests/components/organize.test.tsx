@@ -1,9 +1,10 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { FileGallery } from '../../components/organize/FileGallery';
 import { ReadingOverlay } from '../../components/organize/ReadingOverlay';
+import { RecentMovesWindow } from '../../components/organize/RecentMoves';
 import { SelectionBar } from '../../components/organize/SelectionBar';
 import { SuggestionsPanel, type OwnFolder } from '../../components/organize/SuggestionsPanel';
 import { Check, Pager, Thumb, countFiles } from '../../components/organize/shared';
@@ -68,8 +69,9 @@ describe('the small parts', () => {
 
 describe('the file gallery', () => {
   function show(props: Partial<React.ComponentProps<typeof FileGallery>> = {}) {
-    const handlers = { onPage: vi.fn(), onFilter: vi.fn(), onClearFocus: vi.fn(), onClearAll: vi.fn(), onPickAll: vi.fn(), onPick: vi.fn(), onOpen: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn() };
-    const view = render(<FileGallery files={FILES} places={PLACES} page={1} filter="all" counts={{ all: 9, todo: 8, noloc: 1 }} narrowed={false} picked={new Set()} empty="No files here" tagOf={() => undefined} {...handlers} {...props} />);
+    const handlers = { onPage: vi.fn(), onFilter: vi.fn(), onKind: vi.fn(), onClearFocus: vi.fn(), onClearAll: vi.fn(), onPickAll: vi.fn(), onPick: vi.fn(), onOpen: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn() };
+    const view = render(<FileGallery files={FILES} places={PLACES} page={1} filter="all" counts={{ all: 9, todo: 8, noloc: 1 }} kind="any" kindCounts={{ any: 9, photo: 8, video: 1 }}
+      narrowed={false} picked={new Set()} empty="No files here" tagOf={() => undefined} {...handlers} {...props} />);
     return { ...handlers, ...view };
   }
   const tiles = () => within(screen.getByRole('list', { name: 'Files' })).getAllByRole('button');
@@ -79,6 +81,8 @@ describe('the file gallery', () => {
     expect(container.querySelector('span')).toHaveTextContent(/^9 files$/);
     expect(within(screen.getByRole('group', { name: 'Show' })).getAllByRole('button').map(b => [b.textContent, b.getAttribute('aria-pressed')]))
       .toEqual([['All9', 'true'], ['Not organized8', 'false'], ['No location1', 'false']]);
+    expect(within(screen.getByRole('group', { name: 'Type' })).getAllByRole('button').map(b => [b.textContent, b.getAttribute('aria-pressed')]))
+      .toEqual([['Photos & videos9', 'true'], ['Photos8', 'false'], ['Videos1', 'false']]);
     expect(tiles().map(t => t.textContent)).toEqual([
       'a1.JPGJul 4, 2022 · Anaconda', 'a2.JPGJul 4, 2022 · Anaconda', 'a3.JPGJul 4, 2022 · Anaconda', '0:14a4.MOVJul 4, 2022 · Anaconda', 'a5.JPGJul 4, 2022 · Anaconda',
       'g1.JPGJul 4, 2022 · West Glacier', 'g2.JPGJul 4, 2022 · West Glacier', 'p1.JPGJul 4, 2022 · Apgar', 'n1.JPGJul 4, 2022 · No location',
@@ -165,7 +169,7 @@ describe('the file gallery', () => {
     const { onClearFocus, onClearAll, onFilter, container } = show({ focus: 'Suggested: Anaconda', narrowed: true, files: [FILES[0]] });
     expect(screen.getByText('Suggested: Anaconda')).toBeInTheDocument();
     // One button puts away whatever keeps files from showing, the folder with the rest.
-    expect(screen.getByRole('button', { name: 'Clear all' })).toHaveAttribute('title', 'Show every file again: no folder picked, no search, no filter');
+    expect(screen.getByRole('button', { name: 'Clear all' })).toHaveAttribute('title', 'Show every file again: no folder picked, no search, no filter, photos and videos alike');
     await userEvent.click(screen.getByRole('button', { name: 'Clear all' }));
     expect(onClearAll).toHaveBeenCalledOnce();
     expect(onClearFocus).not.toHaveBeenCalled();
@@ -176,13 +180,24 @@ describe('the file gallery', () => {
     expect(onFilter).toHaveBeenCalledExactlyOnceWith('noloc');
   });
 
+  it('shows photos alone or videos alone, with the way back to both', async () => {
+    const { onKind } = show({ kind: 'video', kindCounts: { any: 9, photo: 8, video: 1 }, narrowed: true, files: [FILES[3]] });
+    const type = () => within(screen.getByRole('group', { name: 'Type' }));
+    expect(type().getAllByRole('button').map(b => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true']);
+    expect(tiles().map(t => t.textContent)).toEqual(['0:14a4.MOVJul 4, 2022 · Anaconda']);
+    expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
+    await userEvent.click(type().getByRole('button', { name: /^Photos\d/ }));
+    await userEvent.click(type().getByRole('button', { name: /^Photos & videos/ }));
+    expect(onKind.mock.calls).toEqual([['photo'], ['any']]);
+  });
+
   it('says when there is nothing to show, but not while the folder is still being read', () => {
     const { rerender, ...handlers } = show({ files: [], reading: true });
     expect(screen.queryByText('No files here')).not.toBeInTheDocument();
     // With every file showing there is nothing to clear.
     expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
-    rerender(<FileGallery files={[]} places={PLACES} page={1} filter="todo" counts={{ all: 0, todo: 0, noloc: 0 }} narrowed picked={new Set()} empty="No files match “zz”" tagOf={() => undefined}
-      onPage={handlers.onPage} onFilter={handlers.onFilter} onClearFocus={handlers.onClearFocus} onClearAll={handlers.onClearAll} onPickAll={handlers.onPickAll} onPick={handlers.onPick} onOpen={handlers.onOpen} onDragStart={handlers.onDragStart} onDragEnd={handlers.onDragEnd} />);
+    rerender(<FileGallery files={[]} places={PLACES} page={1} filter="todo" counts={{ all: 0, todo: 0, noloc: 0 }} kind="any" kindCounts={{ any: 0, photo: 0, video: 0 }} narrowed picked={new Set()} empty="No files match “zz”" tagOf={() => undefined}
+      onPage={handlers.onPage} onFilter={handlers.onFilter} onKind={handlers.onKind} onClearFocus={handlers.onClearFocus} onClearAll={handlers.onClearAll} onPickAll={handlers.onPickAll} onPick={handlers.onPick} onOpen={handlers.onOpen} onDragStart={handlers.onDragStart} onDragEnd={handlers.onDragEnd} />);
     expect(screen.getByText('No files match “zz”')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
   });
@@ -586,24 +601,60 @@ describe('the suggested folders panel', () => {
     expect(within(panel()).queryByRole('group', { name: 'Drop the files on a folder' })).not.toBeInTheDocument();
   });
 
-  it('lists what was moved or copied lately, each with the way to take it back', async () => {
+  const movesWindow = () => screen.getByRole('dialog', { name: 'Recently moved' });
+
+  it('keeps what was moved lately behind a button that says how many, and lists it in a window, each with the way to take it back', async () => {
     const { onUndo } = show({ batches: [batch(), batch({ id: 'b2', label: 'Trips', mode: 'copy', count: 1, bytes: 3_670_000 }), batch({ id: 'b3', label: ROOT, mode: 'remove', count: 2 })] });
-    expect(within(panel()).getByRole('heading', { name: 'Recently moved' })).toBeInTheDocument();
-    const rows = within(panel()).getAllByRole('listitem').map(li => li.textContent);
+    // Only the button is in the panel: the list waits behind it.
+    expect(within(panel()).queryByRole('listitem')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Recently moved · 3' }));
+
+    expect(movesWindow()).toHaveTextContent('Recently moved×What was moved, copied or deleted lately. Undo puts the files back where they were.');
+    const rows = within(movesWindow()).getAllByRole('listitem').map(li => li.textContent);
     expect(rows[0]).toMatch(/^13 files moved to Butte28\.9 MB · \d{1,2}:\d{2}.*Undo$/);
     expect(rows[1]).toMatch(/^1 file copied to Trips3\.5 MB · /);
     // What was deleted is listed by the folder it was taken out of, and can be put back the same way.
     expect(rows[2]).toMatch(/^2 files deleted from Phone Pictures28\.9 MB · /);
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Undo Trips' }));
+    await userEvent.click(within(movesWindow()).getByRole('button', { name: 'Undo Trips' }));
     expect(onUndo).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'b2', label: 'Trips', mode: 'copy' }));
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Undo deleting from Phone Pictures' }));
+    await userEvent.click(within(movesWindow()).getByRole('button', { name: 'Undo deleting from Phone Pictures' }));
     expect(onUndo).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'b3', mode: 'remove' }));
+
+    // The window stays up for more undoing, until Done.
+    await userEvent.click(within(movesWindow()).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('lets nothing be undone while a move is under way, and has no such list when nothing was moved', () => {
+  it('lets nothing be undone while a move is under way, and has no button when nothing was moved', async () => {
     show({ batches: [batch()], busy: true });
-    expect(within(panel()).getByRole('button', { name: 'Undo Butte' })).toBeDisabled();
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Recently moved · 1' }));
+    expect(within(movesWindow()).getByRole('button', { name: 'Undo Butte' })).toBeDisabled();
+    cleanup();
     show();
-    expect(within(screen.getAllByRole('complementary')[1]).queryByRole('heading', { name: 'Recently moved' })).not.toBeInTheDocument();
+    expect(within(panel()).queryByRole('button', { name: /^Recently moved/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('the window of what was moved lately', () => {
+  const batch = (changes: Partial<OrganizeBatchDto> = {}): OrganizeBatchDto => ({ id: 'b1', label: 'Butte', mode: 'move', count: 13, bytes: 30_304_000, utc: '2026-10-08T18:20:35Z', ...changes });
+  const movesWindow = () => screen.getByRole('dialog', { name: 'Recently moved' });
+
+  it('closes with the × in its corner, Esc or a click beside it, but not with a click inside it', async () => {
+    const onClose = vi.fn();
+    render(<RecentMovesWindow batches={[batch()]} busy={false} onUndo={vi.fn()} onClose={onClose} />);
+    fireEvent.mouseDown(movesWindow());
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(movesWindow()).getByRole('button', { name: 'Close' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.mouseDown(movesWindow().parentElement!);
+    expect(onClose).toHaveBeenCalledTimes(3);
+  });
+
+  it('says so when everything in it has been undone', () => {
+    render(<RecentMovesWindow batches={[]} busy={false} onUndo={vi.fn()} onClose={vi.fn()} />);
+    expect(movesWindow()).toHaveTextContent('Nothing moved lately can be undone now.');
+    expect(within(movesWindow()).queryByRole('list')).not.toBeInTheDocument();
   });
 });
