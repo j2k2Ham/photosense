@@ -9,7 +9,8 @@ public static class PhotoFileEnumerator
 
     public static IEnumerable<string> Enumerate(string root, bool recursive)
     {
-        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) yield break;
+        // Inside a photo program's own library every file belongs to that program.
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root) || PhotoLibraries.IsInLibrary(Path.GetFullPath(root))) yield break;
         var pending = new Stack<string>();
         pending.Push(root);
         while (pending.Count > 0)
@@ -22,6 +23,7 @@ public static class PhotoFileEnumerator
             {
                 // Removed files wait here; scanning them would report them as duplicates again.
                 if (Path.GetFileName(sub).Equals(PhotoStorageOptions.RemovedFolderName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (PhotoLibraries.IsLibrary(Path.GetFileName(sub))) continue;
                 // A link to another folder would list the same files under a second path,
                 // making each look like a duplicate of itself.
                 if (new DirectoryInfo(sub).LinkTarget is not null) continue;

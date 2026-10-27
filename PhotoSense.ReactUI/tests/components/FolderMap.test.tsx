@@ -6,7 +6,7 @@ import { FolderMap } from '../../components/organize/FolderMap';
 import { GoogleFolderMap } from '../../components/organize/GoogleFolderMap';
 import type { GoogleMaps, LatLng } from '../../lib/googleMaps';
 import type { MapDot, MapLayout } from '../../lib/organize';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 
 const google = vi.hoisted(() => ({ googleMapsKey: vi.fn(), loadGoogleMaps: vi.fn(), onGoogleMapsRefused: vi.fn() }));
 vi.mock('../../lib/googleMaps', () => google);

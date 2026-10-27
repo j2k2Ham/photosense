@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 import { reply } from '../fixtures';
 
-const hub = await vi.hoisted(async () => new (await import('../fakeSignalR')).FakeHub());
 const swr = vi.hoisted(() => ({ useSWR: vi.fn(), mutate: vi.fn() }));
-vi.mock('@microsoft/signalr', () => hub.module);
 vi.mock('swr', () => ({ default: swr.useSWR, mutate: swr.mutate }));
 
 const API = 'http://localhost:7071/api';
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
-  hub.reset();
   swr.useSWR.mockReset();
   swr.mutate.mockReset();
   fetchMock.mockReset();
@@ -385,69 +382,14 @@ describe('removed files', () => {
 });
 
 describe('the log stream', () => {
-  const negotiate = `${API}/scan/logs/negotiate`;
   const polled = `${API}/scan/logs?limit=200`;
-  const hubOffer = { url: 'https://hub.example/client', accessToken: 'token-1' };
   const settle = () => vi.advanceTimersByTimeAsync(0);
   const line = (n: number) => ({ timestamp: `12:00:0${n}`, level: 'Info', message: `line ${n}` });
 
   beforeEach(() => { vi.useFakeTimers(); });
 
-  it('arrives over the hub when the service offers one', async () => {
-    answering(hubOffer);
-    const api = await load();
-    const lines: string[] = [];
-
-    const dispose = api.connectLogStream(l => lines.push(l));
-    await settle();
-
-    // The service shows its log only to the UI, so both requests say where they come from.
-    expect(lastRequest()).toEqual({ url: negotiate, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
-    expect(hub.connection.url).toBe('https://hub.example/client');
-    expect(hub.connection.options.accessTokenFactory()).toBe('token-1');
-    expect(hub.connection.start).toHaveBeenCalledOnce();
-
-    hub.connection.log('scan-7', '12:00:01', 'Info', 'Scanning 12 files');
-    hub.connection.log('scan-7', '12:00:02', 'Warn', 'Could not decode a.heic');
-    expect(lines).toEqual(['12:00:01 Info Scanning 12 files', '12:00:02 Warn Could not decode a.heic']);
-
-    // The hub is used instead of polling, never beside it.
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(fetchMock).toHaveBeenCalledOnce();
-
-    dispose();
-    expect(hub.connection.stop).toHaveBeenCalledOnce();
-  });
-
-  it('is closed quietly even when the hub will not stop cleanly', async () => {
-    answering(hubOffer);
-    hub.stopError = new Error('already closed');
-    const api = await load();
-
-    const dispose = api.connectLogStream(() => undefined);
-    await settle();
-    dispose();
-    await settle();
-
-    expect(hub.connection.stop).toHaveBeenCalledOnce();
-  });
-
-  it('is not opened once it is no longer wanted', async () => {
-    const offer = deferred<Response>();
-    fetchMock.mockReturnValue(offer.promise);
-    const api = await load();
-
-    const dispose = api.connectLogStream(() => undefined);
-    dispose();
-    offer.resolve(reply(hubOffer));
-    await settle();
-
-    expect(hub.connections).toHaveLength(0);
-  });
-
-  it('is polled for when no hub can be negotiated', async () => {
+  it('is asked for every second and a half, through empty answers, refusals and a lost connection alike', async () => {
     fetchMock
-      .mockImplementationOnce(async () => reply('SignalR is not configured', 500))
       .mockImplementationOnce(async () => reply({ items: [line(1), line(2)], count: 2 }))
       .mockImplementationOnce(async () => reply({ count: 0 }))                 // nothing new, and no list at all
       .mockImplementationOnce(async () => reply('Rate limit exceeded', 429))
@@ -459,72 +401,38 @@ describe('the log stream', () => {
     const dispose = api.connectLogStream(l => lines.push(l));
     await settle();
 
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([negotiate, polled]);
-    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { 'x-photosense-client': 'web' } });
+    // The service shows its log only to the UI, so the request says where it comes from.
+    expect(fetchMock.mock.calls).toEqual([[polled, { headers: { 'x-photosense-client': 'web' } }]]);
     expect(lines).toEqual(['12:00:01 Info line 1', '12:00:02 Info line 2']);
 
-    // Every second and a half, through empty answers, refusals and a lost connection alike.
-    for (const calls of [3, 4, 5]) {
+    for (const calls of [2, 3, 4]) {
       await vi.advanceTimersByTimeAsync(1500);
       expect(fetchMock).toHaveBeenCalledTimes(calls);
       expect(lines).toHaveLength(2);
     }
     await vi.advanceTimersByTimeAsync(1500);
     expect(lines).toEqual(['12:00:01 Info line 1', '12:00:02 Info line 2', '12:00:03 Info line 3']);
-    expect(hub.connections).toHaveLength(0);
 
     // Dismissed between two polls: the one already scheduled does nothing.
     dispose();
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
-  it('is polled for when the hub is offered but cannot be reached', async () => {
-    fetchMock
-      .mockImplementationOnce(async () => reply(hubOffer))
-      .mockImplementation(async () => reply({ items: [line(1)] }));
-    hub.startError = new Error('WebSocket failed to connect');
-    const api = await load();
-    const lines: string[] = [];
-
-    const dispose = api.connectLogStream(l => lines.push(l));
-    await settle();
-
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([negotiate, polled]);
-    expect(lines).toEqual(['12:00:01 Info line 1']);
-    dispose();
-  });
-
-  it('stops being polled for when dismissed while a poll is in flight', async () => {
+  it('stops being asked for when dismissed while a poll is in flight', async () => {
     const poll = deferred<Response>();
-    fetchMock
-      .mockImplementationOnce(async () => reply(undefined, 500))
-      .mockReturnValueOnce(poll.promise);
+    fetchMock.mockReturnValueOnce(poll.promise);
     const api = await load();
 
     const dispose = api.connectLogStream(() => undefined);
-    await settle();
     dispose();
     poll.resolve(reply({ items: [] }));
-    await vi.advanceTimersByTimeAsync(10_000);
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('is never polled for when dismissed before the hub was refused', async () => {
-    const offer = deferred<Response>();
-    fetchMock.mockReturnValue(offer.promise);
-    const api = await load();
-
-    const dispose = api.connectLogStream(() => undefined);
-    dispose();
-    offer.resolve(reply(undefined, 500));
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it('is asked for beside wherever the service lives', async () => {
+  it('is asked for where the rest of the service is', async () => {
     answering(undefined, 500);
     const api = await load({ base: 'https://photos.example/backend' });
 
@@ -532,6 +440,6 @@ describe('the log stream', () => {
     await settle();
     dispose();
 
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual(['https://photos.example/backend/api/scan/logs/negotiate', 'https://photos.example/backend/api/scan/logs?limit=200']);
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual(['https://photos.example/backend/scan/logs?limit=200']);
   });
 });

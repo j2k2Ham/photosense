@@ -9,7 +9,8 @@ Cross-platform photo duplicate & near-duplicate detection.
 | `PhotoSense.Domain` | Core entities, value objects & services abstractions |
 | `PhotoSense.Application` | Application use-cases / orchestration (scanning, grouping) |
 | `PhotoSense.Infrastructure` | Persistence, hashing & metadata extraction implementations |
-| `PhotoSense.Functions` | Azure Functions HTTP endpoints / background scan |
+| `PhotoSense.Api` | The service's endpoints, apart from any one program that serves them |
+| `PhotoSense.Server` | The service as one program for a Windows or Mac computer (ASP.NET Core) |
 | `PhotoSense.Contracts` | The JSON shapes the service sends to the UI |
 | `PhotoSense.ReactUI` | Next.js (React) web client |
 | `PhotoSense.Tests` | Automated tests of everything above the UI |
@@ -28,11 +29,15 @@ The page fits whatever window it is in, and follows a window as it is resized. F
 - The large windows (comparing, previewing a move, names already taken, the guide, the map) fill the screen, with their details under the picture instead of beside it.
 - The header keeps the logo, **Clean up | Organize**, the errors and the menu; the scanned folders' chip is in the menu as **Change folders or rescan**.
 
-Opening PhotoSense from a phone needs more than the layout: as set up, the UI asks for the service at `http://localhost:7071/api`, which on a phone is the phone itself, and the service lets only `http://localhost:3000` call it (`Host:CORS`). Reaching it from another device means serving both on the computer's network address, with `NEXT_PUBLIC_API_BASE` and the CORS list changed to match, and `PHOTOSENSE_API_KEY` set so that other devices on the network cannot use the service: it has no other login.
+Opening PhotoSense from a phone needs more than the layout: as set up, the UI asks for the service at `http://localhost:7071/api`, which on a phone is the phone itself, and the service lets only `http://localhost:3000` call it (`Cors:Origins` in `PhotoSense.Server/appsettings.json`). Reaching it from another device means serving both on the computer's network address, with `NEXT_PUBLIC_API_BASE` and the CORS list changed to match, and `PHOTOSENSE_API_KEY` set so that other devices on the network cannot use the service: it has no other login.
 
 ## The UI and the service
 
-The React UI (`PhotoSense.ReactUI`) fetches everything over REST from the Functions service, with SWR polling for scan progress and group listings. What they exchange is plain JSON mirroring the DTOs in `PhotoSense.Contracts`; the UI keeps its own `types.ts` in step with them. When adding a field, update both.
+The React UI (`PhotoSense.ReactUI`) fetches everything over REST from the service, with SWR polling for scan progress and group listings. What they exchange is plain JSON mirroring the DTOs in `PhotoSense.Contracts`; the UI keeps its own `types.ts` in step with them. When adding a field, update both.
+
+The service is one ASP.NET Core program, `PhotoSense.Server`. It hands every request below `/api` to the endpoints in `PhotoSense.Api` (`PhotoSenseRoutes` lists every address), and serves the page itself when the page has been built into it (see *One program for a computer* below). The endpoints know nothing of the program that serves them: they read an `ApiRequest` and write an `ApiResponse`, so that an app on a phone can later answer the same page at the same addresses with the same code.
+
+A scan runs in the background of the program, one at a time (`ScanRunner`); its progress is held in memory, as before. A scan that the program's stopping cuts short is not carried on when it starts again: scan again, and the files already read are skipped.
 
 ## Running the React UI
 
@@ -45,10 +50,10 @@ npm run dev
 Environment vars:
 
 ```bash
-export NEXT_PUBLIC_API_BASE=http://localhost:7071/api   # Azure Functions / API base
+export NEXT_PUBLIC_API_BASE=http://localhost:7071/api   # where the service is
 ```
 
-The API the UI uses (Functions host, `http://localhost:7071/api`):
+The API the UI uses (the service, `http://localhost:7071/api`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -77,11 +82,15 @@ The API the UI uses (Functions host, `http://localhost:7071/api`):
 | `/removed?root=&root=` | GET | The `_PhotoSense_Removed` folders that hold files, with how much is in each: `{ folders: [{ path, files, bytes }], files, bytes }`. Looked for at any depth inside the folders given and inside every folder a scan on record covered, and wherever Organize put removed files |
 | `/removed/erase` | POST | Erase everything in those folders, and the folders. Body `{ folders: [path] }`, the paths as `/removed` listed them; returns `{ erased, bytes, skipped, problems }`. This is the one request that erases files. A path that is not a folder named `_PhotoSense_Removed` is refused with 400, and nothing is erased then |
 
-Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the photo listings (`/photos`, `/photos/{id}`), the scan log (`/scan/logs` and its negotiation and stream) and `/outbox/dispatch`, as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the Functions host only grants cross-origin access to the UI's address, set under `Host:CORS` in `PhotoSense.Functions/local.settings.json`. If you serve the UI from another port, add that address there.
+Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the photo listings (`/photos`, `/photos/{id}`), the scan log (`/scan/logs` and its stream) and `/outbox/dispatch`, as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the service only grants cross-origin access to the UI's address, listed under `Cors:Origins` in `PhotoSense.Server/appsettings.json` (or given as `--Cors:Origins:0=<address>`). `dev-start.ps1` tells the service the port it gave the UI. A page the service serves itself is at its own address and needs no listing.
 
 ### Choosing the folders to scan
 
 A scan needs each folder's full path as the service sees it. The **Browse** button beside a path opens a folder browser that lists the folders of the computer the service runs on and fills in the full path of the one chosen; a path can also be typed or pasted. (A browser's own folder dialog is no use here: it tells a web page the name of the folder that was picked and never where it is.)
+
+A photo program's own library is never offered, looked inside or scanned, even when the folder it is in is: "Photos Library.photoslibrary" in a Mac's Pictures folder, an iPhoto or Aperture library, Photo Booth's. What is inside belongs to that program's database, and a file moved or removed from outside it would break the library.
+
+On a Mac, the disks offered are the whole disk ("Computer") and the disks under `/Volumes`, plugged in or shared; the system's own volumes are left out.
 
 One folder is enough: copies inside it, in the folder itself or in its subfolders, are found. The secondary folder is for comparing a second place with the first, a backup for instance. Giving the same folder as both changes nothing: it is scanned once, the setup screen says so, and a file is never matched with itself.
 
@@ -117,7 +126,7 @@ The database (`photosense.db`) and the thumbnail cache are kept in a folder of y
 
 Set `PhotoStorage__DatabasePath` to an absolute path to keep the database elsewhere, and `PhotoStorage__ThumbnailPath` for the thumbnails (by default a folder beside the database). A path that is not absolute is taken from the folder above. Deleting the folder forgets every scan; the photos themselves are not touched.
 
-The data must not be inside the folder the service runs from (`PhotoSense.Functions/bin/...`), and the service refuses to start a database there. The Functions host watches that folder and restarts itself when a folder appears in it, as a thumbnail cache does on a scan's first picture; after such a restart it answers every request with an error while the scan carries on unseen.
+The data must not be inside the folder the service runs from (`PhotoSense.Server/bin/...`, or the folder of a published program), and the service refuses to start a database there: a rebuild, or a newer copy of the program put in its place, would take the data with it.
 
 If the service does stop answering, the page says so in a bar under the header, with a Retry button, since what is already on screen stays there. Every error is also kept in the Errors panel (the menu, or the red chip in the header) until it is cleared.
 
@@ -141,7 +150,7 @@ Within a group the keeper is chosen by resolution first, then format, then intac
 
 When the same picture exists at the same resolution as both a HEIC and a JPEG, the JPEG is kept, because it opens on anything. A lossless file (PNG, TIFF, BMP) is kept ahead of either.
 
-To keep the HEIC instead, set `PhotoStorage__KeepFormat` to `CameraOriginal` (under `Values` in `PhotoSense.Functions/local.settings.json`, or as an environment variable) and restart the service. The HEIC is the file the phone wrote, the JPEG a conversion made from it, and the HEIC is usually about half the size. The default is `WidelyCompatible`. Nothing needs scanning again; the choice is applied when groups are worked out.
+To keep the HEIC instead, set `PhotoStorage__KeepFormat` to `CameraOriginal` (as an environment variable, or under `PhotoStorage` in `PhotoSense.Server/appsettings.json`) and restart the service. The HEIC is the file the phone wrote, the JPEG a conversion made from it, and the HEIC is usually about half the size. The default is `WidelyCompatible`. Nothing needs scanning again; the choice is applied when groups are worked out.
 
 PhotoSense shows HEIC pictures itself, whatever the computer can open. Outside it, Windows opens HEIC files only once the free "HEIF Image Extensions" and the "HEVC Video Extensions" are installed from the Microsoft Store; without both, Photos and Explorer previews show nothing. macOS and iOS open them as they are.
 
@@ -228,14 +237,14 @@ Decoding is done with Magick.NET. iPhone HEIC files decode slowly (about a secon
 ## Adding New API Fields
 
 1. Add property in the relevant Application DTO / event.
-2. Update serialization in the API layer (Functions controller or minimal API endpoint).
+2. Fill it in in the endpoint in `PhotoSense.Api` that sends it.
 3. Update `PhotoSense.ReactUI/types.ts` & adjust component rendering.
 
 ## Development Notes
 
 - TailwindCSS powers the new React UI styling.
 - `swr` provides lightweight polling + cache for scan progress & groups.
-- Components are intentionally stateless where possible; future real-time updates (WebSockets / SignalR / Azure Web PubSub) can push into a simple event bus hook.
+- Components are intentionally stateless where possible.
 
 ## Tests & Coverage
 
@@ -273,27 +282,42 @@ npm run test:watch      # again on every change
 npm run test:coverage   # once, with coverage; fails below 100%
 ```
 
-The tests are in `PhotoSense.ReactUI/tests`, laid out like the code they cover (`app`, `components`, `lib`). They run in Vitest with Testing Library, against jsdom rather than a real browser, so nothing needs to be running: the service is stood in for by `tests/fixtures.ts` and the log hub by `tests/fakeSignalR.ts`.
+The tests are in `PhotoSense.ReactUI/tests`, laid out like the code they cover (`app`, `components`, `lib`). They run in Vitest with Testing Library, against jsdom rather than a real browser, so nothing needs to be running: the service is stood in for by `tests/fixtures.ts`, and `tests/deferred.ts` holds a request open for as long as a test needs.
 
 Coverage is measured with Istanbul over `app`, `components` and `lib`, and `vitest.config.ts` fails the run when statements, branches, functions or lines fall below 100%. CI runs it as well, before building the UI. Istanbul counts each arm of an `if` or a ternary and each operand of `&&`, `||` and `??` that is reached; `?.` is not counted as a branch. The HTML report is written to `PhotoSense.ReactUI/coverage`.
 
-## Quick Local Run (Functions + React)
+## Quick Local Run (service + React)
 
-Needs the .NET 10 SDK (every project targets `net10.0`, and `global.json` asks for a 10.0 SDK), Node, Azure Functions Core Tools v4 and Azurite.
+Needs the .NET 10 SDK (every project targets `net10.0`, and `global.json` asks for a 10.0 SDK) and Node. Nothing else: no emulator, no Functions tools. On a Mac, the script needs PowerShell 7 (`brew install --cask powershell`) and is started as `pwsh ./dev-start.ps1`.
 
-Use the PowerShell helper script to spin up the Azure Functions host and the React (Next.js) UI:
+The PowerShell helper script builds the service and starts it with the React (Next.js) UI:
 
 ```powershell
-./dev-start.ps1             # build + start Functions + React UI
+./dev-start.ps1             # build + start the service + React UI
 ./dev-start.ps1 -Open       # also open browser to http://localhost:3000
-./dev-start.ps1 -FunctionsPort 7072
+./dev-start.ps1 -ServicePort 7072
 ./dev-start.ps1 -NoBuild    # skip build for faster restart
 ./dev-start.ps1 -Clean      # clean then build
 ```
 
-To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./dev-start.ps1 -Stop` from any terminal. To restart it, run `./dev-start.ps1` again: it first stops a copy that is still running, since two cannot share the ports and a running service keeps its program files locked against the build. Only PhotoSense's own processes are stopped; if some other program has the UI's port, the UI takes the next free one and the service is told to accept it there.
+To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./dev-start.ps1 -Stop` from any terminal. To restart it, run `./dev-start.ps1` again: it first stops a copy that is still running, since two cannot share the ports and a running service keeps its program files locked against the build. Only PhotoSense's own processes are stopped, an older copy that still runs on Azure Functions among them; if some other program has the UI's port, the UI takes the next free one and the service is told to accept it there.
 
-The scan runs as a Durable Functions activity, which needs the Azurite storage emulator. The script starts it when nothing is listening on port 10000 and `azurite` is on PATH (`npm install -g azurite`); `docker compose -f docker-compose.azurite.yml up` works too.
+`dotnet run --project PhotoSense.Server` starts the service on its own, at `http://localhost:7071`.
+
+## One program for a computer (Windows or Mac)
+
+`publish.ps1` builds PhotoSense as one program: the service, with .NET inside it so that nothing need be installed, and the page beside it in `wwwroot`. Start the program and open `http://localhost:7071`; the page and the service are at the one address, and no other server is needed.
+
+```powershell
+./publish.ps1                        # for the system this runs on
+./publish.ps1 -Runtime osx-arm64     # a Mac with Apple silicon (M1 and later)
+./publish.ps1 -Runtime osx-x64       # an Intel Mac
+./publish.ps1 -Runtime win-x64       # Windows
+```
+
+The program goes to `publish/<runtime>`: `PhotoSense.Server.exe` on Windows, `PhotoSense.Server` on a Mac. A Mac build can be made on Windows. It is not signed, so the first time macOS asks before running it: Control-click it in Finder and choose Open, or clear the mark with `xattr -dr com.apple.quarantine <the folder>`.
+
+CI builds and tests the service on Windows and on macOS as well as on Linux, and on both of those publishes the program, starts it and asks it for the page and for `/api/health`.
 
 ## VS Code Tasks
 
@@ -302,13 +326,14 @@ Common tasks are defined in `.vscode/tasks.json`:
 | Task | Purpose |
 |------|---------|
 | `build:solution` | Build all projects |
-| `run:functions (core tools)` | Start Functions host (port 7071) |
+| `build (service)` | Build the service (the default build task) |
+| `run:service` | Start the service (port 7071) |
 | `run:react` | Start React UI (Next.js dev server) |
-| `run:functions (core tools)` | Start Functions host (port 7071) |
-| `run:functions+react` | Combined startup via dev-start script |
+| `run:service+react` | Combined startup via dev-start script |
 | `dev:start` | Same as combined (opens browser) |
+| `publish:program` | Build the one program for this computer (`publish.ps1`) |
 
-Run via the VS Code command palette: `Tasks: Run Task`.
+Run via the VS Code command palette: `Tasks: Run Task`. `.vscode/launch.json` starts the service under the debugger, or attaches to one that runs.
 
 ## Contracts NuGet Package
 
@@ -324,22 +349,9 @@ dotnet nuget push PhotoSense.Contracts\bin\Debug\PhotoSense.Contracts.0.1.0-alph
 
 Next version: bump `<Version>` inside `PhotoSense.Contracts.csproj` (semantic versioning recommended).
 
-## SignalR (Planned Real-time Logs)
+## The scan log
 
-There are two mechanisms for consuming scan log lines:
-
-1. REST Polling (always on): `GET /api/scan/logs` returns and drains queued log events. Like the negotiation below, it answers only requests that carry the `x-photosense-client` header.
-2. SignalR (optional): Behind `ENABLE_SIGNALR`, a negotiation endpoint `POST|GET /api/scan/logs/negotiate` plus a timer-driven broadcast (`BroadcastScanLogs`) attempts to push logs to hub `scanlogs` every 5s.
-
-The broadcast is switched off in `local.settings.json` (`AzureWebJobs.BroadcastScanLogs.Disabled`). Without an Azure SignalR connection string it fails every 5 seconds and throws away the log lines it took from the queue, so the polling endpoint would show only some of them. Remove that setting once `AzureSignalRConnectionString` is configured.
-
-If the SignalR broadcast build fails (API drift in extension package), the REST polling endpoint remains a stable fallback. The broadcast currently uses a tentative `[SignalROutput]` pattern returning an array of message objects `{ target, arguments }`.
-
-To experiment:
-
-1. Add `ENABLE_SIGNALR` constant in Functions project.
-2. Run `func start` and hit negotiate to retrieve connection info.
-3. From React UI, establish a HubConnection to the `scanlogs` hub and listen to the `log` target.
+The setup screen shows the scan's log as it comes in, by asking the service for the lines logged since it last asked. That request answers only requests that carry the `x-photosense-client` header.
 
 ### Log Retrieval API (Polling)
 
@@ -365,7 +377,7 @@ Behavior:
 
 ### In the UI
 
-`connectLogStream` in `PhotoSense.ReactUI/lib/apiClient.ts` follows the log for the setup screen: over SignalR where the negotiate call succeeds, otherwise by asking the REST endpoint again every few seconds.
+`connectLogStream` in `PhotoSense.ReactUI/lib/apiClient.ts` follows the log for the setup screen, asking the endpoint above every second and a half.
 
 ### Future Enhancements
 

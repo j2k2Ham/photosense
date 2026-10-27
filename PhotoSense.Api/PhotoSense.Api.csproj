@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The service's endpoints, apart from any one program that serves them: the service on a computer
+       hands its requests here, and so can an app on a phone. Nothing here may need a particular host or system. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
+    <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
+    <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
+  </ItemGroup>
+</Project>

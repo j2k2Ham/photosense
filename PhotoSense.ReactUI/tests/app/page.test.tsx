@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePage from '../../app/page';
 import { saveLastScan, saveOrganizeRoot } from '../../lib/lastScan';
 import type { EraseRemovedDto, GroupMode, GroupsPageDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 import { group, groupsPage, member, photo } from '../fixtures';
 
 const api = vi.hoisted(() => ({

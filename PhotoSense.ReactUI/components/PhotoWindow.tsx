@@ -202,7 +202,7 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
               ) : (
                 <button type="button" disabled={busy} onClick={() => setConfirm('copy')} className="pill-rose h-[46px] text-[14.5px]">Delete this copy · {formatBytes(copy.fileSizeBytes)}</button>
               )}
-              <p className="text-[12.5px] text-t3">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder. Move them back to restore them.</p>
+              <p className="text-[12.5px] text-t3">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder, and Undo puts them back.</p>
 
               {confirm === 'original' ? (
                 <div className="rounded-[14px] bg-s2 p-3.5 text-[13.5px]">

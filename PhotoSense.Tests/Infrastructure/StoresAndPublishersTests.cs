@@ -7,7 +7,7 @@ using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Events;
 using PhotoSense.Infrastructure.Persistence;
-using PhotoSense.Infrastructure.Scanning;
+using PhotoSense.Application.Scanning;
 
 namespace PhotoSense.Tests.Infrastructure;
 

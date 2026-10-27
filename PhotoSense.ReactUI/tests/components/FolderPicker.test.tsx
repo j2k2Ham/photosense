@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FolderPicker } from '../../components/FolderPicker';
 import type { FolderListingDto } from '../../types';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 
 const api = vi.hoisted(() => ({ browseFolders: vi.fn() }));
 vi.mock('../../lib/apiClient', () => ({ browseFolders: api.browseFolders }));

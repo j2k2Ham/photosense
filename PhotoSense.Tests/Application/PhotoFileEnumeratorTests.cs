@@ -90,4 +90,17 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
         if (denied is null) return; // nothing is out of reach of the account running this
         await Assert.That(Names(recursive: true)).IsEquivalentTo(["a.jpg", "c.jpg"], CollectionOrdering.Matching);
     }
+
+    [Test]
+    public async Task Never_Looks_Inside_A_Photo_Programs_Own_Library()
+    {
+        Touch("a.jpg");
+        Touch("Photos Library.photoslibrary", "originals", "0", "b.heic");
+        Touch("iPhoto Library", "c.jpg");
+
+        await Assert.That(Names(recursive: true)).IsEquivalentTo(new[] { "a.jpg" }, CollectionOrdering.Matching);
+        // Nor when it is the folder asked for, or a folder inside it.
+        await Assert.That(PhotoFileEnumerator.Enumerate(Path.Combine(_root.FullName, "Photos Library.photoslibrary"), recursive: true)).IsEmpty();
+        await Assert.That(PhotoFileEnumerator.Enumerate(Path.Combine(_root.FullName, "Photos Library.photoslibrary", "originals"), recursive: true)).IsEmpty();
+    }
 }

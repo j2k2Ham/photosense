@@ -1,5 +1,4 @@
 import useSWR, { mutate } from 'swr';
-import * as signalR from '@microsoft/signalr';
 import type {
   BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
@@ -69,51 +68,25 @@ export async function prefetchGroups(mode: GroupMode, filter: string, page: numb
   }
 }
 
-/** Follows the scan's log: over SignalR where the service offers it, otherwise by asking again every few seconds. */
+/** Follows the scan's log, asking every second and a half for the lines logged since it last asked. */
 export function connectLogStream(onLine: (l: string)=>void) {
-  const baseRoot = API_BASE.replace(/\/api$/,'');
   let disposed = false;
-  let conn: signalR.HubConnection | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
-  (async () => {
+  const poll = async () => {
     try {
-      // Updated negotiate route path to match backend (scan/logs/negotiate)
-      const r = await fetch(`${baseRoot}/api/scan/logs/negotiate`, { method: 'POST', headers: authHeaders });
-      if (!r.ok) throw new Error('negotiate failed');
-      const info = await r.json();
-      if (disposed) return;
-      conn = new signalR.HubConnectionBuilder()
-        .withUrl(info.url, { accessTokenFactory: () => info.accessToken })
-        .withAutomaticReconnect()
-        .build();
-      conn.on('log', (_instanceId: string, ts: string, level: string, msg: string) => {
-        onLine(`${ts} ${level} ${msg}`);
-      });
-      await conn.start();
-    } catch {
-      if (disposed) return;
-      // Fallback to simple polling REST endpoint as SSE stream not implemented.
-      const poll = async () => {
-        try {
-          const res = await fetch(`${baseRoot}/api/scan/logs?limit=200`, { headers: authHeaders });
-          if (res.ok) {
-            const json = await res.json();
-            for (const i of json.items ?? []) {
-              onLine(`${i.timestamp} ${i.level} ${i.message}`);
-            }
-          }
-        } catch {/* ignore */}
-        // Dismissed while this poll was in flight: it was the last.
-        if (!disposed) pollTimer = setTimeout(poll, 1500);
-      };
-      poll();
-    }
-  })();
+      const res = await fetch(`${API_BASE}/scan/logs?limit=200`, { headers: authHeaders });
+      if (res.ok) {
+        const json = await res.json();
+        for (const i of json.items ?? []) onLine(`${i.timestamp} ${i.level} ${i.message}`);
+      }
+    } catch {/* asked again in a moment */}
+    // Dismissed while this poll was in flight: it was the last.
+    if (!disposed) pollTimer = setTimeout(poll, 1500);
+  };
+  void poll();
   return () => {
     disposed = true;
     clearTimeout(pollTimer);
-    // A connection that never opened, or has already closed, has nothing left to stop.
-    conn?.stop().catch(() => undefined);
   };
 }
 

@@ -6,7 +6,7 @@ import { MovePreview } from '../../components/organize/MovePreview';
 import { NameClashWindow } from '../../components/organize/NameClashWindow';
 import { resolveNames, type Clash } from '../../lib/organize';
 import type { OrganizeDestination, OrganizeFileDto, OrganizePlanDto, OrganizePlanFile } from '../../types';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 import { organizeFile as file } from '../fixtures';
 
 const api = vi.hoisted(() => ({ planOrganize: vi.fn(), browseFolders: vi.fn() }));

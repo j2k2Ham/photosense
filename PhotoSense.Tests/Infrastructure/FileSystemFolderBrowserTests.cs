@@ -141,4 +141,35 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     [Arguments(DriveType.Unknown, false)]
     public async Task Only_Drives_That_People_Keep_Files_On_Are_Offered(DriveType type, bool offered)
         => await Assert.That(FileSystemFolderBrowser.HoldsFiles(type)).IsEqualTo(offered);
+
+    [Test]
+    public async Task A_Photo_Programs_Own_Library_Is_Not_Offered()
+    {
+        Folder("Albums");
+        Folder("Photos Library.photoslibrary", "originals");
+        Folder("Photo Booth Library");
+
+        await Assert.That(_browser.Browse(_root.FullName).Folders.Select(f => f.Name)).IsEquivalentTo(new[] { "Albums" }, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task On_Windows_Every_Disk_With_A_Letter_Is_Offered_Under_It()
+    {
+        var disks = FileSystemFolderBrowser.Disks([("C:\\", DriveType.Fixed), ("D:\\", DriveType.CDRom), ("F:\\", DriveType.Removable)], windows: true);
+        await Assert.That(disks).IsEquivalentTo(new[] { ("C:\\", "C:\\"), ("F:\\", "F:\\") }, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task On_A_Mac_The_Whole_Disk_And_The_Disks_Plugged_In_Or_Shared_Are_Offered_And_Not_The_Systems_Own_Volumes()
+    {
+        var disks = FileSystemFolderBrowser.Disks(
+        [
+            ("/", DriveType.Fixed), ("/dev", DriveType.Ram), ("/System/Volumes/Data", DriveType.Fixed), ("/System/Volumes/VM", DriveType.Fixed),
+            ("/private/var/vm", DriveType.Fixed), ("/Volumes/PC_backup", DriveType.Removable), ("/Volumes/photos", DriveType.Network),
+            ("/Volumes/Install macOS", DriveType.CDRom), ("/media/jamie/Card/", DriveType.Removable),
+        ], windows: false);
+
+        await Assert.That(disks).IsEquivalentTo(new[] { ("Computer", "/"), ("PC_backup", "/Volumes/PC_backup"), ("photos", "/Volumes/photos"), ("Card", "/media/jamie/Card/") },
+            CollectionOrdering.Matching);
+    }
 }

@@ -59,7 +59,8 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
   const [plan, setPlan] = useState<OrganizePlanDto>();
   const [problem, setProblem] = useState<string>();
 
-  const named = direct ? { name: '' } : checkFolderName(name);
+  // Typed as the check's answer, so that every kind of answer is known to say whether there is an error.
+  const named: ReturnType<typeof checkFolderName> = direct ? { name: '' } : checkFolderName(name);
   const folderName = named.error === undefined ? named.name : undefined;
   const basePath = base ?? root, copy = mode === 'copy';
   const asked = useMemo(() => files.map(f => ({ id: f.id, subfolder: subfolderOf?.(f) })), [files, subfolderOf]);

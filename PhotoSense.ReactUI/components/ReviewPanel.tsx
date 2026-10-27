@@ -118,7 +118,7 @@ export function ReviewPanel({ group, mode, busy, copyIndex, onSelectCopy, onComp
           <p className="text-[13.5px] text-t2 lg:text-[14px]">
             {similar ? 'A burst frame or an edited version. Never removed along with the duplicates.' : <>Original preferred: <span className="font-medium text-keep">{member.keeperReason}</span></>}
           </p>
-          <p className="mt-0.5 hidden text-[12.5px] text-t3 sm:block">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder. Move them back to restore them.</p>
+          <p className="mt-0.5 hidden text-[12.5px] text-t3 sm:block">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder, and Undo puts them back.</p>
         </div>
         {!similar && (
           <button type="button" disabled={busy} onClick={() => onToggleKeep(copy)} className={`pill-keep h-11 px-5 text-[14.5px] max-sm:flex-1 ${copy.kept ? 'bg-keep-bg' : ''}`}>

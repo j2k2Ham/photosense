@@ -9,7 +9,8 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 | `PhotoSense.Domain` | Entities, value objects, store and service interfaces, `PhotoStorageOptions` |
 | `PhotoSense.Application` | Scanning, grouping and removal (`Scanning/`), Organize (`Organizing/`), erasing removed files (`Removal/`) |
 | `PhotoSense.Infrastructure` | LiteDB stores, hashing, Magick.NET imaging, metadata, place names (GeoNames), deletion, folder browsing |
-| `PhotoSense.Functions` | Azure Functions isolated worker: HTTP endpoints in `Api/` and `Scanning/`, DI in `Program.cs` (`AddPhotoSenseCore`) |
+| `PhotoSense.Api` | The endpoints, apart from any host: `Endpoints/`, `Scanning/` (with `ScanRunner`), the route table `PhotoSenseRoutes`, and `Http/` (`ApiRequest`, `ApiResponse`, `ApiRouter`) |
+| `PhotoSense.Server` | The service as one ASP.NET Core program: `PhotoSenseServer` (CORS, the bundled page, `/api` to `ApiBridge`), DI in `PhotoSenseServices.cs` (`AddPhotoSenseCore`, `AddPhotoSenseApi`) |
 | `PhotoSense.Contracts` | JSON DTOs sent to the UI; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
 | `PhotoSense.ReactUI` | Next.js 14 / React 18 / SWR / Tailwind UI: `app/page.tsx`, `components/`, `components/organize/`, `lib/` |
 | `PhotoSense.Tests` | TUnit tests of everything except the UI |
@@ -18,8 +19,8 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## Architecture and stack
 
-- **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Functions` as the host that wires them together. Domain and Application never reference Infrastructure or Functions; new storage or OS access goes behind an interface in Domain.
-- **.NET 10**, Azure Functions isolated worker with Durable Functions and SignalR. Not ASP.NET Core minimal APIs: endpoints are `[Function]` methods on `HttpRequestData`.
+- **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Server` as the host that wires them together. `PhotoSense.Api` depends on Domain, Application and Contracts only, never on Infrastructure or ASP.NET Core, because the phone app will serve the same endpoints. Domain and Application never reference Infrastructure or a host; new storage or OS access goes behind an interface in Domain.
+- **.NET 10**, one ASP.NET Core program (`PhotoSense.Server`), no Azure Functions, Azurite or SignalR. Not minimal APIs or controllers: endpoints are methods taking an `ApiRequest` and returning an `ApiResponse`, and every address is listed in `PhotoSenseRoutes`.
 - **Storage:** LiteDB in one file. No EF Core, no SQL server, no migrations.
 - **Auth:** none. The service runs on the user's own machine; `RequestGuard` is the only gate (see Service patterns). No JWT, OIDC or cookies.
 - **Tests:** TUnit with Moq and coverlet (`coverlet.MTP`), not xUnit, FluentAssertions or Testcontainers.
@@ -28,12 +29,12 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## Running and testing
 
-- **Run the app the way Jamie does:** `./dev-start.ps1` from the repo root. It builds, starts Azurite (port 10000), the Functions host (7071) and the UI (3000). `./dev-start.ps1 -Stop` stops a running copy; Ctrl+C in its terminal also stops everything. The UI hot-reloads source changes; the service does not, so service changes need a restart.
+- **Run the app the way Jamie does:** `./dev-start.ps1` from the repo root. It builds and starts the service (7071) and the UI (3000); on a Mac it runs in PowerShell 7 as `pwsh ./dev-start.ps1`. `./dev-start.ps1 -Stop` stops a running copy; Ctrl+C in its terminal also stops everything. The UI hot-reloads source changes; the service does not, so service changes need a restart.
 - **Data** lives in `%LOCALAPPDATA%\PhotoSense` (`photosense.db`, thumbnails), never under `bin`. The options validator refuses a data folder inside the program folder.
 - **Build:** `dotnet build PhotoSense.sln -c Release -nodeReuse:false -warnaserror`. CI builds with warnings as errors, so build that way locally.
 - **Service tests (TUnit, a program of its own):** `dotnet run --project PhotoSense.Tests -c Release`. One class: append `-- --treenode-filter "/*/*/ClassName/*"`. Coverage: append `-- --coverlet --coverlet-output-format opencover --coverlet-include "[PhotoSense.*]*" --coverlet-exclude "[PhotoSense.Tests]*" --coverlet-exclude-by-file "**/*.g.cs" --results-directory PhotoSense.Tests/coverage`.
 - **UI tests (Vitest + Testing Library + jsdom):** in `PhotoSense.ReactUI`, `npm test`, or `npm run test:coverage`, which fails below 100%. Type-check with `npx tsc --noEmit`, then delete the `tsconfig.tsbuildinfo` it leaves.
-- **CI** (`.github/workflows/ci.yml`) runs on Ubuntu for pushes and pull requests to `main`/`master`: build, UI tests with coverage, `npm run build`, service tests with coverage. The feature branches have never been through it. Some service tests that hold a file open to make it fail were only ever run on Windows.
+- **CI** (`.github/workflows/ci.yml`) runs on Ubuntu for pushes and pull requests to `main`/`master`: build, UI tests with coverage, `npm run build`, service tests with coverage; a second job builds and tests the service on Windows and macOS, publishes it as one program (`publish.ps1`), starts it and asks it for the page and `/api/health`. The feature branches have never been through it. Some service tests that hold a file open to make it fail were only ever run on Windows.
 
 ## Rules
 
@@ -66,14 +67,14 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## Service patterns
 
-- **Isolated worker:** services reach a function class only through its constructor (a method parameter arrives as null). Register new services in `AddPhotoSenseCore`; a factory lambda is used where a constructor has optional parameters.
+- **Registering:** endpoint classes get their services through the constructor. Register services in `AddPhotoSenseCore` and endpoint classes in `AddPhotoSenseApi`; a factory lambda is used where a constructor has optional parameters. Add each address to `PhotoSenseRoutes`, a literal address before one a parameter could match (`scan/logs` before `scan/logs/{instanceId?}`).
 - **Request guard:** an endpoint that reveals or changes someone's files checks `RequestGuard.Allows(req.Headers)` first (the `x-photosense-client` header, which other web pages cannot send). Refusals carry a plain-text reason and a status that says whose fault it is.
-- **Status codes:** set them *after* `WriteAsJsonAsync`, which resets them to 200.
+- **Answers:** `ApiResponse` keeps the status it is given, before or after writing, and writes JSON with property names as declared (not camelCase), as the Functions host did and the page expects.
 - **LiteDB:** one shared `LiteDatabase`. Each store's constructor calls `LiteDbMapping.Prepare<T>()` for every mapped type before first use; LiteDB 5 otherwise fails now and then when two stores are first made together.
 - **Paths:** compare file paths with `PhotoPath.Key` / `PhotoPath.Comparer`, which are case-blind on Windows and macOS and case-sensitive on Linux.
 - **Organize file ids:** an HMAC of the path with a key made per run of the service, so a request can never name a path of its own choosing.
 - **Testability seams:** code that would ask the OS or the disk takes that as an argument so every branch runs on one OS, as in `PhotoPath.Key(path, ignoreCase)` and `RemovedFiles(..., eraseFile)`. Prefer a seam like that to a test that depends on Windows file locking.
-- **Scan state:** scans run as Durable Functions orchestrations, with progress held in memory (`InMemoryScanProgressStore`). `/scan/status` reports the scan running now, and the page follows a running scan even after a reload.
+- **Scan state:** scans run in the background through `ScanRunner`, one at a time, with progress held in memory (`InMemoryScanProgressStore`); one cut short by a stop is not resumed. `/scan/status` reports the scan running now, and the page follows a running scan even after a reload.
 
 ## UI patterns
 
@@ -94,11 +95,12 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
   - Tests run in parallel, even within a class; shared static state needs `[NotInParallel("key")]`.
 - **Service helpers:**
   - `OrganizeFixture` (`Tests/Application/OrganizeTesting.cs`) gives a temp folder, an in-memory repository, the Organize services, `Mover()` and `Removed()`.
-  - `FakeHttpRequest` with `.FromClient()` builds HTTP requests for endpoint tests.
+  - `Http.Get/Post/Delete(...)` with `.FromClient()` (`Tests/Endpoints/ApiTesting.cs`) build requests for endpoint tests; `ServerFixture` gives the service's registrations on a data folder of its own.
+  - `ChangesFixture` and `FailingDisk` (`Tests/Application/ChangesTesting.cs`) make a move, copy or deletion fail at an exact moment on any system.
   - `TestFiles` has `LinkFolder` and `DenyAccess`.
 - **UI tests:**
   - Tests live in `tests/`, mirroring `app`, `components` and `lib`.
-  - `lib/apiClient` is mocked with `vi.hoisted` plus `vi.mock(..., importOriginal)`. Fixtures are in `tests/fixtures.ts`; `deferred` is in `tests/fakeSignalR.ts`.
+  - `lib/apiClient` is mocked with `vi.hoisted` plus `vi.mock(..., importOriginal)`. Fixtures are in `tests/fixtures.ts`; `deferred` is in `tests/deferred.ts`.
   - Istanbul counts each arm of `if`, ternaries, `&&`, `||`, `??` and default parameter values, but not `?.`.
   - Test names are plain sentences that say what the user sees ("asks first, then takes the files off the page at once and offers to put them back").
 
@@ -119,7 +121,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 - Multi-line heredocs with quotes or backslashes often break in the Bash tool. Write the script to the session scratchpad and run it with `python -I path`.
 - `rm -rf` follows junctions. Never link a scratch UI copy to the repo's `node_modules`; give it its own `npm ci`, and remove a junction only with `[IO.Directory]::Delete(path)`.
 - **Scratch copy of the app for end-to-end checks:**
-  - Service: copy `PhotoSense.Functions/bin/Release/net10.0` to the scratchpad and run `func start --port 7099 --cors http://localhost:3100`, with `PhotoStorage__DatabasePath`, `PhotoStorage__ThumbnailPath` and `AzureFunctionsJobHost__extensions__durableTask__hubName` pointing at scratch.
+  - Service: copy `PhotoSense.Server/bin/Release/net10.0` to the scratchpad and run `dotnet PhotoSense.Server.dll --urls http://localhost:7099 --Cors:Origins:0=http://localhost:3100`, with `PhotoStorage__DatabasePath` and `PhotoStorage__ThumbnailPath` pointing at scratch. Or `./publish.ps1 -Output <scratch>` and run the program there, which serves the page itself.
   - UI: robocopy `PhotoSense.ReactUI` to the scratchpad, excluding `node_modules`, `.next` and `.env.local`, run its own `npm ci`, then `npx next dev -p 3100` with `NEXT_PUBLIC_API_BASE=http://localhost:7099/api`.
   - Drive it with `playwright-core` and `chromium.launch({ channel: 'chrome' })`.
   - To see Jamie's data without touching it, point the scratch service at a *copy* of the database, and abort every non-GET request in Playwright.

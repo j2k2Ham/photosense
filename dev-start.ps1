@@ -1,15 +1,13 @@
 <#!
 .SYNOPSIS
-  Starts PhotoSense Functions (Azure Functions isolated) and React (Next.js) UI concurrently for local development.
+  Starts PhotoSense for local development: the service and the page, on Windows or on a Mac.
 
 .DESCRIPTION
   - Optionally cleans build outputs
   - Builds the service (unless -NoBuild)
-  - Starts the Azurite storage emulator if it is not already running
-  - Launches Azure Functions via 'func start' (Core Tools)
-  - Launches React UI via 'npm run dev' (Next.js)
-  - Streams logs with color differentiation
-  - Stops everything it started on Ctrl+C
+  - Starts the service (PhotoSense.Server) and the page's development server (Next.js)
+  - Streams what both print, coloured by which one printed it
+  - Stops both on Ctrl+C
   - Takes over from a copy that is still running: starting again is how to restart
 
 .PARAMETER NoBuild
@@ -18,40 +16,41 @@
 .PARAMETER Clean
   Run 'dotnet clean' before building.
 
-.PARAMETER FunctionsPort
-  Override Functions HTTP port (default 7071).
+.PARAMETER ServicePort
+  The service's port (default 7071). -FunctionsPort, its old name, still works.
 
 .PARAMETER Open
-  After startup, open the default browser to the React UI URL.
+  After startup, open the default browser to the page.
 
 .PARAMETER Stop
-  Stop a copy of PhotoSense that is running (service, UI and storage emulator), then exit.
+  Stop a copy of PhotoSense that is running, then exit.
 
 .EXAMPLE
   ./dev-start.ps1
 
 .EXAMPLE
-  ./dev-start.ps1 -FunctionsPort 7072
+  ./dev-start.ps1 -ServicePort 7072
 
 .EXAMPLE
   ./dev-start.ps1 -Stop
 
 .NOTES
-  Requires Azure Functions Core Tools v4+ available on PATH (func).
+  Needs the .NET 10 SDK and Node. Runs in PowerShell 7 (pwsh) on Windows and on a Mac, and in Windows PowerShell.
+  On a Mac, PowerShell comes from 'brew install --cask powershell'; start this with 'pwsh ./dev-start.ps1'.
 #>
 param(
   [switch]$NoBuild,
   [switch]$Clean,
-  [int]$FunctionsPort = 7071,
+  [Alias('FunctionsPort')][int]$ServicePort = 7071,
   [switch]$Open,
   [switch]$Stop,
-  [switch]$UseDotNetFunctions,
-  [int]$FunctionsRetry = 2,
   [int]$ReactBasePort = 3000,
   [int]$ReactPortScan = 10
 )
 
 $ErrorActionPreference = 'Stop'
+# Asked of .NET rather than of $IsWindows, which Windows PowerShell does not have.
+$onWindows = [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
 
 function Write-Section($msg){
   Write-Host "`n=== $msg ===" -ForegroundColor Cyan
@@ -66,14 +65,18 @@ $outputs = [System.Collections.Generic.List[hashtable]]::new()
 function Start-ProcessLogged {
   param(
     [string]$Name,
-    [string]$Command,
+    [string]$FileName,
+    [string[]]$Arguments,
     [string]$WorkingDirectory,
+    [hashtable]$Environment = @{},
     [ConsoleColor]$Color = [ConsoleColor]::Gray
   )
   $psi = New-Object System.Diagnostics.ProcessStartInfo
-  $psi.FileName = $env:ComSpec
-  $psi.Arguments = "/c $Command"
+  $psi.FileName = $FileName
+  # One string, quoted where needed, so that this also runs in Windows PowerShell, whose .NET has no ArgumentList.
+  $psi.Arguments = ($Arguments | ForEach-Object { if($_ -match '\s'){ '"' + $_ + '"' } else { $_ } }) -join ' '
   $psi.WorkingDirectory = $WorkingDirectory
+  foreach($key in $Environment.Keys){ $psi.EnvironmentVariables[$key] = $Environment[$key] }
   $psi.RedirectStandardOutput = $true
   $psi.RedirectStandardError = $true
   $psi.UseShellExecute = $false
@@ -94,7 +97,7 @@ function Show-Output {
   foreach($o in $outputs){
     # A service that prints without pause is not allowed to hold up the others, or Ctrl+C.
     for($n = 0; $n -lt 500 -and $o.Line -and $o.Line.IsCompleted; $n++){
-      $text = if($o.Line.IsCompletedSuccessfully){ $o.Line.Result } else { $null }
+      $text = if($o.Line.Status -eq 'RanToCompletion'){ $o.Line.Result } else { $null }
       if($null -eq $text){ $o.Line = $null; break }   # the service has closed this stream
       if($text){ Write-Host "[$($o.Name)] $text" -ForegroundColor $o.Color }
       $o.Line = $o.Reader.ReadLineAsync()
@@ -111,41 +114,56 @@ function Wait-Showing([int]$Milliseconds){
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
-# What a run of this script leaves running: the service and its worker, the UI's dev server and, when it
-# started one, the storage emulator. They are recognised by what they are running out of this folder,
-# never by port alone, so another program that happens to sit on the same port is left alone.
-function Get-PhotoSenseProcesses([switch]$IncludeStorage){
-  $here = [regex]::Escape($root)
-  Get-CimInstance Win32_Process | Where-Object {
-    $cmd = $_.CommandLine
-    if(-not $cmd -or $cmd -notmatch $here){ return $false }
-    ($_.Name -eq 'func.exe') -or
-    ($_.Name -eq 'dotnet.exe' -and $cmd -match 'PhotoSense\.Functions\.dll') -or
-    ($_.Name -eq 'node.exe' -and $cmd -match 'PhotoSense\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]') -or
-    ($IncludeStorage -and $_.Name -eq 'node.exe' -and $cmd -match 'azurite')
+# Every process and the command that started it, on Windows or elsewhere.
+function Get-CommandLines {
+  if($onWindows){
+    Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{ Id = [int]$_.ProcessId; Command = "$($_.Name) $($_.CommandLine)" } }
+  } else {
+    & ps -axo 'pid=,command=' | ForEach-Object { if($_ -match '^\s*(\d+)\s+(.*)$'){ [pscustomobject]@{ Id = [int]$Matches[1]; Command = $Matches[2] } } }
   }
 }
 
-# Ends a process together with everything it started. Each service runs underneath a cmd wrapper, and
-# ending the wrapper alone leaves the service itself running and holding its port.
-function Stop-Tree([int]$processId){
-  & taskkill.exe /PID $processId /T /F *> $null
+# What a run of this script leaves running: the service and the page's dev server, and what an older run left:
+# the Functions host, its worker and the storage emulator. They are recognised by what they are running out of
+# this folder, never by port alone, so another program that happens to sit on the same port is left alone.
+function Get-PhotoSenseProcesses {
+  $here = [regex]::Escape($root)
+  Get-CommandLines | Where-Object {
+    $cmd = $_.Command
+    $_.Id -ne $PID -and $cmd -match $here -and (
+      ($cmd -match 'PhotoSense\.Server(\.dll|\.exe)?(\s|"|$)') -or
+      ($cmd -match 'PhotoSense\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]') -or
+      ($cmd -match 'PhotoSense\.Functions') -or ($cmd -match '(^|[\\/\s])func(\.exe)?\s') -or ($cmd -match 'azurite'))
+  }
 }
 
-function Stop-PhotoSense([switch]$IncludeStorage){
-  $found = @(Get-PhotoSenseProcesses -IncludeStorage:$IncludeStorage)
-  foreach($p in $found){ Stop-Tree $p.ProcessId }
+# Ends a process together with everything it started, so that nothing is left holding a port.
+function Stop-Tree([int]$processId){
+  if($onWindows){ & taskkill.exe /PID $processId /T /F *> $null; return }
+  foreach($child in @(& pgrep -P $processId 2>$null)){ if($child){ Stop-Tree ([int]$child) } }
+  Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+}
+
+function Stop-PhotoSense {
+  $found = @(Get-PhotoSenseProcesses)
+  foreach($p in $found){ Stop-Tree $p.Id }
   if($found.Count -gt 0){ Start-Sleep -Milliseconds 800 }   # the ports take a moment to come free
   return $found.Count
 }
 
 function Get-PortOwner([int]$port){
-  $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
-  if($listener){ Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue }
+  if($onWindows){
+    $listener = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+    if($listener){ return Get-Process -Id $listener.OwningProcess -ErrorAction SilentlyContinue }
+    return $null
+  }
+  $owner = @(& lsof -nP "-iTCP:$port" -sTCP:LISTEN -t 2>$null) | Select-Object -First 1
+  if($owner){ return Get-Process -Id ([int]$owner) -ErrorAction SilentlyContinue }
+  return $null
 }
 
 if($Stop){
-  $stopped = Stop-PhotoSense -IncludeStorage
+  $stopped = Stop-PhotoSense
   if($stopped -gt 0){ Write-Host "Stopped PhotoSense ($stopped processes)." -ForegroundColor Cyan }
   else { Write-Host 'PhotoSense is not running.' -ForegroundColor Cyan }
   return
@@ -156,14 +174,15 @@ if($Stop){
 $earlier = Stop-PhotoSense
 if($earlier -gt 0){ Write-Host "Stopped the copy of PhotoSense that was already running ($earlier processes)." -ForegroundColor DarkYellow }
 
-$busy = Get-PortOwner $FunctionsPort
-if($busy){ throw "Port $FunctionsPort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not PhotoSense. Close it, or start with -FunctionsPort <another port>." }
+$busy = Get-PortOwner $ServicePort
+if($busy){ throw "Port $ServicePort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not PhotoSense. Close it, or start with -ServicePort <another port>." }
 
 # A build leaves worker processes waiting to be used again, and after building the service they go on
 # holding its program files. The next build then cannot replace those files and fails ("Could not copy ...
 # The file is locked by: MSBuild"). The ones doing nothing are ended here, whoever left them; one that is
 # in the middle of a build, of this project or any other, is using the processor and is left alone.
 function Stop-IdleBuildWorkers {
+  if(-not $onWindows){ return }   # elsewhere the files are not locked by being open
   $workers = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '/nodemode:1' } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
   if($workers.Count -eq 0){ return }
   $before = @{}
@@ -176,16 +195,15 @@ function Stop-IdleBuildWorkers {
 
 if($Clean){ Write-Section 'Cleaning solution'; Stop-IdleBuildWorkers; dotnet clean PhotoSense.sln -nodeReuse:false }
 
+$serviceProject = Join-Path $root 'PhotoSense.Server'
 if(-not $NoBuild){
   Write-Section 'Building'
   Stop-IdleBuildWorkers
   # The service's project brings the projects it is built from with it. No workers are left waiting
   # afterwards (-nodeReuse:false), so this build does not get in the way of the next one.
-  dotnet build PhotoSense.Functions/PhotoSense.Functions.csproj -nodeReuse:false
+  dotnet build (Join-Path $serviceProject 'PhotoSense.Server.csproj') -nodeReuse:false
   if($LASTEXITCODE -ne 0){ throw 'The build failed; PhotoSense was not started.' }
 }
-
-$photoRoot = Join-Path $root 'PhotoSense.Functions'
 
 Write-Section 'Starting services'
 
@@ -201,46 +219,13 @@ function Get-FreePort([int]$start,[int]$count){
 # Determine React port before launching Next.js to avoid its auto-increment log spam
 $reactPort = Get-FreePort -start $ReactBasePort -count $ReactPortScan
 
-# Scans run as a Durable Functions activity, which keeps its state in the storage emulator.
-$azuriteProc = $null
-$storageUp = $false
-try { $probe = [System.Net.Sockets.TcpClient]::new(); $probe.Connect('127.0.0.1', 10000); $probe.Close(); $storageUp = $true } catch { }
-if(-not $storageUp){
-  if(Get-Command azurite -ErrorAction SilentlyContinue){
-    Write-Host 'Starting Azurite storage emulator' -ForegroundColor DarkGray
-    $azuriteProc = Start-ProcessLogged -Name 'AZURITE' -Command "azurite --silent --location `"$root\.azurite`"" -WorkingDirectory $root -Color DarkGray
-    Wait-Showing 2000
-  } else {
-    Write-Warning 'Azurite is not running and is not on PATH, so scans will not start. Install it with: npm install -g azurite'
-  }
-}
-
-# Functions start logic with retry & fallback
-function Start-FunctionsHost {
-  param([int]$attempt)
-  if($UseDotNetFunctions){
-    Write-Host "Starting Functions via dotnet run (attempt $attempt)" -ForegroundColor Yellow
-    return Start-ProcessLogged -Name 'FUNC' -Command "dotnet run --no-build --project $photoRoot/PhotoSense.Functions.csproj -- --port $FunctionsPort" -WorkingDirectory $photoRoot -Color Yellow
-  } else {
-    Write-Host "Starting Functions via Core Tools (attempt $attempt)" -ForegroundColor Yellow
-    # No --csharp: that flag makes Core Tools use its in-process host, which cannot load this isolated-worker app.
-    # The service answers the UI's address only, so it is told which port the UI was given.
-    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --cors http://localhost:$reactPort,http://127.0.0.1:$reactPort --script-root $photoRoot/bin/Debug/net10.0" -WorkingDirectory $photoRoot -Color Yellow
-  }
-}
-
-$funcProc = $null
-for($a=1; $a -le ([math]::Max(1,$FunctionsRetry+1)); $a++){
-  $funcProc = Start-FunctionsHost -attempt $a
-  Wait-Showing 700
-  if(-not $funcProc.HasExited){ break }
-  Write-Warning "Functions host exited immediately (attempt $a)."
-  if(-not $UseDotNetFunctions -and $a -eq 1){
-    Write-Host 'Falling back to dotnet run for Functions...' -ForegroundColor DarkYellow
-    $UseDotNetFunctions = $true
-  }
-}
-if($funcProc -and $funcProc.HasExited){ throw "Failed to start Functions host after retries." }
+# The service answers the page's address only, so it is told which port the page was given.
+$serviceDll = Join-Path $serviceProject (Join-Path 'bin' (Join-Path 'Debug' (Join-Path 'net10.0' 'PhotoSense.Server.dll')))
+$serviceProc = Start-ProcessLogged -Name 'SERVICE' -FileName 'dotnet' -WorkingDirectory $root -Color Yellow -Arguments @(
+  $serviceDll, '--urls', "http://localhost:$ServicePort",
+  "--Cors:Origins:0=http://localhost:$reactPort", "--Cors:Origins:1=http://127.0.0.1:$reactPort")
+Wait-Showing 700
+if($serviceProc.HasExited){ Show-Output; throw "The service stopped as it started (code $($serviceProc.ExitCode))." }
 
 # React UI
 $reactDir = Join-Path $root 'PhotoSense.ReactUI'
@@ -250,20 +235,21 @@ if(!(Test-Path (Join-Path $reactDir 'node_modules'))){
   npm install | Out-Null
   Pop-Location
 }
-$env:PORT = $reactPort
-$reactProc = Start-ProcessLogged -Name 'WEB' -Command 'npm run dev' -WorkingDirectory $reactDir -Color Green
+$next = Join-Path $reactDir (Join-Path 'node_modules' (Join-Path 'next' (Join-Path 'dist' (Join-Path 'bin' 'next'))))
+$reactProc = Start-ProcessLogged -Name 'WEB' -FileName 'node' -WorkingDirectory $reactDir -Color Green -Arguments @($next, 'dev', '-p', "$reactPort") `
+  -Environment @{ NEXT_PUBLIC_API_BASE = "http://localhost:$ServicePort/api" }
 
 Write-Section 'Startup summary'
-Write-Host "Functions:  http://localhost:$FunctionsPort" -ForegroundColor Yellow
+Write-Host "Service:    http://localhost:$ServicePort" -ForegroundColor Yellow
 Write-Host ("React UI:   http://localhost:{0}" -f $reactPort) -ForegroundColor Green
 Write-Host "Press Ctrl+C here to stop PhotoSense, or run ./dev-start.ps1 -Stop from another terminal." -ForegroundColor Cyan
 
 if($Open){ Start-Process ("http://localhost:{0}" -f $reactPort) | Out-Null }
 
 # Shutdown. Whatever ends the wait below (Ctrl+C, or one of the services dying) lands in the finally
-# block, which ends each service this run started together with everything underneath its wrapper.
+# block, which ends each service this run started together with everything it started in turn.
 # It ends nothing else: a later run that has taken over must not lose what it has just started.
-$started = @($funcProc,$reactProc,$azuriteProc)
+$started = @($serviceProc,$reactProc)
 function Stop-Started {
   foreach($p in $started){
     if($p -and -not $p.HasExited){ Stop-Tree $p.Id }
@@ -274,14 +260,16 @@ function Stop-Started {
 # runs apart from this script, so it is handed the processes rather than left to look for them.
 Register-EngineEvent PowerShell.Exiting -MessageData $started -Action {
   foreach($p in $Event.MessageData){
-    if($p -and -not $p.HasExited){ & taskkill.exe /PID $p.Id /T /F *> $null }
+    if($p -and -not $p.HasExited){
+      if($env:OS -eq 'Windows_NT'){ & taskkill.exe /PID $p.Id /T /F *> $null } else { & pkill -P $p.Id 2>$null; $p.Kill() }
+    }
   }
 } | Out-Null
 
 try {
   while($true){
     Wait-Showing 1000
-    $ended = if($funcProc.HasExited){ 'Functions host', $funcProc } elseif($reactProc.HasExited){ 'React UI', $reactProc }
+    $ended = if($serviceProc.HasExited){ 'Service', $serviceProc } elseif($reactProc.HasExited){ 'React UI', $reactProc }
     if($ended){
       Wait-Showing 300   # its last lines, which say why
       Write-Host "$($ended[0]) exited (code $($ended[1].ExitCode))" -ForegroundColor Red

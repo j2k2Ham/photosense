@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "clean (functions)",
+			"label": "clean (service)",
 			"command": "dotnet",
 			"args": [
 				"clean",
@@ -12,11 +12,11 @@
 			"type": "process",
 			"problemMatcher": "$msCompile",
 			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Functions"
+				"cwd": "${workspaceFolder}/PhotoSense.Server"
 			}
 		},
 		{
-			"label": "build (functions)",
+			"label": "build (service)",
 			"command": "dotnet",
 			"args": [
 				"build",
@@ -24,58 +24,14 @@
 				"/consoleloggerparameters:NoSummary"
 			],
 			"type": "process",
-			"dependsOn": "clean (functions)",
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
 			"problemMatcher": "$msCompile",
 			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Functions"
+				"cwd": "${workspaceFolder}/PhotoSense.Server"
 			}
-		},
-		{
-			"label": "clean release (functions)",
-			"command": "dotnet",
-			"args": [
-				"clean",
-				"--configuration",
-				"Release",
-				"/property:GenerateFullPaths=true",
-				"/consoleloggerparameters:NoSummary"
-			],
-			"type": "process",
-			"problemMatcher": "$msCompile",
-			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Functions"
-			}
-		},
-		{
-			"label": "publish (functions)",
-			"command": "dotnet",
-			"args": [
-				"publish",
-				"--configuration",
-				"Release",
-				"/property:GenerateFullPaths=true",
-				"/consoleloggerparameters:NoSummary"
-			],
-			"type": "process",
-			"dependsOn": "clean release (functions)",
-			"problemMatcher": "$msCompile",
-			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Functions"
-			}
-		},
-		{
-			"type": "func",
-			"dependsOn": "build (functions)",
-			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Functions/bin/Debug/net10.0"
-			},
-			"command": "host start",
-			"isBackground": true,
-			"problemMatcher": "$func-dotnet-watch"
 		},
 		{
 			"label": "build:solution",
@@ -86,6 +42,12 @@
 			"presentation": { "reveal": "silent", "panel": "dedicated" }
 		},
 		{
+			"label": "run:service",
+			"type": "shell",
+			"command": "dotnet run --project PhotoSense.Server",
+			"problemMatcher": []
+		},
+		{
 			"label": "run:react",
 			"type": "shell",
 			"command": "npm run dev",
@@ -93,22 +55,25 @@
 			"problemMatcher": []
 		},
 		{
-			"label": "run:functions (core tools)",
-			"type": "shell",
-			"command": "func start --port 7071 --script-root PhotoSense.Functions/bin/Debug/net10.0",
-			"dependsOn": ["build:solution"],
-			"problemMatcher": []
-		},
-		{
-			"label": "run:functions+react",
+			"label": "run:service+react",
 			"type": "shell",
 			"command": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1 -Open",
+			"osx": { "command": "pwsh -File ./dev-start.ps1 -Open" },
+			"linux": { "command": "pwsh -File ./dev-start.ps1 -Open" },
 			"problemMatcher": []
 		},
 		{
 			"label": "dev:start",
 			"type": "shell",
 			"command": "powershell -ExecutionPolicy Bypass -File ./dev-start.ps1 -Open",
+			"osx": { "command": "pwsh -File ./dev-start.ps1 -Open" },
+			"linux": { "command": "pwsh -File ./dev-start.ps1 -Open" },
+			"problemMatcher": []
+		},
+		{
+			"label": "publish:program",
+			"type": "shell",
+			"command": "pwsh -File ./publish.ps1",
 			"problemMatcher": []
 		}
 	]

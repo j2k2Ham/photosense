@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SetupScreen } from '../../components/SetupScreen';
 import { loadLastScan, saveLastScan } from '../../lib/lastScan';
 import type { ScanProgressSnapshotDto } from '../../types';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 
 const api = vi.hoisted(() => ({ startScan: vi.fn(), browseFolders: vi.fn() }));
 vi.mock('../../lib/apiClient', () => ({ startScan: api.startScan, browseFolders: api.browseFolders }));

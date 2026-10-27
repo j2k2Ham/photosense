@@ -105,3 +105,56 @@ jobs:
           path: |
             **/test-results.trx
             coverage/**
+
+  service-on-windows-and-mac:
+    # The service on the systems people run it on, built into one program and started; the job above measures coverage on Linux.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build PhotoSense.sln --configuration Release -warnaserror
+
+      - name: Test
+        run: dotnet run --project PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release --no-build
+
+      - name: Publish as one program
+        shell: pwsh
+        run: ./publish.ps1 -Output publish/ci
+
+      - name: Start it, and ask it for the page and the service
+        shell: pwsh
+        run: |
+          $program = if ($IsWindows) { 'publish/ci/PhotoSense.Server.exe' } else { 'publish/ci/PhotoSense.Server' }
+          $env:PhotoStorage__DatabasePath = Join-Path $env:RUNNER_TEMP 'photosense/photosense.db'
+          $env:PhotoStorage__ThumbnailPath = Join-Path $env:RUNNER_TEMP 'photosense/thumbnails'
+          $started = Start-Process $program -PassThru -NoNewWindow
+          try {
+            $health = $null
+            for ($i = 0; $i -lt 60 -and -not $health; $i++) {
+              try { $health = Invoke-RestMethod http://localhost:7071/api/health } catch { Start-Sleep -Seconds 1 }
+            }
+            if ($health.status -ne 'ok') { throw 'The service did not answer.' }
+            $page = Invoke-WebRequest http://localhost:7071/ -UseBasicParsing
+            if ($page.Content -notmatch '<title>PhotoSense</title>') { throw 'The page was not served.' }
+            Write-Host "PhotoSense ran on $env:RUNNER_OS ($env:RUNNER_ARCH)."
+          } finally {
+            Stop-Process -Id $started.Id -Force
+          }

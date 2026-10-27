@@ -6,7 +6,7 @@ import { OrganizeView } from '../../components/organize/OrganizeView';
 import { saveOrganizeRoot } from '../../lib/lastScan';
 import type { OrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFileDto, OrganizeFilesDto, OrganizePlanDto, OrganizePlanFile } from '../../types';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 import { organizeFile as file, organizePlace as place } from '../fixtures';
 
 const api = vi.hoisted(() => ({

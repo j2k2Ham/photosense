@@ -1,4 +1,4 @@
-using PhotoSense.Infrastructure.Scanning;
+using PhotoSense.Application.Scanning;
 using System.Linq;
 
 namespace PhotoSense.Tests.Application;
