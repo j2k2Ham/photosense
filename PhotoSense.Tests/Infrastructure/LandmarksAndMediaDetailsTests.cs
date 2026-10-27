@@ -187,7 +187,7 @@ public class LiteDbOrganizeBatchStoreTests
             Items = [new OrganizeBatchItem { From = "a", To = "b", SizeBytes = 4, ModifiedUtcTicks = 7, Companion = true }], CreatedFolders = ["x"] };
         var second = new OrganizeBatch { Label = "2023", Copy = true, UtcTicks = first.UtcTicks + 1 };
         var third = new OrganizeBatch { Label = "Trips", UtcTicks = first.UtcTicks + 2 };
-        foreach (var batch in new[] { first, second, third }) await store.AddAsync(batch);
+        foreach (var batch in new[] { first, second, third }) await store.SaveAsync(batch);
 
         await Assert.That((await store.RecentAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "2023", "Anaconda" }, CollectionOrdering.Matching);
         await Assert.That((await store.RecentAsync(take: 1)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips" }, CollectionOrdering.Matching);
@@ -203,5 +203,68 @@ public class LiteDbOrganizeBatchStoreTests
         await store.MarkUndoneAsync(Guid.NewGuid());
         await Assert.That((await new LiteDbOrganizeBatchStore(db).RecentAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "Anaconda" }, CollectionOrdering.Matching);
         await Assert.That((await store.GetAsync(second.Id))!.Undone).IsTrue();
+    }
+
+    [Test]
+    public async Task A_Change_Written_Before_Changes_Had_A_State_Reads_As_Carried_Out()
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var store = new LiteDbOrganizeBatchStore(db);
+        var id = Guid.NewGuid();
+        // As the version before wrote it: with no state at all.
+        db.GetCollection("organize_batches").Insert(new BsonDocument
+        {
+            ["_id"] = id, ["UtcTicks"] = 1L, ["Label"] = "Anaconda", ["Files"] = 1, ["Undone"] = false, ["Items"] = new BsonArray(), ["CreatedFolders"] = new BsonArray()
+        });
+
+        await Assert.That((await store.GetAsync(id))!.State).IsEqualTo(ChangeState.Done);
+        await Assert.That((await store.RecentAsync()).Single().Id).IsEqualTo(id);
+        await Assert.That(await store.UnfinishedAsync()).IsEmpty();
+    }
+
+    [Test]
+    public async Task Changes_Under_Way_Are_Not_Offered_To_Undo_And_Are_Found_At_The_Next_Start_Oldest_First()
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var store = new LiteDbOrganizeBatchStore(db);
+        var done = new OrganizeBatch { Label = "done", UtcTicks = 3 };
+        var undoing = new OrganizeBatch { Label = "undoing", UtcTicks = 2, State = ChangeState.Undoing };
+        var started = new OrganizeBatch { Label = "started", UtcTicks = 1, State = ChangeState.Started };
+        foreach (var batch in new[] { done, undoing, started }) await store.SaveAsync(batch);
+
+        await Assert.That((await store.RecentAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "done" }, CollectionOrdering.Matching);
+        await Assert.That((await store.UnfinishedAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "started", "undoing" }, CollectionOrdering.Matching);
+
+        // Written down again once it has moved on.
+        started.State = ChangeState.Done;
+        await store.SaveAsync(started);
+        await Assert.That((await store.UnfinishedAsync()).Single().Label).IsEqualTo("undoing");
+        await Assert.That((await store.RecentAsync()).Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task The_Records_Kept_For_A_Removal_Come_Back_As_They_Were()
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var store = new LiteDbOrganizeBatchStore(db);
+        var batch = Guid.NewGuid();
+        var photo = new Photo
+        {
+            SourcePath = "C:/a/IMG_1.HEIC", FileName = "IMG_1.HEIC", FileSizeBytes = 9, FileModifiedUtc = new DateTime(2024, 5, 1, 0, 0, 0, DateTimeKind.Utc),
+            ContentHash = "AB", Signature = [1, 2, 3], TakenOn = new DateTime(2024, 5, 1, 12, 30, 0), IsKept = true, Set = PhotoSet.Secondary
+        };
+        photo.AddCategory("Trips");
+
+        await store.KeepRecordsAsync(batch, [photo]);
+        // Kept twice, it is still kept once.
+        await store.KeepRecordsAsync(batch, [photo]);
+        await store.KeepRecordsAsync(Guid.NewGuid(), [new Photo { SourcePath = "C:/a/IMG_2.HEIC", FileName = "IMG_2.HEIC" }]);
+
+        var kept = (await store.RecordsAsync(batch)).Single();
+        await Assert.That((kept.Id, kept.SourcePath, kept.FileSizeBytes, kept.FileModifiedUtc, kept.ContentHash, kept.TakenOn, kept.IsKept)).IsEqualTo((photo.Id, photo.SourcePath, 9L, photo.FileModifiedUtc, "AB", photo.TakenOn, true));
+        await Assert.That(kept.Set).IsEqualTo(PhotoSet.Secondary);
+        await Assert.That(kept.Signature!).IsEquivalentTo(new byte[] { 1, 2, 3 }, CollectionOrdering.Matching);
+        await Assert.That(kept.Categories.Single()).IsEqualTo("Trips");
+        await Assert.That(await store.RecordsAsync(Guid.NewGuid())).IsEmpty();
     }
 }

@@ -34,6 +34,7 @@ export const GUIDE: GuideTopic[] = [
           'PhotoSense tidies a folder of pictures and videos in two ways. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken.',
           'Everything happens on this computer. Nothing is uploaded.',
           'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Delete permanently**.',
+          'A move, copy or deletion happens in full or not at all. Should one file not go, the files that had gone go back, and the message says which file stopped it. One cut short because PhotoSense stopped is put back the next time it starts.',
         ],
       },
       {
@@ -125,6 +126,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Good to know',
         tips: [
           'Every question asked before a removal names the file that goes and the file that stays: two files holding one picture look alike, and are two files all the same.',
+          'The message after a removal has an **Undo** button, which puts every file it took back where it was, into its group again.',
           'The last copy of a picture is never removed as a duplicate. If the original has been moved, changed or deleted since the scan, its copies are left alone; scan again to bring the results up to date.',
           'A picture’s Live Photo video and edit file go with it, when they belong to that picture and to no other.',
           'If the Duplicates tab is empty, the scan found no copies. Anything that only looks alike is under **Similar**.',
@@ -244,7 +246,9 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Undoing',
         tips: [
           'The message after a move has an **Undo** button.',
-          'The **Recently moved** button, at the foot of the panel on the right, says how many moves can still be undone and opens a list of what was moved, copied or deleted, each with **Undo**. Moved files go back under the names they had, and the folders made for them go again if that leaves them empty. **Done**, the **×** in its corner or **Esc** closes the list.',
+          'The **Recently moved** button, at the foot of the panel on the right, says how many moves can still be undone and opens a list of what was moved, copied or deleted, in Organize or in Clean up, each with **Undo**. Moved files go back under the names they had, and the folders made for them go again if that leaves them empty. **Done**, the **×** in its corner or **Esc** closes the list.',
+          'A file whose old name has been taken since goes back with a number, as in IMG_6435 (1).JPG. One that is no longer where the move put it is left, and the message says so.',
+          'An undo too happens in full or not at all: if one file cannot go back, none does, and the message says why.',
         ],
       },
     ],
@@ -290,7 +294,8 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Putting a file back',
         tips: [
-          'In Organize, press **Undo** in the message, or open **Recently moved** and press **Undo** beside the deletion.',
+          'Press **Undo** in the message that says what was deleted, in Clean up or in Organize. Every file it took goes back where it was, and Clean up lists the copies in their groups again.',
+          'Later, open **Recently moved** in Organize and press **Undo** beside the deletion. It lists what Clean up deleted too.',
           'Otherwise, move the file out of **_PhotoSense_Removed** back to where it was, with the computer’s own file manager. Scan again for Clean up to list it once more.',
         ],
       },
@@ -358,7 +363,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'A file was left where it is',
         text: [
-          'It is open in another program, or it has changed since the scan. Close the program, or scan again, and try once more. The reason is kept under **Errors**.',
+          'It is open in another program, or it has changed since the scan. A file that cannot be moved stops the whole move or deletion, so nothing went and everything is where it was. Close the program, or scan again, and try once more. The reason is kept under **Errors**.',
         ],
       },
       {

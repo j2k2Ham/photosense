@@ -11,11 +11,11 @@ import { PhotoWindow } from '../components/PhotoWindow';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { SettingsWindow } from '../components/SettingsWindow';
 import { SetupScreen } from '../components/SetupScreen';
-import { Toaster, useToasts } from '../components/Toaster';
+import { Toaster, useToasts, type ToastAction } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
 import {
-  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, useGroups, useScanProgress,
-  useScanStatus,
+  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, undoChange, useGroups,
+  useScanProgress, useScanStatus,
 } from '../lib/apiClient';
 import { formatBytes, linkedFiles } from '../lib/format';
 import type { GuidePlace } from '../lib/guide';
@@ -26,6 +26,9 @@ import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, RemovedFil
 
 // Removed files are moved here, inside the scanned folder, rather than erased.
 const REMOVED_FOLDER = '_PhotoSense_Removed';
+
+/** "the duplicate", "the 3 duplicates". */
+const these = (count: number, kind: string) => (count === 1 ? `the ${kind}` : `the ${count.toLocaleString()} ${kind}s`);
 
 /** What is waiting for a yes or no. */
 type Pending =
@@ -175,6 +178,17 @@ export default function HomePage() {
     await setKept(photo.id, !photo.kept);
     push(photo.kept ? `Stopped keeping ${photo.fileName}.` : `Keeping ${photo.fileName}. Bulk deletion will skip it.`, 'ok');
   });
+  // A removal is taken back whole: every file it moved goes back where it was, and into its group again.
+  const undoRemoval = (batchId: string, kind: string, name?: string) => run(async () => {
+    const result = await undoChange(batchId);
+    // Said by what came back, which is less than what went when a file has been taken away since.
+    if (result.restored > 0) push(`Put ${result.restored === 1 && name ? name : these(result.restored, kind)} back where ${result.restored === 1 ? 'it was' : 'they were'}.`, 'ok');
+    if (result.skipped > 0) push(`${result.skipped.toLocaleString()} could not be put back. ${result.problems[0] ?? ''}`.trim(), 'error');
+  });
+  /** The Undo on a message that says what a removal moved: none when it moved nothing. */
+  const undoAction = (batchId: string | null | undefined, kind: string, name?: string): ToastAction | undefined =>
+    batchId ? { label: 'Undo', run: () => void undoRemoval(batchId, kind, name) } : undefined;
+  const kindOf = (m: GroupMode) => (m === 'similar' ? 'similar shot' : 'duplicate');
   // Every removal says which file went and which file stays, by name: the two can look like one.
   const removeOne = (photo: PhotoDto, stays: PhotoDto) => run(async () => {
     // Where the file stood among its group's copies. The copy after it takes its place, so the place is
@@ -184,7 +198,7 @@ export default function HomePage() {
     setPending(undefined);
     untick(from?.key);
     setCopyIndex(from && from.members.length > 1 ? Math.min(from.members.findIndex(m => m.photo.id === photo.id), from.members.length - 2) : 0);
-    push(`Moved ${photo.fileName}${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. ${stays.fileName} stays where it is.`, 'ok');
+    push(`Moved ${photo.fileName}${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. ${stays.fileName} stays where it is.`, 'ok', undoAction(result.batchId, kindOf(mode), photo.fileName));
   });
   const removeMany = (group?: DuplicateGroupDto) => run(async () => {
     const result = await removeDuplicates(group?.key, mode);
@@ -193,10 +207,10 @@ export default function HomePage() {
     // The group's copies have gone, or every group's have: there is nothing left there to be ticked.
     if (group) untick(group.key); else setTicked(new Map());
     const going = group?.members.filter(m => !m.photo.kept) ?? [];
-    const kind = mode === 'similar' ? 'similar shot' : 'duplicate';
+    const kind = kindOf(mode);
     const what = going.length === 1 ? going[0].photo.fileName : `${result.removed} ${kind}${result.removed === 1 ? '' : 's'}`;
     const stays = group ? `. ${group.keeper.fileName} stays where it is.` : '';
-    if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}${stays}`, 'ok');
+    if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}${stays}`, 'ok', undoAction(result.batchId, kind, going.length === 1 ? going[0].photo.fileName : undefined));
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
   const removeTicked = () => run(async () => {
@@ -204,8 +218,11 @@ export default function HomePage() {
     setPending(undefined);
     setCopyIndex(0);
     setTicked(new Map());
-    const kind = mode === 'similar' ? 'similar shot' : 'duplicate';
-    if (result.removed > 0) push(`Moved ${result.removed.toLocaleString()} ${kind}${result.removed === 1 ? '' : 's'} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. The ${mode === 'similar' ? 'best shot' : 'original'} of each group stays where it is.`, 'ok');
+    const kind = kindOf(mode);
+    if (result.removed > 0) {
+      push(`Moved ${result.removed.toLocaleString()} ${kind}${result.removed === 1 ? '' : 's'} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}. The ${mode === 'similar' ? 'best shot' : 'original'} of each group stays where it is.`,
+        'ok', undoAction(result.batchId, kind));
+    }
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
   const clear = () => run(async () => {
@@ -256,7 +273,7 @@ export default function HomePage() {
   }
   const offline = !!(groups.error || status.error);
   const cancel = () => setPending(undefined);
-  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder. Moving a file back restores it; Delete permanently, in the menu, erases them.</>;
+  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.</>;
   const best = mode === 'similar' ? 'best shot' : 'original';
   // Once there is no group left to review, a narrow screen goes back to the list.
   const showReview = reviewing && selected !== undefined;
@@ -316,7 +333,7 @@ export default function HomePage() {
                       ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span><span className="lg:hidden xl:inline">. The best copy of each picture or video is kept.</span></>
                       : <span className="text-t2">{data ? 'No duplicates waiting to be removed.' : 'Loading…'}</span>}
                   </p>
-                  <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER} and can be moved back.</p>
+                  <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
                 </div>
                 <button type="button" disabled={busy || removable === 0} onClick={() => setPending({ scope: 'all', count: removable, bytes: reclaimable })}
                   className="pill-rose my-auto h-11 shrink-0 px-[22px] text-[15px] max-lg:order-2">Delete all duplicates</button>

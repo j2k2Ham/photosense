@@ -1,6 +1,7 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using System.Net;
+using System.Text.Json;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Application.Photos.Interfaces;
@@ -10,6 +11,7 @@ using PhotoSense.Domain.Entities;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Contracts.Duplicates;
 using PhotoSense.Functions.Scanning;
+using PhotoSense.Application.Changes;
 
 namespace PhotoSense.Functions.Api;
 
@@ -40,13 +42,15 @@ public class PhotosFunctions
     private readonly IScanLogSink _log;
     private readonly PhotoDtoMapper _mapper;
     private readonly ISystemViewer _viewer;
+    private readonly FileChanges _changes;
 
     // Services arrive through the constructor: this Functions model does not pass them as method parameters.
     public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IDuplicateRemovalService remover,
-        IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper, ISystemViewer viewer)
+        IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper, ISystemViewer viewer, FileChanges changes)
     {
         _mapper = mapper;
         _viewer = viewer;
+        _changes = changes;
         _repo = repo; _search = search; _remover = remover;
         _thumbnails = thumbnails; _analyzer = analyzer; _audit = audit; _log = log;
     }
@@ -263,13 +267,14 @@ public class PhotosFunctions
                 resp.StatusCode = HttpStatusCode.Conflict;
                 return resp;
             case RemovalOutcome.Failed:
-                await resp.WriteStringAsync($"The file could not be moved: {result.Error}");
-                resp.StatusCode = HttpStatusCode.InternalServerError;
+                // Most often the file is open in another program: nobody's mistake, and it can be tried again.
+                await resp.WriteStringAsync(result.Error!);
+                resp.StatusCode = HttpStatusCode.Conflict;
                 return resp;
         }
         _log.Log("audit","Info",$"Removed photo {gid} physical={physical}");
         await _audit.AddAsync(new AuditEntry { Action = "Delete", PhotoId = gid.ToString(), Details = result.HeldAt is null ? "logical" : $"moved to {result.HeldAt} with {result.Companions.Count} linked files" });
-        await resp.WriteAsJsonAsync(new { heldAt = result.HeldAt, companions = result.Companions.Count });
+        await resp.WriteAsJsonAsync(new { heldAt = result.HeldAt, companions = result.Companions.Count, batchId = result.BatchId?.ToString() });
         return resp;
     }
 
@@ -308,33 +313,46 @@ public class PhotosFunctions
         if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) { resp.StatusCode = HttpStatusCode.BadRequest; await resp.WriteStringAsync("Invalid target"); return resp; }
         var photo = await _repo.GetAsync(new PhotoId(gid));
         if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
-        var newPath = Path.Combine(target, photo.FileName);
-        try
+        // A file already at the target is someone else's picture: this one arrives under its name with a number.
+        var batch = new OrganizeBatch { Label = target };
+        batch.Items.Add(new OrganizeBatchItem { From = photo.SourcePath, To = _changes.FreePlace(Path.Combine(target, photo.FileName), new HashSet<string>(PhotoPath.Comparer)) });
+        var moved = await _changes.CarryOutAsync(batch);
+        if (!moved.Done)
         {
-            // No overwrite: a file already at the target is someone else's picture.
-            File.Move(photo.SourcePath, newPath);
-            await _repo.AddOrUpdateAsync(photo.MovedTo(newPath));
-            _log.Log("audit","Info",$"Moved photo {gid} to {target}");
-            await _audit.AddAsync(new AuditEntry { Action = "Move", PhotoId = gid.ToString(), Details = target });
-            resp.StatusCode = HttpStatusCode.NoContent;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            await resp.WriteStringAsync(ex.Message);
+            await resp.WriteStringAsync(moved.Problem!);
             resp.StatusCode = HttpStatusCode.Conflict;
+            return resp;
         }
+        _log.Log("audit","Info",$"Moved photo {gid} to {target}");
+        await _audit.AddAsync(new AuditEntry { Action = "Move", PhotoId = gid.ToString(), Details = target });
+        await resp.WriteAsJsonAsync(new { path = batch.Items[0].To, batchId = batch.Id.ToString() });
         return resp;
     }
 
-    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group, once for each of several, and &mode=similar for their look-alikes)
+    // POST /api/photos/bulk/remove-duplicates: add ?group=key for one group, once for each of several, or name
+    // them in the body as { "groups": [...] } when there are more than an address holds; &mode=similar for their look-alikes.
+    [Function("RemoveDuplicates")]
     public async Task<HttpResponseData> RemoveDuplicatesAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/remove-duplicates")] HttpRequestData req)
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        var body = await new StreamReader(req.Body).ReadToEndAsync();
+        RemoveGroupsRequest? named = null;
+        if (body.Length > 0)
+        {
+            try { named = JsonSerializer.Deserialize<RemoveGroupsRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }); }
+            catch (JsonException) { /* said below */ }
+            if (named?.Groups is null)
+            {
+                await resp.WriteStringAsync("The groups to remove could not be read.");
+                resp.StatusCode = HttpStatusCode.BadRequest;
+                return resp;
+            }
+        }
         // No group, or only blank ones, means every group.
-        var groups = (query.GetValues("group") ?? []).Where(g => !string.IsNullOrWhiteSpace(g)).ToList();
+        var groups = (query.GetValues("group") ?? []).Concat(named?.Groups ?? []).Where(g => !string.IsNullOrWhiteSpace(g)).ToList();
         var group = groups.Count == 1 ? groups[0] : null;
         var similar = string.Equals(query.Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
         if (similar && groups.Count == 0)
@@ -347,7 +365,7 @@ public class PhotosFunctions
         var what = similar ? "similar shots" : "duplicates";
         _log.Log("audit", "Info", $"Removed {result.Removed} {what} ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
         await _audit.AddAsync(new AuditEntry { Action = similar ? "RemoveSimilar" : "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}{(groups.Count > 1 ? $" groups={groups.Count}" : "")}" });
-        await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems });
+        await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems, BatchId = result.BatchId?.ToString() });
         return resp;
     }
 

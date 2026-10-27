@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { applyOrganize, openOrganizeFile, removeOrganize, undoOrganize, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
+import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
 import { formatBytes, leaf } from '../../lib/format';
 import {
   GALLERY_PAGE, checkFolderName, defaultSettings, fileTag, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
@@ -282,7 +282,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
   async function undo(batchId: string, label: string, copy: boolean) {
     setBusy(true);
     try {
-      const result = await undoOrganize(batchId), was = undoable.current.get(batchId);
+      const result = await undoChange(batchId), was = undoable.current.get(batchId);
       undoable.current.delete(batchId);
       // The files are back where they were, and so is what had been arranged for them.
       if (was) {

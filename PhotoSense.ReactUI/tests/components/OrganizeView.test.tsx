@@ -10,7 +10,7 @@ import { deferred } from '../fakeSignalR';
 import { organizeFile as file, organizePlace as place } from '../fixtures';
 
 const api = vi.hoisted(() => ({
-  useOrganizeFiles: vi.fn(), useOrganizeBatches: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoOrganize: vi.fn(), openOrganizeFile: vi.fn(), browseFolders: vi.fn(),
+  useOrganizeFiles: vi.fn(), useOrganizeBatches: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), openOrganizeFile: vi.fn(), browseFolders: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // What has been read so far of a folder that is still being read.
@@ -594,7 +594,7 @@ describe('deleting files', () => {
 
   it('asks first, then takes the files off the page at once and offers to put them back', async () => {
     api.removeOrganize.mockResolvedValue(applied({ batchId: 'r1', done: 2, bytes: 12_186_000, companions: 1, items: held('a1', 'n1') }));
-    api.undoOrganize.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
+    api.undoChange.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
     open();
     await userEvent.click(tile('a1.JPG'));
     await userEvent.click(tile('n1.JPG'));
@@ -621,7 +621,7 @@ describe('deleting files', () => {
     // Undone from the message, they are back.
     const undo = notify.mock.calls[notify.mock.calls.length - 1][2] as { run(): void };
     await act(async () => undo.run());
-    expect(api.undoOrganize).toHaveBeenCalledExactlyOnceWith('r1');
+    expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('r1');
     expect(notify).toHaveBeenLastCalledWith('Moved 2 files back to where they were', 'ok');
     expect(shownNames()).toHaveLength(7);
   });
@@ -743,7 +743,7 @@ describe('deleting files', () => {
       listings[ROOT] = { data: listing(ROOT, [at('a1', 0), at('b1', 1), at('b2', 1)]) };
       nameTaken();
       goes();
-      api.undoOrganize.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+      api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
       open();
       await review('Anaconda');
       await userEvent.click(bin('Delete a1.JPG, moving'));
@@ -847,7 +847,7 @@ describe('moving, copying and undoing', () => {
 
   it('takes a move back from its message, putting back what had been arranged for the files', async () => {
     api.applyOrganize.mockImplementation(async (request: OrganizeApplyRequest) => butte(request));
-    api.undoOrganize.mockResolvedValue({ restored: 3, skipped: 0, problems: [] });
+    api.undoChange.mockResolvedValue({ restored: 3, skipped: 0, problems: [] });
     const { refresh } = open();
     // One of the two had been put in a folder of the person's own, then dropped on the suggestion with the other.
     fireEvent.dragStart(tile('n1.JPG'), dragged());
@@ -859,7 +859,7 @@ describe('moving, copying and undoing', () => {
 
     const undo = notify.mock.calls[notify.mock.calls.length - 1][2] as { run(): void };
     await act(async () => undo.run());
-    expect(api.undoOrganize).toHaveBeenCalledExactlyOnceWith('b1');
+    expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('b1');
     expect(notify).toHaveBeenLastCalledWith('Moved 3 files back to where they were', 'ok');
     refresh();
     expect(tile('b1.JPG')).not.toHaveTextContent('In Uptown Butte');
@@ -871,7 +871,7 @@ describe('moving, copying and undoing', () => {
     api.applyOrganize.mockImplementation(async (request: OrganizeApplyRequest) => applied({
       batchId: 'b7', done: 1, bytes: 6_093_000, companions: 2, renamed: 1, items: [{ id: 'a1', path: `${ROOT}\\Trips\\a1 (1).JPG` }],
     }));
-    api.undoOrganize.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+    api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
     const { refresh } = open();
     await userEvent.click(tile('a1.JPG'));
     await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
@@ -904,7 +904,7 @@ describe('moving, copying and undoing', () => {
 
   it('undoes a move made before the page was opened, going by what the service says of it', async () => {
     batches = [{ id: 'old-1', label: 'Anaconda', mode: 'copy', count: 9, bytes: 1, utc: '2026-10-08T18:20:35Z' }, { id: 'old-2', label: '2023', mode: 'move', count: 1, bytes: 1, utc: '2026-10-08T18:20:35Z' }];
-    api.undoOrganize.mockResolvedValueOnce({ restored: 9, skipped: 0, problems: [] }).mockResolvedValueOnce({ restored: 1, skipped: 2, problems: ['IMG_1.JPG is no longer where it was put.'] })
+    api.undoChange.mockResolvedValueOnce({ restored: 9, skipped: 0, problems: [] }).mockResolvedValueOnce({ restored: 1, skipped: 2, problems: ['IMG_1.JPG is no longer where it was put.'] })
       .mockResolvedValueOnce({ restored: 0, skipped: 1, problems: [] }).mockRejectedValueOnce(new Error('There is nothing to undo: this was undone already, or was never done.'));
     open();
     await userEvent.click(within(panel()).getByRole('button', { name: 'Recently moved · 2' }));

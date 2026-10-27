@@ -209,35 +209,63 @@ public sealed class OrganizeMoverTests : IDisposable
     }
 
     [Test]
-    public async Task Says_What_Could_Not_Be_Moved_And_Goes_On_With_The_Rest()
+    public async Task Files_No_Longer_There_Or_Already_In_Place_Are_Left_Out_And_The_Rest_Go()
     {
         var fine = _f.Put("IMG_1.JPG", year: 2022);
-        var blocked = _f.Put("IMG_2.JPG", year: 2023);
         var gone = _f.Put("IMG_3.JPG", year: 2022);
         var settled = _f.Put("There/2022/IMG_4.JPG", year: 2022);
         var withCompanion = _f.Put("IMG_1234.HEIC", year: 2022);
         _f.Put("IMG_1234.MOV", year: 2022);
-        var files = await FilesAsync(fine, blocked, gone, settled, withCompanion);
+        var files = await FilesAsync(fine, gone, settled, withCompanion);
         files.Add(("never-given-out", null));
         File.Delete(gone);
-        // A file stands where the folder for 2023 would have to be made.
-        _f.Put("There/2023");
         // The finder names a companion that is not there to be moved.
         var finder = new Mock<ICompanionFileFinder>();
         finder.Setup(c => c.FindAmong(withCompanion, It.IsAny<IReadOnlyList<string>>())).Returns([_f.In("IMG_1234 missing.MOV")]);
 
         var result = await _f.Mover(finder.Object).ApplyAsync(To("There", yearSplit: true), copy: false, bringCompanions: true, "There", files);
 
-        await Assert.That((result.Done, result.Skipped, result.Companions)).IsEqualTo((2, 3, 0));
-        await Assert.That(result.Problems.Count).IsEqualTo(4);
+        await Assert.That((result.Done, result.Skipped, result.Companions)).IsEqualTo((2, 2, 0));
         await Assert.That(result.Problems.Count(p => p.StartsWith("A file is no longer where it was."))).IsEqualTo(2);
-        await Assert.That(result.Problems.Count(p => p.StartsWith("IMG_2.JPG: "))).IsEqualTo(1);
-        await Assert.That(result.Problems.Count(p => p.StartsWith("IMG_1234 missing.MOV: "))).IsEqualTo(1);
+        await Assert.That(result.Problems.Count(p => p == "IMG_1234 missing.MOV is no longer where it was, so it stays behind.")).IsEqualTo(1);
         await Assert.That(_f.Files("There", "2022")).IsEquivalentTo(new[] { "IMG_1.JPG", "IMG_1234.HEIC", "IMG_4.JPG" }, CollectionOrdering.Matching);
-        await Assert.That(File.Exists(blocked)).IsTrue();
         // Only the file that had another of its item beside it was asked about.
         finder.Verify(c => c.FindAmong(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>()), Times.Once);
         finder.Verify(c => c.FindAmong(withCompanion, It.Is<IReadOnlyList<string>>(s => s.Single() == _f.In("IMG_1234.MOV"))), Times.Once);
+    }
+
+    [Test]
+    public async Task When_One_File_Cannot_Go_None_Does_And_The_Reason_Is_Given()
+    {
+        var fine = _f.Put("IMG_1.JPG", year: 2022);
+        var blocked = _f.Put("IMG_2.JPG", year: 2023);
+        var files = await FilesAsync(fine, blocked);
+        // A file stands where the folder for 2023 would have to be made.
+        _f.Put("There/2023");
+
+        var result = await _f.Mover().ApplyAsync(To("There", yearSplit: true), copy: false, bringCompanions: true, "There", files);
+
+        await Assert.That((result.BatchId, result.Done, result.Skipped, result.Items.Count)).IsEqualTo(((Guid?)null, 0, 2, 0));
+        await Assert.That(result.Problems.Single()).StartsWith($"The folder 2023 could not be made in {_f.In("There")}: ");
+        await Assert.That(result.Problems[0]).EndsWith("Nothing was moved: every file is where it was.");
+        await Assert.That(File.Exists(fine) && File.Exists(blocked)).IsTrue();
+        await Assert.That(Directory.Exists(_f.In("There", "2022"))).IsFalse();
+        await Assert.That(await _f.Batches.RecentAsync()).IsEmpty();
+        await Assert.That(_f.Audited).IsEmpty();
+    }
+
+    [Test]
+    public async Task A_Removal_That_Cannot_Take_One_File_Takes_None()
+    {
+        var a = _f.Put("IMG_1.JPG");
+        var b = _f.Put("IMG_2.JPG");
+        _f.Disk.Fail("move", b);
+
+        var result = await _f.Mover().RemoveAsync(_f.Root.FullName, [await _f.IdAsync(a), await _f.IdAsync(b)]);
+
+        await Assert.That((result.Done, result.Skipped)).IsEqualTo((0, 2));
+        await Assert.That(result.Problems.Single()).IsEqualTo("IMG_2.JPG could not be moved: The disk would not move IMG_2.JPG. Nothing was removed: every file is where it was.");
+        await Assert.That(File.Exists(a) && File.Exists(b)).IsTrue();
     }
 
     [Test]
@@ -284,29 +312,47 @@ public sealed class OrganizeMoverTests : IDisposable
     }
 
     [Test]
-    public async Task Undoing_A_Move_Leaves_Alone_What_It_Cannot_Put_Back()
+    public async Task Undoing_A_Move_Puts_A_File_Back_Under_A_Number_Where_Its_Name_Is_Taken_And_Says_What_Has_Gone()
     {
         var a = _f.Put("IMG_1.JPG", "a");
         var b = _f.Put("IMG_2.JPG", "b");
+        var d = _f.Put("IMG_4.JPG", "d");
+        var mover = _f.Mover();
+        var result = await mover.ApplyAsync(To("There"), copy: false, bringCompanions: false, "There", await FilesAsync(a, b, d));
+        // One has been taken out of the folder since, and another's old place has a new file in it.
+        File.Delete(_f.In("There", "IMG_1.JPG"));
+        _f.Put("IMG_2.JPG", "someone else's");
+
+        var undone = await mover.UndoAsync(result.BatchId!.Value);
+
+        await Assert.That((undone.Found, undone.Restored, undone.Skipped)).IsEqualTo((true, 2, 1));
+        await Assert.That(undone.Problems.Single()).IsEqualTo("IMG_1.JPG is no longer where it was put.");
+        await Assert.That((File.ReadAllText(_f.In("IMG_2.JPG")), File.ReadAllText(_f.In("IMG_2 (1).JPG")), File.ReadAllText(d))).IsEqualTo(("someone else's", "b", "d"));
+        await Assert.That(Directory.Exists(_f.In("There"))).IsFalse();
+        // The library knows each file where it now is.
+        await Assert.That((await _f.Library.DescribeAsync(_f.In("IMG_2 (1).JPG")))!.SizeBytes).IsEqualTo(1);
+        await Assert.That(_f.Audited[1].Details).IsEqualTo("2 files put back, 1 left");
+    }
+
+    [Test]
+    public async Task An_Undo_That_Cannot_Put_One_File_Back_Puts_None_Back()
+    {
         var c = _f.Put("Old/IMG_3.JPG", "c");
         var d = _f.Put("IMG_4.JPG", "d");
         var mover = _f.Mover();
-        var result = await mover.ApplyAsync(To("There"), copy: false, bringCompanions: false, "There", await FilesAsync(a, b, c, d));
-        // One has been taken out of the folder since; another's old place has a new file in it; where a third came from, a file now stands.
-        File.Delete(_f.In("There", "IMG_1.JPG"));
-        _f.Put("IMG_2.JPG", "someone else's");
+        var result = await mover.ApplyAsync(To("There"), copy: false, bringCompanions: false, "There", await FilesAsync(c, d));
+        // Where the first came from, a file now stands.
         Directory.Delete(_f.In("Old"));
         _f.Put("Old");
 
         var undone = await mover.UndoAsync(result.BatchId!.Value);
 
-        await Assert.That((undone.Found, undone.Restored, undone.Skipped)).IsEqualTo((true, 1, 3));
-        await Assert.That(undone.Problems.Count(p => p == "IMG_1.JPG is no longer where it was put.")).IsEqualTo(1);
-        await Assert.That(undone.Problems.Count(p => p == "IMG_2.JPG was left where it is: another file now has its old place.")).IsEqualTo(1);
-        await Assert.That(undone.Problems.Count(p => p.StartsWith("IMG_3.JPG: "))).IsEqualTo(1);
-        await Assert.That((File.ReadAllText(_f.In("IMG_2.JPG")), File.ReadAllText(d))).IsEqualTo(("someone else's", "d"));
-        await Assert.That(_f.Files("There")).IsEquivalentTo(new[] { "IMG_2.JPG", "IMG_3.JPG" }, CollectionOrdering.Matching);
-        await Assert.That(_f.Audited[1].Details).IsEqualTo("1 files put back, 3 left");
+        await Assert.That((undone.Found, undone.Restored, undone.Skipped)).IsEqualTo((true, 0, 2));
+        await Assert.That(undone.Problems.Single()).StartsWith($"The folder Old could not be made in {_f.Root.FullName}: ");
+        await Assert.That(_f.Files("There")).IsEquivalentTo(new[] { "IMG_3.JPG", "IMG_4.JPG" }, CollectionOrdering.Matching);
+        await Assert.That(File.Exists(d)).IsFalse();
+        // Nothing was undone, so it can be undone once the way is clear.
+        await Assert.That(await _f.Batches.RecentAsync()).IsNotEmpty();
     }
 
     [Test]

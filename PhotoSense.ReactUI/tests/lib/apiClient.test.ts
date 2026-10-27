@@ -116,30 +116,32 @@ describe('requests that act on photos', () => {
     expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
   });
 
-  it('remove the copies of several groups together, a few dozen named in each request, and list the groups afresh once', async () => {
-    fetchMock.mockImplementation(async url => reply({ removed: String(url).split('group=').length - 1, bytes: 100, skipped: 1, companions: 2, problems: ['one was left alone'] }));
+  it('remove the copies of several groups as one change, however many are named, and list the groups afresh', async () => {
+    const done = { removed: 85, bytes: 300, skipped: 1, companions: 2, problems: ['one was left alone'], batchId: 'b1' };
+    answering(done);
     const api = await load();
     const keys = Array.from({ length: 85 }, (_, i) => `g ${i}`);
 
-    await expect(api.removeGroups(keys, 'duplicates')).resolves.toEqual({ removed: 85, bytes: 300, skipped: 3, companions: 6, problems: ['one was left alone', 'one was left alone', 'one was left alone'] });
-    expect(api.GROUPS_AT_ONCE).toBe(40);
-    expect(fetchMock.mock.calls.map(c => String(c[0]).split('group=').length - 1)).toEqual([40, 40, 5]);
-    expect(lastRequest()).toEqual({ url: `${API}/photos/bulk/remove-duplicates?group=g%2080&group=g%2081&group=g%2082&group=g%2083&group=g%2084`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    await expect(api.removeGroups(keys, 'duplicates')).resolves.toEqual(done);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(lastRequest()).toEqual({
+      url: `${API}/photos/bulk/remove-duplicates`,
+      init: { method: 'POST', body: JSON.stringify({ groups: keys }), headers: { 'Content-Type': 'application/json', 'x-photosense-client': 'web' } },
+    });
     expect(swr.mutate).toHaveBeenCalledOnce();
 
     await api.removeGroups(['gS', 'gT'], 'similar');
-    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS&group=gT&mode=similar`);
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
     // With no group named nothing is asked for, least of all "every duplicate".
     fetchMock.mockClear();
     await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('list the groups afresh even when removing the copies of several failed part of the way', async () => {
-    fetchMock.mockImplementationOnce(async () => reply({ removed: 40, bytes: 0, skipped: 0, companions: 0, problems: [] })).mockImplementationOnce(async () => reply('The disk is full', 500));
+  it('say why the copies of several groups were not removed', async () => {
+    answering('The disk is full', 500);
     const api = await load();
-    await expect(api.removeGroups(Array.from({ length: 50 }, (_, i) => `g${i}`), 'duplicates')).rejects.toMatchObject({ message: 'The disk is full' });
-    expect(swr.mutate).toHaveBeenCalledOnce();
+    await expect(api.removeGroups(['g1'], 'duplicates')).rejects.toMatchObject({ message: 'The disk is full' });
   });
 
   it('list the folders of the service\'s machine, from the top or inside one of them', async () => {
@@ -336,12 +338,12 @@ describe('organize', () => {
 
     swr.mutate.mockClear();
     answering({ restored: 1, skipped: 0, problems: [] });
-    await expect(api.undoOrganize('b 1')).resolves.toEqual({ restored: 1, skipped: 0, problems: [] });
+    await expect(api.undoChange('b 1')).resolves.toEqual({ restored: 1, skipped: 0, problems: [] });
     expect(lastRequest()).toEqual({ url: `${API}/organize/undo/b%201`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
     expect(swr.mutate).toHaveBeenCalledTimes(2);
 
     answering('There is nothing to undo: this was undone already, or was never done.', 404);
-    await expect(api.undoOrganize('b1')).rejects.toMatchObject({ message: 'There is nothing to undo: this was undone already, or was never done.' });
+    await expect(api.undoChange('b1')).rejects.toMatchObject({ message: 'There is nothing to undo: this was undone already, or was never done.' });
   });
 
   it('opens a file in the default viewer of the service\'s machine', async () => {

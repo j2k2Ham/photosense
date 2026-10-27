@@ -3,6 +3,8 @@ using PhotoSense.Application.Scanning.Services;
 
 namespace PhotoSense.Tests.Application;
 
+// The queue is shared by every publisher, so these two must not run at the same moment.
+[NotInParallel("scan-request-queue")]
 public class ScanRequestPublisherTests
 {
     [Test]

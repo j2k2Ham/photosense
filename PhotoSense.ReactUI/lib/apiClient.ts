@@ -2,7 +2,7 @@ import useSWR, { mutate } from 'swr';
 import * as signalR from '@microsoft/signalr';
 import type {
   BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
 } from '../types';
 
 // Base URL can point at Blazor server (proxy) or Functions API.
@@ -124,7 +124,7 @@ export async function setKept(id: string, kept: boolean){
 }
 
 /** Moves one file, and the sidecars and Live Photo video that belong to it alone, to the holding folder. */
-export async function removePhoto(id: string): Promise<{ companions: number }> {
+export async function removePhoto(id: string): Promise<RemovePhotoResultDto> {
   const res = await send(`${API_BASE}/photos/${id}?physical=true`, 'DELETE');
   const result = await res.json();
   await refreshGroups();
@@ -145,31 +145,18 @@ export async function removeDuplicates(groupKey?: string, mode: GroupMode = 'dup
   return result;
 }
 
-/** How many groups one request names, so that no request grows longer than a server will take. */
-export const GROUPS_AT_ONCE = 40;
-
 /**
  * Moves the duplicates of each of the groups named to the holding folder, or their similar shots when
- * asked for those. The best of each group stays.
+ * asked for those, as one change: should one file not move, none does. The best of each group stays.
  */
 export async function removeGroups(groupKeys: string[], mode: GroupMode): Promise<BulkRemovalResultDto> {
-  const total: BulkRemovalResultDto = { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
-  try {
-    for (let from = 0; from < groupKeys.length; from += GROUPS_AT_ONCE) {
-      const named = groupKeys.slice(from, from + GROUPS_AT_ONCE).map(key => `group=${encodeURIComponent(key)}`).join('&');
-      const res = await send(`${API_BASE}/photos/bulk/remove-duplicates?${named}${mode === 'similar' ? '&mode=similar' : ''}`, 'POST');
-      const part: BulkRemovalResultDto = await res.json();
-      total.removed += part.removed;
-      total.bytes += part.bytes;
-      total.skipped += part.skipped;
-      total.companions += part.companions;
-      total.problems.push(...part.problems);
-    }
-  } finally {
-    // What went before a request failed has gone all the same.
-    await refreshGroups();
-  }
-  return total;
+  // With no group named the service would take every duplicate.
+  if (groupKeys.length === 0) return { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
+  // Named in the body, as more of them than an address holds can be ticked.
+  const result = await json<BulkRemovalResultDto>(`${API_BASE}/photos/bulk/remove-duplicates${mode === 'similar' ? '?mode=similar' : ''}`,
+    { method: 'POST', body: JSON.stringify({ groups: groupKeys }) });
+  await refreshGroups();
+  return result;
 }
 
 /** Forgets everything earlier scans recorded. The photos themselves are not touched. */
@@ -250,8 +237,8 @@ export async function removeOrganize(root: string, fileIds: string[]) {
   return result;
 }
 
-/** Takes one move, copy or removal back. */
-export async function undoOrganize(batchId: string): Promise<OrganizeUndoDto> {
+/** Takes one move, copy or removal back, from Organize or Clean up alike. */
+export async function undoChange(batchId: string): Promise<OrganizeUndoDto> {
   const res = await send(`${API_BASE}/organize/undo/${encodeURIComponent(batchId)}`, 'POST');
   const result = await res.json();
   await refreshOrganize();

@@ -1,3 +1,5 @@
+using PhotoSense.Application.Changes;
+using PhotoSense.Application.Removal;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
@@ -20,24 +22,23 @@ public sealed record OrganizeResult(Guid? BatchId, int Done, long Bytes, int Com
 public sealed record OrganizeUndoResult(bool Found, int Restored, int Skipped, IReadOnlyList<string> Problems);
 
 /// <summary>
-/// Moves or copies files into a folder, takes files out of their folders, and can take any of it back.
-/// Nothing is ever replaced: a file arriving under a name that is taken gets a number, whatever name was
-/// asked for. Nothing is ever erased: a file that is removed goes to the folder that holds removed files.
+/// Moves or copies files into a folder, takes files out of their folders, and can take any of it back, each
+/// as a whole: when one file cannot go, none does. Nothing is ever replaced: a file arriving under a name
+/// that is taken gets a number, whatever name was asked for. Nothing is ever erased: a file that is removed
+/// goes to the folder that holds removed files.
 /// </summary>
 public sealed class OrganizeMover
 {
     private readonly OrganizeLibrary _library;
     private readonly ICompanionFileFinder _companions;
-    private readonly IPhotoRepository _repo;
-    private readonly IOrganizeBatchStore _batches;
+    private readonly FileChanges _changes;
     private readonly IAuditRepository _audit;
 
-    public OrganizeMover(OrganizeLibrary library, ICompanionFileFinder companions, IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit)
+    public OrganizeMover(OrganizeLibrary library, ICompanionFileFinder companions, FileChanges changes, IAuditRepository audit)
     {
         _library = library;
         _companions = companions;
-        _repo = repo;
-        _batches = batches;
+        _changes = changes;
         _audit = audit;
     }
 
@@ -53,44 +54,41 @@ public sealed class OrganizeMover
     /// Takes files out of their folders, with the Live Photo videos and edit files that belong to them and to
     /// nothing else. They go to the folder that holds removed files inside <paramref name="root"/>, each
     /// keeping its place relative to the root, so that putting one back is a matter of moving it up; an undo
-    /// does that. What a scan recorded of a removed file is dropped, as it is when Clean up removes one.
+    /// does that. What a scan recorded of a removed file is dropped, as it is when Clean up removes one, and
+    /// an undo brings it back.
     /// </summary>
     /// <param name="root">The folder being organized.</param>
     public Task<OrganizeResult> RemoveAsync(string root, IReadOnlyList<string> ids, CancellationToken ct = default)
     {
         var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-        var held = Path.Combine(folder, PhotoStorageOptions.RemovedFolderName);
-        string HeldFor(LibraryFile file, int _)
-        {
-            var target = Path.GetFullPath(Path.Combine(held, Path.GetRelativePath(folder, file.Folder)));
-            // A file from outside the root is held beside itself.
-            var inside = (PhotoPath.Key(target) + Path.DirectorySeparatorChar).StartsWith(PhotoPath.Key(held) + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-            return inside ? target : Path.Combine(file.Folder, PhotoStorageOptions.RemovedFolderName);
-        }
-        return CarryOutAsync(new OrganizeBatch { Label = folder, Removed = true }, ids.Select(id => (id, (string?)null)).ToList(), bringCompanions: true, HeldFor, "OrganizeRemove", held, ct);
+        return CarryOutAsync(new OrganizeBatch { Label = folder, Removed = true }, ids.Select(id => (id, (string?)null)).ToList(), bringCompanions: true,
+            (file, _) => Path.GetDirectoryName(RemovedPlace.For(file.Path, folder))!, "OrganizeRemove", Path.Combine(folder, PhotoStorageOptions.RemovedFolderName), ct);
     }
 
     private async Task<OrganizeResult> CarryOutAsync(OrganizeBatch batch, IReadOnlyList<(string Id, string? Name)> files, bool bringCompanions,
         Func<LibraryFile, int, string> folderOf, string action, string where, CancellationToken ct)
     {
         var problems = new List<string>();
-        var items = new List<(string, string)>();
-        // Files that have already gone along with the picture they belong to, and where each now is.
-        var carried = new Dictionary<string, string>(PhotoPath.Comparer);
+        // Each file asked for that is to go, by its id, and the place it is going to.
+        var asked = new List<(string Id, OrganizeBatchItem Item)>();
+        // Files going along with the picture they belong to.
+        var carried = new Dictionary<string, OrganizeBatchItem>(PhotoPath.Comparer);
+        var going = new HashSet<string>(PhotoPath.Comparer);
+        var taken = new HashSet<string>(PhotoPath.Comparer);
         var siblings = new SiblingIndex();
-        int renamed = 0, skipped = 0, companionCount = 0;
+        var skipped = 0;
 
         for (var i = 0; i < files.Count; i++)
         {
             var (id, wanted) = files[i];
+            // Asked for as well, a file that goes along with its picture goes once: whoever asked is told where to.
+            if (_library.PathOf(id) is { } was && carried.TryGetValue(was, out var along))
+            {
+                asked.Add((id, along));
+                continue;
+            }
             if (await _library.FindAsync(id, ct) is not { } file)
             {
-                // Asked for as well, a file that went along with its picture has gone too: whoever asked is told where it is.
-                if (_library.PathOf(id) is { } was && carried.TryGetValue(was, out var now))
-                {
-                    items.Add((id, now));
-                    continue;
-                }
                 skipped++;
                 problems.Add("A file is no longer where it was. Choose the folder again to see what is there now.");
                 continue;
@@ -98,135 +96,53 @@ public sealed class OrganizeMover
             var folder = folderOf(file, i);
             if (PhotoPath.Comparer.Equals(file.Folder, folder)) continue;
 
-            // Worked out while the file is still in place.
-            var others = bringCompanions ? siblings.SiblingsOf(file.Path, stillThere: true) : [];
-            var companions = others.Count > 0 ? _companions.FindAmong(file.Path, others) : [];
-            string arrived;
-            try
+            var item = Plan(batch, file.Path, folder, NameRules.Usable(wanted, file.Name) ? wanted! : file.Name, companion: false, taken, going);
+            asked.Add((id, item));
+            var others = bringCompanions ? siblings.SiblingsOf(file.Path, stillThere: true).Where(s => !going.Contains(s)).ToList() : [];
+            foreach (var companion in others.Count > 0 ? _companions.FindAmong(file.Path, others) : [])
             {
-                MakeFolder(folder, batch.CreatedFolders);
-                arrived = await TransferAsync(file.Path, folder, NameRules.Usable(wanted, file.Name) ? wanted! : file.Name, batch, companion: false, ct);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                skipped++;
-                problems.Add($"{file.Name}: {ex.Message}");
-                continue;
-            }
-            batch.Files++;
-            batch.Bytes += file.SizeBytes;
-            items.Add((id, arrived));
-            if (!string.Equals(Path.GetFileName(arrived), file.Name, StringComparison.Ordinal)) renamed++;
-
-            foreach (var companion in companions)
-            {
+                if (!File.Exists(companion))
+                {
+                    problems.Add($"{Path.GetFileName(companion)} is no longer where it was, so it stays behind.");
+                    continue;
+                }
                 // It keeps the picture's name where it shared it, so that the two still belong together.
                 var sharesName = string.Equals(Path.GetFileNameWithoutExtension(companion), Path.GetFileNameWithoutExtension(file.Name), StringComparison.OrdinalIgnoreCase);
-                var name = sharesName ? Path.GetFileNameWithoutExtension(arrived) + Path.GetExtension(companion) : Path.GetFileName(companion);
-                try
-                {
-                    carried[companion] = await TransferAsync(companion, folder, name, batch, companion: true, ct);
-                    companionCount++;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    problems.Add($"{Path.GetFileName(companion)}: {ex.Message}");
-                }
+                var name = sharesName ? Path.GetFileNameWithoutExtension(item.To) + Path.GetExtension(companion) : Path.GetFileName(companion);
+                carried[companion] = Plan(batch, companion, folder, name, companion: true, taken, going);
             }
         }
 
-        if (batch.Items.Count == 0) return new OrganizeResult(null, 0, 0, 0, 0, skipped, problems, items);
-        await _batches.AddAsync(batch, ct);
-        await _audit.AddAsync(new AuditEntry { Action = action, PhotoId = batch.Id.ToString(), Details = $"{batch.Files} files to {where} with {companionCount} linked files" }, ct);
-        return new OrganizeResult(batch.Id, batch.Files, batch.Bytes, companionCount, renamed, skipped, problems, items);
+        if (batch.Items.Count == 0) return new OrganizeResult(null, 0, 0, 0, 0, skipped, problems, []);
+        var outcome = await _changes.CarryOutAsync(batch, ct: ct);
+        if (!outcome.Done) return new OrganizeResult(null, 0, 0, 0, 0, skipped + asked.Count, [outcome.Problem!, .. problems], []);
+
+        foreach (var item in batch.Items) _library.Arrived(item.From, item.To, copied: batch.Copy);
+        var companions = batch.Items.Count(i => i.Companion);
+        var renamed = asked.Count(a => !a.Item.Companion && !string.Equals(Path.GetFileName(a.Item.To), Path.GetFileName(a.Item.From), StringComparison.Ordinal));
+        await _audit.AddAsync(new AuditEntry { Action = action, PhotoId = batch.Id.ToString(), Details = $"{batch.Files} files to {where} with {companions} linked files" }, ct);
+        return new OrganizeResult(batch.Id, batch.Files, batch.Bytes, companions, renamed, skipped, problems, asked.Select(a => (a.Id, a.Item.To)).ToList());
+    }
+
+    // A file's place in the change: under the name asked for, or that name numbered when it is taken on disk or by another file going there.
+    private OrganizeBatchItem Plan(OrganizeBatch batch, string from, string folder, string name, bool companion, HashSet<string> taken, HashSet<string> going)
+    {
+        _changes.NeedFolder(batch.CreatedFolders, folder);
+        var item = new OrganizeBatchItem { From = from, To = _changes.FreePlace(Path.Combine(folder, name), taken), Companion = companion };
+        batch.Items.Add(item);
+        going.Add(from);
+        return item;
     }
 
     public async Task<OrganizeUndoResult> UndoAsync(Guid batchId, CancellationToken ct = default)
     {
-        if (await _batches.GetAsync(batchId, ct) is not { Undone: false } batch) return new OrganizeUndoResult(false, 0, 0, []);
-        var problems = new List<string>();
-        int restored = 0, skipped = 0;
-
-        foreach (var item in Enumerable.Reverse(batch.Items))
-        {
-            var name = Path.GetFileName(item.To);
-            try
-            {
-                var there = new FileInfo(item.To);
-                string? problem = !there.Exists ? $"{name} is no longer where it was put."
-                    : batch.Copy ? RemoveCopy(there, item)
-                    : File.Exists(item.From) ? $"{name} was left where it is: another file now has its old place."
-                    : null;
-                if (problem is null && !batch.Copy)
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(item.From)!);
-                    File.Move(item.To, item.From);
-                    await RecordMoveAsync(item.To, item.From, ct);
-                }
-                if (problem is not null) { skipped++; problems.Add(problem); }
-                else if (!item.Companion) restored++;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                skipped++;
-                problems.Add($"{name}: {ex.Message}");
-            }
-        }
-
-        // The folders that were made for the files go again, where the undo has left them empty.
-        foreach (var folder in batch.CreatedFolders.OrderByDescending(f => f.Length))
-            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any()) Directory.Delete(folder);
-
-        await _batches.MarkUndoneAsync(batchId, ct);
-        await _audit.AddAsync(new AuditEntry { Action = "OrganizeUndo", PhotoId = batchId.ToString(), Details = $"{restored} files put back, {skipped} left" }, ct);
-        return new OrganizeUndoResult(true, restored, skipped, problems);
-    }
-
-    // A copy goes only while it is still the file that was written and what it was copied from is still there.
-    private static string? RemoveCopy(FileInfo copy, OrganizeBatchItem item)
-    {
-        if (copy.Length != item.SizeBytes || copy.LastWriteTimeUtc.Ticks != item.ModifiedUtcTicks) return $"{copy.Name} has changed since it was copied, so it was left.";
-        if (!File.Exists(item.From)) return $"{copy.Name} was left: the file it was copied from is no longer there.";
-        copy.Delete();
-        return null;
-    }
-
-    private async Task<string> TransferAsync(string from, string folder, string name, OrganizeBatch batch, bool companion, CancellationToken ct)
-    {
-        if (File.Exists(Path.Combine(folder, name))) name = NameRules.NextFree(name, n => File.Exists(Path.Combine(folder, n)));
-        var to = Path.Combine(folder, name);
-        // Neither replaces a file: should one appear under the name at this very moment, the transfer fails.
-        if (batch.Copy) File.Copy(from, to, overwrite: false);
-        else File.Move(from, to, overwrite: false);
-
-        var arrived = new FileInfo(to);
-        batch.Items.Add(new OrganizeBatchItem { From = from, To = to, SizeBytes = arrived.Length, ModifiedUtcTicks = arrived.LastWriteTimeUtc.Ticks, Companion = companion });
-        if (batch.Copy) _library.Arrived(from, to, copied: true);
-        else if (batch.Removed) await ForgetAsync(from, to, ct);
-        else await RecordMoveAsync(from, to, ct);
-        return to;
-    }
-
-    // A scan's record of the file follows it, so that the Clean up screens still find it.
-    private async Task RecordMoveAsync(string from, string to, CancellationToken ct)
-    {
-        _library.Arrived(from, to, copied: false);
-        if (await _repo.GetByPathAsync(from, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(to), ct);
-    }
-
-    // A removed file is no longer one of the scanned pictures: the Clean up screens must not go on listing it.
-    private async Task ForgetAsync(string from, string to, CancellationToken ct)
-    {
-        _library.Arrived(from, to, copied: false);
-        if (await _repo.GetByPathAsync(from, ct) is { } photo) await _repo.DeleteAsync(photo.Id, ct);
-    }
-
-    private static void MakeFolder(string folder, List<string> created)
-    {
-        var missing = new List<string>();
-        // The folder is inside one that is there, so going up from it always arrives at a folder that exists.
-        for (var at = folder; !Directory.Exists(at); at = Path.GetDirectoryName(at)!) missing.Add(at);
-        Directory.CreateDirectory(folder);
-        created.AddRange(missing.Where(m => !created.Contains(m, PhotoPath.Comparer)));
+        var undone = await _changes.UndoAsync(batchId, ct);
+        if (!undone.Found) return new OrganizeUndoResult(false, 0, 0, []);
+        if (!undone.Done) return new OrganizeUndoResult(true, 0, undone.Back.Count(i => !i.Companion), [undone.Problem!]);
+        if (!undone.Copies)
+            foreach (var item in undone.Back) _library.Arrived(item.To, item.Back!, copied: false);
+        var restored = undone.Back.Count(i => !i.Companion);
+        await _audit.AddAsync(new AuditEntry { Action = "OrganizeUndo", PhotoId = batchId.ToString(), Details = $"{restored} files put back, {undone.Left.Count} left" }, ct);
+        return new OrganizeUndoResult(true, restored, undone.Left.Count, undone.Left);
     }
 }

@@ -62,6 +62,12 @@ public sealed class DuplicateGroupsPageDto
     [JsonPropertyName("items")] public IReadOnlyList<DuplicateGroupDto> Items { get; init; } = [];
 }
 
+/// <summary>Groups whose copies, or similar shots, go together as one change: more than an address can name.</summary>
+public sealed class RemoveGroupsRequest
+{
+    [JsonPropertyName("groups")] public List<string>? Groups { get; init; }
+}
+
 public sealed class BulkRemovalResultDto
 {
     [JsonPropertyName("removed")] public int Removed { get; init; }
@@ -70,4 +76,6 @@ public sealed class BulkRemovalResultDto
     /// <summary>Sidecars and Live Photo videos moved along with the files they belonged to.</summary>
     [JsonPropertyName("companions")] public int Companions { get; init; }
     [JsonPropertyName("problems")] public IReadOnlyList<string> Problems { get; init; } = [];
+    /// <summary>What to undo the removal by; absent when no file was moved.</summary>
+    [JsonPropertyName("batchId")] public string? BatchId { get; init; }
 }

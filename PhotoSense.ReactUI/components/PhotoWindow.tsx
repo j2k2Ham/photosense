@@ -193,7 +193,7 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
               {confirm === 'copy' ? (
                 <div className="rounded-[14px] border border-rose-line bg-rose-bg p-3.5 text-[13.5px]">
                   <p>Move <span className="font-semibold [overflow-wrap:anywhere]">{copy.fileName}</span> ({formatBytes(copy.fileSizeBytes)}) to _PhotoSense_Removed?</p>
-                  <p className="mt-1.5">The {best}, <span className="font-semibold [overflow-wrap:anywhere]">{original.fileName}</span>, stays where it is. The copy can be moved back later.</p>
+                  <p className="mt-1.5">The {best}, <span className="font-semibold [overflow-wrap:anywhere]">{original.fileName}</span>, stays where it is. Undo, on the message that follows, puts the copy back.</p>
                   <div className="mt-3 flex gap-2">
                     <button type="button" onClick={() => setConfirm(undefined)} className="pill-outline h-10 flex-1 text-[14px]">Cancel</button>
                     <button type="button" disabled={busy} onClick={() => onRemove(copy, original)} className="pill-rose h-10 flex-1 text-[14px]">{busy ? 'Working…' : 'Delete this copy'}</button>

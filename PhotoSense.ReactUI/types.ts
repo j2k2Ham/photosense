@@ -61,6 +61,17 @@ export interface BulkRemovalResultDto {
   /** Sidecars and Live Photo videos moved along with the files they belonged to. */
   companions: number;
   problems: string[];
+  /** What to undo the removal by; absent when no file was moved. */
+  batchId?: string | null;
+}
+
+/** What removing one file did. */
+export interface RemovePhotoResultDto {
+  /** Where the file now is, when it was moved. */
+  heldAt: string | null;
+  companions: number;
+  /** What to undo the removal by; absent when no file was moved. */
+  batchId: string | null;
 }
 
 export interface ScanProgressSnapshotDto {

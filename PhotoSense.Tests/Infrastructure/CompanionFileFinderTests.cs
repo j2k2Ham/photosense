@@ -1,9 +1,15 @@
+using LiteDB;
 using Moq;
+using PhotoSense.Application.Changes;
+using PhotoSense.Application.Scanning.Interfaces;
+using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Infrastructure.Persistence;
+using PhotoSense.Tests.Application;
 
 namespace PhotoSense.Tests.Infrastructure;
 
@@ -124,11 +130,16 @@ public sealed class CompanionFileFinderTests : IDisposable
         await Assert.That(_finder.FindFor(Path.Combine(_root.FullName, "missing-folder", "IMG_1.HEIC"))).IsEmpty();
     }
 
+    // Removes photos the way Clean up does, through a journal of its own.
+    private DuplicateRemovalService Remover(InMemoryPhotoRepository repo, Disk? disk = null)
+        => new(new DuplicateAnalysisService(repo), repo, _finder,
+            new FileChanges(new LiteDbOrganizeBatchStore(new LiteDatabase(new MemoryStream())), repo, Mock.Of<IAuditRepository>(), disk), Mock.Of<IIntegrationEventPublisher>());
+
     [Test]
     public async Task Removing_A_Photo_Moves_Its_Companions_With_It_And_Forgets_Their_Records()
     {
         var repo = new InMemoryPhotoRepository();
-        var service = new FileSystemPhotoDeletionService(repo, Mock.Of<IIntegrationEventPublisher>(), _finder);
+        var service = Remover(repo);
         var picturePath = Put(Path.Combine("2024", "IMG_1234.HEIC"), "id:AAAA");
         var videoPath = Put(Path.Combine("2024", "IMG_1234.MOV"), "id:AAAA");
         var sidecarPath = Put(Path.Combine("2024", "IMG_1234.AAE"));
@@ -138,7 +149,7 @@ public sealed class CompanionFileFinderTests : IDisposable
         await repo.AddOrUpdateAsync(picture);
         await repo.AddOrUpdateAsync(video);
 
-        var result = await service.DeleteAsync(picture.Id, deleteFile: true);
+        var result = await service.RemoveAsync(picture.Id, deleteFile: true);
 
         await Assert.That(result.Succeeded).IsTrue();
         await Assert.That(result.Companions.OrderBy(p => p)).IsEquivalentTo(new[] { sidecarPath, videoPath }.OrderBy(p => p), CollectionOrdering.Matching);
@@ -152,27 +163,25 @@ public sealed class CompanionFileFinderTests : IDisposable
         var kept = Record(Put("IMG_5000.HEIC", "id:CCCC"));
         Put("IMG_5000.AAE");
         await repo.AddOrUpdateAsync(kept);
-        await Assert.That((await service.DeleteAsync(kept.Id, deleteFile: false)).Companions).IsEmpty();
+        await Assert.That((await service.RemoveAsync(kept.Id, deleteFile: false)).Companions).IsEmpty();
         await Assert.That(File.Exists(Path.Combine(_root.FullName, "IMG_5000.AAE"))).IsTrue();
     }
 
     [Test]
-    public async Task A_Companion_That_Cannot_Be_Moved_Stays_And_The_Photo_Still_Goes()
+    public async Task A_Companion_That_Cannot_Be_Moved_Keeps_Its_Photo_Where_It_Is_Too()
     {
         var repo = new InMemoryPhotoRepository();
-        var service = new FileSystemPhotoDeletionService(repo, Mock.Of<IIntegrationEventPublisher>(), _finder);
-        var picture = Record(Put("IMG_1234.HEIC", "id:AAAA"));
         var sidecarPath = Put("IMG_1234.AAE");
+        var service = Remover(repo, new FailingDisk().Fail("move", sidecarPath));
+        var picture = Record(Put("IMG_1234.HEIC", "id:AAAA"));
         await repo.AddOrUpdateAsync(picture);
 
-        RemovalResult result;
-        using (new FileStream(sidecarPath, FileMode.Open, FileAccess.Read, FileShare.None))
-            result = await service.DeleteAsync(picture.Id, deleteFile: true);
+        var result = await service.RemoveAsync(picture.Id, deleteFile: true);
 
-        await Assert.That(result.Succeeded).IsTrue();
-        await Assert.That(result.Companions).IsEmpty();
-        await Assert.That(File.Exists(sidecarPath)).IsTrue();
-        await Assert.That(File.Exists(picture.SourcePath)).IsFalse();
+        // Taking the photo without its sidecar would leave the sidecar with nothing to belong to.
+        await Assert.That((result.Outcome, result.Error)).IsEqualTo((RemovalOutcome.Failed, (string?)"IMG_1234.AAE could not be moved: The disk would not move IMG_1234.AAE. Nothing was removed: every file is where it was."));
+        await Assert.That(File.Exists(sidecarPath) && File.Exists(picture.SourcePath)).IsTrue();
+        await Assert.That(await repo.GetAsync(picture.Id)).IsNotNull();
     }
 
     private Photo Record(string path)

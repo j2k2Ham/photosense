@@ -11,7 +11,7 @@ import { group, groupsPage, member, photo } from '../fixtures';
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
-  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(),
+  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
@@ -175,7 +175,7 @@ describe('the results', () => {
     expect(tab(/Similar/)).toHaveTextContent('Similar1');
     expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
     expect(container).toHaveTextContent('3 duplicate files taking 14.5 MB. The best copy of each picture or video is kept.');
-    expect(container).toHaveTextContent('Deleted files move to _PhotoSense_Removed and can be moved back.');
+    expect(container).toHaveTextContent('Deleted files move to _PhotoSense_Removed, and Undo puts them back.');
     expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
     expect(desk()).toHaveTextContent('IMG_4198.JPG2 duplicates · 8.7 MB to free');
     expect(api.useGroups.mock.calls[0]).toEqual(['duplicates', '', 1, false]);
@@ -537,7 +537,7 @@ describe('deleting', () => {
     await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
     expect(screen.getByRole('alertdialog', { name: 'Delete IMG_4198 (1).JPG?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent('IMG_4198 (1).JPG (5.8 MB) will be removed.The original, IMG_4198.JPG, stays in C:\\photos\\2024.');
-    expect(question()).toHaveTextContent('Files go to _PhotoSense_Removed inside the scanned folder. Moving a file back restores it; Delete permanently, in the menu, erases them.');
+    expect(question()).toHaveTextContent('Files go to _PhotoSense_Removed inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
     expect(api.removePhoto).toHaveBeenCalledExactlyOnceWith('a1');
     expect(await toast('Moved IMG_4198 (1).JPG to _PhotoSense_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
@@ -768,6 +768,86 @@ describe('ticking groups', () => {
     await click('Delete all duplicates');
     await userEvent.click(within(question()).getByRole('button', { name: /^Delete \d files$/ }));
     await waitFor(noSelection);
+  });
+});
+
+describe('undoing a removal', () => {
+  // The Undo on the message that says what went.
+  const undoOn = async (message: string) => within((await toast(message)).parentElement!).getByRole('button', { name: 'Undo' });
+  const removed = (changes: Partial<{ removed: number; bytes: number; batchId: string }>) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], ...changes });
+
+  it('puts a copy deleted on its own back, from the message that says it went', async () => {
+    api.removePhoto.mockResolvedValue({ heldAt: 'C:\\photos\\2024\\_PhotoSense_Removed\\IMG_4198 (1).JPG', companions: 0, batchId: 'b1' });
+    api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+
+    await userEvent.click(await undoOn('Moved IMG_4198 (1).JPG to _PhotoSense_Removed. IMG_4198.JPG stays where it is.'));
+
+    expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('b1');
+    expect(await toast('Put IMG_4198 (1).JPG back where it was.')).toBeInTheDocument();
+  });
+
+  it('puts back the duplicates of a group, or of every group, as they went', async () => {
+    api.removeDuplicates.mockResolvedValueOnce(removed({ removed: 2, bytes: 9_139_000, batchId: 'b2' })).mockResolvedValueOnce(removed({ removed: 1, bytes: 6_093_000, batchId: 'b3' }));
+    api.undoChange.mockResolvedValueOnce({ restored: 2, skipped: 0, problems: [] }).mockResolvedValueOnce({ restored: 1, skipped: 0, problems: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 2 copies · 8.7 MB' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 2 files' }));
+    await userEvent.click(await undoOn('Moved 2 duplicates (8.7 MB) to _PhotoSense_Removed. IMG_4198.JPG stays where it is.'));
+    expect(await toast('Put the 2 duplicates back where they were.')).toBeInTheDocument();
+
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    await userEvent.click(await undoOn('Moved 1 duplicate (5.8 MB) to _PhotoSense_Removed'));
+    expect(api.undoChange).toHaveBeenLastCalledWith('b3');
+    expect(await toast('Put the duplicate back where it was.')).toBeInTheDocument();
+  });
+
+  it('puts back the copies of the ticked groups, saying what came back and what could not', async () => {
+    api.removeGroups.mockResolvedValue(removed({ removed: 3, bytes: 15_232_000, batchId: 'b4' }));
+    api.undoChange.mockResolvedValue({ restored: 2, skipped: 1, problems: ['IMG_5000 (1).JPG is no longer where it was put.'] });
+    open();
+    await userEvent.click(within(gallery()).getByRole('checkbox', { name: 'Select all' }));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Selected groups' })).getByRole('button', { name: 'Delete their duplicates' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+
+    await userEvent.click(await undoOn('Moved 3 duplicates (14.5 MB) to _PhotoSense_Removed. The original of each group stays where it is.'));
+
+    expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('b4');
+    expect(await toast('Put the 2 duplicates back where they were.')).toBeInTheDocument();
+    expect(await toast('1 could not be put back. IMG_5000 (1).JPG is no longer where it was put.')).toBeInTheDocument();
+  });
+
+  it('says why when nothing could be put back, and offers no Undo for a removal that moved no file', async () => {
+    api.removePhoto.mockResolvedValueOnce({ heldAt: null, companions: 0, batchId: 'b5' }).mockResolvedValueOnce({ heldAt: null, companions: 0, batchId: null });
+    api.undoChange.mockResolvedValue({ restored: 0, skipped: 1, problems: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    const undo = await undoOn('Moved IMG_4198 (1).JPG to _PhotoSense_Removed. IMG_4198.JPG stays where it is.');
+    await userEvent.click(undo);
+    expect(await toast('1 could not be put back.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Put /)).not.toBeInTheDocument();
+
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    // The first message went when its Undo was pressed; this one has none.
+    const message = await toast('Moved IMG_4198 (1).JPG to _PhotoSense_Removed. IMG_4198.JPG stays where it is.');
+    expect(within(message.parentElement!).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('names a similar shot put back on its own', async () => {
+    currentMode = 'similar';
+    api.removePhoto.mockResolvedValue({ heldAt: null, companions: 0, batchId: 'b6' });
+    api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+    open();
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    await userEvent.click(await undoOn('Moved IMG_7002.JPG to _PhotoSense_Removed. IMG_7001.JPG stays where it is.'));
+    expect(await toast('Put IMG_7002.JPG back where it was.')).toBeInTheDocument();
   });
 });
 

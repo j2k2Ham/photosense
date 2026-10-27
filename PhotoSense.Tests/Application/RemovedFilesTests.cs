@@ -74,8 +74,8 @@ public sealed class RemovedFilesTests : IDisposable
         await RemoveAsync(_f.In("Phone"), inside, outside);
         // A move is no removal, wherever it put its files; and a removal says nothing of a folder that has gone, or of a file held nowhere.
         _f.Put($"Moved/{Held}/IMG_3.JPG");
-        await _f.Batches.AddAsync(new OrganizeBatch { Items = [new OrganizeBatchItem { To = _f.In("Moved", Held, "IMG_3.JPG") }] });
-        await _f.Batches.AddAsync(new OrganizeBatch { Removed = true, Items = [new OrganizeBatchItem { To = _f.In("Gone", Held, "IMG_4.JPG") }, new OrganizeBatchItem { To = _f.In("Loose", "IMG_5.JPG") }] });
+        await _f.Batches.SaveAsync(new OrganizeBatch { Items = [new OrganizeBatchItem { To = _f.In("Moved", Held, "IMG_3.JPG") }] });
+        await _f.Batches.SaveAsync(new OrganizeBatch { Removed = true, Items = [new OrganizeBatchItem { To = _f.In("Gone", Held, "IMG_4.JPG") }, new OrganizeBatchItem { To = _f.In("Loose", "IMG_5.JPG") }] });
 
         await Assert.That(await FoundAsync()).IsEquivalentTo(new[] { (_f.In("Elsewhere", Held), 1, 2L), (_f.In("Phone", Held), 1, 4L) }, CollectionOrdering.Any);
     }

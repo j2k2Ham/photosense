@@ -1,6 +1,20 @@
 namespace PhotoSense.Domain.Entities;
 
-/// <summary>One file that a move or copy put somewhere, with what is needed to put it back.</summary>
+/// <summary>
+/// How far a change has got. A change is written down before any file is touched, so one that a stop of
+/// the service cut short is found at the next start and put back as it was before it began.
+/// </summary>
+public enum ChangeState
+{
+    /// <summary>Carried out in full. Records written before changes were written down first read as this, as they were only kept once done.</summary>
+    Done,
+    /// <summary>Being carried out.</summary>
+    Started,
+    /// <summary>Being undone.</summary>
+    Undoing,
+}
+
+/// <summary>One file that a move, copy or removal put somewhere, with what is needed to put it back.</summary>
 public sealed class OrganizeBatchItem
 {
     public string From { get; set; } = string.Empty;
@@ -10,9 +24,14 @@ public sealed class OrganizeBatchItem
     public long ModifiedUtcTicks { get; set; }
     /// <summary>A Live Photo video or edit file that came along with its picture.</summary>
     public bool Companion { get; set; }
+    /// <summary>
+    /// Where an undo under way is taking the file: for a file that was moved, its old place, numbered when
+    /// another file has taken that name since; for a copy, a hidden name beside it until the copy is deleted.
+    /// </summary>
+    public string? Back { get; set; }
 }
 
-/// <summary>Everything one Organize move or copy did, kept so that it can be undone.</summary>
+/// <summary>Everything one move, copy or removal did, kept so that it can be undone.</summary>
 public sealed class OrganizeBatch
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -30,4 +49,7 @@ public sealed class OrganizeBatch
     /// <summary>Folders that had to be made, deepest first; an undo removes those it leaves empty.</summary>
     public List<string> CreatedFolders { get; set; } = [];
     public bool Undone { get; set; }
+    public ChangeState State { get; set; }
+    /// <summary>Folders an undo under way has to make again, because the folders the files came from have gone since; deepest first.</summary>
+    public List<string> UndoFolders { get; set; } = [];
 }

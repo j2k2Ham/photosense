@@ -98,7 +98,7 @@ describe('the comparison window', () => {
   it('deletes the copy only after being asked twice, in place', async () => {
     const { onRemove } = open();
     await click('Delete this copy · 12.0 MB');
-    expect(win()).toHaveTextContent('Move IMG_4299.HEIC (12.0 MB) to _PhotoSense_Removed?The original, IMG_4299.JPG, stays where it is. The copy can be moved back later.');
+    expect(win()).toHaveTextContent('Move IMG_4299.HEIC (12.0 MB) to _PhotoSense_Removed?The original, IMG_4299.JPG, stays where it is. Undo, on the message that follows, puts the copy back.');
     expect(onRemove).not.toHaveBeenCalled();
     await click('Cancel');
     expect(button('Delete this copy · 12.0 MB')).toBeInTheDocument();

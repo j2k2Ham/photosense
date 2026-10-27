@@ -1,8 +1,12 @@
+using LiteDB;
 using Moq;
+using PhotoSense.Application.Changes;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Events;
+using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Infrastructure.Persistence;
@@ -13,15 +17,28 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-removal-");
     private readonly InMemoryPhotoRepository _repo = new();
+    private readonly LiteDatabase _db = new(new MemoryStream());
+    private readonly FailingDisk _disk = new();
+    private readonly Mock<IIntegrationEventPublisher> _publisher = new();
+    private readonly FileChanges _changes;
     private readonly DuplicateRemovalService _service;
 
     public DuplicateRemovalServiceTests()
     {
-        var analysis = new DuplicateAnalysisService(_repo);
-        _service = new DuplicateRemovalService(analysis, new FileSystemPhotoDeletionService(_repo, Mock.Of<IIntegrationEventPublisher>(), new CompanionFileFinder(_ => null)));
+        _changes = new FileChanges(new LiteDbOrganizeBatchStore(_db), _repo, Mock.Of<IAuditRepository>(), _disk);
+        _service = Service(new CompanionFileFinder(_ => null));
     }
 
-    public void Dispose() => _root.Delete(true);
+    public void Dispose()
+    {
+        _db.Dispose();
+        _root.Delete(true);
+    }
+
+    private DuplicateRemovalService Service(ICompanionFileFinder finder, TimeProvider? time = null)
+        => new(new DuplicateAnalysisService(_repo), _repo, finder, _changes, _publisher.Object, time);
+
+    private void Published(int times) => _publisher.Verify(p => p.PublishAsync(It.IsAny<PhotoDeletedEvent>(), It.IsAny<CancellationToken>()), Times.Exactly(times));
 
     // A real file with a record that matches it, as a scan would leave it.
     private async Task<Photo> AddAsync(string relativePath, string contentHash, bool kept = false, PhotoSet set = PhotoSet.Primary)
@@ -39,7 +56,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         return photo;
     }
 
-    private string Held(string relativePath) => Path.Combine(_root.FullName, PhotoStorageOptions.RemovedFolderName, relativePath);
+    private string Held(params string[] parts) => Path.Combine([_root.FullName, PhotoStorageOptions.RemovedFolderName, .. parts]);
 
     [Test]
     public async Task Moves_Every_Duplicate_Aside_And_Leaves_The_Best_Copy()
@@ -222,28 +239,91 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     }
 
     [Test]
-    public async Task Reports_A_Copy_That_Cannot_Be_Moved_But_Not_One_That_Is_Already_Gone()
+    public async Task When_One_Copy_Cannot_Be_Moved_None_Is_And_Every_File_Stays_Where_It_Was()
+    {
+        await AddAsync("a.jpg", "AAAA");
+        var copyA = await AddAsync("a (1).jpg", "AAAA");
+        await AddAsync("b.jpg", "BBBB");
+        var copyB = await AddAsync("b (1).jpg", "BBBB");
+        _disk.Fail("move", copyB.SourcePath);
+
+        var result = await _service.RemoveDuplicatesAsync();
+
+        await Assert.That((result.Removed, result.Bytes, result.Skipped, result.BatchId)).IsEqualTo((0, 0L, 2, (Guid?)null));
+        await Assert.That(result.Problems.Single()).IsEqualTo("b (1).jpg could not be moved: The disk would not move b (1).jpg. Nothing was removed: every file is where it was.");
+        await Assert.That(File.Exists(copyA.SourcePath) && File.Exists(copyB.SourcePath)).IsTrue();
+        await Assert.That(await _repo.GetAsync(copyA.Id)).IsNotNull();
+        Published(0);
+    }
+
+    [Test]
+    public async Task A_Removal_Can_Be_Undone_And_The_Copies_Are_Back_In_Their_Group()
     {
         var keeper = await AddAsync("IMG_1.jpg", "AAAA");
-        var copy = await AddAsync("IMG_1 (1).jpg", "AAAA");
-        var analysis = new DuplicateAnalysisService(_repo);
-        var deleter = new Mock<IPhotoDeletionService>();
-        deleter.SetupSequence(d => d.DeleteAsync(copy.Id, true, It.Is<IReadOnlyList<Photo>?>(of => of!.Single().Id == keeper.Id), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RemovalResult(RemovalOutcome.NotFound))
-            .ReturnsAsync(new RemovalResult(RemovalOutcome.Failed, Error: "in use"))
-            .ReturnsAsync(new RemovalResult(RemovalOutcome.LastCopy));
-        var service = new DuplicateRemovalService(analysis, deleter.Object);
+        var copy = await AddAsync(Path.Combine("backup", "IMG_1 (1).jpg"), "AAAA");
 
-        // Already gone, as a Live Photo video is once its picture has taken it along: nothing to report.
-        await Assert.That(await service.RemoveDuplicatesAsync()).IsEqualTo(new BulkRemovalResult(0, 0, 0, [], 0), BulkRemovalResults.Same);
-        var failed = await service.RemoveDuplicatesAsync();
-        await Assert.That(failed.Skipped).IsEqualTo(1);
-        await Assert.That(failed.Problems.Single()).EndsWith("in use");
-        // The copy turned out to be the kept photo itself, recorded under a second path.
-        var itself = await service.RemoveDuplicatesAsync();
-        await Assert.That((itself.Removed, itself.Skipped)).IsEqualTo((0, 1));
-        await Assert.That(itself.Problems.Single()).IsEqualTo($"The same file as the photo kept, under another path, so it was left alone: {copy.SourcePath}");
-        await Assert.That(File.Exists(keeper.SourcePath)).IsTrue();
+        var result = await _service.RemoveDuplicatesAsync();
+        await Assert.That((await new DuplicateAnalysisService(_repo).GetAsync()).Duplicates).IsEmpty();
+        var undone = await _changes.UndoAsync(result.BatchId!.Value);
+
+        await Assert.That((undone.Done, undone.Back.Count)).IsEqualTo((true, 1));
+        await Assert.That(File.Exists(copy.SourcePath)).IsTrue();
+        await Assert.That(Directory.Exists(Held())).IsFalse();
+        var group = (await new DuplicateAnalysisService(_repo).GetAsync()).Duplicates.Single();
+        await Assert.That((group.Keeper.Id, group.Members.Single().Photo.Id)).IsEqualTo((keeper.Id, copy.Id));
+    }
+
+    [Test]
+    public async Task A_Copy_Whose_File_Has_Already_Gone_Is_Forgotten_Along_With_The_Rest()
+    {
+        await AddAsync("a.jpg", "AAAA");
+        var gone = await AddAsync("a (1).jpg", "AAAA");
+        var copy = await AddAsync("a (2).jpg", "AAAA");
+        File.Delete(gone.SourcePath);
+
+        var result = await _service.RemoveDuplicatesAsync();
+
+        await Assert.That((result.Removed, result.Bytes, result.Skipped)).IsEqualTo((2, gone.FileSizeBytes + copy.FileSizeBytes, 0));
+        await Assert.That(result.BatchId).IsNotNull();
+        await Assert.That(await _repo.GetAsync(gone.Id)).IsNull();
+        await Assert.That(File.Exists(Held("a (2).jpg"))).IsTrue();
+        Published(2);
+    }
+
+    [Test]
+    public async Task Forgetting_Copies_Whose_Files_Have_Gone_Leaves_Nothing_To_Undo()
+    {
+        await AddAsync("a.jpg", "AAAA");
+        var gone = await AddAsync("a (1).jpg", "AAAA");
+        File.Delete(gone.SourcePath);
+
+        var result = await _service.RemoveDuplicatesAsync();
+
+        await Assert.That((result.Removed, result.BatchId)).IsEqualTo((1, (Guid?)null));
+        await Assert.That(await _repo.GetAsync(gone.Id)).IsNull();
+    }
+
+    [Test]
+    public async Task A_Copy_That_Is_The_Kept_Photo_Under_Another_Path_Is_Put_Back_And_The_Rest_Still_Go()
+    {
+        // One file, reached through its folder and through a link to that folder, recorded under both paths.
+        var original = await AddAsync(Path.Combine("photos", "IMG_1.jpg"), "AAAA");
+        using var link = TestFiles.LinkFolder(Path.Combine(_root.FullName, "alias"), Path.Combine(_root.FullName, "photos"));
+        await _repo.AddOrUpdateAsync(new Photo
+        {
+            SourcePath = Path.Combine(_root.FullName, "alias", "IMG_1.jpg"), FileName = "IMG_1.jpg", FileSizeBytes = original.FileSizeBytes,
+            FileModifiedUtc = original.FileModifiedUtc, ScanRoot = _root.FullName, ContentHash = "AAAA", Set = PhotoSet.Primary
+        });
+        await AddAsync("b.jpg", "BBBB");
+        var copyB = await AddAsync("b (1).jpg", "BBBB");
+
+        var result = await _service.RemoveDuplicatesAsync();
+
+        await Assert.That((result.Removed, result.Skipped)).IsEqualTo((1, 1));
+        await Assert.That(result.Problems.Single()).StartsWith("The same file as the photo kept, under another path, so it was left alone: ");
+        await Assert.That(await File.ReadAllTextAsync(original.SourcePath)).IsEqualTo("AAAA");
+        await Assert.That(File.Exists(copyB.SourcePath)).IsFalse();
+        Published(1);
     }
 
     // ---- one photo at a time
@@ -334,8 +414,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public async Task A_Picture_Takes_Its_Live_Photo_Video_Along_And_The_Kept_Copy_Keeps_Its_Own()
     {
         // Records made before Live Photo identifiers were stored, so the videos appear as a group of their own.
-        var service = new DuplicateRemovalService(new DuplicateAnalysisService(_repo),
-            new FileSystemPhotoDeletionService(_repo, Mock.Of<IIntegrationEventPublisher>(), new CompanionFileFinder(_ => "LIVE-1")));
+        var service = Service(new CompanionFileFinder(_ => "LIVE-1"));
         var keptPicture = await AddAsync(Path.Combine("a", "IMG_1.JPG"), "PPPP");
         var keptVideo = await AddAsync(Path.Combine("a", "IMG_1.MOV"), "VVVV");
         var copyPicture = await AddAsync(Path.Combine("b", "IMG_1.JPG"), "PPPP");
@@ -355,8 +434,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public async Task The_Last_Copy_Of_A_Video_Is_Never_Removed_As_Somebody_Elses_Duplicate()
     {
         // The picture kept is in b, but of the two identical videos the one in a ranks first.
-        var service = new DuplicateRemovalService(new DuplicateAnalysisService(_repo),
-            new FileSystemPhotoDeletionService(_repo, Mock.Of<IIntegrationEventPublisher>(), new CompanionFileFinder(_ => "LIVE-1")));
+        var service = Service(new CompanionFileFinder(_ => "LIVE-1"));
         var pictureA = await AddAsync(Path.Combine("a", "IMG_1.JPG"), "PPPP", set: PhotoSet.Secondary);
         var videoA = await AddAsync(Path.Combine("a", "IMG_1.MOV"), "VVVV");
         var pictureB = await AddAsync(Path.Combine("b", "IMG_1.JPG"), "PPPP");
@@ -369,6 +447,147 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That((result.Removed, result.Companions, result.Skipped)).IsEqualTo((1, 1, 1));
         await Assert.That(File.Exists(pictureB.SourcePath) && File.Exists(videoB.SourcePath)).IsTrue();
         await Assert.That(File.Exists(pictureA.SourcePath) || File.Exists(videoA.SourcePath)).IsFalse();
+    }
+
+    [Test]
+    public async Task A_Photo_Removed_On_Its_Own_Is_Held_Keeping_Its_Place_Under_The_Scanned_Folder()
+    {
+        var photo = await AddAsync(Path.Combine("2024", "trip", "IMG_1.jpg"), "picture");
+
+        var result = await _service.RemoveAsync(photo.Id, deleteFile: true);
+
+        await Assert.That(result.Succeeded).IsTrue();
+        await Assert.That(result.HeldAt).IsEqualTo(Held("2024", "trip", "IMG_1.jpg"));
+        await Assert.That(result.BatchId).IsNotNull();
+        await Assert.That(File.Exists(photo.SourcePath)).IsFalse();
+        await Assert.That(await File.ReadAllTextAsync(result.HeldAt!)).IsEqualTo("picture");
+        await Assert.That(await _repo.GetAsync(photo.Id)).IsNull();
+        Published(1);
+    }
+
+    [Test]
+    public async Task The_Removal_Is_Recorded_At_The_Time_It_Happened()
+    {
+        var photo = await AddAsync("IMG_1.jpg", "picture");
+
+        await Service(new CompanionFileFinder(_ => null), new TestClock()).RemoveAsync(photo.Id, deleteFile: true);
+
+        _publisher.Verify(p => p.PublishAsync(It.Is<PhotoDeletedEvent>(e => e.OccurredUtc == TestClock.Day.UtcDateTime && e.PhotoId == photo.Id), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Test]
+    public async Task A_File_Held_Under_A_Name_Already_Taken_Gets_A_Number()
+    {
+        var first = await AddAsync("IMG_1.jpg", "first");
+        await Assert.That((await _service.RemoveAsync(first.Id, true)).HeldAt).IsEqualTo(Held("IMG_1.jpg"));
+        var second = await AddAsync("IMG_1.jpg", "second");
+
+        var held = (await _service.RemoveAsync(second.Id, true)).HeldAt;
+
+        await Assert.That(held).IsEqualTo(Held("IMG_1 (1).jpg"));
+        await Assert.That(await File.ReadAllTextAsync(Held("IMG_1.jpg"))).IsEqualTo("first");
+        await Assert.That(await File.ReadAllTextAsync(held!)).IsEqualTo("second");
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("elsewhere")]
+    public async Task A_File_Is_Held_Beside_Itself_When_Its_Scanned_Folder_Is_Unknown_Or_Not_Above_It(string? scanRoot)
+    {
+        var photo = await AddAsync(Path.Combine("sub", "IMG_1.jpg"), "picture");
+        photo.ScanRoot = scanRoot is null ? null : Path.Combine(_root.FullName, scanRoot);
+        await _repo.AddOrUpdateAsync(photo);
+
+        var result = await _service.RemoveAsync(photo.Id, true);
+
+        await Assert.That(result.HeldAt).IsEqualTo(Path.Combine(_root.FullName, "sub", PhotoStorageOptions.RemovedFolderName, "IMG_1.jpg"));
+    }
+
+    [Test]
+    public async Task A_Photo_That_Changed_Since_It_Was_Scanned_Is_Left_With_Its_Record()
+    {
+        var resized = await AddAsync("resized.jpg", "picture");
+        await File.WriteAllTextAsync(resized.SourcePath, "a different length now");
+        var touched = await AddAsync("touched.jpg", "picture");
+        File.SetLastWriteTimeUtc(touched.SourcePath, touched.FileModifiedUtc!.Value.AddMinutes(5));
+
+        await Assert.That((await _service.RemoveAsync(resized.Id, true)).Outcome).IsEqualTo(RemovalOutcome.Changed);
+        await Assert.That((await _service.RemoveAsync(touched.Id, true)).Outcome).IsEqualTo(RemovalOutcome.Changed);
+        await Assert.That(File.Exists(resized.SourcePath) && File.Exists(touched.SourcePath)).IsTrue();
+        await Assert.That(await _repo.GetAsync(resized.Id)).IsNotNull();
+        Published(0);
+    }
+
+    [Test]
+    public async Task A_Photo_That_Cannot_Be_Moved_Keeps_Its_Record_And_Says_Why()
+    {
+        var photo = await AddAsync("IMG_1.jpg", "picture");
+        _disk.Fail("move", photo.SourcePath);
+
+        var result = await _service.RemoveAsync(photo.Id, true);
+
+        await Assert.That((result.Outcome, result.Error)).IsEqualTo((RemovalOutcome.Failed, (string?)"IMG_1.jpg could not be moved: The disk would not move IMG_1.jpg. Nothing was removed: every file is where it was."));
+        await Assert.That(File.Exists(photo.SourcePath)).IsTrue();
+        await Assert.That(await _repo.GetAsync(photo.Id)).IsNotNull();
+    }
+
+    [Test]
+    public async Task A_File_Recorded_Under_Two_Paths_Is_Put_Back_Rather_Than_Removed_As_A_Copy_Of_Itself()
+    {
+        // One file, reached through the folder itself and through a link to that folder.
+        var original = await AddAsync(Path.Combine("photos", "IMG_1.jpg"), "picture");
+        var alias = Path.Combine(_root.FullName, "alias");
+        using var link = TestFiles.LinkFolder(alias, Path.Combine(_root.FullName, "photos"));
+        var same = new Photo
+        {
+            SourcePath = Path.Combine(alias, "IMG_1.jpg"), FileName = "IMG_1.jpg", FileSizeBytes = original.FileSizeBytes,
+            FileModifiedUtc = original.FileModifiedUtc, ScanRoot = _root.FullName, ContentHash = original.ContentHash, Set = PhotoSet.Primary
+        };
+        await _repo.AddOrUpdateAsync(same);
+
+        var result = await _service.RemoveAsync(same.Id, true);
+
+        await Assert.That(result.Outcome).IsEqualTo(RemovalOutcome.LastCopy);
+        await Assert.That(await File.ReadAllTextAsync(original.SourcePath)).IsEqualTo("picture");
+        await Assert.That(await _repo.GetAsync(same.Id)).IsNotNull();
+        Published(0);
+    }
+
+    [Test]
+    public async Task Forgetting_Without_Deleting_Leaves_The_File_Where_It_Is()
+    {
+        var photo = await AddAsync("IMG_1.jpg", "picture");
+
+        var result = await _service.RemoveAsync(photo.Id, deleteFile: false);
+
+        await Assert.That((result.Succeeded, result.HeldAt, result.BatchId)).IsEqualTo((true, (string?)null, (Guid?)null));
+        await Assert.That(File.Exists(photo.SourcePath)).IsTrue();
+        await Assert.That(await _repo.GetAsync(photo.Id)).IsNull();
+        Published(1);
+    }
+
+    [Test]
+    public async Task A_Record_Whose_File_Is_Already_Gone_Is_Simply_Forgotten()
+    {
+        var photo = await AddAsync("IMG_1.jpg", "picture");
+        File.Delete(photo.SourcePath);
+
+        var result = await _service.RemoveAsync(photo.Id, true);
+
+        await Assert.That((result.Succeeded, result.HeldAt)).IsEqualTo((true, (string?)null));
+        await Assert.That(await _repo.GetAsync(photo.Id)).IsNull();
+    }
+
+    [Test]
+    public async Task A_Record_Without_A_Modified_Time_Is_Checked_By_Size_Alone()
+    {
+        var path = Path.Combine(_root.FullName, "IMG_7.jpg");
+        await File.WriteAllTextAsync(path, "picture");
+        var photo = new Photo { SourcePath = path, FileName = "IMG_7.jpg", FileSizeBytes = new FileInfo(path).Length, ScanRoot = _root.FullName, ContentHash = "picture" };
+        await _repo.AddOrUpdateAsync(photo);
+
+        await Assert.That((await _service.RemoveAsync(photo.Id, deleteFile: true)).Succeeded).IsTrue();
+        await Assert.That(File.Exists(Held("IMG_7.jpg"))).IsTrue();
     }
 
     [Test]

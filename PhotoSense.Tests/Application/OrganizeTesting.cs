@@ -1,5 +1,6 @@
 using LiteDB;
 using Moq;
+using PhotoSense.Application.Changes;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
@@ -56,6 +57,9 @@ internal sealed class OrganizeFixture : IDisposable
     public OrganizePlanner Planner { get; }
     public LiteDbOrganizeBatchStore Batches { get; }
     public LiteDbMediaDetailsStore Details { get; }
+    /// <summary>The disk the moves go through; a test can make it fail.</summary>
+    public FailingDisk Disk { get; } = new();
+    public FileChanges Changes { get; }
     private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly Mock<IAuditRepository> _audit = new();
 
@@ -67,6 +71,7 @@ internal sealed class OrganizeFixture : IDisposable
         Places = new PlaceLookup(Resolver.Object);
         Planner = new OrganizePlanner(Library, Finder, Places);
         Batches = new LiteDbOrganizeBatchStore(_db);
+        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);
     }
 
     public CompanionFileFinder Finder { get; } = new(ContentAsId);
@@ -74,7 +79,7 @@ internal sealed class OrganizeFixture : IDisposable
     /// <summary>The library as another run of the service would have it: nothing in memory, the same stores behind it.</summary>
     public OrganizeLibrary AnotherRun() => new(Repo, Reader, Hasher, Details);
 
-    public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Repo, Batches, _audit.Object);
+    public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Changes, _audit.Object);
 
     /// <param name="eraseFile">Stands in for erasing a file, for a test in which one cannot be erased.</param>
     public PhotoSense.Application.Removal.RemovedFiles Removed(Action<string>? eraseFile = null) => new(Repo, Batches, _audit.Object, eraseFile);

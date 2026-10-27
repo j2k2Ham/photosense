@@ -1,5 +1,7 @@
 using System.Net;
+using LiteDB;
 using Moq;
+using PhotoSense.Application.Changes;
 using PhotoSense.Application.Photos.Services;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Entities;
@@ -9,6 +11,7 @@ using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Functions.Api;
 using PhotoSense.Functions.Scanning;
 using PhotoSense.Infrastructure.Persistence;
+using PhotoSense.Tests.Application;
 
 namespace PhotoSense.Tests.Functions;
 
@@ -23,19 +26,27 @@ public sealed class PhotosFunctionsTests : IDisposable
     private readonly Mock<IDuplicateRemovalService> _remover = new();
     private readonly Mock<IAuditRepository> _audit = new();
     private readonly List<AuditEntry> _audited = [];
+    private readonly LiteDatabase _db = new(new MemoryStream());
+    private readonly LiteDbOrganizeBatchStore _batches;
     private readonly PhotosFunctions _api;
 
     public PhotosFunctionsTests()
     {
         _audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => _audited.Add(e)).Returns(Task.CompletedTask);
         _audit.Setup(a => a.RecentAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => _audited);
+        _batches = new LiteDbOrganizeBatchStore(_db);
         _api = Api(_repo);
     }
 
-    public void Dispose() => _root.Delete(true);
+    public void Dispose()
+    {
+        _db.Dispose();
+        _root.Delete(true);
+    }
 
-    private PhotosFunctions Api(IPhotoRepository repo) => new(repo, new PhotoSearchService(repo), _remover.Object, _thumbnails,
-        _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object);
+    private PhotosFunctions Api(IPhotoRepository repo, Disk? disk = null) => new(repo, new PhotoSearchService(repo), _remover.Object, _thumbnails,
+        _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object,
+        new FileChanges(_batches, repo, Mock.Of<IAuditRepository>(), disk));
 
     // A real file with a record that matches it, as a scan would leave it.
     private async Task<Photo> AddAsync(string name, string content = "picture bytes", string? contentHash = "ABCDEF", bool onDisk = true)
@@ -110,7 +121,8 @@ public sealed class PhotosFunctionsTests : IDisposable
         var search = new Mock<PhotoSense.Application.Photos.Interfaces.IPhotoSearchService>();
         search.Setup(s => s.SearchAsync(It.IsAny<PhotoSense.Application.Photos.Interfaces.PhotoSearchQuery>(), It.Is<CancellationToken>(t => t.IsCancellationRequested)))
             .ThrowsAsync(new OperationCanceledException());
-        var api = new PhotosFunctions(_repo, search.Object, _remover.Object, _thumbnails, _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object);
+        var api = new PhotosFunctions(_repo, search.Object, _remover.Object, _thumbnails, _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object,
+            new FileChanges(_batches, _repo, Mock.Of<IAuditRepository>()));
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => api.GetPhotosAsync(Http.Abandoned("photos").FromClient()));
     }
@@ -331,12 +343,13 @@ public sealed class PhotosFunctionsTests : IDisposable
     {
         var id = Guid.NewGuid();
         _remover.Setup(r => r.RemoveAsync(new PhotoId(id), true, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new RemovalResult(RemovalOutcome.Removed, "held/IMG_1.HEIC") { Companions = ["a.MOV", "a.AAE"] });
+            .ReturnsAsync(new RemovalResult(RemovalOutcome.Removed, "held/IMG_1.HEIC") { Companions = ["a.MOV", "a.AAE"], BatchId = id });
 
         var response = await _api.DeletePhotoAsync(Http.Delete("p?physical=true").FromClient(), id.ToString());
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
-        await Assert.That((response.Json().GetProperty("heldAt").GetString(), response.Json().GetProperty("companions").GetInt32())).IsEqualTo(("held/IMG_1.HEIC", 2));
+        var json = response.Json();
+        await Assert.That((json.GetProperty("heldAt").GetString(), json.GetProperty("companions").GetInt32(), json.GetProperty("batchId").GetString())).IsEqualTo(("held/IMG_1.HEIC", 2, id.ToString()));
         var entry = _audited.Single();
         await Assert.That((entry.Action, entry.PhotoId, entry.Details)).IsEqualTo(("Delete", id.ToString(), "moved to held/IMG_1.HEIC with 2 linked files"));
     }
@@ -348,6 +361,8 @@ public sealed class PhotosFunctionsTests : IDisposable
         _remover.Setup(r => r.RemoveAsync(new PhotoId(id), false, It.IsAny<CancellationToken>())).ReturnsAsync(new RemovalResult(RemovalOutcome.Removed));
         var response = await _api.DeletePhotoAsync(Http.Delete("p").FromClient(), id.ToString());
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        // No file moved, so there is nothing to undo.
+        await Assert.That(response.Json().GetProperty("batchId").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
         await Assert.That(_audited.Single().Details).IsEqualTo("logical");
     }
 
@@ -355,7 +370,7 @@ public sealed class PhotosFunctionsTests : IDisposable
     [Arguments(RemovalOutcome.NotFound, HttpStatusCode.NotFound, "")]
     [Arguments(RemovalOutcome.Changed, HttpStatusCode.Conflict, "changed since it was scanned")]
     [Arguments(RemovalOutcome.LastCopy, HttpStatusCode.Conflict, "this may be the only copy left")]
-    [Arguments(RemovalOutcome.Failed, HttpStatusCode.InternalServerError, "in use by another process")]
+    [Arguments(RemovalOutcome.Failed, HttpStatusCode.Conflict, "in use by another process")]
     public async Task A_File_That_Was_Not_Removed_Says_Why(RemovalOutcome outcome, HttpStatusCode status, string message)
     {
         _remover.Setup(r => r.RemoveAsync(It.IsAny<PhotoId>(), true, It.IsAny<CancellationToken>()))
@@ -396,11 +411,15 @@ public sealed class PhotosFunctionsTests : IDisposable
 
         var response = await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
 
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         var moved = Path.Combine(target, "IMG_1.JPG");
         await Assert.That(File.Exists(moved) && !File.Exists(photo.SourcePath)).IsTrue();
         await Assert.That((await _repo.GetAsync(photo.Id))!.SourcePath).IsEqualTo(moved);
         await Assert.That((_audited.Single().Action, _audited[0].Details)).IsEqualTo(("Move", target));
+        var json = response.Json();
+        await Assert.That(json.GetProperty("path").GetString()).IsEqualTo(moved);
+        var batch = (await _batches.GetAsync(Guid.Parse(json.GetProperty("batchId").GetString()!)))!;
+        await Assert.That((batch.Items.Single().From, batch.Items[0].To)).IsEqualTo((photo.SourcePath, moved));
     }
 
     [Test]
@@ -416,7 +435,7 @@ public sealed class PhotosFunctionsTests : IDisposable
     }
 
     [Test]
-    public async Task A_Move_Never_Overwrites_A_File_Already_There()
+    public async Task A_Move_Never_Overwrites_A_File_Already_There_And_Arrives_Under_Its_Name_With_A_Number()
     {
         var photo = await AddAsync("IMG_1.JPG", "mine");
         var target = _root.CreateSubdirectory("album").FullName;
@@ -424,9 +443,22 @@ public sealed class PhotosFunctionsTests : IDisposable
 
         var response = await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
 
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(response.Text()).IsNotEmpty();
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "IMG_1.JPG"))).IsEqualTo("somebody else's");
+        await Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "IMG_1 (1).JPG"))).IsEqualTo("mine");
+        await Assert.That((await _repo.GetAsync(photo.Id))!.SourcePath).IsEqualTo(Path.Combine(target, "IMG_1 (1).JPG"));
+    }
+
+    [Test]
+    public async Task A_Move_That_The_Disk_Refuses_Leaves_The_Photo_And_Says_Why()
+    {
+        var photo = await AddAsync("IMG_1.JPG", "mine");
+        var target = _root.CreateSubdirectory("album").FullName;
+
+        var response = await Api(_repo, new FailingDisk().Fail("move", photo.SourcePath)).MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+        await Assert.That(response.Text()).IsEqualTo("IMG_1.JPG could not be moved: The disk would not move IMG_1.JPG. Nothing was moved: every file is where it was.");
         await Assert.That((await _repo.GetAsync(photo.Id))!.SourcePath).IsEqualTo(photo.SourcePath);
         await Assert.That(_audited).IsEmpty();
     }
@@ -465,11 +497,12 @@ public sealed class PhotosFunctionsTests : IDisposable
     public async Task Duplicates_Are_Removed_For_One_Group_Or_For_All(string url, string? expectedGroup)
     {
         _remover.Setup(r => r.RemoveDuplicatesAsync(expectedGroup, false, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new BulkRemovalResult(3, 900, 1, ["one was left alone"], 2));
+            .ReturnsAsync(new BulkRemovalResult(3, 900, 1, ["one was left alone"], 2, Guid.Empty));
 
         var json = (await _api.RemoveDuplicatesAsync(Http.Post(url).FromClient())).Json();
 
         await Assert.That((json.GetProperty("removed").GetInt32(), json.GetProperty("bytes").GetInt64(), json.GetProperty("skipped").GetInt32(), json.GetProperty("companions").GetInt32())).IsEqualTo((3, 900L, 1, 2));
+        await Assert.That(json.GetProperty("batchId").GetString()).IsEqualTo(Guid.Empty.ToString());
         await Assert.That(json.GetProperty("problems").EnumerateArray().Single().GetString()).IsEqualTo("one was left alone");
         await Assert.That((_audited[0].Action, _audited[0].PhotoId, _audited[0].Details)).IsEqualTo(("RemoveDuplicates", expectedGroup, "removed=3 bytes=900 linked=2 skipped=1"));
     }
@@ -499,6 +532,29 @@ public sealed class PhotosFunctionsTests : IDisposable
 
         await Assert.That((json.GetProperty("removed").GetInt32(), json.GetProperty("bytes").GetInt64(), json.GetProperty("companions").GetInt32())).IsEqualTo((5, 1500L, 1));
         await Assert.That((_audited[0].Action, _audited[0].PhotoId, _audited[0].Details)).IsEqualTo((action, (string?)null, "removed=5 bytes=1500 linked=1 skipped=0 groups=2"));
+    }
+
+    [Test]
+    public async Task Many_Groups_Can_Be_Named_In_The_Body_And_Go_As_One_Change()
+    {
+        _remover.Setup(r => r.RemoveGroupsAsync(It.Is<IReadOnlyCollection<string>>(g => g.SequenceEqual(new[] { "abc", "def", "ghi" })), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BulkRemovalResult(4, 1200, 0, [], 0, Guid.Empty));
+
+        var json = (await _api.RemoveDuplicatesAsync(Http.Post("b?group=abc&mode=similar", """{"groups":["def"," ","ghi"]}""").FromClient())).Json();
+
+        await Assert.That((json.GetProperty("removed").GetInt32(), json.GetProperty("batchId").GetString())).IsEqualTo((4, Guid.Empty.ToString()));
+    }
+
+    [Test]
+    [Arguments("not the groups")]
+    [Arguments("""{"group":["abc"]}""")]
+    public async Task Groups_Named_In_A_Body_That_Cannot_Be_Read_Are_Refused(string body)
+    {
+        var response = await _api.RemoveDuplicatesAsync(Http.Post("b", body).FromClient());
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That(response.Text()).IsEqualTo("The groups to remove could not be read.");
+        _remover.VerifyNoOtherCalls();
     }
 
     [Test]

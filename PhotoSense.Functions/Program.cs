@@ -15,6 +15,7 @@ using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Infrastructure.Events;
 using PhotoSense.Infrastructure.Deletion;
+using PhotoSense.Application.Changes;
 using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Photos.Services;
 using PhotoSense.Domain.Configuration;
@@ -55,7 +56,11 @@ public static class DependencyInjection
         s.AddSingleton<IPhotoMetadataExtractor, BasicExifMetadataExtractor>();
         s.AddSingleton(sp => new PhotoRanking(sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<PhotoStorageOptions>>().Value.KeepFormat));
         s.AddSingleton<IDuplicateAnalysisService, DuplicateAnalysisService>();
-        s.AddSingleton<IDuplicateRemovalService, DuplicateRemovalService>();
+        s.AddSingleton<IDuplicateRemovalService>(sp => new DuplicateRemovalService(sp.GetRequiredService<IDuplicateAnalysisService>(), sp.GetRequiredService<IPhotoRepository>(),
+            sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<FileChanges>(), sp.GetRequiredService<IIntegrationEventPublisher>(), sp.GetRequiredService<TimeProvider>()));
+        // Every move, copy and removal of files goes through the one journal, one at a time.
+        s.AddSingleton(sp => new FileChanges(sp.GetRequiredService<IOrganizeBatchStore>(), sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IAuditRepository>()));
+        s.AddHostedService<Changes.PutBackUnfinishedChanges>();
         s.AddSingleton<IPlaceNameResolver, GeoNamesPlaceResolver>();
         s.AddSingleton<PhotoDtoMapper>();
         s.AddSingleton<ScanGroupingFacade>();
@@ -67,7 +72,6 @@ public static class DependencyInjection
         s.AddSingleton<ICompanionFileFinder>(sp => new CompanionFileFinder(sp.GetRequiredService<OrganizeLibrary>().LivePhotoIds(new LivePhotoIdCache().Read)));
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
         s.AddSingleton<IFolderBrowser, FileSystemFolderBrowser>();
-        s.AddSingleton<IPhotoDeletionService, FileSystemPhotoDeletionService>();
         s.AddSingleton<IPhotoSearchService, PhotoSearchService>();
         s.AddSingleton<IMediaDetailsReader, ExifMediaDetailsReader>();
         s.AddSingleton<IMediaDetailsStore>(sp => new LiteDbMediaDetailsStore(sp.GetRequiredService<LiteDatabase>()));
