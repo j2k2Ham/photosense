@@ -9,9 +9,11 @@ namespace PhotoSense.iOS;
 /// </summary>
 public static class SelfCheck
 {
+    public static bool Running { get; } = Environment.GetEnvironmentVariable("PHOTOSENSE_SELF_CHECK") == "1";
+
     public static void AddTo(WKWebViewConfiguration config)
     {
-        if (Environment.GetEnvironmentVariable("PHOTOSENSE_SELF_CHECK") != "1") return;
+        if (!Running) return;
         config.UserContentController.AddScriptMessageHandler(new Report(), "selfCheck");
         config.UserContentController.AddUserScript(new WKUserScript(new NSString(Script), WKUserScriptInjectionTime.AtDocumentEnd, true));
     }
