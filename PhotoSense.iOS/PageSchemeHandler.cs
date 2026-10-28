@@ -39,7 +39,7 @@ public sealed class PageSchemeHandler : NSObject, IWKUrlSchemeHandler
     {
         var headers = new List<KeyValuePair<string, string>>();
         if (request.Headers is { } given)
-            foreach (var (name, value) in given) headers.Add(new(name.ToString(), value.ToString()));
+            foreach (var (name, value) in given) headers.Add(new($"{name}", $"{value}"));
         var body = request.Body?.ToArray();
         await PhoneApp.Ready;
         // Off the main thread: the endpoints read photos and the database, which would hold up the screen.

@@ -67,6 +67,8 @@ jobs:
       - name: Say what the build warned of
         if: always()
         run: |
+          # A grep that finds nothing is good news here, not a failure.
+          set +o pipefail
           # MSBuild writes "file(line,col): warning CS1234: text [project]", and some errors without a code.
           pattern=': (warning|error)( [A-Za-z]+[0-9]+)? *:'
           grep -E "$pattern" build.log | grep -E ': warning' | sed -E 's/.*: (warning( [A-Za-z]+[0-9]+)? *: [^[]*).*/\1/' | sort | uniq -c | sort -rn | head -10 |
@@ -153,6 +155,7 @@ jobs:
       - name: What the app said
         if: failure()
         run: |
+          set +o pipefail
           for file in app-stderr.txt app-stdout.txt; do
             [ -s "$file" ] && tail -12 "$file" | while read -r line; do echo "::error title=App said ($file)::${line:0:500}"; done
           done
@@ -161,6 +164,8 @@ jobs:
             cp "$crash" .
             grep -E '"(exception|termination)"|"type"|"signal"|"reasons"|"indicator"' "$crash" | head -8 | while read -r line; do echo "::error title=Crash report::${line:0:500}"; done
           done
+          # Nothing ran when the app was never built, so there is no simulator to ask.
+          [ -n "$UDID" ] || exit 0
           xcrun simctl spawn "$UDID" log show --last 15m --style compact --predicate 'process == "PhotoSense.iOS"' > app.log || true
           grep -iE 'exception|error|fault' app.log | tail -8 | while read -r line; do echo "::error title=App log::${line:0:500}"; done
           tail -100 app.log
