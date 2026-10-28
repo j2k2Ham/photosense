@@ -126,10 +126,13 @@ jobs:
           if ! out=$(xcrun simctl privacy "$UDID" grant photos "$BUNDLE" 2>&1); then
             echo "::error title=simctl privacy::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
           fi
-          # What the grant left in the simulator's own record of permissions, for when the app does not see it.
+          # simctl records the grant as set by the system (reason 4, version 1), which Photos on Xcode 26's simulators
+          # reads as never asked; rewritten as tapping Allow leaves it (reason 2, version 2), the app sees it.
           tcc="$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/TCC/TCC.db"
+          changed=$(sqlite3 "$tcc" "update access set auth_value = 2, auth_reason = 2, auth_version = 2 where service = 'kTCCServicePhotos' and client = '$BUNDLE'; select changes();")
           rows=$(sqlite3 "$tcc" "select service, client, auth_value, auth_reason, auth_version from access where client = '$BUNDLE'" 2>&1 || true)
-          echo "::notice title=Permissions recorded::${rows:-none} | ${out:-simctl said nothing}"
+          echo "::notice title=Permissions recorded::${rows:-none} | rewritten: $changed"
+          if [ "$changed" != "1" ]; then echo "::error title=Photos access::simctl left no entry to rewrite"; exit 1; fi
 
       - name: Start it and wait for its report
         run: |
