@@ -18,15 +18,21 @@ public static class SelfCheck
 
     private sealed class Report : NSObject, IWKScriptMessageHandler
     {
+        // Written after every step, so that a check cut short still says how far it got.
         [Export("userContentController:didReceiveScriptMessage:")]
         public void DidReceiveScriptMessage(WKUserContentController userContentController, WKScriptMessage message)
-            => File.WriteAllText(Path.Combine(PhoneApp.DataFolder, "self-check.json"), message.Body.ToString());
+        {
+            var report = $"{message.Body}";
+            File.WriteAllText(Path.Combine(PhoneApp.DataFolder, "self-check.json"), report);
+            Say.Line($"self-check: {report[^Math.Min(300, report.Length)..]}");
+        }
     }
 
     private const string Script = """
         (async () => {
           const headers = { 'x-photosense-client': 'self-check', 'Content-Type': 'application/json' };
-          const report = { steps: [], passed: false };
+          const report = { steps: [], passed: false, finished: false };
+          const send = () => window.webkit.messageHandlers.selfCheck.postMessage(JSON.stringify(report));
           const step = async (name, run) => {
             const started = Date.now();
             try {
@@ -36,6 +42,8 @@ public static class SelfCheck
             } catch (e) {
               report.steps.push({ name, ok: false, ms: Date.now() - started, error: String(e) });
               throw e;
+            } finally {
+              send();
             }
           };
           const ask = async (path, init) => {
@@ -81,7 +89,8 @@ public static class SelfCheck
             report.photos = status.totalPhotos;
             report.passed = true;
           } catch { }
-          window.webkit.messageHandlers.selfCheck.postMessage(JSON.stringify(report));
+          report.finished = true;
+          send();
         })();
         """;
 }

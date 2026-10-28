@@ -30,6 +30,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
 
       - name: Use the Xcode the iOS workload needs
         run: |
@@ -131,12 +134,14 @@ jobs:
           fi
           echo "::notice title=Started::$out"
           report="$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)/Documents/self-check.json"
-          for i in $(seq 1 300); do
-            [ -f "$report" ] && break
+          # The app rewrites its report after every step, and marks it finished at the end.
+          for i in $(seq 1 600); do
+            grep -q '"finished":true' "$report" 2>/dev/null && break
             # A crash leaves a report on this Mac; there is then nothing to wait for.
             ls ~/Library/Logs/DiagnosticReports/PhotoSense* >/dev/null 2>&1 && break
             sleep 1
           done
+          echo "::notice title=Waited::$i seconds"
           cp "$report" self-check.json 2>/dev/null || echo '{"passed": false, "steps": [{"name": "the app reported back", "ok": false, "error": "no self-check.json"}]}' > self-check.json
 
       - name: Say what it found
@@ -148,7 +153,8 @@ jobs:
               said = json.dumps(step.get('value', step.get('error')))[:400]
               kind = 'notice' if step['ok'] else 'error'
               print(f"::{kind} title=Self-check::{step['name']}: {'ok' if step['ok'] else 'FAILED'} in {step.get('ms', 0)} ms: {said}")
-          print(f"::notice title=Self-check::{'passed' if report['passed'] else 'failed'}, {report.get('photos', 0)} photos scanned")
+          ended = 'passed' if report['passed'] else ('failed' if report.get('finished') else 'did not finish')
+          print(f"::notice title=Self-check::{ended}, {report.get('photos', 0)} photos scanned")
           sys.exit(0 if report['passed'] else 1)
           EOF
 
@@ -156,8 +162,9 @@ jobs:
         if: failure()
         run: |
           set +o pipefail
+          # The app's own lines: what photo access it had, the page loading, and each request with its answer.
           for file in app-stderr.txt app-stdout.txt; do
-            [ -s "$file" ] && tail -12 "$file" | while read -r line; do echo "::error title=App said ($file)::${line:0:500}"; done
+            [ -s "$file" ] && tail -40 "$file" | while read -r line; do echo "::error title=App said ($file)::${line:0:500}"; done
           done
           for crash in ~/Library/Logs/DiagnosticReports/PhotoSense*; do
             [ -f "$crash" ] || continue
@@ -200,6 +207,9 @@ jobs:
       - name: Checkout
         if: env.READY == 'true'
         uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
 
       - name: Use the Xcode the iOS workload needs
         if: env.READY == 'true'
@@ -259,7 +269,6 @@ jobs:
           -p:ArchiveOnBuild=false -p:BuildIpa=true
           -p:CodesignKey="Apple Distribution"
           -p:CodesignProvision="$PROFILE_UUID"
-          -p:ApplicationVersion=${{ github.run_number }}
           -o publish/ios
 
       - name: Send it to TestFlight
@@ -273,4 +282,4 @@ jobs:
           echo "$KEY" > ~/.appstoreconnect/private_keys/AuthKey_"$KEY_ID".p8
           ipa=$(find publish PhotoSense.iOS/bin -name '*.ipa' | head -1)
           xcrun altool --upload-app --type ios --file "$ipa" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
-          echo "::notice title=TestFlight::Build ${{ github.run_number }} sent; it shows in TestFlight once Apple has processed it."
+          echo "::notice title=TestFlight::Version $(node tools/version.mjs --part iphone) sent; it shows in TestFlight once Apple has processed it."

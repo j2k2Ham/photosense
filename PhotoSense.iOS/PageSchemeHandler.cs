@@ -19,13 +19,17 @@ public sealed class PageSchemeHandler : NSObject, IWKUrlSchemeHandler
         var url = new Uri(request.Url.AbsoluteString!);
         var stop = new CancellationTokenSource();
         _open[urlSchemeTask.Handle] = stop;
+        var started = DateTime.UtcNow;
         try
         {
             var answer = url.AbsolutePath.StartsWith("/api/", StringComparison.Ordinal) ? await AskAsync(request, url, stop.Token) : PageFile(url);
             // Both this and the web view's giving up happen on the main thread, so it cannot give up in between.
             if (!stop.IsCancellationRequested) Send(urlSchemeTask, request.Url, answer);
+            Say.Line($"{request.HttpMethod} {url.PathAndQuery} {answer.Status} in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms");
         }
-        catch (OperationCanceledException) { /* the web view no longer wants it */ }
+        catch (OperationCanceledException) { Say.Line($"{request.HttpMethod} {url.PathAndQuery} given up by the web view"); }
+        // An exception left to escape an async void method would end the app.
+        catch (Exception e) { Say.Line($"{request.HttpMethod} {url.PathAndQuery} failed: {e}"); }
         finally { _open.Remove(urlSchemeTask.Handle); }
     }
 

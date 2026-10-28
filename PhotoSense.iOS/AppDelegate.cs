@@ -5,6 +5,7 @@ public class AppDelegate : UIApplicationDelegate
 {
     public override bool FinishedLaunching(UIApplication application, NSDictionary? launchOptions)
     {
+        Say.Line($"started, version {NSBundle.MainBundle.InfoDictionary["CFBundleShortVersionString"]} ({NSBundle.MainBundle.InfoDictionary["CFBundleVersion"]})");
         PhoneApp.PutBackUnfinishedChanges();
         return true;
     }
