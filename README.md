@@ -8,7 +8,7 @@ Cross-platform photo duplicate & near-duplicate detection.
 |---------|---------|
 | `PhotoSense.Domain` | Core entities, value objects & services abstractions |
 | `PhotoSense.Application` | Application use-cases / orchestration (scanning, grouping) |
-| `PhotoSense.Infrastructure` | Persistence, hashing & metadata extraction implementations |
+| `PhotoSense.Infrastructure` | Persistence, hashing, metadata extraction, and the computer's disks (`DiskFileSystem`) |
 | `PhotoSense.Api` | The service's endpoints, apart from any one program that serves them |
 | `PhotoSense.Server` | The service as one program for a Windows or Mac computer (ASP.NET Core) |
 | `PhotoSense.Contracts` | The JSON shapes the service sends to the UI |
@@ -38,6 +38,12 @@ The React UI (`PhotoSense.ReactUI`) fetches everything over REST from the servic
 The service is one ASP.NET Core program, `PhotoSense.Server`. It hands every request below `/api` to the endpoints in `PhotoSense.Api` (`PhotoSenseRoutes` lists every address), and serves the page itself when the page has been built into it (see *One program for a computer* below). The endpoints know nothing of the program that serves them: they read an `ApiRequest` and write an `ApiResponse`, so that an app on a phone can later answer the same page at the same addresses with the same code.
 
 A scan runs in the background of the program, one at a time (`ScanRunner`); its progress is held in memory, as before. A scan that the program's stopping cuts short is not carried on when it starts again: scan again, and the files already read are skipped.
+
+### Where the photos live
+
+Everything that lists, reads, moves, copies or erases photos does it through one interface, `IPhotoFileSystem` in `PhotoSense.Domain`: folders that hold files and other folders, and for each file its size and when it last changed. On a computer that is `DiskFileSystem`, the computer's own disks. On a phone it will be the phone's photo library, its albums shown as folders, so that scanning, Clean up, Organize, the record of changes (below), undo and **Delete permanently** work there as they are. Nothing in `PhotoSense.Domain`, `PhotoSense.Application` or `PhotoSense.Api` reaches a disk any other way, and one test runs a scan, Clean up and its undo, an Organize move and its undo, a removal and erasing on photos held only in memory (`PhotosNotOnDiskTests`). What PhotoSense keeps of its own, the database and the thumbnails, stays on the computer's disk, as does the folder browser.
+
+The interface promises what the rules below rest on: a move or copy never replaces a file, a file can be read while it is being moved or removed, and erasing (`Erase`) is a separate operation that only **Delete permanently** asks for.
 
 ## Running the React UI
 
@@ -77,12 +83,11 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 | `/organize/files/{id}/open` | POST | Open the file in the default application of the computer the service runs on |
 | `/photos/{id}/keep?kept=true\|false` | POST | Mark a copy to keep (bulk removal skips it) |
 | `/photos/{id}?physical=true` | DELETE | Remove one file, with the sidecars and Live Photo video that belong to it alone; returns `{ heldAt, companions, batchId }`, and `batchId` undoes it. A file that cannot be moved answers 409 with the reason, and nothing is moved |
-| `/photos/{id}/move?target=` | POST | Move one scanned file into a folder; a name already taken there gets a number. Returns `{ path, batchId }`; 409 with the reason when the disk refuses |
 | `/photos/bulk/remove-duplicates?group=` | POST | Remove the duplicates of one group, of several (`group=` once for each, or in the body as `{ "groups": [...] }` when there are more than an address holds), or of all groups when none is named. With `&mode=similar`, the similar shots of the groups named instead; those are never removed without a group being named. It is one change: when one file cannot be moved, none is. Returns `{ removed, bytes, skipped, companions, problems, batchId }` |
 | `/removed?root=&root=` | GET | The `_PhotoSense_Removed` folders that hold files, with how much is in each: `{ folders: [{ path, files, bytes }], files, bytes }`. Looked for at any depth inside the folders given and inside every folder a scan on record covered, and wherever Organize put removed files |
 | `/removed/erase` | POST | Erase everything in those folders, and the folders. Body `{ folders: [path] }`, the paths as `/removed` listed them; returns `{ erased, bytes, skipped, problems }`. This is the one request that erases files. A path that is not a folder named `_PhotoSense_Removed` is refused with 400, and nothing is erased then |
 
-Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the photo listings (`/photos`, `/photos/{id}`), the scan log (`/scan/logs` and its stream) and `/outbox/dispatch`, as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the service only grants cross-origin access to the UI's address, listed under `Cors:Origins` in `PhotoSense.Server/appsettings.json` (or given as `--Cors:Origins:0=<address>`). `dev-start.ps1` tells the service the port it gave the UI. A page the service serves itself is at its own address and needs no listing.
+Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the scan log (`/scan/logs`), as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the service only grants cross-origin access to the UI's address, listed under `Cors:Origins` in `PhotoSense.Server/appsettings.json` (or given as `--Cors:Origins:0=<address>`). `dev-start.ps1` tells the service the port it gave the UI. A page the service serves itself is at its own address and needs no listing.
 
 ### Choosing the folders to scan
 
@@ -175,7 +180,7 @@ Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folde
 
 Each move, copy or removal, in Clean up or in Organize, and each undo of one, is written down in the database before any file is touched, with every file it is to move and where to. If one file cannot go (open in another program, say), the files that had already gone are put back, and the message names the file that stopped it: "IMG_2.JPG could not be moved: ... Nothing was moved: every file is where it was." Files left out before anything moves, because they have changed since the scan, have gone, or would be the last copy, are still left out and reported, as before; the rest go.
 
-If the service stops part of the way (closed, crashed, the computer turned off), it puts the change back the next time it starts, before anything else can move files, and records what it did in the audit log (`/audit`). The page does not yet say so. It looks at each file rather than trusting the record: a file that had moved goes back, a copy that was being written is deleted only while it holds nothing but what the original begins with, and a file it finds where it expected nothing is left alone. An undo cut short is taken back the same way, so the change it was undoing stands and can be undone again.
+If the service stops part of the way (closed, crashed, the computer turned off), it puts the change back the next time it starts, before anything else can move files, and records what it did in its audit log (the `audit` collection in `photosense.db`). The page does not yet say so. It looks at each file rather than trusting the record: a file that had moved goes back, a copy that was being written is deleted only while it holds nothing but what the original begins with, and a file it finds where it expected nothing is left alone. An undo cut short is taken back the same way, so the change it was undoing stands and can be undone again.
 
 When an undo finds a file's old name taken by another file, it puts it back under that name with a number. A file that is no longer where the change put it is left, and the message says so. A copy is deleted by an undo only while it is still exactly as it was written and what it was copied from is still there; besides **Delete permanently**, that and the half-written copies of a change being put back are the only files PhotoSense ever deletes, and each is a copy it made itself.
 
@@ -185,7 +190,7 @@ When an undo finds a file's old name taken by another file, it puts it back unde
 
 It first looks for those folders: inside the folders last scanned and the folder being organized, inside every folder a scan on record covered, and wherever Organize put a removed file. A warning then lists the folders it found with the number of files in each and what they come to. Confirming it brings a second, small question, **Are you sure?**, and only that one erases. The second question has a switch, **Do not ask me this second time again**; with it on, the warning alone is asked from then on. **Settings**, in the menu, turns the second question back on. Settings are kept in the browser.
 
-A file that cannot be erased (in use, say) is left, with the folders it is in, and the message says so. Only folders named `_PhotoSense_Removed` are ever emptied, and a link to another folder is neither followed nor removed.
+A file that cannot be erased (in use, say) is left, with the folders it is in, and the message says so. Only folders named `_PhotoSense_Removed` are ever emptied. A link, or anything else Windows marks as standing in for a file kept elsewhere (the files OneDrive keeps online, for one), is neither counted, followed nor erased, and the folder holding it stays.
 
 The last copy of a picture is never removed as a duplicate. A copy goes only while the original it was matched with is still on disk exactly as it was scanned, and the original can be removed "instead" only while one of its copies is. If that file has been deleted, moved or edited since the scan, by PhotoSense or by anything else, the removal is refused and the file is left where it is; scan again to bring the results up to date. The same holds if two records turn out to be one file reached by two paths (a linked folder, or a drive letter standing for a folder): the file is put straight back.
 
@@ -266,11 +271,11 @@ dotnet run --project PhotoSense.Tests -c Release -- --coverlet --coverlet-output
 
 `dotnet test --project PhotoSense.Tests -c Release` runs them too on the .NET 10 SDK, which `global.json` tells to use the new test platform. One test can be picked out with `--treenode-filter "/*/*/ClassName/*"`.
 
-In a test, every assertion is awaited (`await Assert.That(actual).IsEqualTo(expected)`); one that is not awaited is never checked, so the build treats a forgotten `await` as an error. Tests run side by side, including those of one class; the few that share the in-memory log queue are marked `[NotInParallel("ScanLogQueue")]`, and the two that share the scan request queue `[NotInParallel("scan-request-queue")]`.
+In a test, every assertion is awaited (`await Assert.That(actual).IsEqualTo(expected)`); one that is not awaited is never checked, so the build treats a forgotten `await` as an error. Tests run side by side, including those of one class; the few that share the in-memory log queue are marked `[NotInParallel("ScanLogQueue")]`.
 
 Coverage thresholds (CI enforced): Line ≥ 90%, Branch ≥ 85%. Measured on Windows the .NET code stands at 100% of lines and 100% of branches. Generated code (`*.g.cs`) and the service's start-up class are left out of the measurement.
 
-Some code is shaped so that every branch can be exercised from one operating system: `PhotoPath.Key(path, ignoreCase)`, `ShellSystemViewer.DesktopOf` and `BasicExifMetadataExtractor.Read(photo, directories)` take as an argument what they would otherwise ask the system or a file for. `RemovedFiles` takes the way a file is erased for the same reason, so that a file that cannot be erased can be tested without one that is really locked. `FileChanges` takes the disk it works on (`Disk`), so that a file that will not move, a file that will not go back, and a change cut short part of the way are all tested on any system (`FailingDisk` in the tests). Two guards against a library handing back nothing (`OutboxIntegrationEventPublisher.NameOf`, `MagickImageAnalyzer.Required`) are callable on their own for the same reason.
+Some code is shaped so that every branch can be exercised from one operating system: `PhotoPath.Key(path, ignoreCase)`, `ShellSystemViewer.DesktopOf` and `BasicExifMetadataExtractor.Read(photo, directories)` take as an argument what they would otherwise ask the system or a file for. Everything that touches photos takes the file system it works on (`IPhotoFileSystem`), so that a file that will not move, will not go back, cannot be read or cannot be erased, and a change cut short part of the way, are all tested on any system with `FailingDisk` in the tests (the real disk, except where a test says it fails), and the whole of Clean up and Organize is tested on photos in memory with `InMemoryFileSystem`. A guard against a library handing back nothing (`MagickImageAnalyzer.Required`) is callable on its own for the same reason.
 
 ### UI (React)
 
@@ -300,7 +305,7 @@ The PowerShell helper script builds the service and starts it with the React (Ne
 ./dev-start.ps1 -Clean      # clean then build
 ```
 
-To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./dev-start.ps1 -Stop` from any terminal. To restart it, run `./dev-start.ps1` again: it first stops a copy that is still running, since two cannot share the ports and a running service keeps its program files locked against the build. Only PhotoSense's own processes are stopped, an older copy that still runs on Azure Functions among them; if some other program has the UI's port, the UI takes the next free one and the service is told to accept it there.
+To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./dev-start.ps1 -Stop` from any terminal. To restart it, run `./dev-start.ps1` again: it first stops a copy that is still running, since two cannot share the ports and a running service keeps its program files locked against the build. Only PhotoSense's own processes are stopped; if some other program has the UI's port, the UI takes the next free one and the service is told to accept it there.
 
 `dotnet run --project PhotoSense.Server` starts the service on its own, at `http://localhost:7071`.
 
@@ -378,11 +383,3 @@ Behavior:
 ### In the UI
 
 `connectLogStream` in `PhotoSense.ReactUI/lib/apiClient.ts` follows the log for the setup screen, asking the endpoint above every second and a half.
-
-### Future Enhancements
-
-- Optional SSE endpoint for lighter fallback vs polling.
-- Per-instance filtering (`?instanceId=...`).
-- Persist recent logs to durable storage if needed for diagnostics.
-
-

@@ -9,7 +9,6 @@ namespace PhotoSense.Tests.Endpoints;
 public class ScanLogsEndpointsTests
 {
     private readonly InMemoryScanLogSink _sink = new();
-    private readonly InMemoryScanProgressStore _progress = new();
 
     public ScanLogsEndpointsTests() => DrainQueue();
 
@@ -18,8 +17,7 @@ public class ScanLogsEndpointsTests
         while (InMemoryScanLogSink.TryDequeuePending(out _)) { }
     }
 
-    private ScanLogsEndpoints Logs(TimeSpan? followFor = null, TimeProvider? time = null)
-        => new(_sink, _progress, time) { FollowFor = followFor ?? TimeSpan.FromMilliseconds(250), PollEvery = TimeSpan.FromMilliseconds(40) };
+    private static ScanLogsEndpoints Logs(TimeProvider? time = null) => new(time);
 
     // ---- what the page polls for
 
@@ -72,90 +70,11 @@ public class ScanLogsEndpointsTests
     [Test]
     public async Task The_Log_Is_Shown_Only_To_The_UI_And_Nothing_Is_Taken_Off_The_Queue_For_Anyone_Else()
     {
-        _progress.ScanStarted("scan-1");
         _sink.Log("scan-1", "Info", @"C:\Photos\IMG_1.JPG");
         var logs = Logs();
 
         await Assert.That((await logs.GetPendingAsync(Http.Get("scan/logs"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await logs.GetLogs(Http.Get("scan/logs/scan-1"), "scan-1")).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await logs.GetLogsStream(Http.Get("scan/logs/stream/scan-1"), "scan-1")).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 
         await Assert.That((await logs.GetPendingAsync(Http.Get("scan/logs").FromClient())).Json().GetProperty("count").GetInt32()).IsEqualTo(1);
-    }
-
-    // ---- by scan
-
-    [Test]
-    public async Task Lines_Of_One_Scan_Can_Be_Listed_And_Filtered_By_Time()
-    {
-        _sink.Log("scan-1", "Info", "first");
-        await Task.Delay(20);
-        var between = DateTime.UtcNow;
-        await Task.Delay(20);
-        _sink.Log("scan-1", "Info", "second");
-        _sink.Log("scan-2", "Info", "another scan");
-
-        var all = (await Logs().GetLogs(Http.Get("scan/logs/scan-1").FromClient(), "scan-1")).Json();
-        await Assert.That(all.EnumerateArray().Select(l => l.GetProperty("message").GetString()!)).IsEquivalentTo(new[] { "first", "second" }, CollectionOrdering.Matching);
-
-        var recent = (await Logs().GetLogs(Http.Get($"scan/logs/scan-1?since={Uri.EscapeDataString(between.ToString("o"))}").FromClient(), "scan-1")).Json();
-        await Assert.That(recent.EnumerateArray().Single().GetProperty("message").GetString()).IsEqualTo("second");
-
-        var badDate = (await Logs().GetLogs(Http.Get("scan/logs/scan-1?since=yesterday-ish").FromClient(), "scan-1")).Json();
-        await Assert.That(badDate.GetArrayLength()).IsEqualTo(2);
-    }
-
-    [Test]
-    public async Task Without_An_Id_The_Latest_Scan_Is_Meant_And_With_No_Scan_There_Is_Nothing()
-    {
-        await Assert.That((await Logs().GetLogs(Http.Get("scan/logs/").FromClient(), null)).Json().GetArrayLength()).IsEqualTo(0);
-        await Assert.That((await Logs().GetLogsStream(Http.Get("scan/logs/stream/").FromClient(), " ")).Text()).Contains("No active scan");
-
-        _progress.ScanStarted("scan-7");
-        _sink.Log("scan-7", "Info", "latest");
-        await Assert.That((await Logs().GetLogs(Http.Get("scan/logs/").FromClient(), "")).Json().EnumerateArray().Single().GetProperty("message").GetString()).IsEqualTo("latest");
-        await Assert.That((await Logs().GetLogsStream(Http.Get("scan/logs/stream/").FromClient(), null)).Text()).Contains("Info latest");
-    }
-
-    [Test]
-    [Arguments("scan/logs/stream/scan-1")]
-    [Arguments("scan/logs/stream/scan-1?follow=false")]
-    [Arguments("scan/logs/stream/scan-1?follow=maybe")]
-    public async Task A_Stream_Sends_What_There_Is_And_Ends(string url)
-    {
-        _sink.Log("scan-1", "Info", "first");
-        var response = await Logs().GetLogsStream(Http.Get(url).FromClient(), "scan-1");
-        await Assert.That(response.Header("Content-Type")).IsEqualTo("text/event-stream");
-        await Assert.That(response.Text()).Contains("event: log");
-        await Assert.That(response.Text()).Contains("Info first");
-        await Assert.That(response.Text()).DoesNotContain("event: end");
-    }
-
-    [Test]
-    public async Task A_Followed_Stream_Closes_When_Its_Time_Is_Up_By_The_Services_Clock()
-    {
-        _sink.Log("scan-1", "Info", "before");
-        // Each look at the clock moves it on ten seconds: after thirty, the stream closes.
-        var clock = new TestClock(TestClock.Day, TimeSpan.FromSeconds(10));
-
-        var text = (await Logs(TimeSpan.FromSeconds(30), clock).GetLogsStream(Http.Get("scan/logs/stream/scan-1?follow=true").FromClient(), "scan-1")).Text();
-
-        await Assert.That(text).EndsWith("event: end\ndata: stream closed\n\n");
-        await Assert.That(clock.Now).IsEqualTo(TestClock.Day.AddSeconds(40));
-    }
-
-    [Test]
-    public async Task A_Followed_Stream_Also_Sends_Lines_That_Arrive_While_It_Is_Open()
-    {
-        _sink.Log("scan-1", "Info", "before");
-        var stream = Logs(TimeSpan.FromMilliseconds(600)).GetLogsStream(Http.Get("scan/logs/stream/scan-1?follow=true").FromClient(), "scan-1");
-        await Task.Delay(120);
-        _sink.Log("scan-1", "Info", "during");
-
-        var text = (await stream).Text();
-
-        await Assert.That(text).Contains("Info before");
-        await Assert.That(text).Contains("Info during");
-        await Assert.That(text).EndsWith("event: end\ndata: stream closed\n\n");
     }
 }

@@ -29,8 +29,8 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     [Test]
     public async Task Both_Halves_Of_A_Live_Photo_Carry_The_Same_Identifier()
     {
-        await Assert.That(LivePhotoLink.ReadId(Put("IMG_1.JPG", MediaSamples.Picture(LiveId)))).IsEqualTo(LiveId);
-        await Assert.That(LivePhotoLink.ReadId(Put("IMG_1.MOV", MediaSamples.Movie(LiveId)))).IsEqualTo(LiveId);
+        await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("IMG_1.JPG", MediaSamples.Picture(LiveId)))).IsEqualTo(LiveId);
+        await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("IMG_1.MOV", MediaSamples.Movie(LiveId)))).IsEqualTo(LiveId);
         await Assert.That((await ReadAsync("IMG_1.JPG", MediaSamples.Picture(LiveId))).LivePhotoId).IsEqualTo(LiveId);
         await Assert.That((await ReadAsync("IMG_1.MOV", MediaSamples.Movie(LiveId))).LivePhotoId).IsEqualTo(LiveId);
     }
@@ -38,10 +38,10 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     [Test]
     public async Task Ordinary_Pictures_And_Videos_Carry_None()
     {
-        await Assert.That(LivePhotoLink.ReadId(Put("plain.JPG", MediaSamples.Picture()))).IsNull();
-        await Assert.That(LivePhotoLink.ReadId(Put("plain.MOV", MediaSamples.Movie()))).IsNull();
-        await Assert.That(LivePhotoLink.ReadId(Put("garbage.MOV", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))).IsNull();
-        await Assert.That(LivePhotoLink.ReadId(Path.Combine(_root.FullName, "not-there.JPG"))).IsNull();
+        await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("plain.JPG", MediaSamples.Picture()))).IsNull();
+        await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("plain.MOV", MediaSamples.Movie()))).IsNull();
+        await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("garbage.MOV", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))).IsNull();
+        await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Path.Combine(_root.FullName, "not-there.JPG"))).IsNull();
         await Assert.That((await ReadAsync("plain.MOV", MediaSamples.Movie())).LivePhotoId).IsNull();
     }
 
@@ -88,7 +88,7 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     public async Task A_Picture_Takes_Only_The_Video_That_Carries_Its_Identifier()
     {
         // Real files and the real reader this time: the rules themselves are covered in CompanionFileFinderTests.
-        var finder = new CompanionFileFinder();
+        var finder = new CompanionFileFinder(TestFiles.Disk);
         var picture = Put("IMG_1234.JPG", MediaSamples.Picture(LiveId));
         var video = Put("IMG_1234.MOV", MediaSamples.Movie(LiveId));
         var sidecar = Put("IMG_1234.AAE", [1]);

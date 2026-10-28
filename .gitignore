@@ -361,7 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/.azurite
 # Coverage report of the React UI tests
 PhotoSense.ReactUI/coverage/
 

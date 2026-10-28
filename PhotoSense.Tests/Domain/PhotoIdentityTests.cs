@@ -77,7 +77,7 @@ public class PhotoIdentityTests
     [Test]
     public async Task Data_Is_Kept_In_The_Users_Own_Folder_And_Never_Where_The_Service_Runs_From()
     {
-        // The Functions host restarts itself when a folder appears beside the program, as a thumbnail cache would.
+        // The program's folder is replaced whenever it is built or published again, and data kept there would go with it.
         var defaults = new PhotoStorageOptions();
         await Assert.That(defaults.ResolveDatabasePath()).IsEqualTo(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "photosense.db"));
         await Assert.That(defaults.ResolveDatabaseFolder()).IsEqualTo(PhotoStorageOptions.DefaultDataFolder);

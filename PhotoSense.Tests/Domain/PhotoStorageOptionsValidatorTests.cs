@@ -25,7 +25,7 @@ public class PhotoStorageOptionsValidatorTests
     [Test]
     public async Task Data_Inside_The_Folder_The_Service_Runs_From_Is_Refused()
     {
-        // Writing there makes the Functions host restart under a running scan, after which it answers nothing.
+        // That folder is replaced whenever the program is built or published again, and the data would go with it.
         var program = Path.Combine(Path.GetTempPath(), "photosense-app", "bin");
         var validator = new PhotoStorageOptionsValidator(program + Path.DirectorySeparatorChar);
 

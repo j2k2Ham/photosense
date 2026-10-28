@@ -38,15 +38,14 @@ public sealed class ApiRouterTests
     [Test]
     public async Task An_Address_Goes_To_The_First_Route_That_Fits_It()
     {
-        var router = Router(("GET", "scan/logs"), ("GET", "scan/logs/stream/{instanceId?}"), ("GET", "scan/logs/{instanceId?}"),
+        var router = Router(("GET", "scan/logs"), ("GET", "scan/progress/latest"), ("GET", "scan/progress/{instanceId}"),
             ("GET", "photos/{id:guid}"), ("DELETE", "photos/{id:guid}"), ("POST", "organize/undo/{batchId}"));
         var id = Guid.NewGuid();
 
         await Assert.That(await Route(router, "GET", "/api/scan/logs")).IsEqualTo("GET scan/logs | -");
         await Assert.That(await Route(router, "GET", "/api/scan/logs/")).IsEqualTo("GET scan/logs | -");
-        await Assert.That(await Route(router, "GET", "/api/scan/logs/stream")).IsEqualTo("GET scan/logs/stream/{instanceId?} | -");
-        await Assert.That(await Route(router, "GET", "/api/scan/logs/stream/abc")).IsEqualTo("GET scan/logs/stream/{instanceId?} | instanceId=abc");
-        await Assert.That(await Route(router, "GET", "/api/Scan/Logs/abc")).IsEqualTo("GET scan/logs/{instanceId?} | instanceId=abc");
+        await Assert.That(await Route(router, "GET", "/api/scan/progress/latest")).IsEqualTo("GET scan/progress/latest | -");
+        await Assert.That(await Route(router, "GET", "/api/Scan/Progress/abc")).IsEqualTo("GET scan/progress/{instanceId} | instanceId=abc");
         await Assert.That(await Route(router, "get", $"/api/photos/{id}")).IsEqualTo($"GET photos/{{id:guid}} | id={id}");
         await Assert.That(await Route(router, "DELETE", $"/api/photos/{id}")).IsEqualTo($"DELETE photos/{{id:guid}} | id={id}");
         // A value is read as it was meant, before it was written into the address.
@@ -58,13 +57,13 @@ public sealed class ApiRouterTests
     [Arguments("POST", "/api/scan/logs")]                 // nothing answers that method there
     [Arguments("GET", "/api/organize/undo")]              // a value that may not be left out
     [Arguments("GET", "/api/organize/files//thumbnail")]  // nor be empty
-    [Arguments("GET", "/api/scan/logs/stream/abc/more")]  // more than any route has
+    [Arguments("GET", "/api/scan/logs/abc")]              // more than the route there has
     [Arguments("GET", "/api/nothing")]
     [Arguments("GET", "/elsewhere/scan/logs")]            // not below /api at all
     [Arguments("GET", "/api")]
     public async Task An_Address_No_Route_Fits_Is_Answered_By_None(string method, string path)
     {
-        var router = Router(("GET", "scan/logs"), ("GET", "scan/logs/stream/{instanceId?}"), ("GET", "photos/{id:guid}"), ("POST", "organize/undo/{batchId}"),
+        var router = Router(("GET", "scan/logs"), ("GET", "photos/{id:guid}"), ("POST", "organize/undo/{batchId}"),
             ("GET", "organize/files/{id}/thumbnail"));
         await Assert.That(await Route(router, method, path)).IsNull();
     }
@@ -98,18 +97,16 @@ public sealed class ApiRouterTests
         // Asked as another web page would ask: what shows or changes someone's files is refused, the rest finds nothing.
         (string Method, string Path, HttpStatusCode Expected)[] addresses =
         [
-            ("GET", "health", HttpStatusCode.OK), ("GET", "folders", HttpStatusCode.Unauthorized), ("GET", "audit", HttpStatusCode.Unauthorized),
-            ("GET", "photos", HttpStatusCode.Unauthorized), ("GET", $"photos/{id}", HttpStatusCode.Unauthorized), ("GET", $"photos/{id}/thumbnail", HttpStatusCode.NotFound),
+            ("GET", "health", HttpStatusCode.OK), ("GET", "folders", HttpStatusCode.Unauthorized), ("GET", $"photos/{id}/thumbnail", HttpStatusCode.NotFound),
             ("GET", $"photos/{id}/image", HttpStatusCode.NotFound), ("GET", $"photos/{id}/video", HttpStatusCode.NotFound), ("POST", $"photos/{id}/open", HttpStatusCode.Unauthorized),
-            ("DELETE", $"photos/{id}", HttpStatusCode.Unauthorized), ("POST", $"photos/{id}/keep", HttpStatusCode.Unauthorized), ("POST", $"photos/{id}/move", HttpStatusCode.Unauthorized),
+            ("DELETE", $"photos/{id}", HttpStatusCode.Unauthorized), ("POST", $"photos/{id}/keep", HttpStatusCode.Unauthorized),
             ("POST", "photos/bulk/remove-duplicates", HttpStatusCode.Unauthorized), ("GET", "scan/status", HttpStatusCode.OK), ("GET", "scan/groups", HttpStatusCode.Unauthorized),
             ("POST", "scan/start", HttpStatusCode.Unauthorized), ("POST", "scan/reset", HttpStatusCode.Unauthorized), ("GET", "scan/progress/scan-1", HttpStatusCode.NotFound),
-            ("GET", "scan/logs", HttpStatusCode.Unauthorized), ("GET", "scan/logs/stream/scan-1", HttpStatusCode.Unauthorized), ("GET", "scan/logs/scan-1", HttpStatusCode.Unauthorized),
+            ("GET", "scan/logs", HttpStatusCode.Unauthorized),
             ("GET", "organize/files", HttpStatusCode.Unauthorized), ("GET", "organize/progress", HttpStatusCode.Unauthorized), ("POST", "organize/plan", HttpStatusCode.Unauthorized),
             ("POST", "organize/apply", HttpStatusCode.Unauthorized), ("POST", "organize/remove", HttpStatusCode.Unauthorized), ("POST", "organize/undo/b1", HttpStatusCode.Unauthorized),
             ("GET", "organize/batches", HttpStatusCode.Unauthorized), ("GET", "organize/files/f1/thumbnail", HttpStatusCode.NotFound), ("GET", "organize/files/f1/image", HttpStatusCode.NotFound),
             ("POST", "organize/files/f1/open", HttpStatusCode.Unauthorized), ("GET", "removed", HttpStatusCode.Unauthorized), ("POST", "removed/erase", HttpStatusCode.Unauthorized),
-            ("POST", "outbox/dispatch", HttpStatusCode.Unauthorized),
         ];
 
         var answered = new List<string>();

@@ -66,7 +66,8 @@ public sealed class RemovedEndpointsTests : IDisposable
     public async Task Says_What_Could_Not_Be_Erased()
     {
         _f.Put($"Phone/{Held}/IMG_1.JPG", "aaaa");
-        var api = new RemovedEndpoints(_f.Removed(_ => throw new IOException("The file is in use.")));
+        _f.Disk.Fail("erase", _ => true, "The file is in use.");
+        var api = new RemovedEndpoints(_f.Removed());
 
         var erased = (await api.EraseAsync(Http.Post("removed/erase", Body(new { folders = new[] { _f.In("Phone", Held) } })).FromClient())).Json();
 

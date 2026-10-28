@@ -67,22 +67,23 @@ internal sealed class OrganizeFixture : IDisposable
     {
         _audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
         Details = new LiteDbMediaDetailsStore(_db);
-        Library = new OrganizeLibrary(Repo, Reader, Hasher, Details);
+        Library = new OrganizeLibrary(Repo, Reader, Hasher, Details, Disk);
         Places = new PlaceLookup(Resolver.Object);
-        Planner = new OrganizePlanner(Library, Finder, Places);
+        Finder = new CompanionFileFinder(Disk, ContentAsId);
+        Planner = new OrganizePlanner(Library, Finder, Places, Disk);
         Batches = new LiteDbOrganizeBatchStore(_db);
         Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);
     }
 
-    public CompanionFileFinder Finder { get; } = new(ContentAsId);
+    public CompanionFileFinder Finder { get; }
 
     /// <summary>The library as another run of the service would have it: nothing in memory, the same stores behind it.</summary>
-    public OrganizeLibrary AnotherRun() => new(Repo, Reader, Hasher, Details);
+    public OrganizeLibrary AnotherRun() => new(Repo, Reader, Hasher, Details, Disk);
 
-    public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Changes, _audit.Object);
+    public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Changes, _audit.Object, Disk);
 
-    /// <param name="eraseFile">Stands in for erasing a file, for a test in which one cannot be erased.</param>
-    public PhotoSense.Application.Removal.RemovedFiles Removed(Action<string>? eraseFile = null) => new(Repo, Batches, _audit.Object, eraseFile);
+    /// <param name="files">The file system it erases through; the fixture's own disk when not given.</param>
+    public PhotoSense.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null) => new(Repo, Batches, _audit.Object, files ?? Disk);
 
     public void Dispose()
     {

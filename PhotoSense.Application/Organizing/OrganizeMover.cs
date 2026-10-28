@@ -33,13 +33,15 @@ public sealed class OrganizeMover
     private readonly ICompanionFileFinder _companions;
     private readonly FileChanges _changes;
     private readonly IAuditRepository _audit;
+    private readonly IPhotoFileSystem _files;
 
-    public OrganizeMover(OrganizeLibrary library, ICompanionFileFinder companions, FileChanges changes, IAuditRepository audit)
+    public OrganizeMover(OrganizeLibrary library, ICompanionFileFinder companions, FileChanges changes, IAuditRepository audit, IPhotoFileSystem files)
     {
         _library = library;
         _companions = companions;
         _changes = changes;
         _audit = audit;
+        _files = files;
     }
 
     /// <param name="bringCompanions">Bring the Live Photo videos and edit files that belong to the files and to nothing else.</param>
@@ -75,7 +77,7 @@ public sealed class OrganizeMover
         var carried = new Dictionary<string, OrganizeBatchItem>(PhotoPath.Comparer);
         var going = new HashSet<string>(PhotoPath.Comparer);
         var taken = new HashSet<string>(PhotoPath.Comparer);
-        var siblings = new SiblingIndex();
+        var siblings = new SiblingIndex(_files);
         var skipped = 0;
 
         for (var i = 0; i < files.Count; i++)
@@ -101,7 +103,7 @@ public sealed class OrganizeMover
             var others = bringCompanions ? siblings.SiblingsOf(file.Path, stillThere: true).Where(s => !going.Contains(s)).ToList() : [];
             foreach (var companion in others.Count > 0 ? _companions.FindAmong(file.Path, others) : [])
             {
-                if (!File.Exists(companion))
+                if (!_files.FileExists(companion))
                 {
                     problems.Add($"{Path.GetFileName(companion)} is no longer where it was, so it stays behind.");
                     continue;

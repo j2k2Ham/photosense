@@ -5,6 +5,7 @@ using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Configuration;
+using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Api.Scanning;
 
@@ -12,7 +13,8 @@ public class ScanStartEndpoints
 {
     private readonly IOptions<PhotoStorageOptions> _options;
     private readonly ScanRunner _runner;
-    public ScanStartEndpoints(IOptions<PhotoStorageOptions> options, ScanRunner runner) { _options = options; _runner = runner; }
+    private readonly IPhotoFileSystem _files;
+    public ScanStartEndpoints(IOptions<PhotoStorageOptions> options, ScanRunner runner, IPhotoFileSystem files) { _options = options; _runner = runner; _files = files; }
 
     // POST /api/scan/start
     public async Task<ApiResponse> StartAsync(ApiRequest req)
@@ -23,7 +25,7 @@ public class ScanStartEndpoints
 
         // Paths are resolved on this machine, so say so when one is not there instead of scanning nothing.
         var missing = new[] { request.PrimaryPath, request.SecondaryPath }
-            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && !Directory.Exists(p));
+            .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && !_files.FolderExists(p));
         if (string.IsNullOrWhiteSpace(request.PrimaryPath) || missing is not null)
         {
             var bad = req.CreateResponse(HttpStatusCode.BadRequest);

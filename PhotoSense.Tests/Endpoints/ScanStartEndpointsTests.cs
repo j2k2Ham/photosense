@@ -48,7 +48,7 @@ public sealed class ScanStartEndpointsTests : IDisposable
         }
     }
 
-    private ScanStartEndpoints Starter(PhotoStorageOptions? defaults = null) => new(Options.Create(defaults ?? new PhotoStorageOptions()), _runner);
+    private ScanStartEndpoints Starter(PhotoStorageOptions? defaults = null) => new(Options.Create(defaults ?? new PhotoStorageOptions()), _runner, TestFiles.Disk);
 
     private static string Body(string? primary, string? secondary = null)
         => System.Text.Json.JsonSerializer.Serialize(new { primaryLocation = primary, secondaryLocation = secondary, recursive = false });
@@ -181,17 +181,14 @@ public sealed class ScanStartEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task Scans_Groups_And_The_Outbox_Answer_Only_The_UI()
+    public async Task Scans_And_Their_Groups_Answer_Only_The_UI()
     {
-        var store = new Mock<IOutboxStore>();
         var groups = new DuplicateGroupsEndpoints(new ScanGroupingFacade(Mock.Of<IDuplicateAnalysisService>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
 
         await Assert.That((await Starter().StartAsync(Http.Post("scan/start", Body(_root.FullName)))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await new OutboxEndpoints(store.Object).RunManualAsync(Http.Post("outbox/dispatch"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await groups.GetDuplicateGroups(Http.Get("scan/groups"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 
         await Assert.That(_scans.Started).IsEmpty();
-        store.Verify(s => s.GetUnprocessedAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
         await Assert.That(ScanRunner.IsRunning(_progress.GetLatest())).IsFalse();
     }
 

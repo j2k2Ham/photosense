@@ -216,8 +216,8 @@ public sealed class OrganizeLibraryTests : IDisposable
 
         // Another run of the service gives the same file another id; one given the same key, the same id.
         byte[] key = [1, 2, 3];
-        var first = new OrganizeLibrary(_f.Repo, _f.Reader, _f.Hasher, _f.Details, key);
-        var again = new OrganizeLibrary(_f.Repo, _f.Reader, _f.Hasher, _f.Details, key);
+        var first = new OrganizeLibrary(_f.Repo, _f.Reader, _f.Hasher, _f.Details, _f.Disk, key);
+        var again = new OrganizeLibrary(_f.Repo, _f.Reader, _f.Hasher, _f.Details, _f.Disk, key);
         await Assert.That((await first.DescribeAsync(one))!.Id).IsEqualTo((await again.DescribeAsync(one))!.Id);
         await Assert.That((await first.DescribeAsync(one))!.Id).IsNotEqualTo(id);
 
@@ -335,7 +335,7 @@ public sealed class OrganizePlannerTests : IDisposable
     private readonly OrganizeFixture _f = new();
     public void Dispose() => _f.Dispose();
 
-    private OrganizeDestination To(string? name, bool direct = false, bool yearSplit = false, string? basePath = null) => new(basePath ?? _f.Root.FullName, name, direct, yearSplit);
+    private OrganizeDestination To(string? name, bool direct = false, bool yearSplit = false, string? basePath = null) => new(basePath ?? _f.Root.FullName, name, direct, yearSplit, _f.Disk);
 
     private async Task<List<string>> IdsAsync(params string[] paths)
     {
@@ -361,7 +361,7 @@ public sealed class OrganizePlannerTests : IDisposable
     public async Task A_Destination_That_Cannot_Be_Used_Says_Why()
     {
         foreach (var basePath in new[] { null, " ", "photos" })
-            await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => new OrganizeDestination(basePath, "Trips", false, false)).Message).IsEqualTo("Choose where the files go.");
+            await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => new OrganizeDestination(basePath, "Trips", false, false, _f.Disk)).Message).IsEqualTo("Choose where the files go.");
         await Assert.That(Assert.ThrowsExactly<DirectoryNotFoundException>(() => To("Trips", basePath: _f.In("nowhere"))).Message).IsEqualTo($"Folder not found: {_f.In("nowhere")}");
         foreach (var name in new[] { null, "", "  ", "\\/", " . " })
             await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => To(name)).Message).IsEqualTo("Give the folder a name first.");
@@ -401,7 +401,7 @@ public sealed class OrganizePlannerTests : IDisposable
         var video = _f.Put("IMG_1234.MOV");
         var sidecar = _f.Put("IMG_O1234.AAE");
         var alone = _f.Put("IMG_5.JPG");
-        var index = new SiblingIndex();
+        var index = new SiblingIndex(_f.Disk);
         await Assert.That(index.SiblingsOf(picture).Order()).IsEquivalentTo(new[] { video, sidecar }.Order(), CollectionOrdering.Matching);
         await Assert.That(index.SiblingsOf(alone).Count + index.SiblingsOf(_f.In("gone", "IMG_1.JPG")).Count + index.SiblingsOf("IMG_1.JPG").Count).IsEqualTo(0);
         // The folder is looked through once; a file that has since left it is no longer counted.
@@ -520,7 +520,7 @@ public sealed class OrganizePlannerTests : IDisposable
         // One file has gone since the folder was listed; another is known only by an id handed out for it.
         File.Delete(gone);
         var library = _f.AnotherRun();
-        var planner = new OrganizePlanner(library, _f.Finder, _f.Places);
+        var planner = new OrganizePlanner(library, _f.Finder, _f.Places, _f.Disk);
         var known = (await library.ListAsync(_f.Root.FullName)).ToDictionary(f => f.Name);
         File.Delete(unlisted);
 

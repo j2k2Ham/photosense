@@ -43,6 +43,7 @@ public sealed class OrganizeLibrary
     private readonly IMediaDetailsReader _reader;
     private readonly IImageHashingService _hashing;
     private readonly IMediaDetailsStore _details;
+    private readonly IPhotoFileSystem _files;
     private readonly byte[] _idKey;
     private readonly ConcurrentDictionary<string, LibraryFile> _known = new();
     private readonly ConcurrentDictionary<string, string> _paths = new();
@@ -65,12 +66,13 @@ public sealed class OrganizeLibrary
     }
 
     /// <param name="idKey">What file ids are derived with; a random one for each run of the service when not given.</param>
-    public OrganizeLibrary(IPhotoRepository repo, IMediaDetailsReader reader, IImageHashingService hashing, IMediaDetailsStore details, byte[]? idKey = null)
+    public OrganizeLibrary(IPhotoRepository repo, IMediaDetailsReader reader, IImageHashingService hashing, IMediaDetailsStore details, IPhotoFileSystem files, byte[]? idKey = null)
     {
         _repo = repo;
         _reader = reader;
         _hashing = hashing;
         _details = details;
+        _files = files;
         _idKey = idKey ?? RandomNumberGenerator.GetBytes(32);
     }
 
@@ -78,7 +80,7 @@ public sealed class OrganizeLibrary
     /// <exception cref="DirectoryNotFoundException">There is no such folder.</exception>
     public async Task<IReadOnlyList<LibraryFile>> ListAsync(string root)
     {
-        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) throw new DirectoryNotFoundException($"Folder not found: {root}");
+        if (string.IsNullOrWhiteSpace(root) || !_files.FolderExists(root)) throw new DirectoryNotFoundException($"Folder not found: {root}");
         var folder = System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(root));
         var key = PhotoPath.Key(folder);
         // A folder asked for again while it is still being read is read once: everyone asking gets the one answer.
@@ -105,7 +107,7 @@ public sealed class OrganizeLibrary
     {
         // The rest runs off the caller's thread, so that the reading is under way, and can be asked about, at once.
         await Task.Yield();
-        var paths = PhotoFileEnumerator.Enumerate(folder, recursive: true).ToList();
+        var paths = PhotoFileEnumerator.Enumerate(_files, folder, recursive: true).ToList();
         var reading = _progress[key] = new Reading(paths.Count);
         try
         {
@@ -122,11 +124,10 @@ public sealed class OrganizeLibrary
             var read = new ConcurrentBag<StoredMediaDetails>();
             Parallel.ForEach(paths, new ParallelOptions { MaxDegreeOfParallelism = ReadersAtOnce }, path =>
             {
-                var info = new FileInfo(path);
                 var at = PhotoPath.Key(path);
-                if (info.Exists)
+                if (_files.Describe(path) is { } now)
                 {
-                    var file = Known(info, at) ?? Learn(info, at, scanned.GetValueOrDefault(at), kept.GetValueOrDefault(at), read.Add);
+                    var file = Known(now, at) ?? Learn(path, now, at, scanned.GetValueOrDefault(at), kept.GetValueOrDefault(at), read.Add);
                     // Kept in the order found, so that whoever is watching can be handed the new ones each time they ask.
                     lock (reading.Found) reading.Found.Add(file);
                 }
@@ -155,34 +156,33 @@ public sealed class OrganizeLibrary
     /// <summary>What is known about the file at a path, or null when there is none.</summary>
     public async Task<LibraryFile?> DescribeAsync(string path, CancellationToken ct = default)
     {
-        var info = new FileInfo(path);
-        if (!info.Exists) return null;
+        if (_files.Describe(path) is not { } now) return null;
         var key = PhotoPath.Key(path);
-        if (Known(info, key) is { } known) return known;
+        if (Known(now, key) is { } known) return known;
         var read = new List<StoredMediaDetails>();
-        var file = Learn(info, key, await _repo.GetByPathAsync(path, ct), _details.At(path), read.Add);
+        var file = Learn(path, now, key, await _repo.GetByPathAsync(path, ct), _details.At(path), read.Add);
         _details.Save(read);
         return file;
     }
 
-    private LibraryFile? Known(FileInfo info, string key)
-        => _known.TryGetValue(key, out var known) && known.SizeBytes == info.Length && known.ModifiedUtc == info.LastWriteTimeUtc ? known : null;
+    private LibraryFile? Known(StoredFile now, string key)
+        => _known.TryGetValue(key, out var known) && known.SizeBytes == now.Length && known.ModifiedUtc == now.ModifiedUtc ? known : null;
 
     // What is on record about a file holds for as long as the file has not changed since; otherwise the file is read.
-    private LibraryFile Learn(FileInfo info, string key, Domain.Entities.Photo? scanned, StoredMediaDetails? kept, Action<StoredMediaDetails> onRead)
+    private LibraryFile Learn(string path, StoredFile now, string key, Domain.Entities.Photo? scanned, StoredMediaDetails? kept, Action<StoredMediaDetails> onRead)
     {
         var id = IdOf(key);
-        _paths[id] = info.FullName;
+        _paths[id] = path;
         LibraryFile file;
-        if (scanned is not null && scanned.FileSizeBytes == info.Length && scanned.FileModifiedUtc == info.LastWriteTimeUtc)
-            file = new LibraryFile(id, info.FullName, info.Length, info.LastWriteTimeUtc,
+        if (scanned is not null && scanned.FileSizeBytes == now.Length && scanned.FileModifiedUtc == now.ModifiedUtc)
+            file = new LibraryFile(id, path, now.Length, now.ModifiedUtc,
                 new MediaDetails(scanned.TakenOn, scanned.Width, scanned.Height, scanned.DurationSeconds, scanned.Latitude, scanned.Longitude, scanned.LivePhotoId), FromScan: true, scanned.ContentHash);
-        else if (kept is not null && kept.SizeBytes == info.Length && kept.ModifiedUtc == info.LastWriteTimeUtc)
-            file = new LibraryFile(id, info.FullName, info.Length, info.LastWriteTimeUtc, kept.Details, FromScan: false, ContentHash: null);
+        else if (kept is not null && kept.SizeBytes == now.Length && kept.ModifiedUtc == now.ModifiedUtc)
+            file = new LibraryFile(id, path, now.Length, now.ModifiedUtc, kept.Details, FromScan: false, ContentHash: null);
         else
         {
-            file = new LibraryFile(id, info.FullName, info.Length, info.LastWriteTimeUtc, _reader.Read(info.FullName), FromScan: false, ContentHash: null);
-            onRead(new StoredMediaDetails(info.FullName, info.Length, info.LastWriteTimeUtc, file.Details));
+            file = new LibraryFile(id, path, now.Length, now.ModifiedUtc, _reader.Read(path), FromScan: false, ContentHash: null);
+            onRead(new StoredMediaDetails(path, now.Length, now.ModifiedUtc, file.Details));
         }
         return _known[key] = file;
     }
@@ -194,8 +194,7 @@ public sealed class OrganizeLibrary
     /// </summary>
     public Func<string, string?> LivePhotoIds(Func<string, string?> otherwise) => path =>
     {
-        var info = new FileInfo(path);
-        return info.Exists && Known(info, PhotoPath.Key(path)) is { } known ? known.Details.LivePhotoId : otherwise(path);
+        return _files.Describe(path) is { } now && Known(now, PhotoPath.Key(path)) is { } known ? known.Details.LivePhotoId : otherwise(path);
     };
 
     /// <summary>The hash of the file's bytes, worked out once for as long as the file stays the same.</summary>
@@ -205,7 +204,7 @@ public sealed class OrganizeLibrary
         // The file as it was handed in may be from before its hash was worked out.
         var key = PhotoPath.Key(file.Path);
         if (_known.TryGetValue(key, out var known) && known.ContentHash is { } worked && known.SizeBytes == file.SizeBytes && known.ModifiedUtc == file.ModifiedUtc) return worked;
-        await using var stream = new FileStream(file.Path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16, FileOptions.SequentialScan);
+        await using var stream = _files.OpenRead(file.Path);
         hash = await _hashing.ComputeHashAsync(stream, ct);
         _known[key] = file with { ContentHash = hash };
         return hash;
@@ -218,10 +217,11 @@ public sealed class OrganizeLibrary
         _paths[id] = to;
         if (!_known.TryGetValue(PhotoPath.Key(from), out var known)) return;
         if (!copied) _known.TryRemove(PhotoPath.Key(from), out _);
-        var arrived = new FileInfo(to);
-        _known[PhotoPath.Key(to)] = known with { Id = id, Path = to, ModifiedUtc = arrived.LastWriteTimeUtc };
+        // Gone again already: there is nothing there to know about.
+        if (_files.Describe(to) is not { } arrived) return;
+        _known[PhotoPath.Key(to)] = known with { Id = id, Path = to, ModifiedUtc = arrived.ModifiedUtc };
         // Kept for the next run as well, so that a file is not read again merely for having been moved.
-        _details.Save([new StoredMediaDetails(to, known.SizeBytes, arrived.LastWriteTimeUtc, known.Details)]);
+        _details.Save([new StoredMediaDetails(to, known.SizeBytes, arrived.ModifiedUtc, known.Details)]);
     }
 
     private string IdOf(string pathKey) => Convert.ToHexString(HMACSHA256.HashData(_idKey, Encoding.UTF8.GetBytes(pathKey)), 0, 12).ToLowerInvariant();

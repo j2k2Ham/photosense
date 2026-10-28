@@ -4,6 +4,7 @@ using PhotoSense.Application.Changes;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.ValueObjects;
+using PhotoSense.Infrastructure.Files;
 using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Application;
@@ -12,14 +13,17 @@ namespace PhotoSense.Tests.Application;
 /// The real disk, except that what a test names fails, on any system, until the test lets it through. A
 /// file held open fails to move only on Windows, so tests ask this instead.
 /// </summary>
-internal sealed class FailingDisk : Disk
+internal sealed class FailingDisk : DiskFileSystem
 {
     private readonly List<(string Operation, Func<string, bool> When, string? Reason)> _failing = [];
 
     /// <summary>Runs before every move with the file about to go, for a test that looks at that moment.</summary>
     public Action<string>? BeforeMove { get; set; }
 
-    /// <summary>Makes an operation ("move", "copy", "make", "remove folder" or "delete") fail for the paths it matches; a move or copy is matched by the file it takes.</summary>
+    /// <summary>
+    /// Makes an operation ("move", "copy", "make", "remove folder", "delete", "erase" or "read") fail for the paths
+    /// it matches; a move or copy is matched by the file it takes.
+    /// </summary>
     /// <param name="reason">What the disk says; a sentence naming the operation and the file when not given.</param>
     public FailingDisk Fail(string operation, Func<string, bool> when, string? reason = null)
     {
@@ -66,6 +70,18 @@ internal sealed class FailingDisk : Disk
     {
         Check("delete", path);
         base.DeleteCopy(path);
+    }
+
+    public override void Erase(string path)
+    {
+        Check("erase", path);
+        base.Erase(path);
+    }
+
+    public override Stream OpenRead(string path)
+    {
+        Check("read", path);
+        return base.OpenRead(path);
     }
 }
 

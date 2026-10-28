@@ -1,15 +1,11 @@
 using System.Net;
-using LiteDB;
 using Moq;
-using PhotoSense.Application.Changes;
-using PhotoSense.Application.Photos.Services;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Api.Endpoints;
-using PhotoSense.Api.Scanning;
 using PhotoSense.Infrastructure.Persistence;
 using PhotoSense.Tests.Application;
 
@@ -26,27 +22,21 @@ public sealed class PhotosEndpointsTests : IDisposable
     private readonly Mock<IDuplicateRemovalService> _remover = new();
     private readonly Mock<IAuditRepository> _audit = new();
     private readonly List<AuditEntry> _audited = [];
-    private readonly LiteDatabase _db = new(new MemoryStream());
-    private readonly LiteDbOrganizeBatchStore _batches;
     private readonly PhotosEndpoints _api;
 
     public PhotosEndpointsTests()
     {
         _audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => _audited.Add(e)).Returns(Task.CompletedTask);
-        _audit.Setup(a => a.RecentAsync(It.IsAny<int>(), It.IsAny<CancellationToken>())).ReturnsAsync(() => _audited);
-        _batches = new LiteDbOrganizeBatchStore(_db);
         _api = Api(_repo);
     }
 
     public void Dispose()
     {
-        _db.Dispose();
         _root.Delete(true);
     }
 
-    private PhotosEndpoints Api(IPhotoRepository repo, Disk? disk = null) => new(repo, new PhotoSearchService(repo), _remover.Object, _thumbnails,
-        _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object,
-        new FileChanges(_batches, repo, Mock.Of<IAuditRepository>(), disk));
+    private PhotosEndpoints Api(IPhotoRepository repo, IPhotoFileSystem? disk = null)
+        => new(repo, _remover.Object, _thumbnails, _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), _viewer.Object, disk ?? TestFiles.Disk);
 
     // A real file with a record that matches it, as a scan would leave it.
     private async Task<Photo> AddAsync(string name, string content = "picture bytes", string? contentHash = "ABCDEF", bool onDisk = true)
@@ -67,72 +57,16 @@ public sealed class PhotosEndpointsTests : IDisposable
     {
         var photo = await AddAsync("IMG_1.JPG");
         var id = Id(photo);
-        await Assert.That((await _api.GetAuditAsync(Http.Get("audit"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _api.DeletePhotoAsync(Http.Delete($"photos/{id}?physical=true"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _api.KeepPhotoAsync(Http.Post($"photos/{id}/keep"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.MovePhotoAsync(Http.Post($"photos/{id}/move?target={_root.FullName}"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _api.OpenPhotoAsync(Http.Post($"photos/{id}/open"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _api.RemoveDuplicatesAsync(Http.Post("photos/bulk/remove-duplicates"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        // Listing photos shows where each file is.
-        await Assert.That((await _api.GetPhotosAsync(Http.Get("photos"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.GetPhotoAsync(Http.Get($"photos/{id}"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 
         _remover.VerifyNoOtherCalls();
         _viewer.VerifyNoOtherCalls();
         await Assert.That((await _repo.GetAsync(photo.Id))!.IsKept).IsFalse();
         await Assert.That(File.Exists(photo.SourcePath)).IsTrue();
         await Assert.That(_audited).IsEmpty();
-    }
-
-    // ---- listing
-
-    [Test]
-    public async Task Audit_Lists_What_Was_Done()
-    {
-        _audited.Add(new AuditEntry { Action = "Keep", PhotoId = "p1", Details = "d" });
-        var entry = (await _api.GetAuditAsync(Http.Get("audit").FromClient())).Json().EnumerateArray().Single();
-        await Assert.That(entry.GetProperty("Action").GetString()).IsEqualTo("Keep");
-    }
-
-    [Test]
-    public async Task Photos_Are_Listed_A_Page_At_A_Time_And_Can_Be_Filtered()
-    {
-        await AddAsync("cat.JPG", contentHash: "AA");
-        await AddAsync("dog.JPG", contentHash: "BB");
-        await AddAsync("cat2.JPG", contentHash: "CC");
-
-        var all = (await _api.GetPhotosAsync(Http.Get("photos").FromClient())).Json();
-        await Assert.That((all.GetProperty("Page").GetInt32(), all.GetProperty("PageSize").GetInt32(), all.GetProperty("TotalCount").GetInt32())).IsEqualTo((1, 50, 3));
-
-        var cats = (await _api.GetPhotosAsync(Http.Get("photos?text=cat&page=2&pageSize=1&set=Unknown").FromClient())).Json();
-        await Assert.That((cats.GetProperty("Page").GetInt32(), cats.GetProperty("PageSize").GetInt32(), cats.GetProperty("TotalCount").GetInt32(), cats.GetProperty("TotalPages").GetInt32())).IsEqualTo((2, 1, 2, 2));
-        await Assert.That(cats.GetProperty("items").EnumerateArray().Single().GetProperty("fileName").GetString()).StartsWith("cat");
-
-        var byHash = (await _api.GetPhotosAsync(Http.Get("photos?hash=BB&phash=&page=x&pageSize=y").FromClient())).Json();
-        await Assert.That((byHash.GetProperty("Page").GetInt32(), byHash.GetProperty("PageSize").GetInt32(), byHash.GetProperty("TotalCount").GetInt32())).IsEqualTo((1, 50, 1));
-
-        var capped = (await _api.GetPhotosAsync(Http.Get("photos?pageSize=9999").FromClient())).Json();
-        await Assert.That(capped.GetProperty("PageSize").GetInt32()).IsEqualTo(500);
-    }
-
-    [Test]
-    public async Task A_Listing_Nobody_Is_Waiting_For_Any_More_Is_Given_Up()
-    {
-        var search = new Mock<PhotoSense.Application.Photos.Interfaces.IPhotoSearchService>();
-        search.Setup(s => s.SearchAsync(It.IsAny<PhotoSense.Application.Photos.Interfaces.PhotoSearchQuery>(), It.Is<CancellationToken>(t => t.IsCancellationRequested)))
-            .ThrowsAsync(new OperationCanceledException());
-        var api = new PhotosEndpoints(_repo, search.Object, _remover.Object, _thumbnails, _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), _viewer.Object,
-            new FileChanges(_batches, _repo, Mock.Of<IAuditRepository>()));
-
-        await Assert.ThrowsAsync<OperationCanceledException>(() => api.GetPhotosAsync(Http.Abandoned("photos").FromClient()));
-    }
-
-    [Test]
-    public async Task One_Photo_Can_Be_Fetched_By_Id()
-    {
-        var photo = await AddAsync("IMG_1.JPG");
-        await Assert.That((await _api.GetPhotoAsync(Http.Get("photos/x").FromClient(), Id(photo))).Json().GetProperty("fileName").GetString()).IsEqualTo("IMG_1.JPG");
-        await Assert.That((await _api.GetPhotoAsync(Http.Get("photos/x").FromClient(), UnknownId)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     // ---- thumbnails
@@ -297,7 +231,7 @@ public sealed class PhotosEndpointsTests : IDisposable
 
         // A video is read a piece at a time, each read as short as the disk allows; the same opening serves it.
         var video = await AddAsync("clip.MOV", "0123456789", contentHash: "H3");
-        await using (var playing = PhotosEndpoints.OpenForShowing(video.SourcePath))
+        await using (var playing = TestFiles.Disk.OpenRead(video.SourcePath))
         {
             var to = Moved(video);
             await Assert.That(new StreamReader(playing).ReadToEnd()).IsEqualTo("0123456789");
@@ -399,92 +333,6 @@ public sealed class PhotosEndpointsTests : IDisposable
         await Assert.That(_audited.Select(a => a.Action)).IsEquivalentTo(new[] { "Keep", "Unkeep" }, CollectionOrdering.Matching);
 
         await Assert.That((await _api.KeepPhotoAsync(Http.Post("k").FromClient(), UnknownId)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
-    }
-
-    // ---- move
-
-    [Test]
-    public async Task A_Photo_Can_Be_Moved_To_Another_Folder()
-    {
-        var photo = await AddAsync("IMG_1.JPG", "bytes");
-        var target = _root.CreateSubdirectory("album").FullName;
-
-        var response = await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
-
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
-        var moved = Path.Combine(target, "IMG_1.JPG");
-        await Assert.That(File.Exists(moved) && !File.Exists(photo.SourcePath)).IsTrue();
-        await Assert.That((await _repo.GetAsync(photo.Id))!.SourcePath).IsEqualTo(moved);
-        await Assert.That((_audited.Single().Action, _audited[0].Details)).IsEqualTo(("Move", target));
-        var json = response.Json();
-        await Assert.That(json.GetProperty("path").GetString()).IsEqualTo(moved);
-        var batch = (await _batches.GetAsync(Guid.Parse(json.GetProperty("batchId").GetString()!)))!;
-        await Assert.That((batch.Items.Single().From, batch.Items[0].To)).IsEqualTo((photo.SourcePath, moved));
-    }
-
-    [Test]
-    public async Task A_Move_Needs_A_Folder_That_Exists_And_A_Photo_That_Is_Recorded()
-    {
-        var photo = await AddAsync("IMG_1.JPG");
-        var missingFolder = Path.Combine(_root.FullName, "no-such-folder");
-        await Assert.That((await _api.MovePhotoAsync(Http.Post("m").FromClient(), Id(photo))).StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
-        await Assert.That((await _api.MovePhotoAsync(Http.Post("m?target=%20").FromClient(), Id(photo))).StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
-        await Assert.That((await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(missingFolder)}").FromClient(), Id(photo))).StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
-        await Assert.That((await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(_root.FullName)}").FromClient(), UnknownId)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
-        await Assert.That(File.Exists(photo.SourcePath)).IsTrue();
-    }
-
-    [Test]
-    public async Task A_Move_Never_Overwrites_A_File_Already_There_And_Arrives_Under_Its_Name_With_A_Number()
-    {
-        var photo = await AddAsync("IMG_1.JPG", "mine");
-        var target = _root.CreateSubdirectory("album").FullName;
-        await File.WriteAllTextAsync(Path.Combine(target, "IMG_1.JPG"), "somebody else's");
-
-        var response = await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
-
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
-        await Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "IMG_1.JPG"))).IsEqualTo("somebody else's");
-        await Assert.That(await File.ReadAllTextAsync(Path.Combine(target, "IMG_1 (1).JPG"))).IsEqualTo("mine");
-        await Assert.That((await _repo.GetAsync(photo.Id))!.SourcePath).IsEqualTo(Path.Combine(target, "IMG_1 (1).JPG"));
-    }
-
-    [Test]
-    public async Task A_Move_That_The_Disk_Refuses_Leaves_The_Photo_And_Says_Why()
-    {
-        var photo = await AddAsync("IMG_1.JPG", "mine");
-        var target = _root.CreateSubdirectory("album").FullName;
-
-        var response = await Api(_repo, new FailingDisk().Fail("move", photo.SourcePath)).MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
-
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(response.Text()).IsEqualTo("IMG_1.JPG could not be moved: The disk would not move IMG_1.JPG. Nothing was moved: every file is where it was.");
-        await Assert.That((await _repo.GetAsync(photo.Id))!.SourcePath).IsEqualTo(photo.SourcePath);
-        await Assert.That(_audited).IsEmpty();
-    }
-
-    [Test]
-    public async Task A_Move_Into_A_Folder_That_Refuses_It_Is_Reported()
-    {
-        var photo = await AddAsync("IMG_1.JPG", "mine");
-        var target = _root.CreateSubdirectory("locked").FullName;
-        using var denied = TestFiles.DenyAccess(target);
-        if (denied is null) return; // cannot be arranged when running as root
-
-        var response = await _api.MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(target)}").FromClient(), Id(photo));
-
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
-        await Assert.That(File.Exists(photo.SourcePath)).IsTrue();
-    }
-
-    [Test]
-    public async Task A_Move_That_Fails_For_Another_Reason_Is_Not_Hidden()
-    {
-        // A record with no path cannot have come from a scan; the failure must surface rather than read as "conflict".
-        var broken = new Photo { SourcePath = string.Empty, FileName = "IMG_1.JPG" };
-        var repo = new Mock<IPhotoRepository>();
-        repo.Setup(r => r.GetAsync(broken.Id, It.IsAny<CancellationToken>())).ReturnsAsync(broken);
-        await Assert.ThrowsAsync<ArgumentException>(() => Api(repo.Object).MovePhotoAsync(Http.Post($"m?target={Uri.EscapeDataString(_root.FullName)}").FromClient(), Id(broken)));
     }
 
     // ---- remove duplicates in bulk

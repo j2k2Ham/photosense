@@ -29,9 +29,10 @@ public class OrganizeEndpoints
     private readonly IThumbnailStore _thumbnails;
     private readonly IImageAnalyzer _analyzer;
     private readonly ISystemViewer _viewer;
+    private readonly IPhotoFileSystem _files;
 
     public OrganizeEndpoints(OrganizeLibrary library, OrganizePlanner planner, OrganizeMover mover, IOrganizeBatchStore batches,
-        OrganizeListingMapper mapper, IThumbnailStore thumbnails, IImageAnalyzer analyzer, ISystemViewer viewer)
+        OrganizeListingMapper mapper, IThumbnailStore thumbnails, IImageAnalyzer analyzer, ISystemViewer viewer, IPhotoFileSystem files)
     {
         _library = library;
         _planner = planner;
@@ -41,6 +42,7 @@ public class OrganizeEndpoints
         _thumbnails = thumbnails;
         _analyzer = analyzer;
         _viewer = viewer;
+        _files = files;
     }
 
     private static string Wall(DateTime clock) => OrganizeListingMapper.Wall(clock);
@@ -144,7 +146,7 @@ public class OrganizeEndpoints
         try { request = JsonSerializer.Deserialize<OrganizeRemoveRequest>(await new StreamReader(req.Body).ReadToEndAsync(), Json); }
         catch (JsonException) { /* said below */ }
         if (request?.Files is null) return await RefuseAsync(req, HttpStatusCode.BadRequest, "The request could not be read.");
-        if (string.IsNullOrWhiteSpace(request.Root) || !Path.IsPathFullyQualified(request.Root) || !Directory.Exists(request.Root))
+        if (string.IsNullOrWhiteSpace(request.Root) || !Path.IsPathFullyQualified(request.Root) || !_files.FolderExists(request.Root))
             return await RefuseAsync(req, HttpStatusCode.NotFound, $"Folder not found: {request.Root}");
 
         return await DoneAsync(req, await _mover.RemoveAsync(request.Root, request.Files.Select(f => f.Id ?? string.Empty).ToList()));
@@ -163,7 +165,7 @@ public class OrganizeEndpoints
     }
 
     // The request and the destination it names, or the answer that says what is wrong with them.
-    private static async Task<(OrganizeRequest?, OrganizeDestination?, ApiResponse?)> ReadAsync(ApiRequest req)
+    private async Task<(OrganizeRequest?, OrganizeDestination?, ApiResponse?)> ReadAsync(ApiRequest req)
     {
         OrganizeRequest? request = null;
         try { request = JsonSerializer.Deserialize<OrganizeRequest>(await new StreamReader(req.Body).ReadToEndAsync(), Json); }
@@ -173,7 +175,7 @@ public class OrganizeEndpoints
         {
             // A subfolder that cannot be made is said now, before anything is planned or moved.
             foreach (var file in request.Files) OrganizeDestination.Subfolder(file.Subfolder);
-            return (request, new OrganizeDestination(request.BasePath, request.FolderName, request.Direct, request.YearSplit), null);
+            return (request, new OrganizeDestination(request.BasePath, request.FolderName, request.Direct, request.YearSplit, _files), null);
         }
         catch (DirectoryNotFoundException ex) { return (null, null, await RefuseAsync(req, HttpStatusCode.NotFound, ex.Message)); }
         catch (ArgumentException ex) { return (null, null, await RefuseAsync(req, HttpStatusCode.BadRequest, ex.Message)); }
@@ -224,7 +226,7 @@ public class OrganizeEndpoints
             await PreviewsBeingMade.WaitAsync();
             try
             {
-                await using var stream = PhotosEndpoints.OpenForShowing(file.Path);
+                await using var stream = _files.OpenRead(file.Path);
                 jpeg = (await _analyzer.AnalyzeAsync(stream)).ThumbnailJpeg;
                 await _thumbnails.SaveAsync(key, jpeg);
             }
@@ -243,7 +245,7 @@ public class OrganizeEndpoints
         string id)
     {
         if (await _library.FindAsync(id) is not { IsVideo: false } file) return req.CreateResponse(HttpStatusCode.NotFound);
-        return await PhotosEndpoints.ShowImageAsync(req, file.Path, file.ContentHash, _analyzer);
+        return await PhotosEndpoints.ShowImageAsync(req, _files, file.Path, file.ContentHash, _analyzer);
     }
 
     // POST /api/organize/files/{id}/open

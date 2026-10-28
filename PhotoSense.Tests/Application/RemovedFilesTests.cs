@@ -1,5 +1,6 @@
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests.Application;
 
@@ -121,20 +122,67 @@ public sealed class RemovedFilesTests : IDisposable
         _f.Put($"Phone/{Held}/2022/IMG_2.JPG", "bb");
         _f.Put($"Phone/{Held}/2023/IMG_3.JPG", "c");
         _f.Put($"Phone/{Held}/2024/IMG_4.JPG", "d");
-        void Erase(string path)
-        {
-            if (path.EndsWith("IMG_2.JPG", StringComparison.Ordinal)) throw new IOException("The file is in use.");
-            if (path.EndsWith("IMG_3.JPG", StringComparison.Ordinal)) throw new UnauthorizedAccessException("Access is denied.");
-            File.Delete(path);
-        }
+        _f.Disk.Fail("erase", p => p.EndsWith("IMG_2.JPG", StringComparison.Ordinal), "The file is in use.");
+        _f.Disk.Fail("erase", p => p.EndsWith("IMG_3.JPG", StringComparison.Ordinal), "Access is denied.");
 
-        var result = await _f.Removed(Erase).EraseAsync([_f.In("Phone", Held)]);
+        var result = await _f.Removed().EraseAsync([_f.In("Phone", Held)]);
 
         await Assert.That((result.Erased, result.Bytes, result.Skipped)).IsEqualTo((2, 5L, 2));
         await Assert.That(result.Problems).IsEquivalentTo(new[] { "IMG_2.JPG: The file is in use.", "IMG_3.JPG: Access is denied." }, CollectionOrdering.Any);
         await Assert.That((_f.Files("Phone", Held).Count, _f.Files("Phone", Held, "2022").Single(), _f.Files("Phone", Held, "2023").Single(), Directory.Exists(_f.In("Phone", Held, "2024"))))
             .IsEqualTo((0, "IMG_2.JPG", "IMG_3.JPG", false));
         await Assert.That(_f.Audited.Single().Details).IsEqualTo("2 files erased from 1 folders, 2 left");
+    }
+
+    [Test]
+    public async Task A_Folder_That_Will_Not_Go_Stays_And_The_Files_In_It_Are_Erased_All_The_Same()
+    {
+        _f.Put($"Phone/{Held}/2022/IMG_1.JPG", "aaaa");
+        _f.Disk.Fail("remove folder", _f.In("Phone", Held, "2022"));
+
+        var result = await _f.Removed().EraseAsync([_f.In("Phone", Held)]);
+
+        await Assert.That((result.Erased, result.Skipped, _f.Files("Phone", Held, "2022").Count, Directory.Exists(_f.In("Phone", Held, "2022")))).IsEqualTo((1, 0, 0, true));
+    }
+
+    /// <summary>The disk, listing in every folder one file more than is there: one gone a moment after the folder was read.</summary>
+    private sealed class ListsAGoneFile : PhotoSense.Infrastructure.Files.DiskFileSystem
+    {
+        public override IReadOnlyList<string> FilesIn(string folder) => [.. base.FilesIn(folder), Path.Combine(folder, "gone.JPG")];
+    }
+
+    // Says what a test names is a link, as Windows marks the files OneDrive keeps online, which no test can make.
+    private sealed class MarksLinks(params string[] links) : PhotoSense.Infrastructure.Files.DiskFileSystem
+    {
+        public override bool IsLink(string path) => links.Contains(path, PhotoPath.Comparer) || base.IsLink(path);
+    }
+
+    [Test]
+    public async Task Links_Are_Neither_Counted_Nor_Erased_And_The_Folders_Holding_Them_Stay()
+    {
+        _f.Put($"Phone/{Held}/IMG_1.JPG", "aaaa");
+        var online = _f.Put($"Phone/{Held}/IMG_2.JPG", "bb");
+        var inLinkedFolder = _f.Put($"Phone/{Held}/Cloud/IMG_3.JPG", "c");
+        // Nor is a folder of removed files looked for inside a link.
+        var underLink = _f.Put($"Phone/OneDrive/{Held}/IMG_4.JPG", "d");
+        var removed = _f.Removed(new MarksLinks(online, _f.In("Phone", Held, "Cloud"), _f.In("Phone", "OneDrive")));
+
+        await Assert.That((await removed.FindAsync([_f.In("Phone")])).Select(h => (h.Path, h.Files, h.Bytes)).Single()).IsEqualTo((_f.In("Phone", Held), 1, 4L));
+        var result = await removed.EraseAsync([_f.In("Phone", Held)]);
+
+        await Assert.That((result.Erased, result.Bytes, result.Skipped)).IsEqualTo((1, 4L, 0));
+        await Assert.That((File.Exists(online), File.Exists(inLinkedFolder), File.Exists(underLink))).IsEqualTo((true, true, true));
+    }
+
+    [Test]
+    public async Task A_File_That_Goes_While_The_Folder_Is_Read_Is_Neither_Counted_Nor_Said_To_Be_Left()
+    {
+        _f.Put($"Phone/{Held}/IMG_1.JPG", "aaaa");
+        var removed = _f.Removed(new ListsAGoneFile());
+
+        await Assert.That((await removed.FindAsync([_f.In("Phone")])).Select(h => (h.Files, h.Bytes)).Single()).IsEqualTo((1, 4L));
+        var result = await removed.EraseAsync([_f.In("Phone", Held)]);
+        await Assert.That((result.Erased, result.Bytes, result.Skipped, Directory.Exists(_f.In("Phone", Held)))).IsEqualTo((1, 4L, 0, false));
     }
 
     [Test]
@@ -172,15 +220,11 @@ public sealed class RemovedFilesTests : IDisposable
         var erased = await RemoveAsync(_f.In("Phone"), _f.Put("Phone/IMG_1.JPG"), _f.Put("Phone/2022/IMG_2.JPG"));
         var partly = await RemoveAsync(_f.In("Backup"), _f.Put("Backup/IMG_3.JPG"), _f.Put("Backup/IMG_4.JPG"));
         var untouched = await RemoveAsync(_f.In("Other"), _f.Put("Other/IMG_5.JPG"));
-        var moved = (await _f.Mover().ApplyAsync(new PhotoSense.Application.Organizing.OrganizeDestination(_f.Root.FullName, "Trips", false, false), copy: false, bringCompanions: false, "Trips",
+        var moved = (await _f.Mover().ApplyAsync(new PhotoSense.Application.Organizing.OrganizeDestination(_f.Root.FullName, "Trips", false, false, _f.Disk), copy: false, bringCompanions: false, "Trips",
             [(await _f.IdAsync(_f.Put("IMG_6.JPG")), null)])).BatchId!.Value;
-        void Erase(string path)
-        {
-            if (path.EndsWith("IMG_4.JPG", StringComparison.Ordinal)) throw new IOException("The file is in use.");
-            File.Delete(path);
-        }
+        _f.Disk.Fail("erase", p => p.EndsWith("IMG_4.JPG", StringComparison.Ordinal), "The file is in use.");
 
-        await _f.Removed(Erase).EraseAsync([_f.In("Phone", Held), _f.In("Backup", Held)]);
+        await _f.Removed().EraseAsync([_f.In("Phone", Held), _f.In("Backup", Held)]);
 
         await Assert.That((await _f.Batches.RecentAsync()).Select(b => b.Id)).IsEquivalentTo(new[] { partly, untouched, moved }, CollectionOrdering.Any);
         await Assert.That((await _f.Mover().UndoAsync(erased)).Found).IsFalse();

@@ -7,22 +7,26 @@ namespace PhotoSense.Infrastructure.Deletion;
 
 public class CompanionFileFinder : ICompanionFileFinder
 {
+    private readonly IPhotoFileSystem _files;
     private readonly Func<string, string?> _readLivePhotoId;
 
-    public CompanionFileFinder() : this(LivePhotoLink.ReadId) { }
+    public CompanionFileFinder(IPhotoFileSystem files) : this(files, path => LivePhotoLink.ReadId(files, path)) { }
 
     /// <param name="readLivePhotoId">Reads the Live Photo identifier a picture or video carries, if any.</param>
-    public CompanionFileFinder(Func<string, string?> readLivePhotoId) => _readLivePhotoId = readLivePhotoId;
+    public CompanionFileFinder(IPhotoFileSystem files, Func<string, string?> readLivePhotoId)
+    {
+        _files = files;
+        _readLivePhotoId = readLivePhotoId;
+    }
 
     public IReadOnlyList<string> FindFor(string path)
     {
-        var folder = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (folder is null || !Directory.Exists(folder)) return [];
+        if (Path.GetDirectoryName(Path.GetFullPath(path)) is not { } folder) return [];
 
         // Everything else in the folder carrying this item's name: other formats, an edited version, sidecars, a video.
         var item = PhotoNaming.ItemOf(path);
         var self = PhotoPath.Key(path);
-        var siblings = Directory.EnumerateFiles(folder)
+        var siblings = _files.FilesIn(folder)
             .Where(f => PhotoNaming.ItemOf(f) == item && PhotoPath.Key(f) != self)
             .ToList();
         return FindAmong(path, siblings);
@@ -30,8 +34,9 @@ public class CompanionFileFinder : ICompanionFileFinder
 
     public IReadOnlyList<string> FindAmong(string path, IReadOnlyList<string> siblings)
     {
-        // While another picture of the item stays, its sidecars and its Live Photo video still have an owner.
-        if (siblings.Any(MediaFiles.IsImage)) return [];
+        // Nothing else carries its name, so nothing can go with it. While another picture of the item stays,
+        // its sidecars and its Live Photo video still have an owner.
+        if (siblings.Count == 0 || siblings.Any(MediaFiles.IsImage)) return [];
 
         var companions = new List<string>();
         // A video is this picture's Live Photo half only if the two carry the same identifier. The name is

@@ -15,6 +15,9 @@ internal sealed class InMemoryThumbnailStore : IThumbnailStore
 
 internal static class TestFiles
 {
+    /// <summary>The computer's own disks, as the service has them.</summary>
+    public static PhotoSense.Infrastructure.Files.DiskFileSystem Disk { get; } = new();
+
     /// <summary>
     /// Deletes a test's folder. A database file closed a moment ago can still be held for an instant, by a
     /// virus scanner for one, and on Windows that now and then makes the first attempt fail.

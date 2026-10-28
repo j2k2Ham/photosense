@@ -8,7 +8,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 |---|---|
 | `PhotoSense.Domain` | Entities, value objects, store and service interfaces, `PhotoStorageOptions` |
 | `PhotoSense.Application` | Scanning, grouping and removal (`Scanning/`), Organize (`Organizing/`), erasing removed files (`Removal/`) |
-| `PhotoSense.Infrastructure` | LiteDB stores, hashing, Magick.NET imaging, metadata, place names (GeoNames), deletion, folder browsing |
+| `PhotoSense.Infrastructure` | LiteDB stores, hashing, Magick.NET imaging, metadata, place names (GeoNames), the computer's disks (`Files/DiskFileSystem`), companions, folder browsing |
 | `PhotoSense.Api` | The endpoints, apart from any host: `Endpoints/`, `Scanning/` (with `ScanRunner`), the route table `PhotoSenseRoutes`, and `Http/` (`ApiRequest`, `ApiResponse`, `ApiRouter`) |
 | `PhotoSense.Server` | The service as one ASP.NET Core program: `PhotoSenseServer` (CORS, the bundled page, `/api` to `ApiBridge`), DI in `PhotoSenseServices.cs` (`AddPhotoSenseCore`, `AddPhotoSenseApi`) |
 | `PhotoSense.Contracts` | JSON DTOs sent to the UI; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
@@ -20,6 +20,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 ## Architecture and stack
 
 - **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Server` as the host that wires them together. `PhotoSense.Api` depends on Domain, Application and Contracts only, never on Infrastructure or ASP.NET Core, because the phone app will serve the same endpoints. Domain and Application never reference Infrastructure or a host; new storage or OS access goes behind an interface in Domain.
+- **Where photos live:** everything that lists, reads, moves, copies or erases photos goes through `IPhotoFileSystem` (Domain): `DiskFileSystem` on a computer, the phone's photo library later. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on photos. PhotoSense's own data (LiteDB, thumbnails) and the folder browser stay on the computer's disk.
 - **.NET 10**, one ASP.NET Core program (`PhotoSense.Server`), no Azure Functions, Azurite or SignalR. Not minimal APIs or controllers: endpoints are methods taking an `ApiRequest` and returning an `ApiResponse`, and every address is listed in `PhotoSenseRoutes`.
 - **Storage:** LiteDB in one file. No EF Core, no SQL server, no migrations.
 - **Auth:** none. The service runs on the user's own machine; `RequestGuard` is the only gate (see Service patterns). No JWT, OIDC or cookies.
@@ -41,7 +42,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 1. **100% branch coverage in both halves.** Every change ships with tests that keep the service and the UI at 100% of branches. Report the measured figures when done, not a guess.
 2. **Nothing is ever replaced, and nothing is erased except by "Delete permanently".**
    - Removing a file moves it into `_PhotoSense_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
-   - The only code that erases files is `RemovedFiles.EraseAsync`, and it only empties folders named `_PhotoSense_Removed`.
+   - The only code that erases files is `RemovedFiles.EraseAsync`, through `IPhotoFileSystem.Erase`, which nothing else calls. It only empties folders named `_PhotoSense_Removed`.
    - A file arriving under a taken name gets a number.
    - The last copy of a picture is never removed as a duplicate.
 3. **Every removal question and message names the file that goes and the file that stays**, by folder when the names are alike. Jamie has twice taken two files for one.
@@ -67,13 +68,13 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## Service patterns
 
-- **Registering:** endpoint classes get their services through the constructor. Register services in `AddPhotoSenseCore` and endpoint classes in `AddPhotoSenseApi`; a factory lambda is used where a constructor has optional parameters. Add each address to `PhotoSenseRoutes`, a literal address before one a parameter could match (`scan/logs` before `scan/logs/{instanceId?}`).
+- **Registering:** endpoint classes get their services through the constructor. Register services in `AddPhotoSenseCore` and endpoint classes in `AddPhotoSenseApi`; a factory lambda is used where a constructor has optional parameters. Add each address to `PhotoSenseRoutes`, a literal address before one a parameter could match (`scan/progress/latest` would go before `scan/progress/{instanceId}`).
 - **Request guard:** an endpoint that reveals or changes someone's files checks `RequestGuard.Allows(req.Headers)` first (the `x-photosense-client` header, which other web pages cannot send). Refusals carry a plain-text reason and a status that says whose fault it is.
 - **Answers:** `ApiResponse` keeps the status it is given, before or after writing, and writes JSON with property names as declared (not camelCase), as the Functions host did and the page expects.
 - **LiteDB:** one shared `LiteDatabase`. Each store's constructor calls `LiteDbMapping.Prepare<T>()` for every mapped type before first use; LiteDB 5 otherwise fails now and then when two stores are first made together.
 - **Paths:** compare file paths with `PhotoPath.Key` / `PhotoPath.Comparer`, which are case-blind on Windows and macOS and case-sensitive on Linux.
 - **Organize file ids:** an HMAC of the path with a key made per run of the service, so a request can never name a path of its own choosing.
-- **Testability seams:** code that would ask the OS or the disk takes that as an argument so every branch runs on one OS, as in `PhotoPath.Key(path, ignoreCase)` and `RemovedFiles(..., eraseFile)`. Prefer a seam like that to a test that depends on Windows file locking.
+- **Testability seams:** code that would ask the OS or the disk takes that as an argument so every branch runs on one OS, as in `PhotoPath.Key(path, ignoreCase)`, and every class that touches photos takes an `IPhotoFileSystem`. Prefer a seam like that to a test that depends on Windows file locking.
 - **Scan state:** scans run in the background through `ScanRunner`, one at a time, with progress held in memory (`InMemoryScanProgressStore`); one cut short by a stop is not resumed. `/scan/status` reports the scan running now, and the page follows a running scan even after a reload.
 
 ## UI patterns
@@ -96,8 +97,9 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 - **Service helpers:**
   - `OrganizeFixture` (`Tests/Application/OrganizeTesting.cs`) gives a temp folder, an in-memory repository, the Organize services, `Mover()` and `Removed()`.
   - `Http.Get/Post/Delete(...)` with `.FromClient()` (`Tests/Endpoints/ApiTesting.cs`) build requests for endpoint tests; `ServerFixture` gives the service's registrations on a data folder of its own.
-  - `ChangesFixture` and `FailingDisk` (`Tests/Application/ChangesTesting.cs`) make a move, copy or deletion fail at an exact moment on any system.
-  - `TestFiles` has `LinkFolder` and `DenyAccess`.
+  - `FailingDisk` (`Tests/Application/ChangesTesting.cs`) is the real `DiskFileSystem` except that a test makes "move", "copy", "make", "remove folder", "delete", "erase" or "read" fail for the paths it names, on any system. `ChangesFixture` and `OrganizeFixture` use one (`Disk`).
+  - `InMemoryFileSystem` (`Tests/InMemoryFileSystem.cs`) keeps photos in memory only; `PhotosNotOnDiskTests` runs Clean up and Organize on it end to end.
+  - `TestFiles` has `Disk` (the real disk), `LinkFolder` and `DenyAccess`.
 - **UI tests:**
   - Tests live in `tests/`, mirroring `app`, `components` and `lib`.
   - `lib/apiClient` is mocked with `vi.hoisted` plus `vi.mock(..., importOriginal)`. Fixtures are in `tests/fixtures.ts`; `deferred` is in `tests/deferred.ts`.

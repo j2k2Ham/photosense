@@ -9,7 +9,7 @@ public sealed class OrganizeMoverTests : IDisposable
     private readonly OrganizeFixture _f = new();
     public void Dispose() => _f.Dispose();
 
-    private OrganizeDestination To(string name, bool yearSplit = false) => new(_f.Root.FullName, name, false, yearSplit);
+    private OrganizeDestination To(string name, bool yearSplit = false) => new(_f.Root.FullName, name, false, yearSplit, _f.Disk);
 
     private async Task<List<(string Id, string? Name)>> FilesAsync(params string[] paths)
     {

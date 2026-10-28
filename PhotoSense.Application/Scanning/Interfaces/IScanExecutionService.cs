@@ -1,11 +1,4 @@
-using PhotoSense.Application.Scanning.Events;
-
 namespace PhotoSense.Application.Scanning.Interfaces;
-
-public interface IScanRequestPublisher
-{
-    Task PublishAsync(ScanRequestedEvent evt, CancellationToken ct = default);
-}
 
 /// <param name="StartOver">Forget what earlier scans recorded and read every file again, instead of skipping files that have not changed.</param>
 public sealed record ScanRequest(string PrimaryPath, string? SecondaryPath, bool Recursive, bool StartOver = false);

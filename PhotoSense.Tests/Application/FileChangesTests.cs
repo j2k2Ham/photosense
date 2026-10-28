@@ -651,42 +651,4 @@ public sealed class FileChangesTests : IDisposable
         await Assert.That(File.Exists(_f.In("IMG_1.JPG"))).IsTrue();
         await Assert.That(await _f.Batches.UnfinishedAsync()).IsEmpty();
     }
-
-    // ---- the disk
-
-    [Test]
-    public async Task A_File_Is_A_Copy_Of_Another_When_It_Holds_What_The_Other_Begins_With()
-    {
-        var bytes = new byte[200_000];
-        new Random(7).NextBytes(bytes);
-        var changed = bytes.ToArray();
-        changed[150_000] ^= 0xFF;
-        string Write(string name, byte[] content)
-        {
-            var path = _f.In(name);
-            File.WriteAllBytes(path, content);
-            return path;
-        }
-        var original = Write("original.bin", bytes);
-
-        await Assert.That(Disk.Real.IsCopyOf(Write("whole.bin", bytes), original)).IsTrue();
-        await Assert.That(Disk.Real.IsCopyOf(Write("part.bin", bytes[..100_000]), original)).IsTrue();
-        await Assert.That(Disk.Real.IsCopyOf(Write("empty.bin", []), original)).IsTrue();
-        await Assert.That(Disk.Real.IsCopyOf(Write("longer.bin", [.. bytes, 1]), original)).IsFalse();
-        await Assert.That(Disk.Real.IsCopyOf(Write("differs.bin", changed), original)).IsFalse();
-    }
-
-    [Test]
-    public async Task A_Folder_Is_Taken_Away_Only_When_It_Is_Empty()
-    {
-        Directory.CreateDirectory(_f.In("empty"));
-        _f.Put("full/a.txt");
-
-        Disk.Real.RemoveEmptyFolder(_f.In("empty"));
-        Disk.Real.RemoveEmptyFolder(_f.In("full"));
-        Disk.Real.RemoveEmptyFolder(_f.In("never there"));
-
-        await Assert.That(Directory.Exists(_f.In("empty"))).IsFalse();
-        await Assert.That(File.Exists(_f.In("full", "a.txt"))).IsTrue();
-    }
 }

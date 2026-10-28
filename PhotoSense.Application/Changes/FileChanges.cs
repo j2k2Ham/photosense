@@ -1,6 +1,7 @@
 using PhotoSense.Application.Organizing;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Changes;
@@ -31,17 +32,16 @@ public sealed class FileChanges
     private readonly IOrganizeBatchStore _batches;
     private readonly IPhotoRepository _repo;
     private readonly IAuditRepository _audit;
-    private readonly Disk _disk;
+    private readonly IPhotoFileSystem _files;
     // One change at a time: two at once could each find a name free and both take it.
     private readonly SemaphoreSlim _one = new(1, 1);
 
-    /// <param name="disk">The file system; the real one when not given.</param>
-    public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, Disk? disk = null)
+    public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, IPhotoFileSystem files)
     {
         _batches = batches;
         _repo = repo;
         _audit = audit;
-        _disk = disk ?? Disk.Real;
+        _files = files;
     }
 
     /// <summary>A place a file can go to without replacing anything: the one asked for, or that name with a number.</summary>
@@ -49,7 +49,7 @@ public sealed class FileChanges
     public string FreePlace(string path, ISet<string> taken)
     {
         var folder = Path.GetDirectoryName(path)!;
-        bool Taken(string p) => taken.Contains(p) || _disk.FileExists(p);
+        bool Taken(string p) => taken.Contains(p) || _files.FileExists(p);
         if (Taken(path)) path = Path.Combine(folder, NameRules.NextFree(Path.GetFileName(path), n => Taken(Path.Combine(folder, n))));
         taken.Add(path);
         return path;
@@ -59,7 +59,7 @@ public sealed class FileChanges
     public void NeedFolder(List<string> folders, string folder)
     {
         // The folder is inside one that is there, so going up from it always arrives at a folder that exists.
-        for (var at = folder; !_disk.FolderExists(at) && !folders.Contains(at, PhotoPath.Comparer); at = Path.GetDirectoryName(at)!) folders.Add(at);
+        for (var at = folder; !_files.FolderExists(at) && !folders.Contains(at, PhotoPath.Comparer); at = Path.GetDirectoryName(at)!) folders.Add(at);
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ public sealed class FileChanges
                 foreach (var f in batch.CreatedFolders.OrderBy(f => f.Length))
                 {
                     folder = f;
-                    _disk.MakeFolder(f);
+                    _files.MakeFolder(f);
                     made.Add(f);
                 }
                 folder = null;
@@ -103,10 +103,11 @@ public sealed class FileChanges
                     // The companions of a file let go of stay where they are with it.
                     if (item.Companion && lettingGo) { left.Add(item); continue; }
                     at = item;
-                    if (batch.Copy) _disk.Copy(item.From, item.To); else _disk.Move(item.From, item.To);
+                    if (batch.Copy) _files.Copy(item.From, item.To); else _files.Move(item.From, item.To);
                     done.Add(item);
-                    item.SizeBytes = _disk.Length(item.To);
-                    item.ModifiedUtcTicks = _disk.ModifiedUtcTicks(item.To);
+                    var arrived = _files.Describe(item.To)!;
+                    item.SizeBytes = arrived.Length;
+                    item.ModifiedUtcTicks = arrived.ModifiedUtc.Ticks;
                     if (item.Companion) continue;
                     lettingGo = keep?.Invoke(item) == false;
                     if (!lettingGo) continue;
@@ -157,11 +158,11 @@ public sealed class FileChanges
             foreach (var item in Enumerable.Reverse(batch.Items))
             {
                 var name = Path.GetFileName(item.To);
-                if (!_disk.FileExists(item.To)) { left.Add($"{name} is no longer where it was put."); continue; }
+                if (_files.Describe(item.To) is not { } now) { left.Add($"{name} is no longer where it was put."); continue; }
                 if (batch.Copy)
                 {
-                    if (_disk.Length(item.To) != item.SizeBytes || _disk.ModifiedUtcTicks(item.To) != item.ModifiedUtcTicks) { left.Add($"{name} has changed since it was copied, so it was left."); continue; }
-                    if (!_disk.FileExists(item.From)) { left.Add($"{name} was left: the file it was copied from is no longer there."); continue; }
+                    if (now.Length != item.SizeBytes || now.ModifiedUtc.Ticks != item.ModifiedUtcTicks) { left.Add($"{name} has changed since it was copied, so it was left."); continue; }
+                    if (!_files.FileExists(item.From)) { left.Add($"{name} was left: the file it was copied from is no longer there."); continue; }
                     // Set aside under a hidden name first, so that it can still come back should another copy not go.
                     item.Back = Path.Combine(Path.GetDirectoryName(item.To)!, $".{name}.{batch.Id:N}.undo");
                 }
@@ -186,14 +187,14 @@ public sealed class FileChanges
                     foreach (var f in batch.UndoFolders.OrderBy(f => f.Length))
                     {
                         folder = f;
-                        _disk.MakeFolder(f);
+                        _files.MakeFolder(f);
                         made.Add(f);
                     }
                     folder = null;
                     foreach (var item in going)
                     {
                         at = item;
-                        _disk.Move(item.To, item.Back!);
+                        _files.Move(item.To, item.Back!);
                         moved.Add(item);
                     }
                 }
@@ -259,8 +260,8 @@ public sealed class FileChanges
     // A file that is moved goes back; a copy is deleted.
     private void Reverse(OrganizeBatchItem item, bool copy)
     {
-        if (copy) _disk.DeleteCopy(item.To);
-        else _disk.Move(item.To, item.From);
+        if (copy) _files.DeleteCopy(item.To);
+        else _files.Move(item.To, item.From);
     }
 
     // Puts back what a change that failed part of the way had done. Returns why it could not, if it could not.
@@ -289,7 +290,7 @@ public sealed class FileChanges
         string? stuck = null;
         foreach (var item in Enumerable.Reverse(moved))
         {
-            try { _disk.Move(item.Back!, item.To); }
+            try { _files.Move(item.Back!, item.To); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 stuck ??= $"{Path.GetFileName(item.Back)} could not be returned to where the undo found it: {Sentence(ex.Message)} PhotoSense returns it the next time it starts.";
@@ -306,15 +307,15 @@ public sealed class FileChanges
     {
         foreach (var item in Enumerable.Reverse(batch.Items))
         {
-            if (!_disk.FileExists(item.To)) continue;
-            if (!_disk.FileExists(item.From))
+            if (!_files.FileExists(item.To)) continue;
+            if (!_files.FileExists(item.From))
             {
-                if (!batch.Copy) _disk.Move(item.To, item.From);
+                if (!batch.Copy) _files.Move(item.To, item.From);
                 continue;
             }
             // A copy, or a move to another disk that had copied the file and not yet taken the original away:
             // what PhotoSense wrote goes, and only while it holds nothing but what the original holds.
-            if (_disk.IsCopyOf(item.To, item.From)) _disk.DeleteCopy(item.To);
+            if (_files.IsCopyOf(item.To, item.From)) _files.DeleteCopy(item.To);
         }
         if (batch.Removed)
         {
@@ -337,10 +338,10 @@ public sealed class FileChanges
         var going = batch.Items.Where(i => i.Back is not null).ToList();
         foreach (var item in going)
         {
-            if (!_disk.FileExists(item.Back!)) continue;
-            if (!_disk.FileExists(item.To)) _disk.Move(item.Back!, item.To);
+            if (!_files.FileExists(item.Back!)) continue;
+            if (!_files.FileExists(item.To)) _files.Move(item.Back!, item.To);
             // An undo to another disk that had copied the file back and not yet taken it away.
-            else if (!batch.Copy && _disk.IsCopyOf(item.Back!, item.To)) _disk.DeleteCopy(item.Back!);
+            else if (!batch.Copy && _files.IsCopyOf(item.Back!, item.To)) _files.DeleteCopy(item.Back!);
         }
         if (batch.Removed)
         {
@@ -401,12 +402,12 @@ public sealed class FileChanges
     {
         try
         {
-            _disk.DeleteCopy(item.Back!);
+            _files.DeleteCopy(item.Back!);
             return null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            try { _disk.Move(item.Back!, item.To); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* left under the hidden name */ }
+            try { _files.Move(item.Back!, item.To); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* left under the hidden name */ }
             return $"{Path.GetFileName(item.To)} could not be deleted, so the copy was left: {Sentence(ex.Message)}";
         }
     }
@@ -423,7 +424,7 @@ public sealed class FileChanges
     {
         foreach (var folder in folders.OrderByDescending(f => f.Length))
         {
-            try { _disk.RemoveEmptyFolder(folder); }
+            try { _files.RemoveEmptyFolder(folder); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* stays */ }
         }
     }

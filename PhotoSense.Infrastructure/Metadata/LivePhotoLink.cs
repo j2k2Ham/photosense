@@ -1,6 +1,7 @@
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif.Makernotes;
 using MetadataExtractor.Formats.QuickTime;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using Directory = MetadataExtractor.Directory;
 
@@ -24,9 +25,13 @@ public static class LivePhotoLink
     }
 
     /// <summary>The identifier in a file, or null when it has none or cannot be read.</summary>
-    public static string? ReadId(string path)
+    public static string? ReadId(IPhotoFileSystem files, string path)
     {
-        try { return ReadId(ImageMetadataReader.ReadMetadata(path), MediaFiles.IsVideo(path)); }
+        try
+        {
+            using var stream = files.OpenRead(path);
+            return ReadId(ImageMetadataReader.ReadMetadata(stream), MediaFiles.IsVideo(path));
+        }
         catch (Exception ex) when (ex is IOException or ImageProcessingException or UnauthorizedAccessException) { return null; }
     }
 }

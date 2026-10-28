@@ -19,10 +19,12 @@ public sealed class ScanExecutionServiceTests : IDisposable
     private readonly FakeThumbnails _thumbnails = new();
     private readonly InMemoryScanProgressStore _progress = new();
     private readonly Mock<IScanLogSink> _log = new();
+    // A file held open by another program cannot be read on Windows alone; this disk refuses to on any system.
+    private readonly FailingDisk _disk = new();
     private readonly ScanExecutionService _service;
 
     public ScanExecutionServiceTests()
-        => _service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _log.Object, parallelism: 2);
+        => _service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, _log.Object, parallelism: 2);
 
     public void Dispose() => _root.Delete(true);
 
@@ -58,7 +60,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
     public async Task Keeps_What_Each_Scan_Took_And_Tells_The_Next_How_Long_To_Expect()
     {
         var history = new History();
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress,
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk,
             parallelism: 2, history: history, time: new SteppingClock());
         Write("a.jpg", "picture a");
 
@@ -83,7 +85,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
     public async Task A_Scan_That_Was_Not_Started_Leaves_No_Record_Of_Itself()
     {
         var history = new History();
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, history: history);
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, history: history);
         await service.RunAsync(new ScanRequest(Path.Combine(_root.FullName, "not-there"), null, true), "missing");
         await Assert.That(history.Scans).IsEmpty();
     }
@@ -217,7 +219,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
     {
         Write("a.jpg", "picture a");
         await ScanAsync();
-        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, parallelism: 1);
+        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, parallelism: 1);
 
         var missing = Path.Combine(_root.FullName, "no-such-folder");
         await Assert.That(await quiet.RunAsync(new ScanRequest(missing, null, true, StartOver: true), "typo")).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
@@ -254,10 +256,9 @@ public sealed class ScanExecutionServiceTests : IDisposable
         var path = Write("locked.jpg", "picture");
         await ScanAsync();
         File.WriteAllText(path, "changed, so it has to be read again");
+        _disk.Fail("read", path);
 
-        ScanSummary summary;
-        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            summary = await ScanAsync(instance: "again");
+        var summary = await ScanAsync(instance: "again");
 
         await Assert.That((summary.Unreadable, summary.Pruned)).IsEqualTo((1, 0));
         await Assert.That(await _repo.GetAllAsync()).HasSingleItem();
@@ -417,7 +418,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
     public async Task Reports_Progress_As_It_Goes()
     {
         for (int i = 0; i < 100; i++) Write($"{i}.jpg", $"picture {i}");
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _log.Object);
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, _log.Object);
         await service.RunAsync(new ScanRequest(_root.FullName, null, true), "many");
         _log.Verify(l => l.Log("many", "Info", "Processed 100/100 files"), Times.Once);
         await Assert.That(_progress.Get("many").OverallPercent).IsEqualTo(100);
@@ -463,7 +464,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
         // The folder has been listed by the time the totals are reported; the file goes just after.
         var progress = new Mock<IScanProgressStore>();
         progress.Setup(p => p.SetTotals(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>())).Callback(() => File.Delete(gone));
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, progress.Object, _log.Object, parallelism: 1);
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, progress.Object, _disk, _log.Object, parallelism: 1);
 
         var summary = await service.RunAsync(new ScanRequest(_root.FullName, null, true), "scan");
 
@@ -476,16 +477,14 @@ public sealed class ScanExecutionServiceTests : IDisposable
     [Test]
     public async Task Scans_The_Same_With_Nowhere_To_Log()
     {
-        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, parallelism: 1);
+        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, parallelism: 1);
         var missing = Path.Combine(_root.FullName, "no-such-folder");
         await Assert.That(await quiet.RunAsync(new ScanRequest(missing, null, true), "typo")).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
 
         for (int i = 0; i < 98; i++) Write($"{i}.jpg", $"picture {i}");
         Write("broken.heic", FakeAnalyzer.Undecodable);
-        var locked = Write("locked.jpg", "another picture");
-        ScanSummary summary;
-        using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true), "quiet");
+        _disk.Fail("read", Write("locked.jpg", "another picture"));
+        var summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true), "quiet");
 
         await Assert.That(summary).IsEqualTo(new ScanSummary(Total: 100, Analyzed: 98, Unchanged: 0, Unreadable: 2, Pruned: 0));
         await Assert.That(_progress.Get("quiet").OverallPercent).IsEqualTo(100);

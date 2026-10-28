@@ -18,7 +18,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
     private readonly OrganizeEndpoints _api;
 
     public OrganizeEndpointsTests()
-        => _api = new OrganizeEndpoints(_f.Library, _f.Planner, _f.Mover(), _f.Batches, new OrganizeListingMapper(_f.Places), _thumbnails, _analyzer.Object, _viewer.Object);
+        => _api = new OrganizeEndpoints(_f.Library, _f.Planner, _f.Mover(), _f.Batches, new OrganizeListingMapper(_f.Places), _thumbnails, _analyzer.Object, _viewer.Object, _f.Disk);
 
     public void Dispose() => _f.Dispose();
 

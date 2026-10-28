@@ -91,7 +91,7 @@ public class LandmarkTests
 public sealed class ExifMediaDetailsReaderTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-details-");
-    private readonly ExifMediaDetailsReader _reader = new();
+    private readonly ExifMediaDetailsReader _reader = new(TestFiles.Disk);
 
     public void Dispose() => _root.Delete(true);
 

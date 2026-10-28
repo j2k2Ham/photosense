@@ -22,7 +22,5 @@ public sealed class LiteDbAuditRepository : IAuditRepository, IDisposable
     }
     public Task AddAsync(AuditEntry entry, CancellationToken ct = default)
     { _col!.Insert(entry); return Task.CompletedTask; }
-    public Task<IReadOnlyList<AuditEntry>> RecentAsync(int take = 200, CancellationToken ct = default)
-    { return Task.FromResult<IReadOnlyList<AuditEntry>>(_col!.Query().OrderByDescending(x=>x.UtcTimestamp).Limit(take).ToList()); }
     public void Dispose(){ if (_ownsDb) _db?.Dispose(); _db=null; _col=null; }
 }

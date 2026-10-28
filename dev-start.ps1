@@ -119,21 +119,19 @@ function Get-CommandLines {
   if($onWindows){
     Get-CimInstance Win32_Process | ForEach-Object { [pscustomobject]@{ Id = [int]$_.ProcessId; Command = "$($_.Name) $($_.CommandLine)" } }
   } else {
-    & ps -axo 'pid=,command=' | ForEach-Object { if($_ -match '^\s*(\d+)\s+(.*)$'){ [pscustomobject]@{ Id = [int]$Matches[1]; Command = $Matches[2] } } }
+    & /bin/ps -axo 'pid=,command=' | ForEach-Object { if($_ -match '^\s*(\d+)\s+(.*)$'){ [pscustomobject]@{ Id = [int]$Matches[1]; Command = $Matches[2] } } }
   }
 }
 
-# What a run of this script leaves running: the service and the page's dev server, and what an older run left:
-# the Functions host, its worker and the storage emulator. They are recognised by what they are running out of
-# this folder, never by port alone, so another program that happens to sit on the same port is left alone.
+# What a run of this script leaves running: the service and the page's dev server. They are recognised by what
+# they are running out of this folder, never by port alone, so another program on the same port is left alone.
 function Get-PhotoSenseProcesses {
   $here = [regex]::Escape($root)
   Get-CommandLines | Where-Object {
     $cmd = $_.Command
     $_.Id -ne $PID -and $cmd -match $here -and (
       ($cmd -match 'PhotoSense\.Server(\.dll|\.exe)?(\s|"|$)') -or
-      ($cmd -match 'PhotoSense\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]') -or
-      ($cmd -match 'PhotoSense\.Functions') -or ($cmd -match '(^|[\\/\s])func(\.exe)?\s') -or ($cmd -match 'azurite'))
+      ($cmd -match 'PhotoSense\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]'))
   }
 }
 

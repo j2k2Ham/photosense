@@ -13,7 +13,7 @@ public sealed class LivePhotoIdCacheTests : IDisposable
         var path = Path.Combine(_root.FullName, "IMG_1.HEIC");
         File.WriteAllText(path, "AAAA");
         var reads = new List<string>();
-        var cache = new LivePhotoIdCache(p => { reads.Add(p); return File.Exists(p) ? File.ReadAllText(p) : null; });
+        var cache = new LivePhotoIdCache(TestFiles.Disk, p => { reads.Add(p); return File.Exists(p) ? File.ReadAllText(p) : null; });
 
         await Assert.That((cache.Read(path), cache.Read(path), reads.Count)).IsEqualTo(("AAAA", "AAAA", 1));
 
@@ -27,7 +27,7 @@ public sealed class LivePhotoIdCacheTests : IDisposable
         // A file with no identifier is remembered as having none; one that is not there is left to the reader each time.
         var plain = Path.Combine(_root.FullName, "plain.JPG");
         File.WriteAllText(plain, "x");
-        var none = new LivePhotoIdCache(p => { reads.Add(p); return null; });
+        var none = new LivePhotoIdCache(TestFiles.Disk, p => { reads.Add(p); return null; });
         await Assert.That((none.Read(plain), none.Read(plain), reads.Count)).IsEqualTo((null, null, 4));
         var missing = Path.Combine(_root.FullName, "missing.JPG");
         await Assert.That((cache.Read(missing), cache.Read(missing), reads.Count)).IsEqualTo((null, null, 6));
@@ -38,6 +38,6 @@ public sealed class LivePhotoIdCacheTests : IDisposable
     {
         var path = Path.Combine(_root.FullName, "IMG_1.JPG");
         File.WriteAllBytes(path, MediaSamples.Picture("LIVE-1"));
-        await Assert.That(new LivePhotoIdCache().Read(path)).IsEqualTo("LIVE-1");
+        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(path)).IsEqualTo("LIVE-1");
     }
 }

@@ -20,7 +20,7 @@ namespace PhotoSense.Tests.Infrastructure;
 public sealed class CompanionFileFinderTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-companions-");
-    private readonly CompanionFileFinder _finder = new(ContentAsId);
+    private readonly CompanionFileFinder _finder = new(TestFiles.Disk, ContentAsId);
 
     public void Dispose() => _root.Delete(true);
 
@@ -131,9 +131,9 @@ public sealed class CompanionFileFinderTests : IDisposable
     }
 
     // Removes photos the way Clean up does, through a journal of its own.
-    private DuplicateRemovalService Remover(InMemoryPhotoRepository repo, Disk? disk = null)
+    private DuplicateRemovalService Remover(InMemoryPhotoRepository repo, IPhotoFileSystem? disk = null)
         => new(new DuplicateAnalysisService(repo), repo, _finder,
-            new FileChanges(new LiteDbOrganizeBatchStore(new LiteDatabase(new MemoryStream())), repo, Mock.Of<IAuditRepository>(), disk), Mock.Of<IIntegrationEventPublisher>());
+            new FileChanges(new LiteDbOrganizeBatchStore(new LiteDatabase(new MemoryStream())), repo, Mock.Of<IAuditRepository>(), disk ?? TestFiles.Disk), disk ?? TestFiles.Disk);
 
     [Test]
     public async Task Removing_A_Photo_Moves_Its_Companions_With_It_And_Forgets_Their_Records()

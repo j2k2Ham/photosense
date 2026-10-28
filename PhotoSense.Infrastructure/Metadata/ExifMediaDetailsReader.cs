@@ -10,7 +10,7 @@ namespace PhotoSense.Infrastructure.Metadata;
 /// Reads when and where a file was taken, and how large its picture is, from the file's own record of
 /// itself. Nothing is decoded, so a folder can be listed without scanning it.
 /// </summary>
-public sealed class ExifMediaDetailsReader : IMediaDetailsReader
+public sealed class ExifMediaDetailsReader(IPhotoFileSystem files) : IMediaDetailsReader
 {
     // What the formats call the size of their picture, the plainest name first.
     private static readonly (string Width, string Height)[] SizeTags = [("Image Width", "Image Height"), ("Exif Image Width", "Exif Image Height"), ("Width", "Height")];
@@ -20,8 +20,7 @@ public sealed class ExifMediaDetailsReader : IMediaDetailsReader
         var photo = new Photo { SourcePath = path, FileName = Path.GetFileName(path) };
         try
         {
-            // Opened so that the file can still be moved while it is being read.
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            using var stream = files.OpenRead(path);
             var directories = ImageMetadataReader.ReadMetadata(stream);
             BasicExifMetadataExtractor.Read(photo, directories);
             if (photo.Width == 0) (photo.Width, photo.Height) = PixelSize(directories);

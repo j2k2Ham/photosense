@@ -21,6 +21,7 @@ public class ScanExecutionService : IScanExecutionService
     private readonly IPhotoMetadataExtractor _meta;
     private readonly IThumbnailStore _thumbnails;
     private readonly IScanProgressStore _progress;
+    private readonly IPhotoFileSystem _files;
     private readonly IScanLogSink? _log;
     private readonly IScanHistory? _history;
     private readonly TimeProvider _time;
@@ -28,10 +29,10 @@ public class ScanExecutionService : IScanExecutionService
 
     /// <param name="history">Where what each scan took is kept, so that the next can say how long it will be.</param>
     public ScanExecutionService(IPhotoRepository repo, IImageHashingService hash, IImageAnalyzer analyzer, IPhotoMetadataExtractor meta,
-        IThumbnailStore thumbnails, IScanProgressStore progress, IScanLogSink? log = null, int parallelism = 0,
+        IThumbnailStore thumbnails, IScanProgressStore progress, IPhotoFileSystem files, IScanLogSink? log = null, int parallelism = 0,
         IScanHistory? history = null, TimeProvider? time = null)
     {
-        _repo = repo; _hash = hash; _analyzer = analyzer; _meta = meta; _thumbnails = thumbnails; _progress = progress; _log = log;
+        _repo = repo; _hash = hash; _analyzer = analyzer; _meta = meta; _thumbnails = thumbnails; _progress = progress; _files = files; _log = log;
         _history = history;
         _time = time ?? TimeProvider.System;
         // Each decoded image is held in memory, so the number in flight is capped.
@@ -47,7 +48,7 @@ public class ScanExecutionService : IScanExecutionService
         {
             // Without this check a mistyped folder would look like an empty one and every record would be pruned.
             var missing = new[] { request.PrimaryPath, request.SecondaryPath }
-                .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && !Directory.Exists(p));
+                .FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && !_files.FolderExists(p));
             if (string.IsNullOrWhiteSpace(request.PrimaryPath) || missing is not null)
             {
                 _log?.Log(instanceId, "Error", $"Scan not started: folder not found: {missing ?? "(none given)"}");
@@ -111,14 +112,11 @@ public class ScanExecutionService : IScanExecutionService
         }
     }
 
-    private static long SizeOf(string file)
-    {
-        try { return new FileInfo(file).Length; }
-        catch (IOException) { return -1; }
-    }
+    // A file gone since the folder was listed has no size another can share.
+    private long SizeOf(string file) => _files.Describe(file)?.Length ?? -1;
 
-    private static List<string> Enumerate(string root, bool recursive, HashSet<string> claimed)
-        => PhotoFileEnumerator.Enumerate(root, recursive).Where(f => claimed.Add(PhotoPath.Key(f))).ToList();
+    private List<string> Enumerate(string root, bool recursive, HashSet<string> claimed)
+        => PhotoFileEnumerator.Enumerate(_files, root, recursive).Where(f => claimed.Add(PhotoPath.Key(f))).ToList();
 
     private Task ProcessAsync(List<string> files, string root, PhotoSet set, Run run, CancellationToken ct)
         => Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = _parallelism, CancellationToken = ct }, async (file, token) =>
@@ -141,14 +139,14 @@ public class ScanExecutionService : IScanExecutionService
 
     private async Task ProcessFileAsync(string file, string root, PhotoSet set, Run run, CancellationToken ct)
     {
-        var info = new FileInfo(file);
+        var info = _files.Describe(file) ?? throw new FileNotFoundException("The file is no longer there.", file);
         var isVideo = MediaFiles.IsVideo(file);
         // An empty file (a transfer that never completed) is the same as every other empty file without
         // being a copy of any of them, so it is recorded but never matched.
         var needsHash = info.Length > 0 && (!isVideo || run.SharedVideoSizes.Contains(info.Length));
         var existing = await _repo.GetByPathAsync(file, ct);
         if (existing is not null && existing.AnalysisVersion == AnalysisVersion
-            && existing.FileSizeBytes == info.Length && existing.FileModifiedUtc == info.LastWriteTimeUtc
+            && existing.FileSizeBytes == info.Length && existing.FileModifiedUtc == info.ModifiedUtc
             && (existing.ContentHash is not null || !needsHash))
         {
             if (existing.Set != set || existing.ScanRoot != root)
@@ -162,14 +160,14 @@ public class ScanExecutionService : IScanExecutionService
             return;
         }
 
-        await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
+        await using var stream = _files.OpenRead(file);
         var photo = new Photo
         {
             Id = existing?.Id ?? PhotoId.New(),
             SourcePath = file,
             FileName = Path.GetFileName(file),
             FileSizeBytes = info.Length,
-            FileModifiedUtc = info.LastWriteTimeUtc,
+            FileModifiedUtc = info.ModifiedUtc,
             ScanRoot = root,
             ContentHash = needsHash ? await _hash.ComputeHashAsync(stream, ct) : null,
             AnalysisVersion = AnalysisVersion,

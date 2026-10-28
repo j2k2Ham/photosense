@@ -21,11 +21,12 @@ public sealed record OrganizeDestination
     /// <param name="folderName">The new folder's name; either slash makes subfolders.</param>
     /// <param name="direct">Put the files in the base folder itself, without a new folder.</param>
     /// <exception cref="ArgumentException">The destination cannot be used; the message says why.</exception>
+    /// <param name="files">Where the base folder is looked for.</param>
     /// <exception cref="DirectoryNotFoundException">The base folder is not there.</exception>
-    public OrganizeDestination(string? basePath, string? folderName, bool direct, bool yearSplit)
+    public OrganizeDestination(string? basePath, string? folderName, bool direct, bool yearSplit, IPhotoFileSystem files)
     {
         if (string.IsNullOrWhiteSpace(basePath) || !Path.IsPathFullyQualified(basePath)) throw new ArgumentException("Choose where the files go.");
-        if (!Directory.Exists(basePath)) throw new DirectoryNotFoundException($"Folder not found: {basePath}");
+        if (!files.FolderExists(basePath)) throw new DirectoryNotFoundException($"Folder not found: {basePath}");
         YearSplit = yearSplit;
         Folder = Path.GetFullPath(basePath);
         if (direct) return;
@@ -93,7 +94,7 @@ public static class NameRules
 /// The files of each folder by the item they belong to, read once for a folder however many of its files
 /// are asked about. Only a file whose item has other files can have companions.
 /// </summary>
-public sealed class SiblingIndex
+public sealed class SiblingIndex(IPhotoFileSystem files)
 {
     private readonly Dictionary<string, ILookup<string, string>> _items = new(PhotoPath.Comparer);
 
@@ -105,8 +106,8 @@ public sealed class SiblingIndex
     {
         var folder = Path.GetDirectoryName(path)!;
         if (!_items.TryGetValue(folder, out var items))
-            _items[folder] = items = (Directory.Exists(folder) ? Directory.EnumerateFiles(folder) : []).ToLookup(PhotoNaming.ItemOf);
-        return items[PhotoNaming.ItemOf(path)].Where(f => !PhotoPath.Comparer.Equals(f, path) && (!stillThere || File.Exists(f))).ToList();
+            _items[folder] = items = files.FilesIn(folder).ToLookup(PhotoNaming.ItemOf);
+        return items[PhotoNaming.ItemOf(path)].Where(f => !PhotoPath.Comparer.Equals(f, path) && (!stillThere || files.FileExists(f))).ToList();
     }
 }
 
@@ -127,12 +128,14 @@ public sealed class OrganizePlanner
     private readonly OrganizeLibrary _library;
     private readonly ICompanionFileFinder _companions;
     private readonly PlaceLookup _places;
+    private readonly IPhotoFileSystem _files;
 
-    public OrganizePlanner(OrganizeLibrary library, ICompanionFileFinder companions, PlaceLookup places)
+    public OrganizePlanner(OrganizeLibrary library, ICompanionFileFinder companions, PlaceLookup places, IPhotoFileSystem files)
     {
         _library = library;
         _companions = companions;
         _places = places;
+        _files = files;
     }
 
     /// <param name="subfolders">A subfolder of the destination for each file, in the order of the files; none for a file leaves it to the destination.</param>
@@ -151,8 +154,8 @@ public sealed class OrganizePlanner
         var items = found.OfType<PlannedFile>().ToList();
 
         var taken = new Dictionary<string, List<string>>(PhotoPath.Comparer);
-        foreach (var folder in items.Select(i => i.Folder).Distinct(PhotoPath.Comparer).Where(Directory.Exists))
-            taken[folder] = Directory.EnumerateFiles(folder).Select(f => Path.GetFileName(f)!).ToList();
+        foreach (var folder in items.Select(i => i.Folder).Distinct(PhotoPath.Comparer).Where(_files.FolderExists))
+            taken[folder] = _files.FilesIn(folder).Select(f => Path.GetFileName(f)!).ToList();
 
         var clashes = new List<PlannedClash>();
         foreach (var (file, folder) in items)
@@ -174,11 +177,11 @@ public sealed class OrganizePlanner
 
         // Live Photo videos and edit files that would be left behind, not counting any that are going anyway.
         var going = items.Select(i => i.File.Path).ToHashSet(PhotoPath.Comparer);
-        var siblings = new SiblingIndex();
+        var siblings = new SiblingIndex(_files);
         var withSiblings = items.Select(i => (i.File.Path, Siblings: siblings.SiblingsOf(i.File.Path))).Where(i => i.Siblings.Count > 0).ToList();
         var companions = withSiblings.AsParallel().SelectMany(i => _companions.FindAmong(i.Path, i.Siblings)).Where(c => !going.Contains(c)).Distinct(PhotoPath.Comparer).Count();
 
-        return new OrganizePlan(destination.Folder, Directory.Exists(destination.Folder), items, clashes, taken, companions);
+        return new OrganizePlan(destination.Folder, _files.FolderExists(destination.Folder), items, clashes, taken, companions);
     }
 
     private async Task<bool> SameBytesAsync(LibraryFile one, LibraryFile other, CancellationToken ct)

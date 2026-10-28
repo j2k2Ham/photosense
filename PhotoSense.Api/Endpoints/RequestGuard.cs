@@ -16,7 +16,7 @@ public static class RequestGuard
     {
         // Any web page can make a browser send a plain request to a server on this machine. It cannot make
         // the browser add a custom header: for that the browser first asks this server, which only grants
-        // it to the UI's own address (Host:CORS in local.settings.json).
+        // it to the UI's own address (Cors:Origins in appsettings.json).
         if (!headers.Contains(ClientHeader)) return false;
         if (string.IsNullOrEmpty(configuredKey)) return true;
         return headers.TryGetValues(ApiKeyHeader, out var values) && values.FirstOrDefault() == configuredKey;

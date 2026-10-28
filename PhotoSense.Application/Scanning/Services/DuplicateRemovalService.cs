@@ -2,7 +2,6 @@ using PhotoSense.Application.Changes;
 using PhotoSense.Application.Removal;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Entities;
-using PhotoSense.Domain.Events;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -20,18 +19,15 @@ public class DuplicateRemovalService : IDuplicateRemovalService
     private readonly IPhotoRepository _repo;
     private readonly ICompanionFileFinder _companions;
     private readonly FileChanges _changes;
-    private readonly IIntegrationEventPublisher _publisher;
-    private readonly TimeProvider _time;
+    private readonly IPhotoFileSystem _files;
 
-    public DuplicateRemovalService(IDuplicateAnalysisService analysis, IPhotoRepository repo, ICompanionFileFinder companions, FileChanges changes,
-        IIntegrationEventPublisher publisher, TimeProvider? time = null)
+    public DuplicateRemovalService(IDuplicateAnalysisService analysis, IPhotoRepository repo, ICompanionFileFinder companions, FileChanges changes, IPhotoFileSystem files)
     {
         _analysis = analysis;
         _repo = repo;
         _companions = companions;
         _changes = changes;
-        _publisher = publisher;
-        _time = time ?? TimeProvider.System;
+        _files = files;
     }
 
     public Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, bool similar = false, CancellationToken ct = default)
@@ -92,9 +88,9 @@ public class DuplicateRemovalService : IDuplicateRemovalService
     {
         if (await _repo.GetAsync(id, ct) is not { } photo) return new RemovalResult(RemovalOutcome.NotFound);
         // A record whose file is already gone is only forgotten: there is nothing left to be the last copy of.
-        if (!deleteFile || !File.Exists(photo.SourcePath))
+        if (!deleteFile || !_files.FileExists(photo.SourcePath))
         {
-            await ForgetAsync(photo, ct);
+            await _repo.DeleteAsync(photo.Id, ct);
             return new RemovalResult(RemovalOutcome.Removed);
         }
 
@@ -110,12 +106,6 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         if (!done.Done) return new RemovalResult(RemovalOutcome.Failed, Error: done.Problem);
         if (removal.LetGo.Count > 0) return new RemovalResult(RemovalOutcome.LastCopy);
         return new RemovalResult(RemovalOutcome.Removed, removal.HeldAt) { Companions = removal.Companions.Select(c => c.From).ToList(), BatchId = removal.BatchId };
-    }
-
-    private async Task ForgetAsync(Photo photo, CancellationToken ct)
-    {
-        await _repo.DeleteAsync(photo.Id, ct);
-        await _publisher.PublishAsync(new PhotoDeletedEvent(Guid.NewGuid(), _time.GetUtcNow().UtcDateTime, photo.Id, photo.SourcePath), ct);
     }
 
     /// <summary>The files one request takes, worked out in full before any of them moves.</summary>
@@ -142,7 +132,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         public string HeldAt => _batch.Items.First(i => !i.Companion).To;
 
         /// <summary>A photo stays while its file is there as it was scanned and this request is not taking it.</summary>
-        public bool Stays(Photo photo) => ScannedFile.IsIntact(photo) && !_going.Contains(photo.SourcePath);
+        public bool Stays(Photo photo) => ScannedFile.IsIntact(photo, service._files) && !_going.Contains(photo.SourcePath);
 
         /// <param name="copyOf">The files it is a copy of, when it is being removed as one: it goes only while one of them stays.</param>
         /// <returns>Removed when it is to go, or why it is not.</returns>
@@ -150,14 +140,13 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         {
             // Already going, for instance as the Live Photo video of a picture this request takes.
             if (_going.Contains(photo.SourcePath)) return RemovalOutcome.NotFound;
-            var file = new FileInfo(photo.SourcePath);
-            if (!file.Exists)
+            if (service._files.Describe(photo.SourcePath) is not { } file)
             {
                 _missing.Add(photo);
                 return RemovalOutcome.Removed;
             }
             // The decision to remove this file was made from the scan; if the file has changed since, it no longer holds.
-            if (file.Length != photo.FileSizeBytes || (photo.FileModifiedUtc is { } scanned && file.LastWriteTimeUtc != scanned)) return RemovalOutcome.Changed;
+            if (file.Length != photo.FileSizeBytes || (photo.FileModifiedUtc is { } scanned && file.ModifiedUtc != scanned)) return RemovalOutcome.Changed;
             var stays = copyOf?.FirstOrDefault(Stays);
             if (copyOf is not null && stays is null) return RemovalOutcome.LastCopy;
 
@@ -186,13 +175,11 @@ public class DuplicateRemovalService : IDuplicateRemovalService
                 // Two records can be one file reached by two paths: through a linked folder, or a drive letter
                 // standing for the same folder. Moving the "copy" then takes the file that was to stay with it,
                 // so it goes straight back.
-                var done = await service._changes.CarryOutAsync(_batch, item => _of[item].Stays is not { } stays || File.Exists(stays.SourcePath), ct);
+                var done = await service._changes.CarryOutAsync(_batch, item => _of[item].Stays is not { } stays || service._files.FileExists(stays.SourcePath), ct);
                 if (!done.Done) return done;
                 _left = done.Left.ToList();
             }
             foreach (var photo in _missing) await service._repo.DeleteAsync(photo.Id, ct);
-            foreach (var photo in Removed.Concat(_missing))
-                await service._publisher.PublishAsync(new PhotoDeletedEvent(Guid.NewGuid(), service._time.GetUtcNow().UtcDateTime, photo.Id, photo.SourcePath), ct);
             return new ChangeResult(true, null, _left);
         }
     }

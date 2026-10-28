@@ -2,14 +2,10 @@ using System.Net;
 using System.Text.Json;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
-using PhotoSense.Application.Photos.Interfaces;
-using System.Web;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Contracts.Duplicates;
-using PhotoSense.Api.Scanning;
-using PhotoSense.Application.Changes;
 using PhotoSense.Api.Http;
 
 namespace PhotoSense.Api.Endpoints;
@@ -33,73 +29,21 @@ public class PhotosEndpoints
     };
 
     private readonly IPhotoRepository _repo;
-    private readonly IPhotoSearchService _search;
     private readonly IDuplicateRemovalService _remover;
     private readonly IThumbnailStore _thumbnails;
     private readonly IImageAnalyzer _analyzer;
     private readonly IAuditRepository _audit;
     private readonly IScanLogSink _log;
-    private readonly PhotoDtoMapper _mapper;
     private readonly ISystemViewer _viewer;
-    private readonly FileChanges _changes;
+    private readonly IPhotoFileSystem _files;
 
-    public PhotosEndpoints(IPhotoRepository repo, IPhotoSearchService search, IDuplicateRemovalService remover,
-        IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper, ISystemViewer viewer, FileChanges changes)
+    public PhotosEndpoints(IPhotoRepository repo, IDuplicateRemovalService remover, IThumbnailStore thumbnails, IImageAnalyzer analyzer,
+        IAuditRepository audit, IScanLogSink log, ISystemViewer viewer, IPhotoFileSystem files)
     {
-        _mapper = mapper;
         _viewer = viewer;
-        _changes = changes;
-        _repo = repo; _search = search; _remover = remover;
+        _files = files;
+        _repo = repo; _remover = remover;
         _thumbnails = thumbnails; _analyzer = analyzer; _audit = audit; _log = log;
-    }
-
-    public async Task<ApiResponse> GetAuditAsync(
-        ApiRequest req)
-    {
-        var resp = req.CreateResponse(HttpStatusCode.OK);
-        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        var items = await _audit.RecentAsync();
-        await resp.WriteAsJsonAsync(items.Select(a => new { a.UtcTimestamp, a.Action, a.PhotoId, a.Details }));
-        return resp;
-    }
-
-    public async Task<ApiResponse> GetPhotosAsync(
-        ApiRequest req)
-    {
-        if (!Authorize(req)) return req.CreateResponse(HttpStatusCode.Unauthorized);
-        var qs = HttpUtility.ParseQueryString(req.Url.Query);
-        int page = int.TryParse(qs.Get("page"), out var p) ? p : 1;
-        int pageSize = int.TryParse(qs.Get("pageSize"), out var ps) ? Math.Clamp(ps,1,500) : 50;
-        var text = qs.Get("text");
-        var hash = qs.Get("hash");
-        var phash = qs.Get("phash");
-        var set = qs.Get("set");
-        var result = await _search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set), req.Aborted);
-        var resp = req.CreateResponse(HttpStatusCode.OK);
-        await resp.WriteAsJsonAsync(new {
-            result.Page,
-            result.PageSize,
-            result.TotalCount,
-            result.TotalPages,
-            items = result.Items.Select(_mapper.Map)
-        });
-        return resp;
-    }
-
-    public async Task<ApiResponse> GetPhotoAsync(
-        ApiRequest req,
-        string id)
-    {
-        if (!Authorize(req)) return req.CreateResponse(HttpStatusCode.Unauthorized);
-        var resp = req.CreateResponse();
-        var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
-        if (photo is null)
-        {
-            resp.StatusCode = HttpStatusCode.NotFound;
-            return resp;
-        }
-        await resp.WriteAsJsonAsync(_mapper.Map(photo));
-        return resp;
     }
 
     public async Task<ApiResponse> GetThumbnailAsync(
@@ -116,7 +60,7 @@ public class PhotosEndpoints
             // The cache was cleared since the scan: make the thumbnail again from the file.
             try
             {
-                await using var stream = OpenForShowing(photo.SourcePath);
+                await using var stream = _files.OpenRead(photo.SourcePath);
                 jpeg = (await _analyzer.AnalyzeAsync(stream)).ThumbnailJpeg;
                 await _thumbnails.SaveAsync(photo.ContentHash, jpeg);
             }
@@ -133,19 +77,19 @@ public class PhotosEndpoints
         string id)
     {
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
-        if (photo is null || photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
-        return await ShowImageAsync(req, photo.SourcePath, photo.ContentHash, _analyzer);
+        if (photo is null || photo.IsVideo || !_files.FileExists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
+        return await ShowImageAsync(req, _files, photo.SourcePath, photo.ContentHash, _analyzer);
     }
 
     /// <summary>The picture in a file, in a form a browser can show at full size.</summary>
-    public static async Task<ApiResponse> ShowImageAsync(ApiRequest req, string path, string? contentHash, IImageAnalyzer analyzer)
+    public static async Task<ApiResponse> ShowImageAsync(ApiRequest req, IPhotoFileSystem files, string path, string? contentHash, IImageAnalyzer analyzer)
     {
         try
         {
             // What browsers can show is sent as it is; anything else is converted for viewing.
             var asItIs = BrowserFormats.TryGetValue(Path.GetExtension(path), out var contentType);
             byte[] bytes;
-            await using (var stream = OpenForShowing(path))
+            await using (var stream = files.OpenRead(path))
             {
                 if (asItIs) await stream.ReadExactlyAsync(bytes = new byte[stream.Length]);
                 else bytes = await analyzer.RenderJpegAsync(stream, ReviewImageEdge);
@@ -166,9 +110,9 @@ public class PhotosEndpoints
         string id)
     {
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
-        if (photo is null || !photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
+        if (photo is null || !photo.IsVideo || !_files.FileExists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        await using var file = OpenForShowing(photo.SourcePath);
+        await using var file = _files.OpenRead(photo.SourcePath);
         var requested = req.Headers.TryGetValues("Range", out var values) ? values.FirstOrDefault() : null;
         if (ByteRange.Parse(requested, file.Length) is not { } range)
         {
@@ -216,14 +160,6 @@ public class PhotosEndpoints
         }
         return resp;
     }
-
-    /// <summary>
-    /// Opens a file to show it on the page without holding on to it: while it is being read it can still be
-    /// moved to the holding folder. Opened the usual way, a video could not be deleted at a moment when its
-    /// player was fetching the next piece of it, nor a picture while it was being converted for viewing.
-    /// </summary>
-    public static FileStream OpenForShowing(string path)
-        => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
 
     // A file's bytes never change under the same content hash, so the browser may keep what it was sent.
     public static async Task<ApiResponse> ImageResponseAsync(ApiRequest req, byte[] bytes, string contentType, string? contentHash)
@@ -289,34 +225,6 @@ public class PhotosEndpoints
             await _audit.AddAsync(new AuditEntry { Action = kept ? "Keep" : "Unkeep", PhotoId = gid.ToString(), Details = "" });
         }
         resp.StatusCode = HttpStatusCode.NoContent;
-        return resp;
-    }
-
-    public async Task<ApiResponse> MovePhotoAsync(
-        ApiRequest req,
-        string id)
-    {
-        var resp = req.CreateResponse();
-        if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        var gid = Guid.Parse(id);
-        var qs = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
-        var target = qs.Get("target");
-        if (string.IsNullOrWhiteSpace(target) || !Directory.Exists(target)) { resp.StatusCode = HttpStatusCode.BadRequest; await resp.WriteStringAsync("Invalid target"); return resp; }
-        var photo = await _repo.GetAsync(new PhotoId(gid));
-        if (photo == null) { resp.StatusCode = HttpStatusCode.NotFound; return resp; }
-        // A file already at the target is someone else's picture: this one arrives under its name with a number.
-        var batch = new OrganizeBatch { Label = target };
-        batch.Items.Add(new OrganizeBatchItem { From = photo.SourcePath, To = _changes.FreePlace(Path.Combine(target, photo.FileName), new HashSet<string>(PhotoPath.Comparer)) });
-        var moved = await _changes.CarryOutAsync(batch);
-        if (!moved.Done)
-        {
-            await resp.WriteStringAsync(moved.Problem!);
-            resp.StatusCode = HttpStatusCode.Conflict;
-            return resp;
-        }
-        _log.Log("audit","Info",$"Moved photo {gid} to {target}");
-        await _audit.AddAsync(new AuditEntry { Action = "Move", PhotoId = gid.ToString(), Details = target });
-        await resp.WriteAsJsonAsync(new { path = batch.Items[0].To, batchId = batch.Id.ToString() });
         return resp;
     }
 

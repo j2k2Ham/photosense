@@ -5,7 +5,6 @@ using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
-using PhotoSense.Domain.Events;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Deletion;
@@ -19,14 +18,13 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     private readonly InMemoryPhotoRepository _repo = new();
     private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly FailingDisk _disk = new();
-    private readonly Mock<IIntegrationEventPublisher> _publisher = new();
     private readonly FileChanges _changes;
     private readonly DuplicateRemovalService _service;
 
     public DuplicateRemovalServiceTests()
     {
         _changes = new FileChanges(new LiteDbOrganizeBatchStore(_db), _repo, Mock.Of<IAuditRepository>(), _disk);
-        _service = Service(new CompanionFileFinder(_ => null));
+        _service = Service(new CompanionFileFinder(_disk, _ => null));
     }
 
     public void Dispose()
@@ -35,10 +33,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         _root.Delete(true);
     }
 
-    private DuplicateRemovalService Service(ICompanionFileFinder finder, TimeProvider? time = null)
-        => new(new DuplicateAnalysisService(_repo), _repo, finder, _changes, _publisher.Object, time);
-
-    private void Published(int times) => _publisher.Verify(p => p.PublishAsync(It.IsAny<PhotoDeletedEvent>(), It.IsAny<CancellationToken>()), Times.Exactly(times));
+    private DuplicateRemovalService Service(ICompanionFileFinder finder) => new(new DuplicateAnalysisService(_repo), _repo, finder, _changes, _disk);
 
     // A real file with a record that matches it, as a scan would leave it.
     private async Task<Photo> AddAsync(string relativePath, string contentHash, bool kept = false, PhotoSet set = PhotoSet.Primary)
@@ -253,7 +248,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That(result.Problems.Single()).IsEqualTo("b (1).jpg could not be moved: The disk would not move b (1).jpg. Nothing was removed: every file is where it was.");
         await Assert.That(File.Exists(copyA.SourcePath) && File.Exists(copyB.SourcePath)).IsTrue();
         await Assert.That(await _repo.GetAsync(copyA.Id)).IsNotNull();
-        Published(0);
     }
 
     [Test]
@@ -287,7 +281,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That(result.BatchId).IsNotNull();
         await Assert.That(await _repo.GetAsync(gone.Id)).IsNull();
         await Assert.That(File.Exists(Held("a (2).jpg"))).IsTrue();
-        Published(2);
     }
 
     [Test]
@@ -323,7 +316,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That(result.Problems.Single()).StartsWith("The same file as the photo kept, under another path, so it was left alone: ");
         await Assert.That(await File.ReadAllTextAsync(original.SourcePath)).IsEqualTo("AAAA");
         await Assert.That(File.Exists(copyB.SourcePath)).IsFalse();
-        Published(1);
     }
 
     // ---- one photo at a time
@@ -414,7 +406,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public async Task A_Picture_Takes_Its_Live_Photo_Video_Along_And_The_Kept_Copy_Keeps_Its_Own()
     {
         // Records made before Live Photo identifiers were stored, so the videos appear as a group of their own.
-        var service = Service(new CompanionFileFinder(_ => "LIVE-1"));
+        var service = Service(new CompanionFileFinder(_disk, _ => "LIVE-1"));
         var keptPicture = await AddAsync(Path.Combine("a", "IMG_1.JPG"), "PPPP");
         var keptVideo = await AddAsync(Path.Combine("a", "IMG_1.MOV"), "VVVV");
         var copyPicture = await AddAsync(Path.Combine("b", "IMG_1.JPG"), "PPPP");
@@ -434,7 +426,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public async Task The_Last_Copy_Of_A_Video_Is_Never_Removed_As_Somebody_Elses_Duplicate()
     {
         // The picture kept is in b, but of the two identical videos the one in a ranks first.
-        var service = Service(new CompanionFileFinder(_ => "LIVE-1"));
+        var service = Service(new CompanionFileFinder(_disk, _ => "LIVE-1"));
         var pictureA = await AddAsync(Path.Combine("a", "IMG_1.JPG"), "PPPP", set: PhotoSet.Secondary);
         var videoA = await AddAsync(Path.Combine("a", "IMG_1.MOV"), "VVVV");
         var pictureB = await AddAsync(Path.Combine("b", "IMG_1.JPG"), "PPPP");
@@ -462,17 +454,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That(File.Exists(photo.SourcePath)).IsFalse();
         await Assert.That(await File.ReadAllTextAsync(result.HeldAt!)).IsEqualTo("picture");
         await Assert.That(await _repo.GetAsync(photo.Id)).IsNull();
-        Published(1);
-    }
-
-    [Test]
-    public async Task The_Removal_Is_Recorded_At_The_Time_It_Happened()
-    {
-        var photo = await AddAsync("IMG_1.jpg", "picture");
-
-        await Service(new CompanionFileFinder(_ => null), new TestClock()).RemoveAsync(photo.Id, deleteFile: true);
-
-        _publisher.Verify(p => p.PublishAsync(It.Is<PhotoDeletedEvent>(e => e.OccurredUtc == TestClock.Day.UtcDateTime && e.PhotoId == photo.Id), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
@@ -515,7 +496,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That((await _service.RemoveAsync(touched.Id, true)).Outcome).IsEqualTo(RemovalOutcome.Changed);
         await Assert.That(File.Exists(resized.SourcePath) && File.Exists(touched.SourcePath)).IsTrue();
         await Assert.That(await _repo.GetAsync(resized.Id)).IsNotNull();
-        Published(0);
     }
 
     [Test]
@@ -550,7 +530,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That(result.Outcome).IsEqualTo(RemovalOutcome.LastCopy);
         await Assert.That(await File.ReadAllTextAsync(original.SourcePath)).IsEqualTo("picture");
         await Assert.That(await _repo.GetAsync(same.Id)).IsNotNull();
-        Published(0);
     }
 
     [Test]
@@ -563,7 +542,6 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That((result.Succeeded, result.HeldAt, result.BatchId)).IsEqualTo((true, (string?)null, (Guid?)null));
         await Assert.That(File.Exists(photo.SourcePath)).IsTrue();
         await Assert.That(await _repo.GetAsync(photo.Id)).IsNull();
-        Published(1);
     }
 
     [Test]

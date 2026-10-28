@@ -1,13 +1,11 @@
 using System.Net;
 using Microsoft.Extensions.Options;
 using Moq;
-using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.DTOs;
-using PhotoSense.Domain.Events;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Api.Endpoints;
@@ -148,21 +146,6 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         var options = Options.Create(new PhotoStorageOptions { PrimaryPath = primary ?? "", SecondaryPath = secondary ?? "" });
         var json = (await new HealthEndpoints(options).GetAsync(Http.Get("health"))).Json();
         await Assert.That((json.GetProperty("status").GetString(), json.GetProperty("storagePrimaryConfigured").GetBoolean(), json.GetProperty("storageSecondaryConfigured").GetBoolean())).IsEqualTo(("ok", hasPrimary, hasSecondary));
-    }
-
-    [Test]
-    public async Task Dispatching_The_Outbox_Marks_Every_Pending_Message_Processed()
-    {
-        var first = new OutboxMessage { Type = "a", Payload = "{}" };
-        var second = new OutboxMessage { Type = "b", Payload = "{}" };
-        var store = new Mock<IOutboxStore>();
-        store.Setup(s => s.GetUnprocessedAsync(100, It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
-
-        var response = await new OutboxEndpoints(store.Object).RunManualAsync(Http.Post("outbox/dispatch").FromClient());
-
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Accepted);
-        store.Verify(s => s.MarkProcessedAsync(first.Id, It.IsAny<CancellationToken>()), Times.Once);
-        store.Verify(s => s.MarkProcessedAsync(second.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ---- groups

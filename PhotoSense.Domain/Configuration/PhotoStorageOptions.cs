@@ -25,8 +25,8 @@ public class PhotoStorageOptions
 
     /// <summary>
     /// Where the database and the thumbnail cache are kept unless an absolute path says otherwise: a folder
-    /// of the user's own, never the folder the service runs from. The Functions host watches that folder and
-    /// restarts itself when a folder appears in it, which the first thumbnail of a scan would cause.
+    /// of the user's own, never the folder the service runs from. That folder is replaced whenever the program
+    /// is built or published again, and the database and thumbnails would go with it.
     /// </summary>
     public static string DefaultDataFolder { get; } = DataFolderIn(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
 

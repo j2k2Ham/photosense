@@ -16,7 +16,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
         File.WriteAllBytes(path, [1]);
     }
 
-    private List<string> Names(bool recursive) => PhotoFileEnumerator.Enumerate(_root.FullName, recursive).Select(f => Path.GetFileName(f)!).OrderBy(x => x, StringComparer.Ordinal).ToList();
+    private List<string> Names(bool recursive) => PhotoFileEnumerator.Enumerate(TestFiles.Disk, _root.FullName, recursive).Select(f => Path.GetFileName(f)!).OrderBy(x => x, StringComparer.Ordinal).ToList();
 
     [Test]
     public async Task Finds_Pictures_And_Videos_And_Nothing_Else()
@@ -58,7 +58,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     [Arguments("")]
     [Arguments(" ")]
     public async Task A_Folder_That_Is_Not_There_Has_No_Files(string root)
-        => await Assert.That(PhotoFileEnumerator.Enumerate(root, true)).IsEmpty();
+        => await Assert.That(PhotoFileEnumerator.Enumerate(TestFiles.Disk, root, true)).IsEmpty();
 
     [Test]
     [Arguments("IMG_1.HEIC", true)]
@@ -72,7 +72,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     {
         Touch("first", "a.jpg");
         Touch("second", "b.jpg");
-        using var files = PhotoFileEnumerator.Enumerate(_root.FullName, recursive: true).GetEnumerator();
+        using var files = PhotoFileEnumerator.Enumerate(TestFiles.Disk, _root.FullName, recursive: true).GetEnumerator();
         await Assert.That(files.MoveNext()).IsTrue();
         // Both folders are known by now; the one not yet looked in is taken away.
         var other = Path.GetFileName(files.Current) == "a.jpg" ? "second" : "first";
@@ -100,7 +100,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
 
         await Assert.That(Names(recursive: true)).IsEquivalentTo(new[] { "a.jpg" }, CollectionOrdering.Matching);
         // Nor when it is the folder asked for, or a folder inside it.
-        await Assert.That(PhotoFileEnumerator.Enumerate(Path.Combine(_root.FullName, "Photos Library.photoslibrary"), recursive: true)).IsEmpty();
-        await Assert.That(PhotoFileEnumerator.Enumerate(Path.Combine(_root.FullName, "Photos Library.photoslibrary", "originals"), recursive: true)).IsEmpty();
+        await Assert.That(PhotoFileEnumerator.Enumerate(TestFiles.Disk, Path.Combine(_root.FullName, "Photos Library.photoslibrary"), recursive: true)).IsEmpty();
+        await Assert.That(PhotoFileEnumerator.Enumerate(TestFiles.Disk, Path.Combine(_root.FullName, "Photos Library.photoslibrary", "originals"), recursive: true)).IsEmpty();
     }
 }
