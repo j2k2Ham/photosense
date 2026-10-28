@@ -31,7 +31,7 @@ The page fits whatever window it is in, and follows a window as it is resized. F
 - The large windows (comparing, previewing a move, names already taken, the guide, the map) fill the screen, with their details under the picture instead of beside it.
 - The header keeps the logo, **Clean up | Organize**, the errors and the menu; the scanned folders' chip is in the menu as **Change folders or rescan**.
 
-Opening PhotoSense from a phone needs more than the layout: as set up, the UI asks for the service at `http://localhost:7071/api`, which on a phone is the phone itself, and the service lets only `http://localhost:3000` call it (`Cors:Origins` in `PhotoSense.Server/appsettings.json`). Reaching it from another device means serving both on the computer's network address, with `NEXT_PUBLIC_API_BASE` and the CORS list changed to match, and `PHOTOSENSE_API_KEY` set so that other devices on the network cannot use the service: it has no other login.
+Opening PhotoSense from a phone needs more than the layout: as set up, the UI asks for the service at `http://localhost:7071/api`, which on a phone is the phone itself, and the service lets only `http://localhost:3000` call it (`Cors:Origins` in `PhotoSense.Server/appsettings.json`). Reaching it from another device means serving both on the computer's network address, with `NEXT_PUBLIC_API_BASE`, the CORS list and `AllowedHosts` (below) changed to match, and `PHOTOSENSE_API_KEY` set so that other devices on the network cannot use the service: it has no other login.
 
 ## The UI and the service
 
@@ -90,6 +90,8 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 | `/removed/erase` | POST | Erase everything in those folders, and the folders. Body `{ folders: [path] }`, the paths as `/removed` listed them; returns `{ erased, bytes, skipped, problems }`. This is the one request that erases files. A path that is not a folder named `_PhotoSense_Removed` is refused with 400, and nothing is erased then |
 
 Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the scan log (`/scan/logs`), as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the service only grants cross-origin access to the UI's address, listed under `Cors:Origins` in `PhotoSense.Server/appsettings.json` (or given as `--Cors:Origins:0=<address>`). `dev-start.ps1` tells the service the port it gave the UI. A page the service serves itself is at its own address and needs no listing.
+
+The service also answers only under this computer's own names, `localhost`, `127.0.0.1` and `[::1]`; under any other name a request gets 400. A web site can have its own name pointed at this computer (DNS rebinding), and its page would then be at the service's own address, free to send the header. Other names can be allowed with the `AllowedHosts` setting, separated by semicolons (`--AllowedHosts=localhost;photos-pc.local`), which replaces the three.
 
 ### Choosing the folders to scan
 
@@ -368,6 +370,8 @@ base64 -w0 distribution.p12   # the value of APPLE_CERTIFICATE_P12
 ```
 
 Keep `photosense.key` and the `.p12` file out of the repository. In App Store Connect the app needs a record with the same id; each build then appears in TestFlight once Apple has processed it.
+
+`PhotoSense.iOS/PrivacyInfo.xcprivacy` is what Apple asks every app to declare: PhotoSense tracks no one and collects nothing, and the only "required reason" uses are the .NET runtime's own (file dates, free space, time since start). It must change if the app ever sends anything off the phone, a map included.
 
 ## VS Code Tasks
 

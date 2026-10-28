@@ -45,6 +45,34 @@ public sealed class PhotoSenseServerTests : IDisposable
     }
 
     [Test]
+    [Arguments(null, "localhost", HttpStatusCode.OK)]
+    [Arguments(null, "127.0.0.1", HttpStatusCode.OK)]
+    [Arguments(null, "[::1]", HttpStatusCode.OK)]
+    [Arguments(null, "photos.example", HttpStatusCode.BadRequest)]
+    [Arguments("photos.example", "photos.example", HttpStatusCode.OK)]
+    [Arguments("photos.example", "localhost", HttpStatusCode.BadRequest)]
+    public async Task A_Page_Under_Another_Name_Is_Not_Answered_Unless_The_Settings_Name_It(string? allowed, string name, HttpStatusCode expected)
+    {
+        await using var app = PhotoSenseServer.Build(
+        [
+            "--urls=http://127.0.0.1:0",
+            $"--PhotoStorage:DatabasePath={Path.Combine(_root.FullName, "data", "photosense.db")}",
+            $"--PhotoStorage:ThumbnailPath={Path.Combine(_root.FullName, "data", "thumbnails")}",
+            .. allowed is null ? Array.Empty<string>() : [$"--AllowedHosts={allowed}"],
+        ], _root.FullName);
+        await app.StartAsync();
+        using var http = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+
+        // As a page whose own name had been pointed at this machine would ask, client header and all.
+        using var asking = new HttpRequestMessage(HttpMethod.Get, "/api/folders");
+        asking.Headers.Host = $"{name}:{new Uri(app.Urls.Single()).Port}";
+        asking.Headers.Add("x-photosense-client", "1");
+        await Assert.That((await http.SendAsync(asking)).StatusCode).IsEqualTo(expected);
+
+        await app.StopAsync();
+    }
+
+    [Test]
     public async Task Told_Nothing_It_Looks_For_Its_Settings_And_Page_Beside_The_Program()
     {
         await using var app = PhotoSenseServer.Build([]);

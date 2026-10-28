@@ -1,4 +1,5 @@
 using PhotoSense.Api;
+using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.FileProviders;
 
 namespace PhotoSense.Server;
@@ -11,6 +12,9 @@ public static class PhotoSenseServer
     public static WebApplication Build(string[] args, string? contentRoot = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = contentRoot ?? AppContext.BaseDirectory });
+        // A web page can have its own name pointed at this machine (DNS rebinding) and then use these addresses as
+        // its own, client header and all; so only this machine's own names are answered unless the settings name others.
+        builder.Configuration.Sources.Insert(0, new MemoryConfigurationSource { InitialData = [new("AllowedHosts", "localhost;127.0.0.1;[::1]")] });
         builder.Services.AddPhotoSenseComputer(builder.Configuration).AddPhotoSenseApi();
         // Any web page can make a browser send a plain request to this machine; only the page's own address
         // is let add the client header that every request touching someone's files must carry.

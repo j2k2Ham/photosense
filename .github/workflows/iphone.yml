@@ -95,15 +95,39 @@ jobs:
           sips -s format jpeg samples/picture.bmp --out samples/IMG_0003.JPG
           xcrun simctl addmedia "$UDID" samples/IMG_0001.HEIC samples/IMG_0002.HEIC samples/IMG_0003.JPG
 
-      - name: Install the app and let it check itself
+      # A run's log can be read only by someone signed in to GitHub, but its notes by anyone: each command below that
+      # fails puts its own last words on the run.
+      - name: Install the app
         run: |
-          app=$(find PhotoSense.iOS/bin -name '*.app' -type d | head -1)
-          xcrun simctl install "$UDID" "$app"
-          xcrun simctl privacy "$UDID" grant photos "$BUNDLE"
-          SIMCTL_CHILD_PHOTOSENSE_SELF_CHECK=1 xcrun simctl launch "$UDID" "$BUNDLE"
+          app=$(find PhotoSense.iOS/bin -name '*.app' -type d -print -quit)
+          echo "::notice title=App::${app:-none built}"
+          if ! out=$(xcrun simctl install "$UDID" "$app" 2>&1); then
+            echo "::error title=simctl install::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
+          fi
+
+      - name: Let it see the photos
+        run: |
+          if ! out=$(xcrun simctl privacy "$UDID" grant photos "$BUNDLE" 2>&1); then
+            echo "::error title=simctl privacy::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
+          fi
+
+      - name: Start it and wait for its report
+        run: |
+          if ! out=$(SIMCTL_CHILD_PHOTOSENSE_SELF_CHECK=1 xcrun simctl launch --stdout="$PWD/app-stdout.txt" --stderr="$PWD/app-stderr.txt" "$UDID" "$BUNDLE" 2>&1); then
+            echo "::error title=simctl launch::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
+          fi
+          echo "::notice title=Started::$out"
           report="$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)/Documents/self-check.json"
-          for i in $(seq 1 300); do [ -f "$report" ] && break; sleep 1; done
-          cp "$report" self-check.json 2>/dev/null || echo '{"passed": false, "steps": [{"name": "the app reported back", "ok": false, "error": "no self-check.json within five minutes"}]}' > self-check.json
+          for i in $(seq 1 300); do
+            [ -f "$report" ] && break
+            # A crash leaves a report on this Mac; there is then nothing to wait for.
+            ls ~/Library/Logs/DiagnosticReports/PhotoSense* >/dev/null 2>&1 && break
+            sleep 1
+          done
+          cp "$report" self-check.json 2>/dev/null || echo '{"passed": false, "steps": [{"name": "the app reported back", "ok": false, "error": "no self-check.json"}]}' > self-check.json
+
+      - name: Say what it found
+        run: |
           python3 - self-check.json <<'EOF'
           import json, sys
           report = json.load(open(sys.argv[1]))
@@ -118,6 +142,14 @@ jobs:
       - name: What the app said
         if: failure()
         run: |
+          for file in app-stderr.txt app-stdout.txt; do
+            [ -s "$file" ] && tail -12 "$file" | while read -r line; do echo "::error title=App said ($file)::${line:0:500}"; done
+          done
+          for crash in ~/Library/Logs/DiagnosticReports/PhotoSense*; do
+            [ -f "$crash" ] || continue
+            cp "$crash" .
+            grep -E '"(exception|termination)"|"type"|"signal"|"reasons"|"indicator"' "$crash" | head -8 | while read -r line; do echo "::error title=Crash report::${line:0:500}"; done
+          done
           xcrun simctl spawn "$UDID" log show --last 15m --style compact --predicate 'process == "PhotoSense.iOS"' > app.log || true
           grep -iE 'exception|error|fault' app.log | tail -8 | while read -r line; do echo "::error title=App log::${line:0:500}"; done
           tail -100 app.log
@@ -130,6 +162,8 @@ jobs:
           path: |
             self-check.json
             app.log
+            app-std*.txt
+            PhotoSense*.ips
             build.log
           if-no-files-found: ignore
 

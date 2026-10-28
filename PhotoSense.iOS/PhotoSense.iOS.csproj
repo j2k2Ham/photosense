@@ -30,6 +30,8 @@
     <!-- The page, built for a program that hands it out itself: in PhotoSense.ReactUI,
          NEXT_PUBLIC_API_BASE=/api npm run build, which leaves it in out/. -->
     <BundleResource Include="..\PhotoSense.ReactUI\out\**\*" LogicalName="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Without it, App Store Connect refuses the upload. -->
+    <BundleResource Include="PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
   </ItemGroup>
   <Target Name="RequireThePage" BeforeTargets="Build" Condition="!Exists('..\PhotoSense.ReactUI\out\index.html')">
     <Error Text="Build the page first: in PhotoSense.ReactUI, run npm ci, then npm run build with NEXT_PUBLIC_API_BASE set to /api." />
