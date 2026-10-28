@@ -7,13 +7,19 @@ namespace PhotoSense.Api;
 /// <summary>Every address of the service below /api, with the endpoint that answers it.</summary>
 public sealed class PhotoSenseRoutes
 {
-    public PhotoSenseRoutes(HealthEndpoints health, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
-        ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize,
+    public PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
+        ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed)
     {
         Router = new ApiRouter()
             .Get("health", (r, _) => health.GetAsync(r))
+            .Get("about", (r, _) => about.GetAsync(r))
+            .Get("about/icon", (r, _) => about.IconAsync(r))
+            .Get("about/{document}", (r, v) => about.TextAsync(r, v["document"]))
             .Get("folders", (r, _) => folders.BrowseAsync(r))
+            .Get("library/access", (r, _) => library.AccessAsync(r))
+            .Post("library/choose-more", (r, _) => library.ChooseMoreAsync(r))
+            .Post("library/open-settings", (r, _) => Task.FromResult(library.OpenSettings(r)))
             .Get("photos/{id:guid}/thumbnail", (r, v) => photos.GetThumbnailAsync(r, v["id"]))
             .Get("photos/{id:guid}/image", (r, v) => photos.GetImageAsync(r, v["id"]))
             .Get("photos/{id:guid}/video", (r, v) => photos.GetVideoAsync(r, v["id"]))

@@ -18,6 +18,17 @@ Cross-platform photo duplicate & near-duplicate detection.
 | `PhotoSense.Tests` | Automated tests of everything above the UI |
 | `PhotoSense.Benchmarks` | A benchmark of the duplicate analysis, run by hand |
 
+Beside them:
+
+| Folder or file | What it is |
+|---|---|
+| `version.json` | Which kind of release comes next, and whether the programs share one version (see *Versions*) |
+| `product.json` | Who makes PhotoSense and how to reach them: the publisher, the copyright line, the support address, the web addresses, the law that governs the terms |
+| `branding/app-icon.png` | The icon, the one copy every program uses |
+| `site/pages/` | The privacy policy, the terms of use and the support page, which the About window shows and `tools/site.mjs` makes into the web site |
+| `notices/` | Each program's third-party notices, written by `tools/notices.mjs` |
+| `tools/` | What the build runs: `version.mjs`, `notices.mjs`, `site.mjs`, with their tests in `tools/tests` |
+
 ## The user guide
 
 How to use PhotoSense is told in the app itself: **Help**, in the menu, opens the user guide. It has a topic for each part of the app (scanning, reviewing duplicates and similar shots, Organize, deleting permanently, what to do when something looks wrong), can be searched, is read from one topic to the next, and most topics have a button that goes to the place they describe. Its text is in `PhotoSense.ReactUI/lib/guide.ts`; when something on screen is renamed or added, the guide is changed there.
@@ -65,6 +76,12 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/about` | GET | Who makes PhotoSense, how to reach them, and the program answering: `{ name, version, program, publisher, copyright, supportEmail, website, privacyPolicyUrl, termsUrl, supportUrl }`, a value not yet set in `product.json` as `null` |
+| `/about/icon` | GET | The icon (`branding/app-icon.png`) |
+| `/about/{privacy\|terms\|support\|notices}` | GET | The privacy policy, the terms of use or the support page in Markdown, with `product.json`'s details filled in; or the program's third-party notices as plain text |
+| `/library/access` | GET | How much of a phone's photos PhotoSense may see: `{ access: "everything" \| "selected" \| "nothing" }`; on a computer always `everything` |
+| `/library/choose-more` | POST | Show the phone's own picker for choosing more photos; answers once it is put away, with the access then |
+| `/library/open-settings` | POST | Open PhotoSense's page of the phone's settings, where its access to the photos is changed; 204 |
 | `/folders?path=` | GET | The folders inside a folder of the computer the service runs on, each with its full path; without `path`, the places to start from (Pictures, the home folder, each disk) |
 | `/scan/start` | POST | Start a scan. Body `{ primaryLocation, secondaryLocation?, recursive, startOver? }`; returns `{ instanceId }`, or 400 `{ error }` when a folder is not found on the server |
 | `/scan/reset` | POST | Forget everything earlier scans recorded, previews included; refused while a scan is running. The photos are not touched |
@@ -89,7 +106,7 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 | `/removed?root=&root=` | GET | The `_PhotoSense_Removed` folders that hold files, with how much is in each: `{ folders: [{ path, files, bytes }], files, bytes }`. Looked for at any depth inside the folders given and inside every folder a scan on record covered, and wherever Organize put removed files |
 | `/removed/erase` | POST | Erase everything in those folders, and the folders. Body `{ folders: [path] }`, the paths as `/removed` listed them; returns `{ erased, bytes, skipped, problems }`. This is the one request that erases files. A path that is not a folder named `_PhotoSense_Removed` is refused with 400, and nothing is erased then |
 
-Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the scan log (`/scan/logs`), as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the service only grants cross-origin access to the UI's address, listed under `Cors:Origins` in `PhotoSense.Server/appsettings.json` (or given as `--Cors:Origins:0=<address>`). `dev-start.ps1` tells the service the port it gave the UI. A page the service serves itself is at its own address and needs no listing.
+Every request above that shows where files are or changes anything must carry the `x-photosense-client` header (the React client sends it): the folder listing, starting a scan, the groups, the scan log (`/scan/logs`), as well as everything that changes or removes photos. Requests without it get 401. Only `/health`, `/about` and its documents, `/library/access`, `/scan/status`, `/scan/progress` and the thumbnails, images and videos answer without it: those carry no file names, or are loaded by `<img>` and `<video>` tags, which cannot send a header. Other web sites cannot add it, because the service only grants cross-origin access to the UI's address, listed under `Cors:Origins` in `PhotoSense.Server/appsettings.json` (or given as `--Cors:Origins:0=<address>`). `dev-start.ps1` tells the service the port it gave the UI. A page the service serves itself is at its own address and needs no listing.
 
 The service also answers only under this computer's own names, `localhost`, `127.0.0.1` and `[::1]`; under any other name a request gets 400. A web site can have its own name pointed at this computer (DNS rebinding), and its page would then be at the service's own address, free to send the header. Other names can be allowed with the `AllowedHosts` setting, separated by semicolons (`--AllowedHosts=localhost;photos-pc.local`), which replaces the three.
 
@@ -257,7 +274,7 @@ Decoding is done with Magick.NET. iPhone HEIC files decode slowly (about a secon
 
 ## Tests & Coverage
 
-Both halves are tested to 100% of branches.
+The service, the UI and the build tools are each tested to 100% of branches.
 
 ### Service (.NET)
 
@@ -294,6 +311,16 @@ npm run test:coverage   # once, with coverage; fails below 100%
 The tests are in `PhotoSense.ReactUI/tests`, laid out like the code they cover (`app`, `components`, `lib`). They run in Vitest with Testing Library, against jsdom rather than a real browser, so nothing needs to be running: the service is stood in for by `tests/fixtures.ts`, and `tests/deferred.ts` holds a request open for as long as a test needs.
 
 Coverage is measured with Istanbul over `app`, `components` and `lib`, and `vitest.config.ts` fails the run when statements, branches, functions or lines fall below 100%. CI runs it as well, before building the UI. Istanbul counts each arm of an `if` or a ternary and each operand of `&&`, `||` and `??` that is reached; `?.` is not counted as a branch. The HTML report is written to `PhotoSense.ReactUI/coverage`.
+
+### Build tools (Node)
+
+From the repo root:
+
+```bash
+node --test --experimental-test-coverage --test-coverage-include="tools/*.mjs" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tools/tests/
+```
+
+The tests of `tools/notices.mjs` also check that the notices in `notices/` are up to date, so they need a restore (`dotnet restore PhotoSense.sln`) and the page's packages (`npm ci` in `PhotoSense.ReactUI`) first.
 
 ## Quick Local Run (service + React)
 
@@ -334,7 +361,7 @@ CI builds and tests the service on Windows and on macOS as well as on Linux, and
 
 The first time it opens, it asks to see the photos: all of them, those picked, or none. The library is then offered as one folder, **Photo Library**, holding every picture and video once under the name it was taken with; a Live Photo is two files there, its picture and its video. Pictures taken under the same name are told apart by the start of each one's own id (`IMG_0001 (1A2B3C4D).HEIC`), so that a name never comes to stand for another picture. Pictures are decoded by the phone itself (`ImageIOAnalyzer`), since Magick.NET has no build for a phone, and measured the same way as on a computer (`ImageFingerprint`).
 
-This first version only looks. A scan finds copies and similar shots, and Organize lists the library by place and date, but nothing on the phone can be moved, removed or put in an album yet: every such request is refused before anything happens, with the reason. Albums, removal into a hidden **PhotoSense Removed** album, and **Delete permanently** (to Recently Deleted) come next.
+This first version only looks. A scan finds copies and similar shots, and Organize lists the library by place and date, but nothing on the phone can be moved, removed or put in an album yet: every such request is refused before anything happens, with the reason. When only some photos were allowed, the scan screen says so, with **Choose more photos** for the phone's own picker and **Open Settings** for allowing all of them (`/library/...`, `PhotoKitAccess`). A link to anywhere outside the app (a web site, an email address) opens in Safari or Mail. Albums, removal into a hidden **PhotoSense Removed** album, and **Delete permanently** (to Recently Deleted) come next.
 
 Only the parts that talk to Apple's frameworks are in `PhotoSense.iOS`: the photo library (`PhotoKitLibrary`), the decoder, the web view and its requests. Everything that decides anything is shared and tested with the rest (`PhotoLibraryFileSystemTests`, `InProcessApiTests`, and `PhotosOnAPhoneTests`, which runs the phone's whole stack but Apple's code on a library held in memory).
 
@@ -389,19 +416,41 @@ Common tasks are defined in `.vscode/tasks.json`:
 
 Run via the VS Code command palette: `Tasks: Run Task`. `.vscode/launch.json` starts the service under the debugger, or attaches to one that runs.
 
-## Contracts NuGet Package
+## Versions
 
-The shared DTOs live in `PhotoSense.Contracts`. A pre-release package is produced on build:
+Every program is numbered as part of its build, from `version.json` and the repository's history (`tools/version.mjs`, run by `Directory.Build.targets`):
 
-Artifact: `PhotoSense.Contracts.0.1.0-alpha.nupkg`
+- `release` says what the next release is: `major`, `minor` or `patch`. It is the one thing to change before a release.
+- The last release is the highest release tag: `v1.2.0` for all the programs at once.
+- An ordinary build is the next release followed by the number of commits so far: `1.3.0.57` after `v1.2.0` with `release` set to `minor`. Every build of the same commit gets the same number, on any machine, so the programs built from it match; the number only rises, as Apple's build numbers and Windows' file versions need.
+- A release build is the release alone, `1.3.0`: `dotnet build -p:PhotoSenseRelease=true`, or any build of a commit that carries its release tag. Once it has shipped, tag that commit (`git tag v1.3.0`).
 
-To publish manually:
+With `linked` set to `false`, each program is numbered on its own: by its own entry under `parts` (`server`, `iphone`), and by its own tags as well as the shared ones (`iphone-v1.0.3`). Linking them again carries on above the highest release of any of them. A program names itself with `<PhotoSensePart>` in its project file; the libraries every program shares take the linked version.
 
-```powershell
-dotnet nuget push PhotoSense.Contracts\bin\Debug\PhotoSense.Contracts.0.1.0-alpha.nupkg -s https://api.nuget.org/v3/index.json -k <API_KEY>
-```
+On an iPhone the version people see is the three numbers (`1.3.0`), and the build number Apple asks to rise with every upload is the commit count. `node tools/version.mjs --part iphone` prints a program's version.
 
-Next version: bump `<Version>` inside `PhotoSense.Contracts.csproj` (semantic versioning recommended).
+## About, the privacy policy and the support page
+
+**About PhotoSense**, in the menu, shows the version of the program answering, who makes it and how to reach them (`/about`), and holds the support page, the privacy policy, the terms of use and the acknowledgements of what others made that PhotoSense uses.
+
+- Who makes PhotoSense, the copyright line, the support address, the web addresses and the governing law are in `product.json` alone, built into `PhotoSense.Api`. A value left blank there is shown as not set yet.
+- The documents are Markdown in `site/pages`, with `{{name}}`, `{{publisher}}`, `{{supportEmail}}` and `{{governingLaw}}` filled in from `product.json`. The app shows them as they are (`lib/markdown.ts` reads them); `node tools/site.mjs` writes the same pages as a web site in `site/out`, for the App Store listing and the app to point to. It refuses while the support address or the governing law is not set; `--draft` writes a marked draft.
+- The third-party notices are written by `node tools/notices.mjs`, a file for each program (`notices/server.txt`, `notices/iphone.txt`) from what it actually ships: its NuGet packages (from the restore), the page's own packages and Tailwind's styles (from `package-lock.json`), the page's fonts (`tools/fonts`) and the place names (GeoNames). Each licence is given in full, from the package itself or, where a package only names its licence, from `tools/licenses`. Run it after adding or updating a package; CI fails while the notices are out of date. Each program builds its own file in.
+
+## The icon
+
+`branding/app-icon.png` (1024 by 1024, no transparency) is the only copy of the icon. The iPhone app takes it as Apple's single-size icon, from which Xcode makes every size; `PhotoSense.Api` builds it in and hands it out at `/about/icon`, which the page shows as its tab icon, in its header and under About. To change the icon, replace that file.
+
+## Accessibility
+
+- The page is linted with every rule of `eslint-plugin-jsx-a11y`'s strict set (`npm run lint`, run in CI), besides Next's own.
+- Each window and question stands on `Scrim`: Tab and Shift+Tab go round its own controls, Escape or a press outside it puts it away, and focus goes back to what had it before. A question raised over a window has Tab to itself.
+- The menu is a menu: it opens on its first item, and the arrow keys, Home and End go through it. The theme is chosen among its items.
+- The header, the page's content (`<main>`) and the menu are landmarks a screen reader can jump between. Messages are added to one region that is always there (`role="log"`), so each is read out; an error says it is one.
+- The keyboard's place is always shown, in the brand's colour on both themes, and a text field drawn without an outline shows it on its frame. With less motion asked for, nothing slides, sweeps or fades.
+- Every screen was checked with [axe](https://github.com/dequelabs/axe-core) in Chrome, in both themes, with nothing found: the results, a group, Organize, the scan screen, the menu, Help, Settings and About.
+
+The page is in English only.
 
 ## The scan log
 

@@ -1,11 +1,12 @@
 import useSWR, { mutate } from 'swr';
 import type {
-  BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
+  AboutDocument, AboutDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PhotoAccessDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
 } from '../types';
 
-// Where the service answers. The page a program hands out itself (the service's own, the phone app's) is built with /api.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
+import { API_BASE } from './apiBase';
+
+export { appIconUrl } from './apiBase';
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth enforced
 // The server acts on photos only for requests carrying this header, which other web sites cannot send.
@@ -33,6 +34,43 @@ const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && 
 
 /** Asks again for everything on screen, for when the service has been out of reach. */
 export const retryNow = () => mutate(() => true);
+
+/** Who makes PhotoSense, how to reach them, and the program answering with its version. */
+export function useAbout() {
+  return useSWR<AboutDto>(`${API_BASE}/about`, json);
+}
+
+async function text(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw await failure(res);
+  return res.text();
+}
+
+/** One of the documents About shows: the privacy policy, terms or support page (Markdown), or the third-party notices. */
+export function useAboutText(document: AboutDocument) {
+  return useSWR<string>(`${API_BASE}/about/${document}`, text);
+}
+
+const accessUrl = `${API_BASE}/library/access`;
+
+/** How much of a phone's photos PhotoSense may see; on a computer, always everything. */
+export function usePhotoAccess() {
+  return useSWR<PhotoAccessDto>(accessUrl, json);
+}
+
+/** Shows the phone's own picker for choosing more photos, and answers once it is put away. */
+export async function chooseMorePhotos(): Promise<PhotoAccessDto> {
+  const access = await json<PhotoAccessDto>(`${API_BASE}/library/choose-more`, { method: 'POST' });
+  await mutate(accessUrl, access, { revalidate: false });
+  // What the library holds has changed, and with it what Organize lists.
+  await mutate((key: unknown) => typeof key === 'string' && key.includes('/organize/files?'));
+  return access;
+}
+
+/** Opens PhotoSense's own page of the phone's settings, where its access to the photos is changed. */
+export async function openPhotoSettings() {
+  await send(`${API_BASE}/library/open-settings`, 'POST');
+}
 
 export const thumbnailUrl = (id: string) => `${API_BASE}/photos/${id}/thumbnail`;
 export const imageUrl = (id: string) => `${API_BASE}/photos/${id}/image`;

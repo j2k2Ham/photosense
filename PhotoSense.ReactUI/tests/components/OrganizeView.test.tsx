@@ -868,7 +868,7 @@ describe('moving, copying and undoing', () => {
   });
 
   it('copies one of your folders to where you choose, and undoes that from the list of what was moved', async () => {
-    api.applyOrganize.mockImplementation(async (request: OrganizeApplyRequest) => applied({
+    api.applyOrganize.mockImplementation(async () => applied({
       batchId: 'b7', done: 1, bytes: 6_093_000, companions: 2, renamed: 1, items: [{ id: 'a1', path: `${ROOT}\\Trips\\a1 (1).JPG` }],
     }));
     api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });

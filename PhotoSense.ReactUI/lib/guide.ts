@@ -32,7 +32,7 @@ export const GUIDE: GuideTopic[] = [
       {
         text: [
           'PhotoSense tidies a folder of pictures and videos in two ways. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken.',
-          'Everything happens on this computer. Nothing is uploaded.',
+          'Everything happens on this device, the computer or the phone PhotoSense runs on. Nothing is uploaded.',
           'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Delete permanently**.',
           'A move, copy or deletion happens in full or not at all. Should one file not go, the files that had gone go back, and the message says which file stopped it. One cut short because PhotoSense stopped is put back the next time it starts.',
         ],
@@ -41,7 +41,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Finding your way',
         tips: [
           'The switch at the top left, **Clean up | Organize**, moves between the two areas. Each keeps what you were doing in it.',
-          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help** and **Delete permanently**.',
+          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help**, **About PhotoSense** and **Delete permanently**.',
           'Messages appear at the bottom right, or across the bottom on a phone. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
           'On a phone, or in a narrow window, the screen rearranges itself to fit. In **Clean up**, tap a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and tapping a folder shows its files. Make the window wider and the two sit side by side again.',
         ],
@@ -71,6 +71,12 @@ export const GUIDE: GuideTopic[] = [
           'If you like, give a **Secondary folder** too, a backup for example. Copies are then found between the two as well as inside each.',
           'Leave **Recursive** ticked to include the folders inside the folder.',
           'Press **Scan**.',
+        ],
+      },
+      {
+        heading: 'On an iPhone or iPad',
+        text: [
+          'The phone\'s photos are the one folder, **Photo Library**. If you let PhotoSense see only some of them, the scan screen says so: **Choose more photos** opens the phone\'s own picker, and **Open Settings** goes to where all of them can be allowed.',
         ],
       },
       {
@@ -317,7 +323,7 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'menu',
-    title: 'Settings, theme and errors',
+    title: 'Settings, theme, errors and About',
     summary: 'What the menu holds besides the things described elsewhere.',
     go: { label: 'Open Settings', place: 'settings' },
     sections: [
@@ -327,6 +333,7 @@ export const GUIDE: GuideTopic[] = [
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
           '**Settings** has the switch for the second question before deleting permanently. Settings are kept in this browser.',
           '**Help** opens this guide.',
+          '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
         ],
       },
     ],

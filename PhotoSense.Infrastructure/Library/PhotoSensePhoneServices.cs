@@ -11,12 +11,12 @@ public static class PhotoSensePhoneServices
     public const string LibraryRoot = "/Photo Library";
 
     /// <summary>
-    /// PhotoSense as it runs on a phone: on the photos in its library, decoded the phone's own way, with what it
+    /// PhotoSense as it runs on a phone: on the photos in its library, as far as <paramref name="access"/> lets it see, decoded the phone's own way, with what it
     /// records kept in <paramref name="dataFolder"/> and its previews in <paramref name="cacheFolder"/>, which the
     /// phone may empty when it runs short of space.
     /// </summary>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
-    public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IImageAnalyzer analyzer,
+    public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, string root = LibraryRoot)
     {
         s.AddSingleton(Options.Create(new PhotoStorageOptions
@@ -27,6 +27,7 @@ public static class PhotoSensePhoneServices
         var photos = new PhotoLibraryFileSystem(library, root);
         s.AddSingleton(photos);
         s.AddSingleton<IPhotoFileSystem>(photos);
+        s.AddSingleton(access);
         s.AddSingleton(analyzer);
         s.AddSingleton<ISystemViewer, PhoneViewer>();
         s.AddSingleton<IFolderBrowser, PhotoLibraryBrowser>();

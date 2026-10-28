@@ -4,6 +4,7 @@ import { AppMenu } from '../components/AppMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
+import { AboutWindow } from '../components/AboutWindow';
 import { HelpWindow } from '../components/HelpWindow';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
@@ -75,6 +76,7 @@ export default function HomePage() {
   const [errorsOpen, setErrorsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
   // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
@@ -130,7 +132,7 @@ export default function HomePage() {
   }, [data, lastPage, mode, filter, page, hideKept]);
 
   // When the scan that was started here finishes, say what it found and show it.
-  const announced = useRef<string>();
+  const announced = useRef<string | undefined>(undefined);
   const finished = !!instanceId && !!progress.data?.completedUtc;
   useEffect(() => {
     if (!finished || announced.current === instanceId) return;
@@ -283,7 +285,13 @@ export default function HomePage() {
     <div className="flex h-dvh flex-col bg-bg text-t1">
       <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
         errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
-        onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }} />
+        onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
+        {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
+        {menuOpen && (
+          <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
+            onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} onDeletePermanently={askToErase} />
+        )}
+        {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
 
       {offline && (
         <div role="alert" className="flex items-center gap-4 border-b border-rose-line bg-rose-bg px-4 py-2.5 text-[14px] text-rose-t sm:px-6">
@@ -292,78 +300,80 @@ export default function HomePage() {
         </div>
       )}
 
-      {organizing && (
-        <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} notify={push} /></div>
-      )}
+      <main className="flex min-h-0 flex-1 flex-col">
+        {organizing && (
+          <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} notify={push} /></div>
+        )}
 
-      {area === 'organize' ? null : screen === 'setup' ? (
-        <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
-      ) : (
-        <>
-          {/* On a narrow screen the bar wraps: the tabs and the switch, then the search, then what deleting would free. */}
-          <div className={`min-h-[72px] shrink-0 flex-wrap items-stretch gap-x-5 gap-y-2.5 border-b border-line px-4 pb-3 lg:flex-nowrap lg:px-6 lg:pb-0 ${showReview ? 'hidden lg:flex' : 'flex'}`}>
-            <div className="flex h-12 gap-6 lg:h-auto" role="tablist">
-              {(['duplicates', 'similar'] as const).map(m => (
-                <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => switchMode(m)}
-                  className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${mode === m ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
-                  {m === 'duplicates' ? 'Duplicates' : 'Similar'}
-                  <span className="font-mono text-[12px] font-normal text-t3">{totals[m]?.toLocaleString()}</span>
-                </button>
-              ))}
-            </div>
-            <label className="my-auto flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-4 max-lg:order-1 lg:w-[clamp(220px,22vw,380px)]">
-              <span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-2 border-t3" />
-              <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
-                className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
-            </label>
-            {mode === 'duplicates' && (
-              <label className="my-auto flex cursor-pointer items-center gap-2.5 whitespace-nowrap text-[13.5px] text-t2" title="Hide groups where every copy is marked keep">
-                <input type="checkbox" role="switch" checked={hideKept} onChange={e => { setHideKept(e.target.checked); turnPage(1); }} className="peer sr-only" />
-                <span aria-hidden className="relative h-[18px] w-8 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-3.5 peer-checked:after:bg-on-brand" />
-                Hide reviewed
+        {area === 'organize' ? null : screen === 'setup' ? (
+          <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
+        ) : (
+          <>
+            {/* On a narrow screen the bar wraps: the tabs and the switch, then the search, then what deleting would free. */}
+            <div className={`min-h-[72px] shrink-0 flex-wrap items-stretch gap-x-5 gap-y-2.5 border-b border-line px-4 pb-3 lg:flex-nowrap lg:px-6 lg:pb-0 ${showReview ? 'hidden lg:flex' : 'flex'}`}>
+              <div className="flex h-12 gap-6 lg:h-auto" role="tablist">
+                {(['duplicates', 'similar'] as const).map(m => (
+                  <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => switchMode(m)}
+                    className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${mode === m ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
+                    {m === 'duplicates' ? 'Duplicates' : 'Similar'}
+                    <span className="font-mono text-[12px] font-normal text-t3">{totals[m]?.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+              <label className="my-auto flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-4 max-lg:order-1 lg:w-[clamp(220px,22vw,380px)]">
+                <span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-2 border-t3" />
+                <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
+                  className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
               </label>
-            )}
-            <span className="hidden flex-1 lg:block" />
-            {mode === 'duplicates' ? (
-              <>
-                {/* Between the narrow layout and a wide screen the bar is tight: only the count and the size are said there. */}
-                <div className="my-auto min-w-0 flex-1 max-lg:order-2 lg:flex-initial lg:text-right">
-                  <p className="text-[13.5px] lg:text-[14.5px]">
-                    {removable > 0
-                      ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span><span className="lg:hidden xl:inline">. The best copy of each picture or video is kept.</span></>
-                      : <span className="text-t2">{data ? 'No duplicates waiting to be removed.' : 'Loading…'}</span>}
-                  </p>
-                  <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
-                </div>
-                <button type="button" disabled={busy || removable === 0} onClick={() => setPending({ scope: 'all', count: removable, bytes: reclaimable })}
-                  className="pill-rose my-auto h-11 shrink-0 px-[22px] text-[15px] max-lg:order-2">Delete all duplicates</button>
-              </>
-            ) : (
-              <p className="my-auto text-[13px] text-t2 max-lg:order-2 lg:max-w-[520px] lg:text-right lg:text-[14px]">Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.</p>
-            )}
-          </div>
+              {mode === 'duplicates' && (
+                <label className="my-auto flex cursor-pointer items-center gap-2.5 whitespace-nowrap text-[13.5px] text-t2" title="Hide groups where every copy is marked keep">
+                  <input type="checkbox" role="switch" checked={hideKept} onChange={e => { setHideKept(e.target.checked); turnPage(1); }} className="peer sr-only" />
+                  <span aria-hidden className="relative h-[18px] w-8 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-3.5 peer-checked:after:bg-on-brand" />
+                  Hide reviewed
+                </label>
+              )}
+              <span className="hidden flex-1 lg:block" />
+              {mode === 'duplicates' ? (
+                <>
+                  {/* Between the narrow layout and a wide screen the bar is tight: only the count and the size are said there. */}
+                  <div className="my-auto min-w-0 flex-1 max-lg:order-2 lg:flex-initial lg:text-right">
+                    <p className="text-[13.5px] lg:text-[14.5px]">
+                      {removable > 0
+                        ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span><span className="lg:hidden xl:inline">. The best copy of each picture or video is kept.</span></>
+                        : <span className="text-t2">{data ? 'No duplicates waiting to be removed.' : 'Loading…'}</span>}
+                    </p>
+                    <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
+                  </div>
+                  <button type="button" disabled={busy || removable === 0} onClick={() => setPending({ scope: 'all', count: removable, bytes: reclaimable })}
+                    className="pill-rose my-auto h-11 shrink-0 px-[22px] text-[15px] max-lg:order-2">Delete all duplicates</button>
+                </>
+              ) : (
+                <p className="my-auto text-[13px] text-t2 max-lg:order-2 lg:max-w-[520px] lg:text-right lg:text-[14px]">Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.</p>
+              )}
+            </div>
 
-          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[clamp(380px,32vw,620px)_1fr]">
-            <GroupList className={showReview ? 'hidden lg:flex' : 'flex'} groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
-              selectedKey={selected?.key} otherTotal={mode === 'duplicates' ? totals.similar : totals.duplicates} onSelect={select} onPage={turnPage}
-              onOther={() => switchMode(mode === 'duplicates' ? 'similar' : 'duplicates')} chosen={ticked} onChoose={tick} onChooseAll={tickAll}
-              footer={ticked.size > 0 && (
-                <div role="region" aria-label="Selected groups" className="m-3 flex shrink-0 flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-pop px-4 py-2.5 shadow-toast">
-                  <span className="min-w-0 flex-1 text-[13.5px]">
-                    <span className="font-semibold">{ticked.size.toLocaleString()} {ticked.size === 1 ? 'group' : 'groups'} selected</span>
-                    <span className="text-t2"> · {tickedFiles > 0 ? `${files(tickedFiles)}, ${formatBytes(tickedBytes)}` : 'every copy is marked keep'}</span>
-                  </span>
-                  <button type="button" disabled={busy || tickedFiles === 0} onClick={() => setPending({ scope: 'ticked' })} className="pill-rose h-9 px-4 text-[13.5px]">Delete their {mode === 'similar' ? 'similar shots' : 'duplicates'}</button>
-                  <button type="button" onClick={() => setTicked(new Map())} className="pill-outline h-9 px-3.5 text-[13.5px] font-medium">Clear</button>
-                </div>
-              )} />
-            <ReviewPanel className={showReview ? 'flex' : 'hidden lg:flex'} onBack={() => setReviewing(false)} group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
-              onCompare={() => selected && setComparing(selected.key)} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
-              onDeleteCopy={member => selected && setPending({ scope: 'copy', group: selected, member })}
-              onDeleteGroup={group => setPending({ scope: 'group', group })} />
-          </div>
-        </>
-      )}
+            <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[clamp(380px,32vw,620px)_1fr]">
+              <GroupList className={showReview ? 'hidden lg:flex' : 'flex'} groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
+                selectedKey={selected?.key} otherTotal={mode === 'duplicates' ? totals.similar : totals.duplicates} onSelect={select} onPage={turnPage}
+                onOther={() => switchMode(mode === 'duplicates' ? 'similar' : 'duplicates')} chosen={ticked} onChoose={tick} onChooseAll={tickAll}
+                footer={ticked.size > 0 && (
+                  <div role="region" aria-label="Selected groups" className="m-3 flex shrink-0 flex-wrap items-center gap-2.5 rounded-2xl border border-line bg-pop px-4 py-2.5 shadow-toast">
+                    <span className="min-w-0 flex-1 text-[13.5px]">
+                      <span className="font-semibold">{ticked.size.toLocaleString()} {ticked.size === 1 ? 'group' : 'groups'} selected</span>
+                      <span className="text-t2"> · {tickedFiles > 0 ? `${files(tickedFiles)}, ${formatBytes(tickedBytes)}` : 'every copy is marked keep'}</span>
+                    </span>
+                    <button type="button" disabled={busy || tickedFiles === 0} onClick={() => setPending({ scope: 'ticked' })} className="pill-rose h-9 px-4 text-[13.5px]">Delete their {mode === 'similar' ? 'similar shots' : 'duplicates'}</button>
+                    <button type="button" onClick={() => setTicked(new Map())} className="pill-outline h-9 px-3.5 text-[13.5px] font-medium">Clear</button>
+                  </div>
+                )} />
+              <ReviewPanel className={showReview ? 'flex' : 'hidden lg:flex'} onBack={() => setReviewing(false)} group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
+                onCompare={() => selected && setComparing(selected.key)} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
+                onDeleteCopy={member => selected && setPending({ scope: 'copy', group: selected, member })}
+                onDeleteGroup={group => setPending({ scope: 'group', group })} />
+            </div>
+          </>
+        )}
+      </main>
 
       {compared && (
         <PhotoWindow key={compared.key} original={compared.keeper} member={compared.members[comparedIndex]} index={comparedIndex} count={compared.members.length} mode={mode} busy={busy}
@@ -431,13 +441,9 @@ export default function HomePage() {
         </ConfirmDialog>
       )}
 
-      {menuOpen && (
-        <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-          onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onDeletePermanently={askToErase} />
-      )}
       {helpOpen && <HelpWindow onGo={goTo} onClose={() => setHelpOpen(false)} />}
+      {aboutOpen && <AboutWindow onClose={() => setAboutOpen(false)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
-      {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}
 
       <Toaster toasts={toasts} remove={remove} />
     </div>

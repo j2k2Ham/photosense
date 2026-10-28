@@ -1,4 +1,5 @@
 import React from 'react';
+import { appIconUrl } from '../lib/apiClient';
 import { leaf } from '../lib/format';
 import { ModeSwitch, type Area } from './ModeSwitch';
 
@@ -18,17 +19,18 @@ interface Props {
   onChangeFolders(): void;
   onToggleErrors(): void;
   onToggleMenu(): void;
+  /** What opens from the header (the menu, the errors), so that it belongs to the header. */
+  readonly children?: React.ReactNode;
 }
 
-export function TopBar({ area, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu }: Props) {
+export function TopBar({ area, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu, children }: Props) {
   return (
     // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)
-    // and the note that nothing leaves the computer.
+    // and the note that nothing leaves the device.
     <header className="flex h-16 shrink-0 items-center gap-2.5 border-b border-line px-3 sm:gap-4 sm:px-6">
       <div className="flex items-center gap-[11px]">
-        <span aria-hidden className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-brand">
-          <span className="h-2.5 w-2.5 rounded-full border-2 border-on-brand" />
-        </span>
+        <img src={appIconUrl} alt="" className="h-[26px] w-[26px] rounded-lg" />
+
         <h1 className="text-[17px] font-semibold max-sm:sr-only">PhotoSense</h1>
       </div>
       <ModeSwitch area={area} onArea={onArea} />
@@ -49,7 +51,7 @@ export function TopBar({ area, onArea, showScan, folders, files, scanned, errorC
       <span className="flex-1" />
 
       <span className="hidden h-9 shrink-0 items-center gap-2 rounded-full bg-s2 px-3.5 text-[13px] text-t2 xl:flex">
-        <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-keep" />Runs on this computer. Nothing is uploaded.
+        <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-keep" />Runs on this device. Nothing is uploaded.
       </span>
 
       {errorCount > 0 && (
@@ -58,10 +60,11 @@ export function TopBar({ area, onArea, showScan, folders, files, scanned, errorC
         </button>
       )}
 
-      <button type="button" aria-label="Menu" aria-expanded={menuOpen} onClick={onToggleMenu}
+      <button type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={onToggleMenu}
         className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-1 rounded-full border border-line ${menuOpen ? 'bg-s3' : 'bg-s1 hover:bg-s2'}`}>
         <span className="h-0.5 w-4 bg-t1" /><span className="h-0.5 w-4 bg-t1" /><span className="h-0.5 w-4 bg-t1" />
       </button>
+      {children}
     </header>
   );
 }

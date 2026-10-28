@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { Scrim } from './Scrim';
 
 interface Props {
   /** What the window is, for a screen reader. */
@@ -22,7 +23,7 @@ export function WindowShell({ label, header, children, columns, raised = false, 
 
   return (
     // On a narrow screen the window is the whole screen, and its parts stand one under another and scroll together.
-    <div className={`fixed inset-0 bg-scrim lg:p-10 ${raised ? 'z-40' : 'z-30'}`} onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <Scrim className={`fixed inset-0 bg-scrim lg:p-10 ${raised ? 'z-40' : 'z-30'}`} onDismiss={onClose}>
       <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} className="flex h-full flex-col overflow-hidden border-line bg-s1 shadow-dialog outline-none lg:rounded-[18px] lg:border">
         {/* The header's own parts wrap among themselves on a narrow screen; the close button stays at the top right. */}
         <div className="flex min-h-[60px] shrink-0 items-start gap-3.5 border-b border-line py-2.5 pl-4 pr-3 lg:h-[72px] lg:items-center lg:py-0 lg:pl-7 lg:pr-[18px]">
@@ -33,7 +34,7 @@ export function WindowShell({ label, header, children, columns, raised = false, 
         {/* Narrow, each part takes the height it needs and the window scrolls; wide, the parts share the height there is. */}
         <div className={`grid min-h-0 flex-1 auto-rows-max grid-cols-1 overflow-y-auto lg:auto-rows-auto lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden ${columns}`}>{children}</div>
       </div>
-    </div>
+    </Scrim>
   );
 }
 

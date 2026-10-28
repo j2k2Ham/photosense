@@ -13,6 +13,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -43,6 +46,15 @@ jobs:
       - name: Install React UI deps
         working-directory: PhotoSense.ReactUI
         run: npm ci
+
+      - name: Test the build tools, and that the third-party notices are up to date (fails below 100% coverage)
+        run: >-
+          node --test --experimental-test-coverage --test-coverage-include="tools/*.mjs"
+          --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tools/tests/
+
+      - name: Lint React UI (the accessibility rules included)
+        working-directory: PhotoSense.ReactUI
+        run: npm run lint
 
       - name: Test React UI (fails below 100% coverage)
         working-directory: PhotoSense.ReactUI
@@ -116,6 +128,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4

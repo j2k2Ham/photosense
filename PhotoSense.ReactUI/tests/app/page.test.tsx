@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
   fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(),
+  useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
@@ -376,7 +377,8 @@ describe('scanning', () => {
     statusNow = { data: { instanceId: '', totalPhotos: 0 } };
     open();
     await click('Scan');
-    expect(await screen.findByRole('alert')).toHaveTextContent('Choose a root folder to scan.Kept in Errors');
+    expect(await within(screen.getByRole('log', { name: 'Messages' })).findByText('Choose a root folder to scan.')).toBeInTheDocument();
+    expect(screen.getByRole('log', { name: 'Messages' })).toHaveTextContent('Error: Choose a root folder to scan.Kept in Errors');
     await click('1 error');
     expect(screen.getByRole('dialog', { name: 'Errors' })).toHaveTextContent('Choose a root folder to scan.');
   });
@@ -393,9 +395,9 @@ describe('the menu and the errors', () => {
 
     await click('Menu');
     expect(screen.getByRole('menu')).toBeInTheDocument();
-    await click('Light');
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
     expect(document.documentElement).toHaveClass('light');
-    await click('Dark');
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Dark' }));
     await click('1 error');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     const errors = screen.getByRole('dialog', { name: 'Errors' });
@@ -851,8 +853,21 @@ describe('undoing a removal', () => {
   });
 });
 
-describe('help', () => {
-  const help = () => screen.queryByRole('dialog', { name: 'Help' });
+describe('about', () => {
+  const about = () => screen.queryByRole('dialog', { name: 'About PhotoSense' });
+
+  it('opens About PhotoSense from the menu, and closes on Escape', async () => {
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'About PhotoSense' }));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(about()).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(about()).not.toBeInTheDocument();
+  });
+});
+
+describe('help', () => {  const help = () => screen.queryByRole('dialog', { name: 'Help' });
   const openHelp = async () => {
     await click('Menu');
     await userEvent.click(screen.getByRole('menuitem', { name: 'Help' }));
@@ -898,7 +913,7 @@ describe('help', () => {
     await go(/^Reviewing duplicates/, 'Show the duplicates');
     expect(tab(/Duplicates/)).toBeInTheDocument();
 
-    await go(/^Settings, theme and errors/, 'Open Settings');
+    await go(/^Settings, theme, errors and About/, 'Open Settings');
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
   });
 });
@@ -1057,7 +1072,7 @@ describe('deleting permanently', () => {
     open();
     await confirm();
     for (const message of messages) expect(await toast(message)).toBeInTheDocument();
-    expect([...screen.queryAllByRole('status'), ...screen.queryAllByRole('alert')].filter(e => /Deleted|could not|nothing left/.test(e.textContent!))).toHaveLength(messages.length);
+    expect([...screen.getByRole('log', { name: 'Messages' }).children].filter(e => /Deleted|could not|nothing left/.test(e.textContent!))).toHaveLength(messages.length);
   });
 
   it('says why when the removed files cannot be looked for, or cannot be erased', async () => {

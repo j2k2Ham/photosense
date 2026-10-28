@@ -21,7 +21,7 @@ describe('the guide itself', () => {
   it('has a topic for each part of PhotoSense, each told from the others, and says where its buttons go', () => {
     expect(GUIDE.map(t => t.title)).toEqual([
       'Getting started', 'Scanning for duplicates', 'Reviewing duplicates', 'Similar shots', 'Organize: suggested folders', 'Organize: folders of your own',
-      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Removed files and deleting permanently', 'Settings, theme and errors', 'If something looks wrong',
+      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Removed files and deleting permanently', 'Settings, theme, errors and About', 'If something looks wrong',
     ]);
     expect(new Set(GUIDE.map(t => t.id)).size).toBe(GUIDE.length);
     expect(GUIDE.filter(t => t.go).map(t => [t.id, t.go!.place])).toEqual([
@@ -89,7 +89,7 @@ describe('the help window', () => {
     await userEvent.click(within(page()).getByRole('button', { name: /^Previous\s*Getting started$/ }));
     expect(reading()).toBe('Getting started');
     await userEvent.click(topic('If something looks wrong'));
-    expect(within(page()).getByRole('button', { name: /^Previous\s*Settings, theme and errors$/ })).toBeInTheDocument();
+    expect(within(page()).getByRole('button', { name: /^Previous\s*Settings, theme, errors and About$/ })).toBeInTheDocument();
     expect(within(page()).queryByRole('button', { name: /^Next/ })).not.toBeInTheDocument();
   });
 

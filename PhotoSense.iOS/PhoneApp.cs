@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Api;
+using PhotoSense.Api.About;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Scanning.Interfaces;
@@ -11,8 +12,9 @@ namespace PhotoSense.iOS;
 public static class PhoneApp
 {
     private static readonly Lazy<ServiceProvider> Built = new(() => new ServiceCollection()
-        .AddPhotoSensePhone(new PhotoKitLibrary(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory))
+        .AddPhotoSensePhone(new PhotoKitLibrary(), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory))
         .AddPhotoSenseApi()
+        .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "iphone"))
         .BuildServiceProvider());
 
     private static Task? _ready;

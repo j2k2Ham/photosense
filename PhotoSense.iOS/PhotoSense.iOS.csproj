@@ -12,8 +12,9 @@
     <RootNamespace>PhotoSense.iOS</RootNamespace>
     <ApplicationTitle>PhotoSense</ApplicationTitle>
     <ApplicationId>com.j2k2ham.photosense</ApplicationId>
-    <ApplicationDisplayVersion>0.1</ApplicationDisplayVersion>
-    <ApplicationVersion>1</ApplicationVersion>
+    <!-- Its version, and the build number Apple asks to rise with every upload, come from version.json
+         (Directory.Build.targets). -->
+    <PhotoSensePart>iphone</PhotoSensePart>
     <!-- The answers are written as JSON by reflection, as they are on the computer, and LiteDB maps its records the
          same way: only the framework's own assemblies are trimmed, and reflection stays on. -->
     <TrimMode>partial</TrimMode>
@@ -35,6 +36,12 @@
     <BundleResource Include="..\PhotoSense.ReactUI\out\**\*" LogicalName="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- Without it, App Store Connect refuses the upload. -->
     <BundleResource Include="PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
+    <!-- The app's icon is kept once, for every program, in branding/; Xcode makes every size the phone needs from it. -->
+    <ImageAsset Include="..\branding\app-icon.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->
+    <EmbeddedResource Include="..\notices\iphone.txt" LogicalName="PhotoSense.ThirdPartyNotices.txt" />
   </ItemGroup>
   <Target Name="RequireThePage" BeforeTargets="Build" Condition="!Exists('..\PhotoSense.ReactUI\out\index.html')">
     <Error Text="Build the page first: in PhotoSense.ReactUI, run npm ci, then npm run build with NEXT_PUBLIC_API_BASE set to /api." />

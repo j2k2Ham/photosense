@@ -21,8 +21,8 @@ export function ClusterMap({ map, focus, note, large = false, onFocus, onEnlarge
   const shape = 1 / Math.min(1.45, Math.max(0.6, map.aspect));
   return (
     <div className={large ? 'flex h-full w-full items-center justify-center [container-type:size]' : 'flex flex-col items-center gap-2.5 pb-2'}>
-      {/* A click on the map itself, as well as the button in its corner, opens it large. */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      {/* A click on the map itself, as well as the button in its corner, opens it large; the keyboard has the button. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div role="group" aria-label={large ? 'Large map of the suggested folders' : 'Map of the suggested folders'}
         // As wide as the space allows without growing taller than it.
         style={large ? { aspectRatio: shape, width: `min(100cqw, calc(100cqh * ${shape}))` } : { aspectRatio: shape }}

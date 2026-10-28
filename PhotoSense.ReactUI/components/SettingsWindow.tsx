@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useId } from 'react';
+import { Scrim } from './Scrim';
 import type { AppSettings } from '../lib/settings';
 
 interface Props {
@@ -9,13 +10,15 @@ interface Props {
 
 /** One setting: what it is, what it does, and the switch that turns it on or off. */
 function Switch({ title, about, on, onChange }: { readonly title: string; readonly about: string; readonly on: boolean; onChange(on: boolean): void }) {
+  const id = useId();
   return (
+    // A screen reader names the switch by its title and reads what it does after.
     <label className="flex cursor-pointer select-none items-start gap-4">
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-[15px] font-medium">{title}</span>
-        <span className="text-[13px] text-t2">{about}</span>
+        <span id={`${id}-title`} className="text-[15px] font-medium">{title}</span>
+        <span id={`${id}-about`} className="text-[13px] text-t2">{about}</span>
       </span>
-      <input type="checkbox" role="switch" checked={on} onChange={e => onChange(e.target.checked)} className="peer sr-only" />
+      <input type="checkbox" role="switch" checked={on} onChange={e => onChange(e.target.checked)} aria-labelledby={`${id}-title`} aria-describedby={`${id}-about`} className="peer sr-only" />
       <span aria-hidden className="relative mt-1 h-[22px] w-10 shrink-0 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-[18px] after:w-[18px] after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-[18px] peer-checked:after:bg-on-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand" />
     </label>
   );
@@ -30,7 +33,7 @@ export function SettingsWindow({ settings, onChange, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <Scrim className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onDismiss={onClose}>
       <div role="dialog" aria-modal="true" aria-label="Settings" className="flex max-h-full w-[560px] max-w-full flex-col gap-5 overflow-y-auto rounded-[20px] border border-line bg-pop p-5 shadow-dialog sm:p-7">
         <h2 className="text-[21px] font-semibold">Settings</h2>
         <div className="flex flex-col gap-3">
@@ -43,6 +46,6 @@ export function SettingsWindow({ settings, onChange, onClose }: Props) {
           <button type="button" onClick={onClose} className="pill-brand h-11 px-6 text-[15px]">Done</button>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }

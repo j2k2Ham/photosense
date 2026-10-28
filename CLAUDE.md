@@ -14,7 +14,10 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 | `PhotoSense.Server` | The service as one ASP.NET Core program: `PhotoSenseServer` (CORS, the bundled page, `/api` to `ApiBridge`), `AddPhotoSenseComputer` in `PhotoSenseServices.cs` |
 | `PhotoSense.iOS` | The iPhone/iPad app: a `WKWebView` whose `app://` requests `PageSchemeHandler` answers in-process, `PhotoKitLibrary`, `ImageIOAnalyzer`, `SelfCheck`. Builds only on a Mac (`.github/workflows/iphone.yml`); not in `PhotoSense.sln` |
 | `PhotoSense.Contracts` | JSON DTOs sent to the UI; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
-| `PhotoSense.ReactUI` | Next.js 14 / React 18 / SWR / Tailwind UI: `app/page.tsx`, `components/`, `components/organize/`, `lib/` |
+| `PhotoSense.ReactUI` | Next.js 16 / React 19 / SWR / Tailwind 3 UI: `app/page.tsx`, `components/`, `components/organize/`, `lib/` |
+| `tools/` | Node scripts the build runs, tested in `tools/tests`: `version.mjs` (each program's version, from `version.json` and the git history), `notices.mjs` (the third-party notices in `notices/`), `site.mjs` (the web site from `site/pages`) |
+| `version.json`, `product.json` | The next kind of release and whether the programs share a version; who makes PhotoSense and how to reach them (built into `PhotoSense.Api`) |
+| `site/pages/`, `branding/app-icon.png` | The privacy policy, terms and support page, shown by About and made into the web site; the one copy of the icon |
 | `PhotoSense.Tests` | TUnit tests of everything except the UI |
 | `PhotoSense.Benchmarks` | BenchmarkDotNet runs of near-duplicate matching |
 | `docs/design_handoff_photosense_redesign` | Jamie's design handoff. Leave it alone and out of commits unless asked |
@@ -37,12 +40,14 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 - **Data** lives in `%LOCALAPPDATA%\PhotoSense` (`photosense.db`, thumbnails), never under `bin`. The options validator refuses a data folder inside the program folder.
 - **Build:** `dotnet build PhotoSense.sln -c Release -nodeReuse:false -warnaserror`. CI builds with warnings as errors, so build that way locally.
 - **Service tests (TUnit, a program of its own):** `dotnet run --project PhotoSense.Tests -c Release`. One class: append `-- --treenode-filter "/*/*/ClassName/*"`. Coverage: append `-- --coverlet --coverlet-output-format opencover --coverlet-include "[PhotoSense.*]*" --coverlet-exclude "[PhotoSense.Tests]*" --coverlet-exclude-by-file "**/*.g.cs" --results-directory PhotoSense.Tests/coverage`.
-- **UI tests (Vitest + Testing Library + jsdom):** in `PhotoSense.ReactUI`, `npm test`, or `npm run test:coverage`, which fails below 100%. Type-check with `npx tsc --noEmit`, then delete the `tsconfig.tsbuildinfo` it leaves.
+- **UI tests (Vitest + Testing Library + jsdom):** in `PhotoSense.ReactUI`, `npm test`, or `npm run test:coverage`, which fails below 100%. Type-check with `npx tsc --noEmit`, then delete the `tsconfig.tsbuildinfo` it leaves. `npm run lint` (ESLint 9, Next's rules and jsx-a11y's strict set) must report no errors; the 17 `react-hooks` compiler warnings are known. `npm run build` catches what tsc does not, such as a server-rendered file (`app/layout.tsx`) importing a module that uses SWR.
+- **Build-tool tests (node:test):** from the root, `node --test --experimental-test-coverage --test-coverage-include="tools/*.mjs" --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tools/tests/`. They also check `notices/` is current, so restore and `npm ci` first.
+- **After adding or updating a package** (NuGet or the page's), run `node tools/notices.mjs` and commit `notices/`; CI fails while they are out of date. A package that names a licence without its text needs `tools/licenses/<SPDX>.txt` or a `NAMED_ONLY` entry; a font added to `app/layout.tsx` needs its licence in `tools/fonts`.
 - **CI** (`.github/workflows/ci.yml`) runs on Ubuntu for pushes and pull requests to `main`/`master`: build, UI tests with coverage, `npm run build`, service tests with coverage; a second job builds and tests the service on Windows and macOS, publishes it as one program (`publish.ps1`), starts it and asks it for the page and `/api/health`. The feature branches have never been through it. Some service tests that hold a file open to make it fail were only ever run on Windows.
 
 ## Rules
 
-1. **100% branch coverage in both halves.** Every change ships with tests that keep the service and the UI at 100% of branches. Report the measured figures when done, not a guess.
+1. **100% branch coverage in all three parts.** Every change ships with tests that keep the service, the UI and the build tools (`tools/`) at 100% of branches. Report the measured figures when done, not a guess.
 2. **Nothing is ever replaced, and nothing is erased except by "Delete permanently".**
    - Removing a file moves it into `_PhotoSense_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
    - The only code that erases files is `RemovedFiles.EraseAsync`, through `IPhotoFileSystem.Erase`, which nothing else calls. It only empties folders named `_PhotoSense_Removed`.
@@ -72,6 +77,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 ## Service patterns
 
 - **Registering:** endpoint classes get their services through the constructor. Register services both hosts run in `AddPhotoSenseCore`, a host's own in `AddPhotoSenseComputer` or `AddPhotoSensePhone`, and endpoint classes in `AddPhotoSenseApi`; a factory lambda is used where a constructor has optional parameters. Add each address to `PhotoSenseRoutes`, a literal address before one a parameter could match (`scan/progress/latest` would go before `scan/progress/{instanceId}`).
+- **About and the program:** `ProductInfo` (`product.json`, built into `PhotoSense.Api`) is the same for every program; each host registers its own `ProgramInfo` (its name, its version from its assembly, its notices file). `IPhotoAccess` says what a phone has let PhotoSense see (`FolderAccess` on a computer, always everything).
 - **Request guard:** an endpoint that reveals or changes someone's files checks `RequestGuard.Allows(req.Headers)` first (the `x-photosense-client` header, which other web pages cannot send). The server answers only under this machine's own names (`AllowedHosts`, by default `localhost;127.0.0.1;[::1]`, set in `PhotoSenseServer.Build`), so a page renamed to this machine by DNS rebinding cannot send the header as its own. Refusals carry a plain-text reason and a status that says whose fault it is.
 - **Answers:** `ApiResponse` keeps the status it is given, before or after writing, and writes JSON with property names as declared (not camelCase), as the Functions host did and the page expects.
 - **LiteDB:** one shared `LiteDatabase`. Each store's constructor calls `LiteDbMapping.Prepare<T>()` for every mapped type before first use; LiteDB 5 otherwise fails now and then when two stores are first made together.
@@ -82,10 +88,11 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## UI patterns
 
-- **API calls** all go through `lib/apiClient.ts`. Calls that change files revalidate the SWR keys they affect (`refreshGroups`, `refreshOrganize`).
+- **API calls** all go through `lib/apiClient.ts`. Calls that change files revalidate the SWR keys they affect (`refreshGroups`, `refreshOrganize`). The service's address is in `lib/apiBase.ts`, which the server-rendered `app/layout.tsx` may import (`apiClient` it may not: SWR's server build has no `mutate`).
+- **The icon** is `branding/app-icon.png` only; the page shows it from `appIconUrl` (`/api/about/icon`). Never copy it into the page or the app.
 - **Types:** `types.ts` mirrors `PhotoSense.Contracts`. Update both when a field changes.
 - **Styling:** colours are theme tokens in `app/globals.css` (`--bg`, `--t1`, `--brand`, `--rose`, ...), used through Tailwind classes such as `bg-pop`, `text-t2` and `border-line`. Buttons use the `pill-*` classes. Every screen must work in both the dark and the light theme.
-- **Windows and dialogs:** large windows use `WindowShell` (z-30, or z-40 when raised over another). Questions use `ConfirmDialog` (z-[45], rose for anything that removes files); `small` and `ready` cover a second question and a question still waiting for data. Each window handles its own Escape. A window under a question must ignore keys while the question is up (the `asking` / `frozen` props), or one Escape closes both.
+- **Windows and dialogs:** large windows use `WindowShell` (z-30, or z-40 when raised over another). Questions use `ConfirmDialog` (z-[45], rose for anything that removes files); `small` and `ready` cover a second question and a question still waiting for data. Each window handles its own Escape. A window under a question must ignore keys while the question is up (the `asking` / `frozen` props), or one Escape closes both. Every modal window stands on `Scrim`, which closes it on a press outside it, keeps Tab inside the topmost window and gives focus back when it goes. Messages (`Toaster`) go into one `role="log"` region that is always on the page.
 - **Settings** live in `lib/settings.ts` (browser localStorage). Remembered folders live in `lib/lastScan.ts`.
 - **The user guide** (`lib/guide.ts`, shown by `components/HelpWindow.tsx` from Help in the menu) must change whenever something on screen is renamed, added or removed. Its tests check its structure.
 - **Organize state:** arrangements that have not been carried out live in the page only. What was moved is recorded in the service (`organize_batches`), so undo survives a reload.

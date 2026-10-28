@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Api.About;
 using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Scanning;
 
@@ -13,8 +14,11 @@ public static class PhotoSenseApiServices
         s.AddSingleton<ScanGroupingFacade>();
         s.AddSingleton<OrganizeListingMapper>();
         s.AddSingleton<ScanRunner>();
+        s.AddSingleton(ProductInfo.Bundled);
         s.AddSingleton<HealthEndpoints>();
+        s.AddSingleton<AboutEndpoints>();
         s.AddSingleton<FoldersEndpoints>();
+        s.AddSingleton<LibraryEndpoints>();
         s.AddSingleton<PhotosEndpoints>();
         s.AddSingleton<DuplicateGroupsEndpoints>();
         s.AddSingleton<ScanStatusEndpoints>();

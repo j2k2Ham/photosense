@@ -54,3 +54,14 @@ body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.
   .label-caps { @apply text-[12px] font-semibold uppercase tracking-[0.07em] text-t3; }
   .badge { @apply inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em]; }
 }
+/* Where the keyboard is, always visible, in the brand's colour, on both themes. */
+@layer base {
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+}
+/* A text field drawn without an outline of its own shows the ring on the frame it sits in. */
+:where(label, div):has(> input.outline-none:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* For whoever has asked their system for less motion: nothing slides, sweeps or fades. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

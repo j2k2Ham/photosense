@@ -1,12 +1,17 @@
 import './globals.css';
 import React from 'react';
 import { DM_Mono, DM_Sans } from 'next/font/google';
+import { appIconUrl } from '../lib/apiBase';
 import { THEME_KEY } from '../lib/themeKey';
 
 const sans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans' });
 const mono = DM_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-mono' });
 
-export const metadata = { title: 'PhotoSense', description: 'Find duplicate photos and videos, keep the best copy of each, and check the rest before anything moves.' };
+export const metadata = {
+  title: 'PhotoSense',
+  description: 'Find duplicate photos and videos, keep the best copy of each, and check the rest before anything moves.',
+  icons: { icon: appIconUrl },
+};
 
 // Runs before the first paint, so a page saved in the light theme never flashes dark.
 const applySavedTheme = `try{if(localStorage.getItem('${THEME_KEY}')==='light')document.documentElement.classList.add('light')}catch(e){}`;

@@ -293,3 +293,26 @@ export interface EraseRemovedDto {
   skipped: number;
   problems: string[];
 }
+/** What PhotoSense says about itself under About in the menu (PhotoSense.Contracts.About.AboutDto). */
+export interface AboutDto {
+  name: string;
+  /** The answering program's own version: 1.2.0.57 for an ordinary build, 1.2.0 for a release. */
+  version: string;
+  /** Which program is answering: "server" on a computer, "iphone" on an iPhone or iPad. */
+  program: string;
+  publisher: string;
+  copyright: string;
+  /** Where to write for help; null until one is set in product.json. */
+  supportEmail: string | null;
+  website: string | null;
+  privacyPolicyUrl: string | null;
+  termsUrl: string | null;
+  supportUrl: string | null;
+}
+
+/** The documents About shows: the privacy policy, terms of use and support page in Markdown, and the third-party notices. */
+export type AboutDocument = 'privacy' | 'terms' | 'support' | 'notices';
+/** How much of a phone's photos PhotoSense may see (PhotoSense.Contracts.Library.PhotoAccessDto); on a computer, always everything. */
+export interface PhotoAccessDto {
+  access: 'everything' | 'selected' | 'nothing';
+}

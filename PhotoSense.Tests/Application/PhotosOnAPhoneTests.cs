@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Api;
+using PhotoSense.Api.About;
 using PhotoSense.Api.Hosting;
 using PhotoSense.Api.Http;
 using PhotoSense.Desktop.Imaging;
@@ -20,6 +21,7 @@ public sealed class PhotosOnAPhoneTests : IDisposable
     private readonly DirectoryInfo _data = Directory.CreateTempSubdirectory("photosense-phone-");
     private readonly string _root = Path.Combine(Path.GetTempPath(), "photosense-phone-library-" + Guid.NewGuid().ToString("N"), "Photo Library");
     private readonly FakePhotoLibrary _library = new();
+    private readonly FakePhotoAccess _access = new() { Current = PhotoSense.Domain.Services.PhotoAccess.Selected };
     private readonly ServiceProvider _services;
     private readonly ApiRouter _router;
 
@@ -27,10 +29,26 @@ public sealed class PhotosOnAPhoneTests : IDisposable
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddPhotoSensePhone(_library, new MagickImageAnalyzer(), In("Documents"), In("Caches"), _root)
+            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), _root)
             .AddPhotoSenseApi()
+            .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for PhotoSense for iPhone and iPad"))
             .BuildServiceProvider();
         _router = _services.GetRequiredService<PhotoSenseRoutes>().Router;
+    }
+
+    [Test]
+    public async Task About_Says_It_Is_The_Phone_App_And_Gives_Its_Documents()
+    {
+        var about = await JsonAsync("GET", "about");
+        await Assert.That(about.GetProperty("program").GetString()).IsEqualTo("iphone");
+        await Assert.That(about.GetProperty("version").GetString()).IsEqualTo("1.2.0.57");
+        await Assert.That((await AskAsync("GET", "about/privacy")).Text).StartsWith("# Privacy Policy");
+        await Assert.That((await AskAsync("GET", "about/notices")).Text).StartsWith("Third-party notices for PhotoSense for iPhone and iPad");
+        await Assert.That((await JsonAsync("GET", "library/access")).GetProperty("access").GetString()).IsEqualTo("selected");
+        await Assert.That((await JsonAsync("POST", "library/choose-more")).GetProperty("access").GetString()).IsEqualTo("everything");
+        await Assert.That(_access.PickersShown).IsEqualTo(1);
+        var icon = await _router.AnswerAsync("GET", new Uri("app://photosense/api/about/icon"), [], null);
+        await Assert.That(icon.Headers["Content-Type"]).IsEqualTo("image/png");
     }
 
     public void Dispose()

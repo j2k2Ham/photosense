@@ -194,8 +194,57 @@ describe('requests that act on photos', () => {
   });
 });
 
-describe('what the page reads', () => {
-  it('asks for groups fifty to a page, by mode, page, search text and whether reviewed ones are hidden', async () => {
+describe('what a phone lets PhotoSense see', () => {
+  it('is asked of the program, and the phone\'s picker answers with what it then allows, which the listings follow', async () => {
+    swr.useSWR.mockReturnValue({ data: 'the access' });
+    answering({ access: 'everything' });
+    const api = await load();
+
+    expect(api.usePhotoAccess()).toEqual({ data: 'the access' });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/library/access`, expect.any(Function));
+
+    await expect(api.chooseMorePhotos()).resolves.toEqual({ access: 'everything' });
+    expect(lastRequest().url).toBe(`${API}/library/choose-more`);
+    expect(lastRequest().init?.method).toBe('POST');
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/library/access`, { access: 'everything' }, { revalidate: false });
+    const listings = swr.mutate.mock.calls[1][0] as (key: unknown) => boolean;
+    expect([`${API}/organize/files?root=x`, `${API}/scan/groups`, 7].map(listings)).toEqual([true, false, false]);
+  });
+
+  it('opens PhotoSense\'s page of the phone\'s settings', async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.openPhotoSettings();
+    expect(lastRequest().url).toBe(`${API}/library/open-settings`);
+    expect(lastRequest().init?.method).toBe('POST');
+  });
+});
+
+describe('About', () => {  it('shows the icon the program answering hands out, and asks it who makes PhotoSense and which version is running', async () => {
+    swr.useSWR.mockReturnValue({ data: 'the details' });
+    const api = await load();
+
+    expect(api.appIconUrl).toBe(`${API}/about/icon`);
+    expect(api.useAbout()).toEqual({ data: 'the details' });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/about`, expect.any(Function));
+  });
+
+  it('asks for each document as the text it is, and says why one could not be had', async () => {
+    const api = await load();
+    api.useAboutText('privacy');
+    const [url, fetcher] = swr.useSWR.mock.calls[0] as [string, (url: string) => Promise<string>];
+    expect(url).toBe(`${API}/about/privacy`);
+
+    answering('# Privacy Policy');
+    await expect(fetcher(url)).resolves.toBe('# Privacy Policy');
+    expect(lastRequest()).toEqual({ url, init: undefined });
+
+    answering('There is no document called cookies.', 404);
+    await expect(fetcher(`${API}/about/cookies`)).rejects.toThrow('There is no document called cookies.');
+  });
+});
+
+describe('what the page reads', () => {  it('asks for groups fifty to a page, by mode, page, search text and whether reviewed ones are hidden', async () => {
     swr.useSWR.mockReturnValue({ data: 'the groups' });
     const api = await load();
 

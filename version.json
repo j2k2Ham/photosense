@@ -1,0 +1,8 @@
+{
+  "linked": true,
+  "release": "minor",
+  "parts": {
+    "server": { "release": "minor" },
+    "iphone": { "release": "minor" }
+  }
+}

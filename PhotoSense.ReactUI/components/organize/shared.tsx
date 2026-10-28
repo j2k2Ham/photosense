@@ -18,7 +18,6 @@ export function Thumb({ file, className = '', play = 14, duration = false }: { r
       </span>
     );
   // The tile is what is dragged, not the picture inside it.
-  // eslint-disable-next-line @next/next/no-img-element
   return <img src={organizeThumbnailUrl(file.id)} alt="" loading="lazy" decoding="async" draggable={false} className={`bg-s3 object-cover ${className}`} />;
 }
 

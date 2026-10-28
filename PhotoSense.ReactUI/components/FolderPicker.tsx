@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Scrim } from './Scrim';
 import { createPortal } from 'react-dom';
 import { browseFolders } from '../lib/apiClient';
 import type { FolderDto, FolderListingDto } from '../types';
@@ -41,13 +42,13 @@ export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', ot
   }, []);
 
   // Only when the dialog opens: later changes to what is typed do not move it.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     void (async () => {
       try { setPlaces((await browseFolders()).folders); } catch (e) { setError(messageOf(e)); }
       const typed = startAt?.trim();
       if (typed) await open(typed, true); else setLoading(false);
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -61,7 +62,7 @@ export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', ot
 
   // Rendered on the page body, over everything else.
   return createPortal(
-    <div className="fixed inset-0 z-[46] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onCancel(); }}>
+    <Scrim className="fixed inset-0 z-[46] flex items-center justify-center bg-scrim p-3 sm:p-6" onDismiss={onCancel}>
       <div role="dialog" aria-modal="true" aria-label={title} className="flex h-[560px] max-h-full w-[720px] max-w-full flex-col rounded-[20px] border border-line bg-pop shadow-dialog">
         <div className="flex flex-col gap-3 px-4 pb-4 pt-5 sm:px-6">
           <h2 className="text-[20px] font-semibold">{title}</h2>
@@ -106,7 +107,7 @@ export function FolderPicker({ title, startAt, pickLabel = 'Use this folder', ot
           <button type="button" disabled={loading || !here} onClick={() => here && onPick(here)} className="pill-brand h-11 px-5 text-[15px]">{pickLabel}</button>
         </div>
       </div>
-    </div>,
+    </Scrim>,
     document.body,
   );
 }

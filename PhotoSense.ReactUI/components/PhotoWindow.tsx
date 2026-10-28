@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Scrim } from './Scrim';
 import type { GroupMemberDto, GroupMode, PhotoDto } from '../types';
 import { formatBytes, formatCoordinates, formatFile, formatTaken, hasCoordinates, mapUrl, matchLabel, matchMeaning } from '../lib/format';
 import { Differences } from './Differences';
@@ -103,7 +104,7 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
 
   return (
     // On a narrow screen the window is the whole screen: the pictures on top, the details under them, scrolling together.
-    <div className="fixed inset-0 z-30 bg-scrim lg:p-10" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <Scrim className="fixed inset-0 z-30 bg-scrim lg:p-10" onDismiss={onClose}>
       <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Compare ${shown.fileName}`} className="flex h-full flex-col overflow-hidden border-line bg-s1 shadow-dialog outline-none lg:rounded-[18px] lg:border">
         <div className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2.5 lg:h-[72px] lg:flex-nowrap lg:px-6 lg:py-0">
           <span className="min-w-0 truncate text-[18px] font-semibold max-lg:flex-1">{shown.fileName}</span>
@@ -221,6 +222,6 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
           </aside>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }

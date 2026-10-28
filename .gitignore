@@ -370,6 +370,8 @@ PhotoSense.Tests/coverage/coverage.opencover*
 PhotoSense.ReactUI/.next/
 # The page as built to be handed out by a program (publish.ps1, the iPhone app)
 PhotoSense.ReactUI/out/
+# The web site as tools/site.mjs writes it from site/pages
+site/out/
 
 # Local settings of the UI, such as a Google Maps key
 .env*.local

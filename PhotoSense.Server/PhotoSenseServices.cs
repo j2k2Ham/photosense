@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using PhotoSense.Api.About;
 using PhotoSense.Desktop.Browsing;
 using PhotoSense.Desktop.Imaging;
 using PhotoSense.Desktop.Viewing;
@@ -21,6 +22,8 @@ public static class PhotoSenseServices
         s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
         s.AddSingleton<IFolderBrowser, FileSystemFolderBrowser>();
+        s.AddSingleton<IPhotoAccess, FolderAccess>();
+        s.AddSingleton(ProgramInfo.From(typeof(PhotoSenseServices).Assembly, "server"));
         s.AddHostedService<PutBackUnfinishedChanges>();
         return s.AddPhotoSenseCore();
     }

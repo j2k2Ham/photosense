@@ -12,7 +12,6 @@ export function PhotoThumb({ photo, className = '' }: { readonly photo: PhotoDto
         {photo.durationSeconds != null && <span className="font-mono text-[13px]">{formatDuration(photo.durationSeconds)}</span>}
       </span>
     );
-  // eslint-disable-next-line @next/next/no-img-element
   // Fetched at once, not as it scrolls into view: a page holds few enough for that, and none then appears late.
   return <img src={thumbnailUrl(photo.id)} alt="" decoding="async" className={`bg-s3 object-cover ${className}`} />;
 }
@@ -29,7 +28,6 @@ export function PhotoStill({ photo }: { readonly photo: PhotoDto }) {
     );
   return (
     <span className="block h-full w-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url("${thumbnailUrl(photo.id)}")` }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img key={photo.id} src={imageUrl(photo.id)} alt={photo.fileName} className="h-full w-full object-contain" />
     </span>
   );
@@ -58,7 +56,8 @@ function VideoView({ photo, onOpenInViewer }: ViewProps) {
           <span className="max-w-sm text-[13px]">This browser cannot play this video. Open it in your default player instead.</span>
         </div>
       ) : (
-        <video src={videoUrl(photo.id)} controls preload="metadata" className="min-h-0 w-full flex-1 object-contain"
+        // eslint-disable-next-line jsx-a11y/media-has-caption -- people's own videos come with no captions to show
+        <video src={videoUrl(photo.id)} controls preload="metadata" aria-label={photo.fileName} className="min-h-0 w-full flex-1 object-contain"
           onError={() => setUnplayable(true)}
           // Sound without a picture: the browser lacks the video decoder.
           onLoadedMetadata={e => { if (e.currentTarget.videoWidth === 0) setUnplayable(true); }} />

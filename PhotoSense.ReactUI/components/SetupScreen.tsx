@@ -4,6 +4,7 @@ import { leaf, sameFolder, timeLeft } from '../lib/format';
 import { loadLastScan, saveLastScan } from '../lib/lastScan';
 import type { ScanProgressSnapshotDto } from '../types';
 import { FolderPicker } from './FolderPicker';
+import { PhotoAccessNote } from './PhotoAccessNote';
 import type { ToastKind } from './Toaster';
 
 interface Props {
@@ -114,6 +115,8 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
           </button>
         </div>
       </div>
+
+      <PhotoAccessNote notify={notify} />
 
       {scanning && (
         <div className="flex w-[min(1240px,100%)] flex-col gap-4" aria-label="Scan progress">

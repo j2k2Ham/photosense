@@ -7,7 +7,7 @@ import {
 } from '../../lib/organize';
 import { loadOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
 import { useOrganizeReading } from '../../lib/useOrganizeReading';
-import type { OrganizeApplyRequest, OrganizeFileDto } from '../../types';
+import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
@@ -35,6 +35,7 @@ const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the Ph
 const without = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(Object.entries(map).filter(([k]) => !keys.includes(k)));
 const only = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(keys.filter(k => map[k]).map(k => [k, map[k]]));
 const NO_FILES: OrganizeFileDto[] = [];
+const NO_PLACES: OrganizePlaceDto[] = [];
 
 const Named = ({ children }: { readonly children: string }) => <span className="font-semibold text-t1 [overflow-wrap:anywhere]">{children}</span>;
 const Where = ({ children }: { readonly children: string }) => <span className="font-mono text-[13.5px] [overflow-wrap:anywhere]">{children}</span>;
@@ -76,14 +77,14 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const [deleting, setDeleting] = useState<{ files: FileRef[]; stays?: FileRef }>();
   const undoable = useRef(new Map<string, Undoable>());
   // The folder that was just chosen, until its files have been read and that has been said.
-  const announce = useRef<string>();
+  const announce = useRef<string | undefined>(undefined);
 
   const reading = root !== undefined && !listing.data && !listing.error;
   const soFar = useOrganizeReading(root, reading);
   // Until the whole list has come, what has been read so far stands in for it, in the order it was read.
   const listed = listing.data ?? soFar?.listing;
   const data = useMemo(() => (listed && gone.size > 0 ? { ...listed, files: listed.files.filter(f => !gone.has(f.id)) } : listed), [listed, gone]);
-  const files = data?.files ?? NO_FILES, places = data?.places ?? [];
+  const files = data?.files ?? NO_FILES, places = data?.places ?? NO_PLACES;
 
   useEffect(() => {
     if (listing.error) notify(messageOf(listing.error), 'error');

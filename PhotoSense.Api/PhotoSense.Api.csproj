@@ -11,4 +11,11 @@
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
     <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Who makes PhotoSense, and the documents the About window shows as the web site does (site/pages). -->
+    <EmbeddedResource Include="..\product.json" LogicalName="PhotoSense.About.product.json" />
+    <EmbeddedResource Include="..\site\pages\*.md" LogicalName="PhotoSense.About.%(Filename)%(Extension)" />
+    <!-- The one copy of the icon, which the page shows as its own. -->
+    <EmbeddedResource Include="..\branding\app-icon.png" LogicalName="PhotoSense.About.app-icon.png" />
+  </ItemGroup>
 </Project>

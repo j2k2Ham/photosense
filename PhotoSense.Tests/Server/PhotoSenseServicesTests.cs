@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using PhotoSense.Api;
+using PhotoSense.Api.About;
 using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Scanning;
 using PhotoSense.Application.Changes;
@@ -33,9 +34,15 @@ public sealed class PhotoSenseServicesTests : IDisposable
             typeof(IScanProgressStore), typeof(IScanLogSink), typeof(IScanExecutionService), typeof(IValidateOptions<PhotoStorageOptions>),
             typeof(ScanRunner), typeof(PhotoSenseRoutes), typeof(HealthEndpoints), typeof(FoldersEndpoints), typeof(PhotosEndpoints), typeof(DuplicateGroupsEndpoints),
             typeof(ScanStatusEndpoints), typeof(ScanStartEndpoints), typeof(ScanResetEndpoints), typeof(ScanProgressEndpoints), typeof(ScanLogsEndpoints),
-            typeof(OrganizeEndpoints), typeof(RemovedEndpoints),
+            typeof(OrganizeEndpoints), typeof(RemovedEndpoints), typeof(AboutEndpoints), typeof(LibraryEndpoints), typeof(IPhotoAccess),
         })
             await Assert.That(_f.Services.GetRequiredService(type)).IsNotNull();
+
+        // About says it is the program for a computer, with the notices built into it.
+        var program = _f.Services.GetRequiredService<ProgramInfo>();
+        await Assert.That(program.Program).IsEqualTo("server");
+        await Assert.That(program.Notices()).StartsWith("Third-party notices for PhotoSense for Windows and Mac");
+        await Assert.That(_f.Services.GetRequiredService<ProductInfo>()).IsSameReferenceAs(ProductInfo.Bundled);
 
         // The configured preference reaches the ranking: the JPEG is the keeper.
         var ranking = _f.Services.GetRequiredService<PhotoRanking>();

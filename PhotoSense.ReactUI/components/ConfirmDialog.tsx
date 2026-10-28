@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Scrim } from './Scrim';
 
 interface Props {
   readonly title: string;
@@ -25,7 +26,7 @@ export function ConfirmDialog({ title, confirmLabel, busy, tone = 'rose', small 
   }, [busy, onCancel]);
 
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget && !busy) onCancel(); }}>
+    <Scrim className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onDismiss={() => { if (!busy) onCancel(); }}>
       <div role="alertdialog" aria-modal="true" aria-label={title} className={`flex max-h-full max-w-full flex-col gap-4 overflow-y-auto rounded-[20px] border border-line bg-pop p-5 shadow-dialog ${small ? 'w-[400px] sm:p-6' : 'w-[520px] sm:p-7'}`}>
         <h2 className={`font-semibold ${small ? 'text-[18px]' : 'text-[21px]'}`}>{title}</h2>
         <div className="space-y-1.5 text-[15px] text-t2">{children}</div>
@@ -35,6 +36,6 @@ export function ConfirmDialog({ title, confirmLabel, busy, tone = 'rose', small 
           <button type="button" disabled={busy || !ready} onClick={onConfirm} className={`${tone === 'rose' ? 'pill-rose' : 'pill-brand'} h-11 px-5 text-[15px]`}>{busy ? 'Working…' : confirmLabel}</button>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }
