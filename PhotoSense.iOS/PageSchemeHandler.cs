@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using PhotoSense.Api.Hosting;
 using WebKit;
 
@@ -28,8 +29,14 @@ public sealed class PageSchemeHandler : NSObject, IWKUrlSchemeHandler
             Say.Line($"{request.HttpMethod} {url.PathAndQuery} {answer.Status} in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms");
         }
         catch (OperationCanceledException) { Say.Line($"{request.HttpMethod} {url.PathAndQuery} given up by the web view"); }
-        // An exception left to escape an async void method would end the app.
-        catch (Exception e) { Say.Line($"{request.HttpMethod} {url.PathAndQuery} failed: {e}"); }
+        // An exception left to escape an async void method would end the app; and the page is answered all the same,
+        // with what went wrong, or it would wait for an answer for ever.
+        catch (Exception e)
+        {
+            Say.Line($"{request.HttpMethod} {url.PathAndQuery} failed: {e}");
+            if (!stop.IsCancellationRequested)
+                Send(urlSchemeTask, request.Url, new InProcessAnswer(500, new Dictionary<string, string> { ["Content-Type"] = "text/plain; charset=utf-8" }, Encoding.UTF8.GetBytes(e.Message)));
+        }
         finally { _open.Remove(urlSchemeTask.Handle); }
     }
 

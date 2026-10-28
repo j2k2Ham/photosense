@@ -18,6 +18,9 @@
          same way: only the framework's own assemblies are trimmed, and reflection stays on. -->
     <TrimMode>partial</TrimMode>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- LiteDB makes its queries from compiled expressions, code made while the app runs, which iOS allows only through
+         .NET's interpreter: everything is still compiled ahead of time, and only code made that way is interpreted. -->
+    <MtouchInterpreter>-all</MtouchInterpreter>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />
