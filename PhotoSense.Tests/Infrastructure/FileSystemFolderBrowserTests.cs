@@ -1,6 +1,6 @@
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Services;
-using PhotoSense.Infrastructure.Browsing;
+using PhotoSense.Desktop.Browsing;
 
 namespace PhotoSense.Tests.Infrastructure;
 

@@ -2,7 +2,7 @@ using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
-namespace PhotoSense.Infrastructure.Browsing;
+namespace PhotoSense.Desktop.Browsing;
 
 public sealed class FileSystemFolderBrowser : IFolderBrowser
 {

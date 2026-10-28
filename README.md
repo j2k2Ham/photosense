@@ -8,9 +8,11 @@ Cross-platform photo duplicate & near-duplicate detection.
 |---------|---------|
 | `PhotoSense.Domain` | Core entities, value objects & services abstractions |
 | `PhotoSense.Application` | Application use-cases / orchestration (scanning, grouping) |
-| `PhotoSense.Infrastructure` | Persistence, hashing, metadata extraction, and the computer's disks (`DiskFileSystem`) |
-| `PhotoSense.Api` | The service's endpoints, apart from any one program that serves them |
+| `PhotoSense.Infrastructure` | What both programs run: persistence, hashing, metadata, place names, the computer's disks (`DiskFileSystem`), a phone's photo library as a folder (`Library/`), and the services wired together (`AddPhotoSenseCore`) |
+| `PhotoSense.Desktop` | What only a computer has: Magick.NET to decode pictures, the folder browser, opening a file in another program |
+| `PhotoSense.Api` | The service's endpoints, apart from any one program that serves them, and what a program without a web server needs to answer the page (`Hosting/`) |
 | `PhotoSense.Server` | The service as one program for a Windows or Mac computer (ASP.NET Core) |
+| `PhotoSense.iOS` | The app for an iPhone or iPad, built on GitHub's Macs; not part of `PhotoSense.sln` |
 | `PhotoSense.Contracts` | The JSON shapes the service sends to the UI |
 | `PhotoSense.ReactUI` | Next.js (React) web client |
 | `PhotoSense.Tests` | Automated tests of everything above the UI |
@@ -35,13 +37,13 @@ Opening PhotoSense from a phone needs more than the layout: as set up, the UI as
 
 The React UI (`PhotoSense.ReactUI`) fetches everything over REST from the service, with SWR polling for scan progress and group listings. What they exchange is plain JSON mirroring the DTOs in `PhotoSense.Contracts`; the UI keeps its own `types.ts` in step with them. When adding a field, update both.
 
-The service is one ASP.NET Core program, `PhotoSense.Server`. It hands every request below `/api` to the endpoints in `PhotoSense.Api` (`PhotoSenseRoutes` lists every address), and serves the page itself when the page has been built into it (see *One program for a computer* below). The endpoints know nothing of the program that serves them: they read an `ApiRequest` and write an `ApiResponse`, so that an app on a phone can later answer the same page at the same addresses with the same code.
+The service is one ASP.NET Core program, `PhotoSense.Server`. It hands every request below `/api` to the endpoints in `PhotoSense.Api` (`PhotoSenseRoutes` lists every address), and serves the page itself when the page has been built into it (see *One program for a computer* below). The endpoints know nothing of the program that serves them: they read an `ApiRequest` and write an `ApiResponse`, so that the app on a phone answers the same page at the same addresses with the same code (see *The iPhone app*). What both programs run is wired together once (`AddPhotoSenseCore`, `AddPhotoSenseApi`); each adds only what is its own (`AddPhotoSenseComputer`, `AddPhotoSensePhone`).
 
 A scan runs in the background of the program, one at a time (`ScanRunner`); its progress is held in memory, as before. A scan that the program's stopping cuts short is not carried on when it starts again: scan again, and the files already read are skipped.
 
 ### Where the photos live
 
-Everything that lists, reads, moves, copies or erases photos does it through one interface, `IPhotoFileSystem` in `PhotoSense.Domain`: folders that hold files and other folders, and for each file its size and when it last changed. On a computer that is `DiskFileSystem`, the computer's own disks. On a phone it will be the phone's photo library, its albums shown as folders, so that scanning, Clean up, Organize, the record of changes (below), undo and **Delete permanently** work there as they are. Nothing in `PhotoSense.Domain`, `PhotoSense.Application` or `PhotoSense.Api` reaches a disk any other way, and one test runs a scan, Clean up and its undo, an Organize move and its undo, a removal and erasing on photos held only in memory (`PhotosNotOnDiskTests`). What PhotoSense keeps of its own, the database and the thumbnails, stays on the computer's disk, as does the folder browser.
+Everything that lists, reads, moves, copies or erases photos does it through one interface, `IPhotoFileSystem` in `PhotoSense.Domain`: folders that hold files and other folders, and for each file its size and when it last changed. On a computer that is `DiskFileSystem`, the computer's own disks. On a phone it is the phone's photo library (`PhotoLibraryFileSystem`), so that scanning, Clean up, Organize, the record of changes (below), undo and **Delete permanently** work there as they are. Nothing in `PhotoSense.Domain`, `PhotoSense.Application` or `PhotoSense.Api` reaches a disk any other way, and one test runs a scan, Clean up and its undo, an Organize move and its undo, a removal and erasing on photos held only in memory (`PhotosNotOnDiskTests`). What PhotoSense keeps of its own, the database and the thumbnails, stays on the computer's disk, as does the folder browser.
 
 The interface promises what the rules below rest on: a move or copy never replaces a file, a file can be read while it is being moved or removed, and erasing (`Erase`) is a separate operation that only **Delete permanently** asks for.
 
@@ -323,6 +325,49 @@ To stop PhotoSense, press Ctrl+C in the terminal it was started in, or run `./de
 The program goes to `publish/<runtime>`: `PhotoSense.Server.exe` on Windows, `PhotoSense.Server` on a Mac. A Mac build can be made on Windows. It is not signed, so the first time macOS asks before running it: Control-click it in Finder and choose Open, or clear the mark with `xattr -dr com.apple.quarantine <the folder>`.
 
 CI builds and tests the service on Windows and on macOS as well as on Linux, and on both of those publishes the program, starts it and asks it for the page and for `/api/health`.
+
+## The iPhone app
+
+`PhotoSense.iOS` is PhotoSense on an iPhone or iPad: the same page, in a web view that fills the screen, with every request the page makes answered inside the app by the same endpoints the service uses. There is no web server on the phone. The page's own files are handed out from the app, and its requests below `/api` go to `PhotoSenseRoutes` (`PageSchemeHandler`, through `InProcessApi` and `PageFiles` in `PhotoSense.Api/Hosting`). What the app records is kept among its own files, and the previews where the phone may clear them when it runs short of space.
+
+The first time it opens, it asks to see the photos: all of them, those picked, or none. The library is then offered as one folder, **Photo Library**, holding every picture and video once under the name it was taken with; a Live Photo is two files there, its picture and its video. Pictures taken under the same name are told apart by the start of each one's own id (`IMG_0001 (1A2B3C4D).HEIC`), so that a name never comes to stand for another picture. Pictures are decoded by the phone itself (`ImageIOAnalyzer`), since Magick.NET has no build for a phone, and measured the same way as on a computer (`ImageFingerprint`).
+
+This first version only looks. A scan finds copies and similar shots, and Organize lists the library by place and date, but nothing on the phone can be moved, removed or put in an album yet: every such request is refused before anything happens, with the reason. Albums, removal into a hidden **PhotoSense Removed** album, and **Delete permanently** (to Recently Deleted) come next.
+
+Only the parts that talk to Apple's frameworks are in `PhotoSense.iOS`: the photo library (`PhotoKitLibrary`), the decoder, the web view and its requests. Everything that decides anything is shared and tested with the rest (`PhotoLibraryFileSystemTests`, `InProcessApiTests`, and `PhotosOnAPhoneTests`, which runs the phone's whole stack but Apple's code on a library held in memory).
+
+### Building it
+
+The app builds only where Apple's tools are. The `iPhone app` workflow (`.github/workflows/iphone.yml`) builds it on GitHub's Macs on every push: first the page, with `NEXT_PUBLIC_API_BASE=/api`, then the app for the simulator. It then starts a simulator, puts a photo, a copy of it and a JPEG of it in the simulator's library, and starts the app with `PHOTOSENSE_SELF_CHECK=1`. The app then makes the page's own requests from inside its web view: the library offered, a scan started and finished, the copies found, a preview and a whole picture shown, Organize's listing, a removal refused. Each step is reported as a note on the run. On a Mac with Xcode the same build is:
+
+```bash
+cd PhotoSense.ReactUI && npm ci && NEXT_PUBLIC_API_BASE=/api npm run build && cd ..
+dotnet workload install ios
+dotnet build PhotoSense.iOS/PhotoSense.iOS.csproj -c Release -r iossimulator-arm64
+```
+
+### Putting it on an iPhone or iPad
+
+The workflow's second job signs the app and sends it to TestFlight, once these are in the repository's secrets (Settings > Secrets and variables > Actions). Until then it is skipped.
+
+| Secret | What it is |
+|---|---|
+| `APPLE_CERTIFICATE_P12` | An Apple Distribution certificate with its private key, as a `.p12` file in base64 |
+| `APPLE_CERTIFICATE_PASSWORD` | The password the `.p12` file was saved with |
+| `APPLE_PROFILE` | An App Store provisioning profile for the app's id, `com.j2k2ham.photosense`, in base64 |
+| `APPSTORE_KEY_ID`, `APPSTORE_ISSUER_ID`, `APPSTORE_KEY_P8` | An App Store Connect API key (Users and Access > Integrations), its issuer, and the `.p8` file's text |
+
+Without a Mac, the certificate's request can be made with OpenSSL, which comes with Git for Windows:
+
+```bash
+openssl req -new -newkey rsa:2048 -nodes -keyout photosense.key -out photosense.csr -subj "/CN=PhotoSense/C=US"
+# upload photosense.csr at developer.apple.com > Certificates > Apple Distribution, and download distribution.cer
+openssl x509 -inform der -in distribution.cer -out distribution.pem
+openssl pkcs12 -export -legacy -inkey photosense.key -in distribution.pem -out distribution.p12
+base64 -w0 distribution.p12   # the value of APPLE_CERTIFICATE_P12
+```
+
+Keep `photosense.key` and the `.p12` file out of the repository. In App Store Connect the app needs a record with the same id; each build then appears in TestFlight once Apple has processed it.
 
 ## VS Code Tasks
 

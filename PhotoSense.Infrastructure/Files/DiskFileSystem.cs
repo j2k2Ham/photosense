@@ -42,14 +42,7 @@ public class DiskFileSystem : IPhotoFileSystem
     {
         using var part = OpenRead(copy);
         using var whole = OpenRead(original);
-        if (part.Length > whole.Length) return false;
-        byte[] a = new byte[81920], b = new byte[81920];
-        for (int read; (read = part.Read(a)) > 0;)
-        {
-            whole.ReadExactly(b, 0, read);
-            if (!a.AsSpan(0, read).SequenceEqual(b.AsSpan(0, read))) return false;
-        }
-        return true;
+        return Copies.BeginsWith(whole, part);
     }
 
     public virtual void Move(string from, string to) => File.Move(from, to, overwrite: false);

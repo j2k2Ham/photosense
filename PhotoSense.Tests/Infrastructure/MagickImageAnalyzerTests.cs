@@ -1,7 +1,8 @@
 using ImageMagick;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Entities;
-using PhotoSense.Infrastructure.Imaging;
+using PhotoSense.Domain.Services;
+using PhotoSense.Desktop.Imaging;
 using PhotoSense.Infrastructure.Metadata;
 
 namespace PhotoSense.Tests.Infrastructure;
@@ -46,8 +47,8 @@ public class MagickImageAnalyzerTests
         var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg, 85));
 
         await Assert.That((analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality)).IsEqualTo((1200, 900, "JPEG", 85));
-        await Assert.That(analysis.Signature.Length).IsEqualTo(MagickImageAnalyzer.SignatureEdge * MagickImageAnalyzer.SignatureEdge * 3);
-        await Assert.That(MagickImageAnalyzer.PerceptualHash(analysis.Signature)).IsEqualTo(analysis.PerceptualHash);
+        await Assert.That(analysis.Signature.Length).IsEqualTo(ImageFingerprint.SignatureEdge * ImageFingerprint.SignatureEdge * 3);
+        await Assert.That(ImageFingerprint.PerceptualHash(analysis.Signature)).IsEqualTo(analysis.PerceptualHash);
         using var thumbnail = new MagickImage(analysis.ThumbnailJpeg);
         await Assert.That((thumbnail.Format, thumbnail.Width, thumbnail.Height)).IsEqualTo((MagickFormat.Jpeg, 320u, 240u));
     }
@@ -157,12 +158,12 @@ public class MagickImageAnalyzerTests
     [Test]
     public async Task The_Hash_Sets_Half_Its_Bits_And_Ignores_Overall_Brightness()
     {
-        using var picture = Picture(7, MagickImageAnalyzer.SignatureEdge, MagickImageAnalyzer.SignatureEdge);
+        using var picture = Picture(7, ImageFingerprint.SignatureEdge, ImageFingerprint.SignatureEdge);
         var rgb = picture.GetPixels().ToByteArray(PixelMapping.RGB)!;
         var brighter = rgb.Select(b => (byte)Math.Min(255, b / 2 + 60)).ToArray();
-        var hash = MagickImageAnalyzer.PerceptualHash(rgb);
+        var hash = ImageFingerprint.PerceptualHash(rgb);
         await Assert.That(System.Numerics.BitOperations.PopCount(hash)).IsEqualTo(31); // terms above the median of 64
-        await Assert.That(PhotoMatcher.HashDistance(hash, MagickImageAnalyzer.PerceptualHash(brighter))).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(4);
+        await Assert.That(PhotoMatcher.HashDistance(hash, ImageFingerprint.PerceptualHash(brighter))).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(4);
     }
 
     [Test]

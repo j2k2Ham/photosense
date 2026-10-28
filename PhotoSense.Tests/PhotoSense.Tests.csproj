@@ -22,5 +22,6 @@
     <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />
     <ProjectReference Include="..\PhotoSense.Server\PhotoSense.Server.csproj" />
     <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
+    <ProjectReference Include="..\PhotoSense.Desktop\PhotoSense.Desktop.csproj" />
   </ItemGroup>
 </Project>

@@ -3,21 +3,21 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using PhotoSense.Domain.Services;
 
-namespace PhotoSense.Infrastructure.Viewing;
+namespace PhotoSense.Desktop.Viewing;
 
 /// <summary>Which desktop the service is running on, as far as opening a file is concerned.</summary>
-public enum Desktop { Windows, MacOS, Linux }
+public enum DesktopSystem { Windows, MacOS, Linux }
 
 /// <summary>Hands a file to the operating system to open, as double-clicking it would.</summary>
 public sealed class ShellSystemViewer : ISystemViewer
 {
-    private readonly Desktop _desktop;
+    private readonly DesktopSystem _desktop;
     private readonly Func<ProcessStartInfo, IDisposable?> _start;
 
     public ShellSystemViewer() : this(CurrentDesktop(), Process.Start) { }
 
     /// <param name="start">Starts the process; replaced in tests so that nothing is really opened.</param>
-    public ShellSystemViewer(Desktop desktop, Func<ProcessStartInfo, IDisposable?> start)
+    public ShellSystemViewer(DesktopSystem desktop, Func<ProcessStartInfo, IDisposable?> start)
     {
         _desktop = desktop;
         _start = start;
@@ -39,17 +39,17 @@ public sealed class ShellSystemViewer : ISystemViewer
     }
 
     /// <summary>What to run to open a file: the file itself through the Windows shell, or the desktop's opener elsewhere.</summary>
-    public static ProcessStartInfo CommandFor(string path, Desktop desktop)
+    public static ProcessStartInfo CommandFor(string path, DesktopSystem desktop)
     {
-        if (desktop == Desktop.Windows) return new ProcessStartInfo(path) { UseShellExecute = true };
+        if (desktop == DesktopSystem.Windows) return new ProcessStartInfo(path) { UseShellExecute = true };
         // The path is passed as one argument, never through a shell, so nothing in a file name is interpreted.
-        var info = new ProcessStartInfo(desktop == Desktop.MacOS ? "open" : "xdg-open") { UseShellExecute = false };
+        var info = new ProcessStartInfo(desktop == DesktopSystem.MacOS ? "open" : "xdg-open") { UseShellExecute = false };
         info.ArgumentList.Add(path);
         return info;
     }
 
-    public static Desktop CurrentDesktop() => DesktopOf(RuntimeInformation.IsOSPlatform);
+    public static DesktopSystem CurrentDesktop() => DesktopOf(RuntimeInformation.IsOSPlatform);
 
-    public static Desktop DesktopOf(Func<OSPlatform, bool> runningOn)
-        => runningOn(OSPlatform.Windows) ? Desktop.Windows : runningOn(OSPlatform.OSX) ? Desktop.MacOS : Desktop.Linux;
+    public static DesktopSystem DesktopOf(Func<OSPlatform, bool> runningOn)
+        => runningOn(OSPlatform.Windows) ? DesktopSystem.Windows : runningOn(OSPlatform.OSX) ? DesktopSystem.MacOS : DesktopSystem.Linux;
 }

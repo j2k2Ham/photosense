@@ -9,6 +9,7 @@
     <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
     <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
+    <ProjectReference Include="..\PhotoSense.Desktop\PhotoSense.Desktop.csproj" />
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
     <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
   </ItemGroup>

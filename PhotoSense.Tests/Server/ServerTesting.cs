@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Api;
 using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Server;
@@ -20,7 +21,7 @@ internal sealed class ServerFixture : IDisposable
             ["PhotoStorage:ThumbnailPath"] = ThumbnailPath,
             ["PhotoStorage:KeepFormat"] = "WidelyCompatible",
         }).Build();
-        Services = new ServiceCollection().AddLogging().AddPhotoSenseCore(settings).AddPhotoSenseApi().BuildServiceProvider();
+        Services = new ServiceCollection().AddLogging().AddPhotoSenseComputer(settings).AddPhotoSenseApi().BuildServiceProvider();
     }
 
     public void Dispose()

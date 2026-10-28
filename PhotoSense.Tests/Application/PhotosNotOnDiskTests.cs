@@ -10,7 +10,7 @@ using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Infrastructure.Hashing;
-using PhotoSense.Infrastructure.Imaging;
+using PhotoSense.Desktop.Imaging;
 using PhotoSense.Infrastructure.Metadata;
 using PhotoSense.Infrastructure.Persistence;
 

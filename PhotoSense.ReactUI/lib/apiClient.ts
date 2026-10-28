@@ -4,7 +4,7 @@ import type {
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
 } from '../types';
 
-// Base URL can point at Blazor server (proxy) or Functions API.
+// Where the service answers. The page a program hands out itself (the service's own, the phone app's) is built with /api.
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth enforced

@@ -8,9 +8,11 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 |---|---|
 | `PhotoSense.Domain` | Entities, value objects, store and service interfaces, `PhotoStorageOptions` |
 | `PhotoSense.Application` | Scanning, grouping and removal (`Scanning/`), Organize (`Organizing/`), erasing removed files (`Removal/`) |
-| `PhotoSense.Infrastructure` | LiteDB stores, hashing, Magick.NET imaging, metadata, place names (GeoNames), the computer's disks (`Files/DiskFileSystem`), companions, folder browsing |
-| `PhotoSense.Api` | The endpoints, apart from any host: `Endpoints/`, `Scanning/` (with `ScanRunner`), the route table `PhotoSenseRoutes`, and `Http/` (`ApiRequest`, `ApiResponse`, `ApiRouter`) |
-| `PhotoSense.Server` | The service as one ASP.NET Core program: `PhotoSenseServer` (CORS, the bundled page, `/api` to `ApiBridge`), DI in `PhotoSenseServices.cs` (`AddPhotoSenseCore`, `AddPhotoSenseApi`) |
+| `PhotoSense.Infrastructure` | What both hosts run: LiteDB stores, hashing, metadata, place names (GeoNames), the computer's disks (`Files/DiskFileSystem`), companions, a phone's library as a folder (`Library/`), and the shared DI (`AddPhotoSenseCore`; `AddPhotoSensePhone` for a phone) |
+| `PhotoSense.Desktop` | What only a computer has: Magick.NET imaging, the folder browser, `ShellSystemViewer` |
+| `PhotoSense.Api` | The endpoints, apart from any host: `Endpoints/`, `Scanning/` (with `ScanRunner`), the route table `PhotoSenseRoutes`, `Http/` (`ApiRequest`, `ApiResponse`, `ApiRouter`), `Hosting/` (`InProcessApi`, `PageFiles`) and `AddPhotoSenseApi` |
+| `PhotoSense.Server` | The service as one ASP.NET Core program: `PhotoSenseServer` (CORS, the bundled page, `/api` to `ApiBridge`), `AddPhotoSenseComputer` in `PhotoSenseServices.cs` |
+| `PhotoSense.iOS` | The iPhone/iPad app: a `WKWebView` whose `app://` requests `PageSchemeHandler` answers in-process, `PhotoKitLibrary`, `ImageIOAnalyzer`, `SelfCheck`. Builds only on a Mac (`.github/workflows/iphone.yml`); not in `PhotoSense.sln` |
 | `PhotoSense.Contracts` | JSON DTOs sent to the UI; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
 | `PhotoSense.ReactUI` | Next.js 14 / React 18 / SWR / Tailwind UI: `app/page.tsx`, `components/`, `components/organize/`, `lib/` |
 | `PhotoSense.Tests` | TUnit tests of everything except the UI |
@@ -19,13 +21,14 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## Architecture and stack
 
-- **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Server` as the host that wires them together. `PhotoSense.Api` depends on Domain, Application and Contracts only, never on Infrastructure or ASP.NET Core, because the phone app will serve the same endpoints. Domain and Application never reference Infrastructure or a host; new storage or OS access goes behind an interface in Domain.
-- **Where photos live:** everything that lists, reads, moves, copies or erases photos goes through `IPhotoFileSystem` (Domain): `DiskFileSystem` on a computer, the phone's photo library later. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on photos. PhotoSense's own data (LiteDB, thumbnails) and the folder browser stay on the computer's disk.
+- **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Server` as the host that wires them together. `PhotoSense.Api` depends on Domain, Application and Contracts only, never on Infrastructure or ASP.NET Core, because the phone app serves the same endpoints. Domain and Application never reference Infrastructure or a host; new storage or OS access goes behind an interface in Domain.
+- **Where photos live:** everything that lists, reads, moves, copies or erases photos goes through `IPhotoFileSystem` (Domain): `DiskFileSystem` on a computer, `PhotoLibraryFileSystem` over `IPhotoLibrary` on a phone. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on photos. PhotoSense's own data (LiteDB, thumbnails) stays on the program's own disk. The phone's library is read-only for now: every change is refused with `PhotoLibraryFileSystem.ReadOnly`.
 - **.NET 10**, one ASP.NET Core program (`PhotoSense.Server`), no Azure Functions, Azurite or SignalR. Not minimal APIs or controllers: endpoints are methods taking an `ApiRequest` and returning an `ApiResponse`, and every address is listed in `PhotoSenseRoutes`.
 - **Storage:** LiteDB in one file. No EF Core, no SQL server, no migrations.
 - **Auth:** none. The service runs on the user's own machine; `RequestGuard` is the only gate (see Service patterns). No JWT, OIDC or cookies.
 - **Tests:** TUnit with Moq and coverlet (`coverlet.MTP`), not xUnit, FluentAssertions or Testcontainers.
-- **Imaging and metadata:** Magick.NET (Q8) and MetadataExtractor.
+- **Imaging and metadata:** Magick.NET (Q8) on a computer, ImageIO on a phone, both measuring through `ImageFingerprint`; MetadataExtractor on both.
+- **The phone app:** plain .NET for iOS (not MAUI), only the thin layer over Apple's frameworks; anything that decides goes in shared code with tests. It is checked on GitHub's simulator by `SelfCheck` and on a device by hand, as Jamie agreed.
 - Generic .NET advice that assumes another stack (EF Core, minimal APIs, xUnit) does not apply here; follow this file.
 
 ## Running and testing
@@ -68,7 +71,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
 
 ## Service patterns
 
-- **Registering:** endpoint classes get their services through the constructor. Register services in `AddPhotoSenseCore` and endpoint classes in `AddPhotoSenseApi`; a factory lambda is used where a constructor has optional parameters. Add each address to `PhotoSenseRoutes`, a literal address before one a parameter could match (`scan/progress/latest` would go before `scan/progress/{instanceId}`).
+- **Registering:** endpoint classes get their services through the constructor. Register services both hosts run in `AddPhotoSenseCore`, a host's own in `AddPhotoSenseComputer` or `AddPhotoSensePhone`, and endpoint classes in `AddPhotoSenseApi`; a factory lambda is used where a constructor has optional parameters. Add each address to `PhotoSenseRoutes`, a literal address before one a parameter could match (`scan/progress/latest` would go before `scan/progress/{instanceId}`).
 - **Request guard:** an endpoint that reveals or changes someone's files checks `RequestGuard.Allows(req.Headers)` first (the `x-photosense-client` header, which other web pages cannot send). Refusals carry a plain-text reason and a status that says whose fault it is.
 - **Answers:** `ApiResponse` keeps the status it is given, before or after writing, and writes JSON with property names as declared (not camelCase), as the Functions host did and the page expects.
 - **LiteDB:** one shared `LiteDatabase`. Each store's constructor calls `LiteDbMapping.Prepare<T>()` for every mapped type before first use; LiteDB 5 otherwise fails now and then when two stores are first made together.
@@ -99,6 +102,8 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
   - `Http.Get/Post/Delete(...)` with `.FromClient()` (`Tests/Endpoints/ApiTesting.cs`) build requests for endpoint tests; `ServerFixture` gives the service's registrations on a data folder of its own.
   - `FailingDisk` (`Tests/Application/ChangesTesting.cs`) is the real `DiskFileSystem` except that a test makes "move", "copy", "make", "remove folder", "delete", "erase" or "read" fail for the paths it names, on any system. `ChangesFixture` and `OrganizeFixture` use one (`Disk`).
   - `InMemoryFileSystem` (`Tests/InMemoryFileSystem.cs`) keeps photos in memory only; `PhotosNotOnDiskTests` runs Clean up and Organize on it end to end.
+  - `FakePhotoLibrary` (`Tests/FakePhotoLibrary.cs`) is a phone's library in memory; `PhotosOnAPhoneTests` runs the phone's whole stack (`AddPhotoSensePhone`, requests through `InProcessApi`) on it, with Magick.NET standing in for ImageIO.
+  - The iOS app cannot be built here: the Mono toolchain pack for the current runtime is missing, and installing it needs admin. Its compile check is the `iPhone app` workflow, which runs on pushes, so each try needs Jamie's go-ahead to push.
   - `TestFiles` has `Disk` (the real disk), `LinkFolder` and `DenyAccess`.
 - **UI tests:**
   - Tests live in `tests/`, mirroring `app`, `components` and `lib`.

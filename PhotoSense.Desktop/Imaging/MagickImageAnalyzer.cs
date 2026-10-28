@@ -1,17 +1,10 @@
 using ImageMagick;
 using PhotoSense.Domain.Services;
 
-namespace PhotoSense.Infrastructure.Imaging;
+namespace PhotoSense.Desktop.Imaging;
 
 public sealed class MagickImageAnalyzer : IImageAnalyzer
 {
-    public const int SignatureEdge = 32;
-    private const int WorkEdge = 512;
-    private const int ThumbnailEdge = 320;
-
-    // Low-frequency DCT terms 1..8 of a 32-sample row; term 0 (overall brightness) is left out of the hash.
-    private static readonly double[,] Cosines = BuildCosines();
-
     static MagickImageAnalyzer()
     {
         // Files are processed in parallel, one image per thread.
@@ -32,7 +25,7 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
 
     private static ImageAnalysis Analyze(Stream imageStream)
     {
-        using var image = Load(imageStream, WorkEdge);
+        using var image = Load(imageStream, ImageFingerprint.WorkEdge);
         // A JPEG is decoded at reduced size for speed, so its true size comes from the header.
         var sideways = image.Orientation is OrientationType.LeftTop or OrientationType.RightTop or OrientationType.RightBottom or OrientationType.LeftBottom;
         int width = (int)(sideways ? image.BaseHeight : image.BaseWidth), height = (int)(sideways ? image.BaseWidth : image.BaseHeight);
@@ -40,17 +33,17 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
         int? quality = image.Format is MagickFormat.Jpeg or MagickFormat.Jpg && image.Quality > 0 ? (int)image.Quality : null;
 
         image.AutoOrient();
-        if (image.Width > WorkEdge || image.Height > WorkEdge) image.Scale(new MagickGeometry(WorkEdge, WorkEdge));
+        if (image.Width > ImageFingerprint.WorkEdge || image.Height > ImageFingerprint.WorkEdge) image.Scale(new MagickGeometry(ImageFingerprint.WorkEdge, ImageFingerprint.WorkEdge));
         ToStandardColors(image);
 
         using var thumbnail = image.Clone();
-        if (thumbnail.Width > ThumbnailEdge || thumbnail.Height > ThumbnailEdge) thumbnail.Resize(new MagickGeometry(ThumbnailEdge, ThumbnailEdge));
+        if (thumbnail.Width > ImageFingerprint.ThumbnailEdge || thumbnail.Height > ImageFingerprint.ThumbnailEdge) thumbnail.Resize(new MagickGeometry(ImageFingerprint.ThumbnailEdge, ImageFingerprint.ThumbnailEdge));
 
         // Stretched to a square on purpose: aspect ratio is checked separately, and a fixed grid lets two signatures be compared cell by cell.
-        image.Resize(new MagickGeometry(SignatureEdge, SignatureEdge) { IgnoreAspectRatio = true });
+        image.Resize(new MagickGeometry(ImageFingerprint.SignatureEdge, ImageFingerprint.SignatureEdge) { IgnoreAspectRatio = true });
         var signature = Required(image.GetPixels().ToByteArray(PixelMapping.RGB));
 
-        return new ImageAnalysis(width, height, format, quality, PerceptualHash(signature), signature, ToJpeg(thumbnail, 82));
+        return new ImageAnalysis(width, height, format, quality, ImageFingerprint.PerceptualHash(signature), signature, ToJpeg(thumbnail, 82));
     }
 
     /// <summary>The pixels read from an image; the decoder hands back none for an image it could not unpack.</summary>
@@ -81,45 +74,5 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
         image.Format = MagickFormat.Jpeg;
         image.Quality = quality;
         return image.ToByteArray();
-    }
-
-    /// <summary>64-bit DCT hash of a 32x32 RGB grid: one bit per low-frequency term, set when above the median.</summary>
-    public static ulong PerceptualHash(ReadOnlySpan<byte> rgb)
-    {
-        const int n = SignatureEdge;
-        Span<double> luma = stackalloc double[n * n];
-        for (int i = 0; i < luma.Length; i++)
-            luma[i] = 0.299 * rgb[i * 3] + 0.587 * rgb[i * 3 + 1] + 0.114 * rgb[i * 3 + 2];
-
-        Span<double> terms = stackalloc double[64];
-        for (int u = 0; u < 8; u++)
-            for (int v = 0; v < 8; v++)
-            {
-                double sum = 0;
-                for (int y = 0; y < n; y++)
-                {
-                    double cy = Cosines[u, y];
-                    for (int x = 0; x < n; x++) sum += luma[y * n + x] * cy * Cosines[v, x];
-                }
-                terms[u * 8 + v] = sum;
-            }
-
-        Span<double> sorted = stackalloc double[64];
-        terms.CopyTo(sorted);
-        sorted.Sort();
-        var median = sorted[32];
-        ulong hash = 0;
-        for (int i = 0; i < 64; i++)
-            if (terms[i] > median) hash |= 1UL << i;
-        return hash;
-    }
-
-    private static double[,] BuildCosines()
-    {
-        var table = new double[8, SignatureEdge];
-        for (int u = 0; u < 8; u++)
-            for (int x = 0; x < SignatureEdge; x++)
-                table[u, x] = Math.Cos((2 * x + 1) * (u + 1) * Math.PI / (2 * SignatureEdge));
-        return table;
     }
 }

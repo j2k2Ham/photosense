@@ -368,6 +368,8 @@ PhotoSense.ReactUI/coverage/
 PhotoSense.Tests/coverage/coverage.opencover*
 # Next.js build and dev-server output: rebuilt on every run (cache packs, fonts, compiled pages)
 PhotoSense.ReactUI/.next/
+# The page as built to be handed out by a program (publish.ps1, the iPhone app)
+PhotoSense.ReactUI/out/
 
 # Local settings of the UI, such as a Google Maps key
 .env*.local

@@ -1,3 +1,4 @@
+using PhotoSense.Api;
 using Microsoft.Extensions.FileProviders;
 
 namespace PhotoSense.Server;
@@ -10,7 +11,7 @@ public static class PhotoSenseServer
     public static WebApplication Build(string[] args, string? contentRoot = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = contentRoot ?? AppContext.BaseDirectory });
-        builder.Services.AddPhotoSenseCore(builder.Configuration).AddPhotoSenseApi();
+        builder.Services.AddPhotoSenseComputer(builder.Configuration).AddPhotoSenseApi();
         // Any web page can make a browser send a plain request to this machine; only the page's own address
         // is let add the client header that every request touching someone's files must carry.
         var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];
