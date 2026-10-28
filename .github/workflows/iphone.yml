@@ -9,6 +9,17 @@ on:
 
 env:
   BUNDLE: com.j2k2ham.photosense
+  # Each release of .NET for iOS needs one Xcode, and is installed by its workload set on a matching .NET SDK; the
+  # three move together, as each release's notes at https://github.com/dotnet/macios/releases say. GitHub's
+  # macos-26 machines have Xcode 26.x only, so the newest workload (for Xcode 27) cannot build there yet.
+  XCODE: '26.6'
+  DOTNET_SDK: '10.0.401'
+  IOS_WORKLOAD_SET: '10.0.401'
+
+defaults:
+  run:
+    # Unlike GitHub's default on a Mac, a command that fails inside a pipe (a build piped to tee) fails the step.
+    shell: bash
 
 jobs:
   simulator:
@@ -20,12 +31,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use the newest Xcode
+      - name: Use the Xcode the iOS workload needs
         run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
-          sudo xcode-select -s "$xcode"
-          xcodebuild -version
-          echo "::notice title=Xcode::$(xcodebuild -version | head -1) at $xcode"
+          sudo xcode-select -s "/Applications/Xcode_$XCODE.app"
+          echo "::notice title=Xcode::$(xcodebuild -version | head -1)"
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -37,12 +46,12 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: ${{ env.DOTNET_SDK }}
 
       - name: Install the iOS workload
         run: |
-          dotnet workload install ios
-          dotnet workload list
+          dotnet workload install ios --version "$IOS_WORKLOAD_SET"
+          echo "::notice title=iOS workload::$(dotnet workload list | grep -E '^ios ' | tr -s ' ')"
 
       - name: Build the page for the app
         working-directory: PhotoSense.ReactUI
@@ -58,9 +67,11 @@ jobs:
       - name: Say what the build warned of
         if: always()
         run: |
-          grep -E 'warning [A-Z]+[0-9]+' build.log | sed -E 's/.*(warning [A-Z]+[0-9]+: [^[]*).*/\1/' | sort | uniq -c | sort -rn | head -10 |
+          # MSBuild writes "file(line,col): warning CS1234: text [project]", and some errors without a code.
+          pattern=': (warning|error)( [A-Za-z]+[0-9]+)? *:'
+          grep -E "$pattern" build.log | grep -E ': warning' | sed -E 's/.*: (warning( [A-Za-z]+[0-9]+)? *: [^[]*).*/\1/' | sort | uniq -c | sort -rn | head -10 |
             while read -r line; do echo "::warning title=Build::$line"; done
-          grep -E ' error [A-Z]+[0-9]+' build.log | sed -E 's/.*( error [A-Z]+[0-9]+: [^[]*).*/\1/' | sort -u | head -10 |
+          grep -E "$pattern" build.log | grep -E ': error' | sed -E 's/.*: (error( [A-Za-z]+[0-9]+)? *: [^[]*).*/\1/' | sort -u | head -10 |
             while read -r line; do echo "::error title=Build::$line"; done
 
       - name: Start a simulator
@@ -185,9 +196,9 @@ jobs:
         if: env.READY == 'true'
         uses: actions/checkout@v4
 
-      - name: Use the newest Xcode
+      - name: Use the Xcode the iOS workload needs
         if: env.READY == 'true'
-        run: sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)"
+        run: sudo xcode-select -s "/Applications/Xcode_$XCODE.app"
 
       - name: Setup Node
         if: env.READY == 'true'
@@ -199,11 +210,11 @@ jobs:
         if: env.READY == 'true'
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: ${{ env.DOTNET_SDK }}
 
       - name: Install the iOS workload
         if: env.READY == 'true'
-        run: dotnet workload install ios
+        run: dotnet workload install ios --version "$IOS_WORKLOAD_SET"
 
       - name: Build the page for the app
         if: env.READY == 'true'
