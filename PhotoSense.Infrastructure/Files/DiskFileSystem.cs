@@ -49,6 +49,8 @@ public class DiskFileSystem : IPhotoFileSystem
 
     public virtual void Copy(string from, string to) => File.Copy(from, to, overwrite: false);
 
+    public virtual Stream CreateNew(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16);
+
     public virtual void MakeFolder(string path) => Directory.CreateDirectory(path);
 
     public virtual void RemoveEmptyFolder(string path)

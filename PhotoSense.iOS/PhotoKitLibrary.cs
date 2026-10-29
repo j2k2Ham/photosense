@@ -79,7 +79,6 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
                     AlbumChange(take.Key, album).RemoveAssets([.. take.Select(t => assets.GetValueOrDefault(t.Item)).OfType<PHAsset>()]);
             foreach (var add in change.Add.GroupBy(a => Key(a.Album)))
                 AlbumFor(add.First().Album).AddAssets([.. add.Select(a => assets.GetValueOrDefault(a.Item)).OfType<PHAsset>()]);
-            Drop();
             if (change.Delete.Count > 0) PHAssetChangeRequest.DeleteAssets([.. change.Delete.Select(assets.GetValueOrDefault).OfType<PHAsset>()]);
 
             PHAssetCollectionChangeRequest AlbumChange(string key, PHAssetCollection album)
@@ -113,26 +112,6 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
             {
                 using var children = NSArray.FromNSObjects(child);
                 Send(FolderFor(folder).Handle, Selector.GetHandle("addChildCollections:"), children.Handle);
-            }
-
-            // Albums go when nothing is in them, and folders when nothing is left in them.
-            void Drop()
-            {
-                var going = new HashSet<string>();
-                foreach (var path in change.Drop)
-                {
-                    var key = Key(path);
-                    if (known.Albums.GetValueOrDefault(key) is { } album && PHAsset.FetchAssets(album, null).Count == 0)
-                    {
-                        PHAssetCollectionChangeRequest.DeleteAssetCollections([album]);
-                        going.Add(album.LocalIdentifier);
-                    }
-                    else if (known.Folders.GetValueOrDefault(key) is { } folder && Children(folder).All(going.Contains))
-                    {
-                        PHCollectionListChangeRequest.DeleteCollectionLists([folder]);
-                        going.Add(folder.LocalIdentifier);
-                    }
-                }
             }
         }, out var error);
         if (!done)
@@ -178,13 +157,6 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
     {
         var parents = PHCollectionList.FetchCollectionLists(collection, null);
         return parents.Count > 0 ? parents[0] as PHCollectionList : null;
-    }
-
-    private static IEnumerable<string> Children(PHCollectionList folder)
-    {
-        var inside = PHCollection.FetchCollections(folder, null);
-        for (nint i = 0; i < inside.Count; i++)
-            if (inside[i] is PHCollection child) yield return child.LocalIdentifier;
     }
 
     private static string Key(IReadOnlyList<string> path) => string.Join('\u001f', path);

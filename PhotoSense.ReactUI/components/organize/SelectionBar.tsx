@@ -10,13 +10,15 @@ interface BarProps {
   onSelectAll(): void;
   /** Asks which folder the selected files go in: a new one, or one already there. */
   onNewFolder(): void;
+  /** On a phone: offers the selected files to a computer. */
+  onSend?(): void;
   /** Asks to delete the selected files; nothing goes until that is confirmed. */
   onDelete(): void;
   onClear(): void;
 }
 
 /** What can be done with the files that are selected, floating over the foot of the gallery. */
-export function SelectionBar({ count, shown, hint, onSelectAll, onNewFolder, onDelete, onClear }: BarProps) {
+export function SelectionBar({ count, shown, hint, onSelectAll, onNewFolder, onSend, onDelete, onClear }: BarProps) {
   return (
     // A pill across the foot of the gallery, drawn over the pictures it floats above; on a narrow screen a card whose buttons wrap.
     <div role="region" aria-label="Selection" className="relative z-10 mx-3 mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-pop py-2 pl-4 pr-2 shadow-toast sm:mx-6 sm:mb-[18px] sm:flex-nowrap sm:rounded-full sm:pl-5">
@@ -25,6 +27,7 @@ export function SelectionBar({ count, shown, hint, onSelectAll, onNewFolder, onD
       <span className="flex-1" />
       <span className="hidden whitespace-nowrap text-[13px] text-t3 xl:inline">{hint}</span>
       <button type="button" onClick={onNewFolder} className="pill-brand h-[38px] px-[18px] text-[14px]">New folder from these</button>
+      {onSend && <button type="button" onClick={onSend} className="pill-outline h-[38px] px-[18px] text-[14px] font-medium">Send to computer</button>}
       <button type="button" aria-label={`Delete the ${count.toLocaleString()} selected ${count === 1 ? 'file' : 'files'}`} title="Delete the selected files" onClick={onDelete}
         className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-rose-line text-rose-t hover:bg-rose-bg">
         <BinIcon />

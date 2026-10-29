@@ -316,3 +316,50 @@ export type AboutDocument = 'privacy' | 'terms' | 'support' | 'notices';
 export interface PhotoAccessDto {
   access: 'everything' | 'selected' | 'nothing';
 }
+
+/** Where sending photos from this phone to a computer has got to (PhotoSense.Contracts.Transfer.SendStateDto). */
+export interface SendStateDto {
+  stage: 'idle' | 'waiting' | 'comparing' | 'sending' | 'sent' | 'failed';
+  /** The number to compare with the computer's, while it is being compared: "482 917". */
+  code: string | null;
+  computer: string | null;
+  /** Files the computer has said are safely there. */
+  done: number;
+  total: number;
+  bytes: number;
+  totalBytes: number;
+  /** The names of the pictures and videos every file of which is safely on the computer, which can be deleted from the phone. */
+  deletable: string[];
+  /** The folder on the computer the files went to, when they all went to one. */
+  where: string | null;
+  /** What this phone is called, as the computer shows it. */
+  phone: string;
+  problem: string | null;
+}
+export interface DeleteSentDto {
+  deleted: number;
+}
+/** A phone offering photos, found by this computer. */
+export interface FoundPhoneDto {
+  key: string;
+  name: string;
+  via: 'wifi' | 'usb';
+}
+export interface FoundPhonesDto {
+  phones: FoundPhoneDto[];
+}
+/** Where receiving photos from a phone has got to (PhotoSense.Contracts.Transfer.ReceiveStateDto). */
+export interface ReceiveStateDto {
+  stage: 'idle' | 'connecting' | 'comparing' | 'receiving' | 'done' | 'failed';
+  code: string | null;
+  phone: string | null;
+  /** Files that have arrived, those already there among them. */
+  done: number;
+  total: number;
+  bytes: number;
+  totalBytes: number;
+  /** Files of which the very same file was in the folder already, so that nothing was written. */
+  alreadyThere: number;
+  folder: string | null;
+  problem: string | null;
+}

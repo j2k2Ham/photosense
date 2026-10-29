@@ -7,6 +7,10 @@ using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure;
 using PhotoSense.Infrastructure.Files;
+using PhotoSense.Infrastructure.Transfer;
+using PhotoSense.Application.Changes;
+using PhotoSense.Application.Transfer;
+using PhotoSense.Domain.Repositories;
 
 namespace PhotoSense.Server;
 
@@ -25,6 +29,10 @@ public static class PhotoSenseServices
         s.AddSingleton<IPhotoAccess, FolderAccess>();
         s.AddSingleton(ProgramInfo.From(typeof(PhotoSenseServices).Assembly, "server"));
         s.AddHostedService<PutBackUnfinishedChanges>();
+        // Photos come from phones over the network, or through a cable by Apple's device service.
+        s.AddSingleton<IPhoneFinder>(new PhoneFinders(new MdnsPhoneFinder(), new UsbmuxPhoneFinder()));
+        s.AddSingleton(sp => new PhoneReceiving(sp.GetRequiredService<IPhoneFinder>(), sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<IPhotoFileSystem>(),
+            sp.GetRequiredService<FileChanges>(), Environment.MachineName));
         return s.AddPhotoSenseCore();
     }
 }

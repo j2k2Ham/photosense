@@ -9,6 +9,7 @@ import { HelpWindow } from '../components/HelpWindow';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
 import { PhotoWindow } from '../components/PhotoWindow';
+import { ReceiveWindow } from '../components/ReceiveWindow';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { SettingsWindow } from '../components/SettingsWindow';
 import { SetupScreen } from '../components/SetupScreen';
@@ -16,7 +17,7 @@ import { Toaster, useToasts, type ToastAction } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
 import {
   clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, undoChange, useGroups,
-  useScanProgress, useScanStatus,
+  useAbout, useScanProgress, useScanStatus,
 } from '../lib/apiClient';
 import { formatBytes, linkedFiles } from '../lib/format';
 import type { GuidePlace } from '../lib/guide';
@@ -47,6 +48,8 @@ const files = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'
 const NAMED = 4;
 const groupsOf = (n: number, kind: string) => `${n.toLocaleString()} ${kind} ${n === 1 ? 'group' : 'groups'}`;
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** The programs that run on a phone. */
+const PHONES = new Set(['iphone', 'android']);
 
 export default function HomePage() {
   const [theme, setTheme] = useTheme();
@@ -77,6 +80,9 @@ export default function HomePage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
+  // A computer receives photos from a phone; a phone sends them, from Organize.
+  const onPhone = PHONES.has(useAbout().data?.program ?? '');
   // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
   // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
@@ -289,7 +295,8 @@ export default function HomePage() {
         {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
         {menuOpen && (
           <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-            onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} onDeletePermanently={askToErase} />
+            onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} onDeletePermanently={askToErase}
+            onReceive={onPhone ? undefined : () => setReceiveOpen(true)} />
         )}
         {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
 
@@ -444,6 +451,7 @@ export default function HomePage() {
       {helpOpen && <HelpWindow onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {aboutOpen && <AboutWindow onClose={() => setAboutOpen(false)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
+      {receiveOpen && <ReceiveWindow folder={loadOrganizeRoot() || loadLastScan().root} notify={push} onClose={() => setReceiveOpen(false)} />}
 
       <Toaster toasts={toasts} remove={remove} />
     </div>

@@ -21,7 +21,7 @@ describe('the guide itself', () => {
   it('has a topic for each part of PhotoSense, each told from the others, and says where its buttons go', () => {
     expect(GUIDE.map(t => t.title)).toEqual([
       'Getting started', 'Scanning for duplicates', 'Reviewing duplicates', 'Similar shots', 'Organize: suggested folders', 'Organize: folders of your own',
-      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Removed files and deleting permanently', 'Settings, theme, errors and About', 'If something looks wrong',
+      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Sending photos from a phone to a computer', 'Removed files and deleting permanently', 'Settings, theme, errors and About', 'If something looks wrong',
     ]);
     expect(new Set(GUIDE.map(t => t.id)).size).toBe(GUIDE.length);
     expect(GUIDE.filter(t => t.go).map(t => [t.id, t.go!.place])).toEqual([
@@ -57,7 +57,7 @@ describe('the help window', () => {
     expect(topic('Getting started')).toHaveAttribute('aria-current', 'page');
     expect(topic('Similar shots')).not.toHaveAttribute('aria-current');
     expect(page()).toHaveAccessibleName('Getting started');
-    expect(page()).toHaveTextContent('1 of 11');
+    expect(page()).toHaveTextContent('1 of 12');
     expect(within(page()).getByText('What PhotoSense does, and how to find your way around it.')).toBeInTheDocument();
     expect(within(page()).getAllByText('Clean up')[0].tagName).toBe('STRONG');
     expect(page()).not.toHaveTextContent('**');
@@ -85,7 +85,7 @@ describe('the help window', () => {
     expect(within(page()).queryByRole('button', { name: /^Previous/ })).not.toBeInTheDocument();
     await userEvent.click(within(page()).getByRole('button', { name: /^Next\s*Scanning for duplicates$/ }));
     expect(reading()).toBe('Scanning for duplicates');
-    expect(page()).toHaveTextContent('2 of 11');
+    expect(page()).toHaveTextContent('2 of 12');
     await userEvent.click(within(page()).getByRole('button', { name: /^Previous\s*Getting started$/ }));
     expect(reading()).toBe('Getting started');
     await userEvent.click(topic('If something looks wrong'));

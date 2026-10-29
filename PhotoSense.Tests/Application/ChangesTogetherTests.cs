@@ -63,6 +63,7 @@ internal sealed class TogetherFiles : IPhotoFileSystem, IPhotoChangesTogether
     public bool IsCopyOf(string copy, string original) => _files.IsCopyOf(copy, original);
     public void Move(string from, string to) => throw new InvalidOperationException("Moved one at a time.");
     public void Copy(string from, string to) => throw new UnauthorizedAccessException("Never copied.");
+    public Stream CreateNew(string path) => _files.CreateNew(path);
     public void MakeFolder(string path) => _files.MakeFolder(path);
     public void RemoveEmptyFolder(string path) => throw new InvalidOperationException("Taken away one at a time.");
     public void DeleteCopy(string path) => throw new InvalidOperationException("Never copied.");

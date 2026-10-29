@@ -60,6 +60,12 @@ internal sealed class FailingDisk : DiskFileSystem
         base.MakeFolder(path);
     }
 
+    public override Stream CreateNew(string path)
+    {
+        Check("create", path);
+        return base.CreateNew(path);
+    }
+
     public override void RemoveEmptyFolder(string path)
     {
         Check("remove folder", path);

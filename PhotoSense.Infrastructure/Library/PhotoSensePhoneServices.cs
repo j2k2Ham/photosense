@@ -1,7 +1,11 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PhotoSense.Domain.Configuration;
+using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Transfer;
+using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
+using PhotoSense.Infrastructure.Transfer;
 
 namespace PhotoSense.Infrastructure.Library;
 
@@ -15,9 +19,12 @@ public static class PhotoSensePhoneServices
     /// records kept in <paramref name="dataFolder"/> and its previews in <paramref name="cacheFolder"/>, which the
     /// phone may empty when it runs short of space.
     /// </summary>
+    /// <param name="advertiser">Tells computers on the network that the phone is offering photos.</param>
+    /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
+    /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
-        string dataFolder, string cacheFolder, string root = LibraryRoot)
+        string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, string name, string root = LibraryRoot, ITransferListener? listener = null)
     {
         s.AddSingleton(Options.Create(new PhotoStorageOptions
         {
@@ -31,6 +38,8 @@ public static class PhotoSensePhoneServices
         s.AddSingleton(analyzer);
         s.AddSingleton<ISystemViewer, PhoneViewer>();
         s.AddSingleton<IFolderBrowser, PhotoLibraryBrowser>();
+        s.AddSingleton(sp => new PhoneSending(listener ?? new TcpTransferListener(), advertiser, sp.GetRequiredService<IPairingStore>(), photos,
+            sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<OrganizeLibrary>(), name));
         return s.AddPhotoSenseCore();
     }
 }

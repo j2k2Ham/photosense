@@ -185,6 +185,7 @@ public sealed class PhotoLibraryFileSystemTests
             .IsEqualTo("IMG_1.JPG keeps its own name on the phone, so it cannot arrive as Other.JPG.");
         await Assert.That(Assert.Throws<UnauthorizedAccessException>(() => _photos.Move(picture, In(Path.Combine("..", "Elsewhere", "IMG_1.JPG"))))!.Message).Contains("is not in the photo library.");
         await Assert.That(Assert.Throws<UnauthorizedAccessException>(() => _photos.MakeFolder(In(Path.Combine("..", "Elsewhere"))))!.Message).Contains("is not in the photo library.");
+        await Assert.That(Assert.Throws<UnauthorizedAccessException>(() => _photos.CreateNew(In("New.JPG")))!.Message).IsEqualTo("PhotoSense does not put new files in a phone's photo library.");
         await Assert.That(Assert.Throws<FileNotFoundException>(() => _photos.Move(In("IMG_9.JPG"), In(Path.Combine("Trips", "IMG_9.JPG"))))!.Message).IsEqualTo("IMG_9.JPG is no longer in the photo library.");
         await Assert.That(Assert.Throws<IOException>(() => _photos.MoveAll([new FileMove(picture, In(Path.Combine("A", "IMG_1.JPG"))), new FileMove(picture, In(Path.Combine("B", "IMG_1.JPG")))]))!.Message)
             .IsEqualTo("IMG_1.JPG cannot go to two albums at once.");
@@ -225,33 +226,31 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Empty_Albums_Go_With_The_Folders_They_Leave_Empty_In_One_Change_And_One_That_Holds_Anything_Stays()
+    public async Task Emptied_Albums_Stay_So_The_Phone_Never_Asks_And_Only_Folders_Made_For_Pictures_That_Never_Came_Go()
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Album(["Butte", "2022"]);
         _library.Album(["Trips"], "A1");
-        _library.Album(["Kept", "Old"]);
-        _library.Album(["Kept", "New"]);
         var made = In(Path.Combine("Made", "For later"));
         _photos.MakeFolder(made);
+        var holding = In(Path.Combine("Holding", "Inside"));
+        _photos.MakeFolder(holding);
 
-        _photos.RemoveEmptyFolders([In("Butte"), In(Path.Combine("Butte", "2022")), In("Trips"), In(Path.Combine("Kept", "Old")), In("Kept"), made, In("Made"), Root, In("Nowhere")]);
-        var change = _library.Changes.Single();
-        // Kept still holds an album after its old one goes; the folders only made for later go without a change.
-        await Assert.That(change.Drop.Select(d => string.Join('/', d))).IsEquivalentTo(["Butte/2022", "Kept/Old", "Butte"], CollectionOrdering.Matching);
-        await Assert.That((_photos.FolderExists(made), _photos.FolderExists(In("Trips")), _photos.FolderExists(In(Path.Combine("Kept", "New"))))).IsEqualTo((false, true, true));
+        _photos.RemoveEmptyFolders([In("Butte"), In(Path.Combine("Butte", "2022")), In("Trips"), made, In("Made"), In("Holding"), Root, In("Nowhere")]);
+        await Assert.That(_library.Changes).IsEmpty();
+        await Assert.That((_photos.FolderExists(In(Path.Combine("Butte", "2022"))), _photos.FolderExists(In("Trips")), _photos.FolderExists(made), _photos.FolderExists(In("Made"))))
+            .IsEqualTo((true, true, false, false));
+        // A folder still holding one made for later stays with it.
+        await Assert.That((_photos.FolderExists(holding), _photos.FolderExists(In("Holding")))).IsEqualTo((true, true));
 
-        // A folder made for pictures that became an album, and was emptied again, goes as an album.
+        // A folder made for pictures that became an album, and was emptied again, stays as that album.
         var glacier = In("Glacier");
         _photos.MakeFolder(glacier);
         _photos.Move(In(Path.Combine("Trips", "IMG_1.JPG")), Path.Combine(glacier, "IMG_1.JPG"));
         _photos.Move(Path.Combine(glacier, "IMG_1.JPG"), In("IMG_1.JPG"));
-        _photos.RemoveEmptyFolder(glacier);
-        await Assert.That(string.Join('/', _library.Changes[^1].Drop.Single())).IsEqualTo("Glacier");
-        // Nothing to take away: no change.
         var changes = _library.Changes.Count;
-        _photos.RemoveEmptyFolders([In("Nowhere")]);
-        await Assert.That(_library.Changes.Count).IsEqualTo(changes);
+        _photos.RemoveEmptyFolder(glacier);
+        await Assert.That((_library.Changes.Count, _photos.FolderExists(glacier), _library.InAlbums()["Glacier"].Length)).IsEqualTo((changes, true, 0));
     }
 
     [Test]

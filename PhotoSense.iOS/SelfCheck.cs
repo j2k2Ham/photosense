@@ -82,8 +82,6 @@ public static class SelfCheck
             });
             const files = await step('Organize lists the library', async () =>
               (await (await ask('organize/files?root=' + encodeURIComponent(root))).json()).files);
-            // What makes albums comes first, what takes them away last: should the phone stop to ask about taking one
-            // away, the steps before it have still been made.
             const moved = await step('Organize puts a picture in an album in a folder', async () => {
               const picture = files.find(f => !f.isVideo);
               const done = await (await ask('organize/apply', { method: 'POST', body: JSON.stringify({
@@ -107,6 +105,13 @@ public static class SelfCheck
               const undone = await (await ask('organize/undo/' + moved.batchId, { method: 'POST' })).json();
               if (undone.restored < 1) throw new Error(JSON.stringify(undone));
               return undone.restored;
+            });
+            await step('a photo is offered to a computer, and no longer once stopped', async () => {
+              const picture = files.find(f => !f.isVideo);
+              const offering = await (await ask('send/start', { method: 'POST', body: JSON.stringify({ files: [picture.id] }) })).json();
+              const stopped = await (await ask('send/stop', { method: 'POST' })).json();
+              if (offering.stage !== 'waiting' || stopped.stage !== 'idle') throw new Error(JSON.stringify({ offering, stopped }));
+              return { offering: offering.stage, total: offering.total, phone: offering.phone, stopped: stopped.stage };
             });
             report.photos = status.totalPhotos;
             report.passed = true;

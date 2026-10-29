@@ -71,8 +71,6 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
             if (Find(path) is not { } album) _albums.Add(album = ([.. path], []));
             if (!album.Items.Contains(item)) album.Items.Add(item);
         }
-        // A folder holds no pictures of its own here: it is there while an album in it is.
-        foreach (var path in change.Drop) _albums.RemoveAll(a => a.Path.SequenceEqual(path) && a.Items.Count == 0);
         foreach (var id in change.Delete)
         {
             _items.RemoveAll(i => i.Id == id);

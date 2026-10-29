@@ -96,11 +96,19 @@ describe('AppMenu', () => {
 
   it('switches the theme without closing', async () => {
     const { onTheme, onClose } = show();
+    expect(screen.queryByRole('menuitem', { name: 'Receive from phone' })).not.toBeInTheDocument();
     expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
     expect(onTheme).toHaveBeenCalledExactlyOnceWith('light');
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('on a computer, receives photos from a phone', async () => {
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn(), onReceive: vi.fn() };
+    render(<AppMenu theme="dark" errorCount={0} {...handlers} />);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Receive from phone' }));
+    expect([handlers.onReceive.mock.calls.length, handlers.onClose.mock.calls.length]).toEqual([1, 1]);
   });
 
   it('marks light as chosen when it is', () => {

@@ -7,6 +7,7 @@ using PhotoSense.Api.Hosting;
 using PhotoSense.Api.Http;
 using PhotoSense.Desktop.Imaging;
 using PhotoSense.Infrastructure.Library;
+using PhotoSense.Infrastructure.Transfer;
 
 namespace PhotoSense.Tests.Application;
 
@@ -23,13 +24,14 @@ public sealed class PhotosOnAPhoneTests : IDisposable
     private readonly FakePhotoLibrary _library = new();
     private readonly FakePhotoAccess _access = new() { Current = PhotoSense.Domain.Services.PhotoAccess.Selected };
     private readonly ServiceProvider _services;
+    internal FakeAdvertiser Advertiser { get; } = new();
     private readonly ApiRouter _router;
 
     public PhotosOnAPhoneTests()
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), _root)
+            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for PhotoSense for iPhone and iPad"))
             .BuildServiceProvider();
@@ -78,7 +80,8 @@ public sealed class PhotosOnAPhoneTests : IDisposable
         await Assert.That(copied.GetRawText()).Contains("it can be moved there, not copied.");
 
         await JsonAsync("POST", $"organize/undo/{moved.GetProperty("batchId").GetString()}");
-        await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums().Count)).IsEqualTo((3, 0));
+        // The album stays, empty: the phone would ask before an app took it away.
+        await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums()["Butte/2022"].Length)).IsEqualTo((3, 0));
     }
 
     [Test]
@@ -98,7 +101,7 @@ public sealed class PhotosOnAPhoneTests : IDisposable
         await Assert.That((refused.GetProperty("erased").GetInt32(), refused.GetProperty("skipped").GetInt32(), refused.GetProperty("problems")[0].GetString())).IsEqualTo((0, 1, "You chose not to delete these photos."));
 
         var erased = await JsonAsync("POST", "removed/erase", new { folders = new[] { removedFolder } });
-        await Assert.That((erased.GetProperty("erased").GetInt32(), _library.RecentlyDeleted.Single(), _library.InAlbums().Count)).IsEqualTo((1, "BBBBBBBB-2", 0));
+        await Assert.That((erased.GetProperty("erased").GetInt32(), _library.RecentlyDeleted.Single(), _library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length)).IsEqualTo((1, "BBBBBBBB-2", 0));
     }
 
     public void Dispose()
@@ -153,14 +156,14 @@ public sealed class PhotosOnAPhoneTests : IDisposable
         await Assert.That(listed.GetProperty("files").GetArrayLength()).IsEqualTo(4);
 
         // The copy goes, with its Live Photo video, into the album of removed pictures, in one change; the person
-        // is asked nothing, and Undo takes it back, the album with it.
+        // is asked nothing, and Undo takes it back, leaving the album empty.
         var photos = _services.GetRequiredService<PhotoLibraryFileSystem>();
         var removed = await JsonAsync("POST", "photos/bulk/remove-duplicates");
         await Assert.That((removed.GetProperty("removed").GetInt32(), removed.GetProperty("companions").GetInt32(), _library.Changes.Count)).IsEqualTo((1, 1, 1));
         await Assert.That(_library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length).IsEqualTo(1);
         await Assert.That((photos.FilesIn(_root).Count, photos.FilesIn(Path.Combine(_root, "_PhotoSense_Removed")).Count)).IsEqualTo((2, 2));
         await JsonAsync("POST", $"organize/undo/{removed.GetProperty("batchId").GetString()}");
-        await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums().Count, _library.RecentlyDeleted.Count)).IsEqualTo((4, 0, 0));
+        await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length, _library.RecentlyDeleted.Count)).IsEqualTo((4, 0, 0));
 
         // What PhotoSense records is kept where the phone keeps an app's own files, and the previews where it may clear them.
         await Assert.That((File.Exists(Path.Combine(In("Documents"), "photosense.db")), Directory.EnumerateFiles(Path.Combine(In("Caches"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))

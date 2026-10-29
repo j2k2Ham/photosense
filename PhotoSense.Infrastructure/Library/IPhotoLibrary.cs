@@ -34,13 +34,10 @@ public sealed class LibraryChange
     /// <summary>Pictures and videos to take out of an album of PhotoSense's. They stay in the library.</summary>
     public List<(string Item, IReadOnlyList<string> Album)> Take { get; } = [];
 
-    /// <summary>Albums or folders of PhotoSense's to take away, each only when nothing is in it.</summary>
-    public List<IReadOnlyList<string>> Drop { get; } = [];
-
     /// <summary>Pictures and videos to delete. A phone keeps what is deleted in its own bin for a while, Recently Deleted on an iPhone.</summary>
     public List<string> Delete { get; } = [];
 
-    public bool IsEmpty => Add.Count == 0 && Take.Count == 0 && Drop.Count == 0 && Delete.Count == 0;
+    public bool IsEmpty => Add.Count == 0 && Take.Count == 0 && Delete.Count == 0;
 }
 
 /// <summary>

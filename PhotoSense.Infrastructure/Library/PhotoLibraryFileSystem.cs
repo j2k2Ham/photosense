@@ -93,6 +93,9 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
 
     public void Copy(string from, string to) => throw new UnauthorizedAccessException(NoCopies);
 
+    /// <summary>Photos arrive on a computer from a phone, not on the phone.</summary>
+    public Stream CreateNew(string path) => throw new UnauthorizedAccessException("PhotoSense does not put new files in a phone's photo library.");
+
     public void MakeFolder(string path)
     {
         for (var at = Inside(path); !Same(at, Root); at = Path.GetDirectoryName(at)!) _made.Add(at);
@@ -143,21 +146,16 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         Apply(change);
     }
 
+    /// <summary>
+    /// Forgets the folders made for pictures that never came. An album emptied stays, as the folder it is in does:
+    /// iOS asks the person before an app takes an album away, and an empty album does no harm.
+    /// </summary>
     public void RemoveEmptyFolders(IReadOnlyList<string> folders)
     {
         var seen = Look();
-        var change = new LibraryChange();
-        var going = new HashSet<string>(PhotoPath.Comparer);
-        // Deepest first: a folder whose folders go with it is empty too.
+        // Deepest first: a folder whose folders were forgotten is empty too.
         foreach (var folder in folders.Select(Path.TrimEndingDirectorySeparator).OrderByDescending(f => f.Length))
-        {
-            if (Same(folder, Root) || !FolderExists(folder) || going.Contains(folder)) continue;
-            if (seen.Files.Values.Any(f => Same(f.Folder, folder)) || FoldersIn(folder).Any(f => !going.Contains(f))) continue;
-            going.Add(folder);
-            _made.Remove(folder);
-            if (seen.Folders.Contains(folder)) change.Drop.Add(NamesOf(folder, seen));
-        }
-        Apply(change);
+            if (!seen.Files.Values.Any(f => Same(f.Folder, folder)) && FoldersIn(folder).Count == 0) _made.Remove(folder);
     }
 
     private void Apply(LibraryChange change)

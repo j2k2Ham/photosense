@@ -285,10 +285,18 @@ describe('the selection bar', () => {
   it('says how many are selected and offers to take them all, put them in a folder, or let them go', async () => {
     const { onSelectAll, onNewFolder, onClear } = show({ hint: 'or add them to one of your folders' });
     expect(bar()).toHaveTextContent('6 selectedSelect all 4,212 shownor add them to one of your foldersNew folder from theseClear');
+    expect(within(bar()).queryByRole('button', { name: 'Send to computer' })).not.toBeInTheDocument();
     await userEvent.click(within(bar()).getByRole('button', { name: 'Select all 4,212 shown' }));
     await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
     await userEvent.click(within(bar()).getByRole('button', { name: 'Clear' }));
     expect([onSelectAll, onNewFolder, onClear].map(f => f.mock.calls.length)).toEqual([1, 1, 1]);
+  });
+
+  it('on a phone, offers to send the selected files to a computer', async () => {
+    const onSend = vi.fn();
+    show({ onSend });
+    await userEvent.click(within(bar()).getByRole('button', { name: 'Send to computer' }));
+    expect(onSend).toHaveBeenCalledOnce();
   });
 
   it('is drawn over the pictures it floats above, so that none of them covers its edge', () => {

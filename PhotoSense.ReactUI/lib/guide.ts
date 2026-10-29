@@ -77,7 +77,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'On an iPhone or iPad',
         text: [
           'The phone\'s photos are the one folder, **Photo Library**. If you let PhotoSense see only some of them, the scan screen says so: **Choose more photos** opens the phone\'s own picker, and **Open Settings** goes to where all of them can be allowed.',
-          'There, a folder is an album. Organizing a photo puts it in an album, inside a folder where the name has a \\, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied.',
+          'There, a folder is an album. Organizing a photo puts it in an album, inside a folder where the name has a \\, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied. An album left empty, by **Undo** or otherwise, stays in Photos until you delete it there.',
           'What you delete waits in an album called **PhotoSense Removed**, where **Undo** can still take it back. **Delete permanently** sends it to the phone\'s **Recently Deleted**, which keeps it for 30 days; the phone asks you first.',
         ],
       },
@@ -293,6 +293,36 @@ export const GUIDE: GuideTopic[] = [
     ],
   },
   {
+    id: 'phone',
+    title: 'Sending photos from a phone to a computer',
+    summary: 'Moving photos off an iPhone or iPad to PhotoSense on a computer, over Wi-Fi or a cable, and then off the phone.',
+    sections: [
+      {
+        text: [
+          'PhotoSense on the phone sends photos straight to PhotoSense on your computer. They go over your own Wi-Fi, or through a cable plugged into the computer, never through the internet, and no one else on the network can read them.',
+          'On Windows, sending through a cable needs Apple’s **Apple Devices** app or iTunes on the computer. Over Wi-Fi the phone and the computer need to be on the same network.',
+        ],
+      },
+      {
+        heading: 'Sending',
+        steps: [
+          'On the phone, open **Organize**, select the photos and choose **Send to computer**. Their Live Photo videos and edits go with them. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
+          'On the computer, choose **Receive from phone** in the menu. Pick the phone, and the folder the photos go to with **Change**, then press **Receive into** that folder.',
+          'The first time, the phone and the computer each show a six-digit number. If they are the same, press **They match** on both. If not, press **They don’t match**: something else may be trying to connect. After that the two know each other and do not ask again.',
+          'The photos arrive. Each is checked, and only a photo that arrived whole is kept. One the very same as a file already in the folder is not copied again, and one whose name is taken there arrives under a new name: nothing on the computer is replaced.',
+        ],
+      },
+      {
+        heading: 'Deleting them from the phone afterwards',
+        tips: [
+          'Once they have arrived, the phone offers **Delete** them **from this phone**. It names what goes, and says the copies on the computer stay.',
+          'Only photos that are safely on the computer, with every file that belongs to them, are deleted. They go to **Recently Deleted** on the phone, where they stay for 30 days; the phone asks you first.',
+          'Close the window instead to keep them on the phone too.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'removed',
     title: 'Removed files and deleting permanently',
     summary: 'Where deleted files wait, how to put one back, and how to erase them for good.',
@@ -338,6 +368,7 @@ export const GUIDE: GuideTopic[] = [
           '**Theme** switches between dark and light.',
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
           '**Settings** has the switch for the second question before deleting permanently. Settings are kept in this browser.',
+          '**Receive from phone**, on a computer, takes in photos a phone with PhotoSense sends.',
           '**Help** opens this guide.',
           '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
         ],

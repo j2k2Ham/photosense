@@ -11,6 +11,7 @@ import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto } from '..
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
+import { SendWindow } from '../SendWindow';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { FileGallery, type FileFilter, type FileKind } from './FileGallery';
 import { FolderDialog, type FolderPlace } from './FolderDialog';
@@ -70,6 +71,8 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const [focus, setFocus] = useState<Focus>();
   // Which folder the selected files go in is being asked.
   const [making, setMaking] = useState(false);
+  // The files being offered to a computer, by their ids, while the window that does it is open.
+  const [sending, setSending] = useState<string[]>();
   const [dragging, setDragging] = useState<string[]>([]);
   const [preview, setPreview] = useState<Target>();
   const [mode, setMode] = useState<'move' | 'copy'>('move');
@@ -361,7 +364,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
               onPick={pick} onOpen={open} onDragStart={f => setDragging(picked.has(f.id) ? [...picked] : [f.id])} onDragEnd={() => setDragging([])} />
             {picked.size > 0 && (
               <SelectionBar count={picked.size} shown={shown.length} hint={folders.length > 0 ? 'or add them to one of your folders' : ''}
-                onSelectAll={() => setPicked(new Set(shown.map(f => f.id)))} onNewFolder={() => setMaking(true)} onDelete={askToDelete} onClear={clearPicks} />
+                onSelectAll={() => setPicked(new Set(shown.map(f => f.id)))} onNewFolder={() => setMaking(true)} onSend={onPhone ? () => setSending([...picked]) : undefined} onDelete={askToDelete} onClear={clearPicks} />
             )}
           </section>
           <SuggestionsPanel className={pane === 'folders' ? 'flex' : 'hidden lg:flex'} settings={settings} showMap={showMap} suggestions={suggestions} map={map} focus={focus} unplaced={noPlace.length} folders={own} picked={picked.size}
@@ -395,6 +398,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
         <FolderDialog count={picked.size} root={root} taken={own.map(f => f.path!)} onDone={createFolder} onCancel={() => setMaking(false)} />
       )}
       {browsing && <FolderPicker title="Choose a folder to organize" startAt={root} onPick={chooseRoot} onCancel={() => setBrowsing(false)} />}
+      {sending && <SendWindow files={sending} notify={notify} onClose={() => setSending(undefined)} />}
     </>
   );
 }

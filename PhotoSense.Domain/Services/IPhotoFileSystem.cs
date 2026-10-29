@@ -45,6 +45,9 @@ public interface IPhotoFileSystem
     /// <summary>Copies a file. It never replaces one.</summary>
     void Copy(string from, string to);
 
+    /// <summary>A new file to write, as one arriving from a phone. It never replaces one: should a file stand at <paramref name="path"/>, it fails.</summary>
+    Stream CreateNew(string path);
+
     void MakeFolder(string path);
 
     /// <summary>Takes away a folder that is empty; one that holds anything stays.</summary>

@@ -25,6 +25,17 @@ vi.mock('../../components/organize/OrganizeView', () => ({
   ),
 }));
 
+// Receiving from a phone is tested on its own; here it says where the photos would go.
+vi.mock('../../components/ReceiveWindow', () => ({
+  ReceiveWindow: ({ folder, notify, onClose }: { folder?: string; notify(message: string, kind: 'ok'): void; onClose(): void }) => (
+    <div role="dialog" aria-label="Receive from phone">
+      Into {folder || 'no folder'}
+      <button type="button" onClick={() => notify('Received', 'ok')}>Say something</button>
+      <button type="button" onClick={onClose}>Close receiving</button>
+    </div>
+  ),
+}));
+
 // Two groups: a picture with two copies, and another with one.
 const copyA1 = member({ id: 'a1', fileName: 'IMG_4198 (1).JPG' }, 'identical', 'Same quality; kept the one with the plainer name');
 const copyA2 = member({ id: 'a2', fileName: 'IMG_4198.HEIC', format: 'HEIC', fileSizeBytes: 3_046_000 }, 'samePicture', 'Opens everywhere: JPEG rather than HEIC');
@@ -864,6 +875,35 @@ describe('about', () => {
     expect(about()).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(about()).not.toBeInTheDocument();
+  });
+});
+
+describe('receiving from a phone', () => {
+  const receiving = () => screen.queryByRole('dialog', { name: 'Receive from phone' });
+
+  it('is in the menu of a computer, into the folder last organized or else the one last scanned', async () => {
+    window.localStorage.setItem('photosense-organize-root', 'C:\Phone Pictures');
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Receive from phone' }));
+    expect(receiving()).toHaveTextContent('Into C:\Phone Pictures');
+    await userEvent.click(screen.getByRole('button', { name: 'Say something' }));
+    expect(await screen.findByText('Received')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Close receiving' }));
+    expect(receiving()).not.toBeInTheDocument();
+
+    window.localStorage.setItem('photosense-organize-root', '');
+    window.localStorage.setItem('photosense-last-scan', JSON.stringify({ root: 'D:\Scanned' }));
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Receive from phone' }));
+    expect(receiving()).toHaveTextContent('Into D:\Scanned');
+  });
+
+  it('is not in the menu of a phone, which sends them', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    open();
+    await click('Menu');
+    expect(screen.queryByRole('menuitem', { name: 'Receive from phone' })).not.toBeInTheDocument();
   });
 });
 

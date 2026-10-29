@@ -91,6 +91,27 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
         }
     }
 
+    public Stream CreateNew(string path)
+    {
+        lock (_lock)
+        {
+            if (_files.ContainsKey(path)) throw new IOException($"{System.IO.Path.GetFileName(path)} is there already.");
+            if (!_folders.ContainsKey(System.IO.Path.GetDirectoryName(path)!)) throw new DirectoryNotFoundException($"No folder for {path}.");
+            // The file is there, empty, from the start, and holds what was written once it is closed.
+            _files[path] = (path, [], _clock = _clock.AddSeconds(1));
+            return new Written(bytes => { lock (_lock) _files[path] = (path, bytes, _clock = _clock.AddSeconds(1)); });
+        }
+    }
+
+    private sealed class Written(Action<byte[]> written) : MemoryStream
+    {
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) written(ToArray());
+            base.Dispose(disposing);
+        }
+    }
+
     public void MakeFolder(string path)
     {
         lock (_lock)

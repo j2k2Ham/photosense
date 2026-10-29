@@ -16,6 +16,16 @@ vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOrigin
 // What has been read so far of a folder that is still being read.
 const soFar = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/useOrganizeReading', () => ({ useOrganizeReading: soFar }));
+// Sending from a phone is tested on its own; here it says what it was given.
+vi.mock('../../components/SendWindow', () => ({
+  SendWindow: ({ files, notify, onClose }: { files: string[]; notify(message: string, kind: 'ok'): void; onClose(): void }) => (
+    <div role="dialog" aria-label="Send to computer">
+      Sending {files.join(', ')}
+      <button type="button" onClick={() => notify('Sent', 'ok')}>Say sent</button>
+      <button type="button" onClick={onClose}>Close sending</button>
+    </div>
+  ),
+}));
 
 const ROOT = 'C:\\Users\\jamie\\Phone Pictures', OTHER = 'D:\\Backup\\Phone 2022';
 const PLACES = [
@@ -588,6 +598,24 @@ describe('selecting files and making folders', () => {
     await userEvent.click(within(panel()).getByRole('button', { name: 'Show the files for Anaconda' }));
     await userEvent.click(within(panel()).getByRole('button', { name: 'Remove Family' }));
     expect(screen.getByText('Suggested: Anaconda')).toBeInTheDocument();
+  });
+});
+
+describe('sending files from a phone', () => {
+  it('offers the selected files to a computer from the bar under them, on a phone only', async () => {
+    const { refresh } = open();
+    await userEvent.click(tile('a1.JPG'));
+    await userEvent.click(tile('b1.JPG'));
+    expect(within(bar()).queryByRole('button', { name: 'Send to computer' })).not.toBeInTheDocument();
+
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } });
+    refresh();
+    await userEvent.click(within(bar()).getByRole('button', { name: 'Send to computer' }));
+    expect(screen.getByRole('dialog', { name: 'Send to computer' })).toHaveTextContent('Sending a1, b1');
+    await userEvent.click(screen.getByRole('button', { name: 'Say sent' }));
+    expect(notify).toHaveBeenLastCalledWith('Sent', 'ok');
+    await userEvent.click(screen.getByRole('button', { name: 'Close sending' }));
+    expect(screen.queryByRole('dialog', { name: 'Send to computer' })).not.toBeInTheDocument();
   });
 });
 

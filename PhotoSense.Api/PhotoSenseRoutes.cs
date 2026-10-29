@@ -9,7 +9,7 @@ public sealed class PhotoSenseRoutes
 {
     public PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
-        RemovedEndpoints removed)
+        RemovedEndpoints removed, TransferEndpoints transfer)
     {
         Router = new ApiRouter()
             .Get("health", (r, _) => health.GetAsync(r))
@@ -44,7 +44,17 @@ public sealed class PhotoSenseRoutes
             .Get("organize/files/{id}/image", (r, v) => organize.ImageAsync(r, v["id"]))
             .Post("organize/files/{id}/open", (r, v) => organize.OpenAsync(r, v["id"]))
             .Get("removed", (r, _) => removed.FindAsync(r))
-            .Post("removed/erase", (r, _) => removed.EraseAsync(r));
+            .Post("removed/erase", (r, _) => removed.EraseAsync(r))
+            .Post("send/start", (r, _) => transfer.StartSendingAsync(r))
+            .Get("send/state", (r, _) => transfer.SendingAsync(r))
+            .Post("send/confirm", (r, _) => transfer.ConfirmSendingAsync(r))
+            .Post("send/stop", (r, _) => transfer.StopSendingAsync(r))
+            .Post("send/delete-sent", (r, _) => transfer.DeleteSentAsync(r))
+            .Get("phones", (r, _) => transfer.PhonesAsync(r))
+            .Post("receive/start", (r, _) => transfer.StartReceivingAsync(r))
+            .Get("receive/state", (r, _) => transfer.ReceivingAsync(r))
+            .Post("receive/confirm", (r, _) => transfer.ConfirmReceivingAsync(r))
+            .Post("receive/stop", (r, _) => transfer.StopReceivingAsync(r));
     }
 
     public ApiRouter Router { get; }

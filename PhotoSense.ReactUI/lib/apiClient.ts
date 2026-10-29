@@ -1,7 +1,7 @@
 import useSWR, { mutate } from 'swr';
 import type {
-  AboutDocument, AboutDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PhotoAccessDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
+  AboutDocument, AboutDto, BulkRemovalResultDto, DeleteSentDto, EraseRemovedDto, FolderListingDto, FoundPhonesDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PhotoAccessDto, ReceiveStateDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, SendStateDto, StartScanRequest,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -275,3 +275,54 @@ export async function eraseRemoved(folders: string[]) {
   await mutate((key: unknown) => typeof key === 'string' && key.includes('/organize/batches'));
   return result;
 }
+
+// ---- Sending photos from a phone to a computer
+
+const sendStateUrl = `${API_BASE}/send/state`;
+
+/** Where sending from this phone has got to, asked every second while it is shown. */
+export function useSendState() {
+  return useSWR<SendStateDto>(sendStateUrl, json, { refreshInterval: 1000 });
+}
+
+async function sending(path: string, body?: object) {
+  const state = await json<SendStateDto>(`${API_BASE}/send/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
+  await mutate(sendStateUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Offers these files, by the ids Organize gave them, to the computer that connects next. */
+export const startSending = (files: string[]) => sending('start', { files });
+/** Says whether the number on the computer is the one on the phone. */
+export const confirmSending = (same: boolean) => sending('confirm', { same });
+export const stopSending = () => sending('stop');
+
+/** Deletes from the phone what is safely on the computer; the phone asks first, and keeps them in Recently Deleted. */
+export async function deleteSent() {
+  const result = await json<DeleteSentDto>(`${API_BASE}/send/delete-sent`, { method: 'POST' });
+  await Promise.all([refreshOrganize(), mutate(sendStateUrl)]);
+  return result;
+}
+
+const receiveStateUrl = `${API_BASE}/receive/state`;
+
+/** The phones offering photos now, looked for again every few seconds while they are being chosen from. */
+export function usePhones(looking: boolean) {
+  return useSWR<FoundPhonesDto>(looking ? `${API_BASE}/phones` : null, json, { refreshInterval: 3000 });
+}
+
+/** Where receiving from a phone has got to, asked every second while it goes on. */
+export function useReceiveState(receiving: boolean) {
+  return useSWR<ReceiveStateDto>(receiving ? receiveStateUrl : null, json, { refreshInterval: 1000 });
+}
+
+async function receiving(path: string, body?: object) {
+  const state = await json<ReceiveStateDto>(`${API_BASE}/receive/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
+  await mutate(receiveStateUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Receives what the phone found offers, into a folder of this computer. */
+export const startReceiving = (phone: string, folder: string) => receiving('start', { phone, folder });
+export const confirmReceiving = (same: boolean) => receiving('confirm', { same });
+export const stopReceiving = () => receiving('stop');

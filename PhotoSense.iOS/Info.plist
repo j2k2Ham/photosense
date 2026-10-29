@@ -30,6 +30,12 @@
     <string>Assets.xcassets/AppIcon.appiconset</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>PhotoSense looks through your photos for copies and for shots that look alike, and shows them by place and date.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>PhotoSense sends the photos you choose to PhotoSense on your computer, over your Wi-Fi.</string>
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_photosense._tcp</string>
+    </array>
     <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
     <true/>
     <key>ITSAppUsesNonExemptEncryption</key>

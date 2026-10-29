@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Application.Transfer;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Scanning;
@@ -28,6 +29,8 @@ public static class PhotoSenseApiServices
         s.AddSingleton<ScanLogsEndpoints>();
         s.AddSingleton<OrganizeEndpoints>();
         s.AddSingleton<RemovedEndpoints>();
+        // A phone sends and a computer receives: each program has the one half.
+        s.AddSingleton(sp => new TransferEndpoints(sp.GetService<PhoneSending>(), sp.GetService<PhoneReceiving>()));
         s.AddSingleton<PhotoSenseRoutes>();
         return s;
     }
