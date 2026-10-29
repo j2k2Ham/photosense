@@ -150,9 +150,10 @@ describe('sending from the phone', () => {
     expect(notify).toHaveBeenLastCalledWith('Deleted 1 photo from this phone. It is in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.', 'ok');
   });
 
-  it('offers nothing to delete until something is safely on the computer', async () => {
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 0, total: 2 });
+  it('offers nothing to delete until something is safely on the computer, nor once it was deleted', async () => {
+    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 2, total: 2 });
     await send();
+    expect(dialog('Send to computer')).toHaveTextContent(/^Send to computer2 of 2 files are on DESKTOP-1\.Close$/);
     expect(screen.queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
   });
 

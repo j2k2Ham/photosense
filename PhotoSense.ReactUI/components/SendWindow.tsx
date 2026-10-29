@@ -101,12 +101,13 @@ export function SendWindow({ files, notify, onClose }: Props) {
           <>
             <p className="text-[15px] text-t2">
               {state.done.toLocaleString()} of {state.total.toLocaleString()} {state.total === 1 ? 'file is' : 'files are'} on <Named>{computer}</Named>
-              {state.where ? <> in <Where>{state.where}</Where></> : null}. They are still on this phone too.
+              {state.where ? <> in <Where>{state.where}</Where></> : null}.{state.deletable.length > 0 && ' They are still on this phone too.'}
             </p>
             <Buttons>
               <button type="button" onClick={close} className="pill-outline h-11 px-5 text-[15px]">Close</button>
               {state.deletable.length > 0 && (
-                <button type="button" onClick={() => setAsking(true)} className="pill-rose h-11 px-5 text-[15px]">Delete {photosAndVideos(state.deletable)} from this phone</button>
+                // On a phone's narrow screen the whole of what it does wraps onto two lines rather than leave the window.
+                <button type="button" onClick={() => setAsking(true)} className="pill-rose min-h-11 max-w-full whitespace-normal px-5 py-2.5 text-[15px]">Delete {photosAndVideos(state.deletable)} from this phone</button>
               )}
             </Buttons>
           </>
