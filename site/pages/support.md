@@ -2,7 +2,7 @@
 
 {{name}} has a guide built in: choose Help in the menu. It explains every screen, and its search finds what you are looking for.
 
-## Common questions
+## Frequently asked questions
 
 ### Where do the files I delete go?
 
@@ -16,7 +16,7 @@ Choose Delete permanently in the menu. {{name}} says how many files are waiting 
 
 No. {{name}} works on your own device, and your photos and what it learns about them stay there. See the privacy policy.
 
-### On my iPhone or iPad, {{name}} does not show all my photos
+### Why does {{name}} not show all my photos on my iPhone or iPad?
 
 When {{name}} first asked to see your photos, you may have chosen to allow only some. The scan screen then says so: **Choose more photos** opens the phone's own picker, and **Open Settings** goes to where all of them can be allowed, under Privacy & Security, then Photos, then {{name}}.
 

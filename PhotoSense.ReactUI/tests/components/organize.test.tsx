@@ -1,5 +1,5 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { FileGallery } from '../../components/organize/FileGallery';
@@ -23,6 +23,8 @@ const at = (id: string, placeIndex: number | null, changes: Partial<OrganizeFile
 const FILES = [at('a1', 0), at('a2', 0), at('a3', 0), at('a4', 0, { isVideo: true, name: 'a4.MOV', durationSeconds: 14 }), at('a5', 0), at('g1', 1), at('g2', 1), at('p1', 2), at('n1', null)];
 const LISTING: OrganizeFilesDto = { root: ROOT, fromScan: true, places: PLACES, files: FILES };
 const dragged = () => ({ dataTransfer: { setData: vi.fn(), effectAllowed: '' } });
+// A card stays a moment after the pointer leaves its tile, so that the pointer can be moved onto it.
+const waitForCardToGo = () => waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
 
 describe('the small parts', () => {
   it('counts files in words', () => {
@@ -70,7 +72,7 @@ describe('the small parts', () => {
 describe('the file gallery', () => {
   function show(props: Partial<React.ComponentProps<typeof FileGallery>> = {}) {
     const handlers = { onPage: vi.fn(), onFilter: vi.fn(), onKind: vi.fn(), onClearFocus: vi.fn(), onClearAll: vi.fn(), onPickAll: vi.fn(), onPick: vi.fn(), onOpen: vi.fn(), onDragStart: vi.fn(), onDragEnd: vi.fn() };
-    const view = render(<FileGallery files={FILES} places={PLACES} page={1} filter="all" counts={{ all: 9, todo: 8, noloc: 1 }} kind="any" kindCounts={{ any: 9, photo: 8, video: 1 }}
+    const view = render(<FileGallery files={FILES} places={PLACES} root={ROOT} page={1} filter="all" counts={{ all: 9, todo: 8, noloc: 1 }} kind="any" kindCounts={{ any: 9, photo: 8, video: 1 }}
       narrowed={false} picked={new Set()} empty="No files here" tagOf={() => undefined} {...handlers} {...props} />);
     return { ...handlers, ...view };
   }
@@ -89,6 +91,28 @@ describe('the file gallery', () => {
     ]);
     expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
     expect(screen.queryByText('No files here')).not.toBeInTheDocument();
+  });
+
+  it('shows what is known of a file on a card while its tile is pointed at or reached by the keyboard', async () => {
+    const files = [
+      at('a1', 1, { folder: `${ROOT}\\2022\\July`, width: 4032, height: 3024, sizeBytes: 6_093_000 }),
+      at('a4', null, { isVideo: true, name: 'a4.MOV', durationSeconds: 14, dateFromFile: true, livePhoto: true, width: 0, height: 0 }),
+    ];
+    show({ files });
+    const [picture, video] = tiles();
+    // No tooltip of the browser's own beside the card.
+    expect(picture).not.toHaveAttribute('title');
+    fireEvent.pointerEnter(picture, { pointerType: 'mouse' });
+    const card = await screen.findByRole('tooltip');
+    expect(picture).toHaveAttribute('aria-describedby', card.id);
+    expect(card).toHaveTextContent('a1.JPGTakenJul 4, 2022, 10:00:00 AMPlaceGlacier National Park, West Glacier, Montana, USFolder2022\\JulyFile4032 × 3024 · JPG · 5.8 MB');
+    fireEvent.pointerLeave(picture, { pointerType: 'mouse' });
+    await waitForCardToGo();
+
+    // A file with no date of its own, a video of a Live Photo, with no place, at the top of the folder.
+    fireEvent.focus(video);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('a4.MOVChangedJul 4, 2022, 10:00:00 AMPlaceNo location in this fileFolderTop levelFileSize unknown · MOV · 0:14 · 5.8 MB'
+      + 'Nothing in the file says when it was taken, so this is when the file was last changed.The video of a Live Photo. It goes wherever its picture goes.');
   });
 
   it('has a box that selects every file shown, or lets them all go', async () => {
@@ -196,7 +220,7 @@ describe('the file gallery', () => {
     expect(screen.queryByText('No files here')).not.toBeInTheDocument();
     // With every file showing there is nothing to clear.
     expect(screen.queryByRole('button', { name: 'Clear all' })).not.toBeInTheDocument();
-    rerender(<FileGallery files={[]} places={PLACES} page={1} filter="todo" counts={{ all: 0, todo: 0, noloc: 0 }} kind="any" kindCounts={{ any: 0, photo: 0, video: 0 }} narrowed picked={new Set()} empty="No files match “zz”" tagOf={() => undefined}
+    rerender(<FileGallery files={[]} places={PLACES} root={ROOT} page={1} filter="todo" counts={{ all: 0, todo: 0, noloc: 0 }} kind="any" kindCounts={{ any: 0, photo: 0, video: 0 }} narrowed picked={new Set()} empty="No files match “zz”" tagOf={() => undefined}
       onPage={handlers.onPage} onFilter={handlers.onFilter} onKind={handlers.onKind} onClearFocus={handlers.onClearFocus} onClearAll={handlers.onClearAll} onPickAll={handlers.onPickAll} onPick={handlers.onPick} onOpen={handlers.onOpen} onDragStart={handlers.onDragStart} onDragEnd={handlers.onDragEnd} />);
     expect(screen.getByText('No files match “zz”')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear all' })).toBeInTheDocument();
@@ -252,19 +276,24 @@ describe('the overlay while a folder is being read', () => {
 
 describe('the selection bar', () => {
   function show(props: Partial<React.ComponentProps<typeof SelectionBar>> = {}) {
-    const handlers = { onName: vi.fn(), onSelectAll: vi.fn(), onStartNaming: vi.fn(), onCancelNaming: vi.fn(), onCreate: vi.fn(), onDelete: vi.fn(), onClear: vi.fn() };
-    render(<SelectionBar count={6} shown={4212} hint="" naming={false} name="" {...handlers} {...props} />);
+    const handlers = { onSelectAll: vi.fn(), onNewFolder: vi.fn(), onDelete: vi.fn(), onClear: vi.fn() };
+    render(<SelectionBar count={6} shown={4212} hint="" {...handlers} {...props} />);
     return handlers;
   }
   const bar = () => screen.getByRole('region', { name: 'Selection' });
 
-  it('says how many are selected and offers to take them all, make a folder of them, or let them go', async () => {
-    const { onSelectAll, onStartNaming, onClear } = show({ hint: 'or add them to one of your folders' });
+  it('says how many are selected and offers to take them all, put them in a folder, or let them go', async () => {
+    const { onSelectAll, onNewFolder, onClear } = show({ hint: 'or add them to one of your folders' });
     expect(bar()).toHaveTextContent('6 selectedSelect all 4,212 shownor add them to one of your foldersNew folder from theseClear');
     await userEvent.click(within(bar()).getByRole('button', { name: 'Select all 4,212 shown' }));
     await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
     await userEvent.click(within(bar()).getByRole('button', { name: 'Clear' }));
-    expect([onSelectAll, onStartNaming, onClear].map(f => f.mock.calls.length)).toEqual([1, 1, 1]);
+    expect([onSelectAll, onNewFolder, onClear].map(f => f.mock.calls.length)).toEqual([1, 1, 1]);
+  });
+
+  it('is drawn over the pictures it floats above, so that none of them covers its edge', () => {
+    show();
+    expect(bar()).toHaveClass('relative', 'z-10');
   });
 
   it('has a bin to delete the selected files with, as soon as one is selected', async () => {
@@ -282,24 +311,6 @@ describe('the selection bar', () => {
     expect(within(bar()).queryByRole('button', { name: /^Select all/ })).not.toBeInTheDocument();
   });
 
-  it('turns into the name of the new folder, made on Enter or the button', async () => {
-    const { onName, onCreate, onCancelNaming } = show({ naming: true, name: 'Trips' });
-    const input = within(bar()).getByRole('textbox', { name: 'Name of the new folder' });
-    expect(input).toHaveFocus();
-    expect(input).toHaveValue('Trips');
-    expect(input).toHaveAttribute('placeholder', 'Name the new folder, for example Trips\\Glacier 2022');
-    fireEvent.change(input, { target: { value: 'Trips\\Glacier 2022' } });
-    expect(onName).toHaveBeenCalledExactlyOnceWith('Trips\\Glacier 2022');
-    fireEvent.keyDown(input, { key: 'a' });
-    expect(onCreate).not.toHaveBeenCalled();
-    fireEvent.keyDown(input, { key: 'Enter' });
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Create folder' }));
-    expect(onCreate).toHaveBeenCalledTimes(2);
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }));
-    expect(onCancelNaming).toHaveBeenCalledOnce();
-    expect(within(bar()).queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
-    expect(within(bar()).queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
-  });
 });
 
 describe('the suggested folders panel', () => {
@@ -309,11 +320,11 @@ describe('the suggested folders panel', () => {
     const all = { ...defaultSettings, ...settings };
     const suggestions = suggest(LISTING, all, noChoices);
     const handlers = {
-      onSettings: vi.fn(), onShowMap: vi.fn(), onFocus: vi.fn(), onPreview: vi.fn(), onDrop: vi.fn(), onGroupByDate: vi.fn(), onName: vi.fn(), onStartNaming: vi.fn(), onCancelNaming: vi.fn(),
-      onCreate: vi.fn(), onAddPicked: vi.fn(), onRemoveFolder: vi.fn(), onUndo: vi.fn(),
+      onSettings: vi.fn(), onShowMap: vi.fn(), onFocus: vi.fn(), onPreview: vi.fn(), onDrop: vi.fn(), onGroupByDate: vi.fn(), onNewFolder: vi.fn(),
+      onAddPicked: vi.fn(), onRemoveFolder: vi.fn(), onUndo: vi.fn(),
     };
     const view = render(<SuggestionsPanel settings={all} showMap={false} suggestions={suggestions} map={mapLayout(suggestions, PLACES, all)} unplaced={0} folders={[]} picked={0} dragging={0}
-      naming={false} name="" batches={[]} busy={false} reading={false} rootName="Phone Pictures" {...handlers} {...props} />);
+      batches={[]} busy={false} reading={false} rootName="Phone Pictures" {...handlers} {...props} />);
     return { ...handlers, ...view, suggestions };
   }
   const panel = () => screen.getByRole('complementary', { name: 'Suggested folders' });
@@ -333,7 +344,7 @@ describe('the suggested folders panel', () => {
     expect(cards[0].querySelectorAll('img')).toHaveLength(3);
     expect(cards[1].querySelectorAll('img')).toHaveLength(3);
     expect(cards[1].querySelectorAll('.bg-s3:not(img)')).toHaveLength(1);
-    expect(panel()).toHaveTextContent('Folders are made inside Phone Pictures. Files already in the right folder are left alone, and nothing is ever replaced: if a name is taken, (1) is added.');
+    expect(panel()).toHaveTextContent('Folders are made inside Phone Pictures unless you choose another place. Files already in the right folder are left alone, and nothing is ever replaced: if a name is taken, (1) is added.');
   });
 
   it('changes how the files are grouped by place', async () => {
@@ -469,8 +480,8 @@ describe('the suggested folders panel', () => {
     const suggestions = suggest(spread, settings, noChoices), last = suggestions[7];
     const onFocus = vi.fn();
     render(<SuggestionsPanel settings={settings} showMap suggestions={suggestions} map={mapLayout(suggestions, towns, settings)} focus={{ kind: 'suggested', key: last.key }} unplaced={0} folders={[]} picked={0}
-      dragging={0} naming={false} name="" batches={[]} busy={false} reading={false} rootName="Phone Pictures" onSettings={vi.fn()} onShowMap={vi.fn()} onFocus={onFocus} onPreview={vi.fn()} onDrop={vi.fn()}
-      onGroupByDate={vi.fn()} onName={vi.fn()} onStartNaming={vi.fn()} onCancelNaming={vi.fn()} onCreate={vi.fn()} onAddPicked={vi.fn()} onRemoveFolder={vi.fn()} onUndo={vi.fn()} />);
+      dragging={0} batches={[]} busy={false} reading={false} rootName="Phone Pictures" onSettings={vi.fn()} onShowMap={vi.fn()} onFocus={onFocus} onPreview={vi.fn()} onDrop={vi.fn()}
+      onGroupByDate={vi.fn()} onNewFolder={vi.fn()} onAddPicked={vi.fn()} onRemoveFolder={vi.fn()} onUndo={vi.fn()} />);
     const map = screen.getByRole('group', { name: 'Map of the suggested folders' });
     // The six largest are labelled, and so is the picked one though it is the smallest; its label is on the left, being far to the east.
     expect(map).toHaveTextContent('T0T1T2T3T4T5T7');
@@ -521,35 +532,11 @@ describe('the suggested folders panel', () => {
     expect(panel()).not.toHaveTextContent('No location ·');
   });
 
-  it('explains your own folders until there is one, and names a new one in place', async () => {
-    const { onStartNaming } = show();
-    expect(panel()).toHaveTextContent('Make a folder of your own, then select or drag files onto it. Files you add are left out of the suggestions.');
+  it('explains your own folders until there is one, and asks which folder on New folder', async () => {
+    const { onNewFolder } = show();
+    expect(panel()).toHaveTextContent('Make a folder of your own, or pick one already there, then select or drag files onto it. Files you add are left out of the suggestions.');
     await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    expect(onStartNaming).toHaveBeenCalledOnce();
-  });
-
-  it('takes the name of a new folder, saying what will go in it', async () => {
-    const { onName, onCreate, onCancelNaming, rerender, ...rest } = show({ naming: true, name: 'Trips', picked: 6 });
-    const input = within(panel()).getByRole('textbox', { name: 'Folder name' });
-    expect(input).toHaveFocus();
-    expect(panel()).toHaveTextContent('The 6 selected files go in it. Use \\ for subfolders.');
-    expect(panel()).not.toHaveTextContent('Make a folder of your own');
-    fireEvent.change(input, { target: { value: 'Trips\\Glacier' } });
-    expect(onName).toHaveBeenCalledExactlyOnceWith('Trips\\Glacier');
-    fireEvent.keyDown(input, { key: 'x' });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Create' }));
-    expect(onCreate).toHaveBeenCalledTimes(2);
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Cancel' }));
-    expect(onCancelNaming).toHaveBeenCalledOnce();
-    expect(rest.onStartNaming).not.toHaveBeenCalled();
-  });
-
-  it('says one selected file goes in a new folder, or that files are added afterwards', () => {
-    show({ naming: true, picked: 1 });
-    expect(panel()).toHaveTextContent('The 1 selected file goes in it. Use \\ for subfolders.');
-    show({ naming: true, picked: 0 });
-    expect(screen.getAllByRole('complementary')[1]).toHaveTextContent('Use \\ for subfolders. Add files to it afterwards.');
+    expect(onNewFolder).toHaveBeenCalledOnce();
   });
 
   it('lists your folders with what is in each, to add to, look into, preview or remove', async () => {
@@ -571,6 +558,15 @@ describe('the suggested folders panel', () => {
     expect(onRemoveFolder).toHaveBeenCalledExactlyOnceWith('own-2');
     fireEvent.drop(card.parentElement!);
     expect(onDrop).toHaveBeenCalledExactlyOnceWith({ kind: 'own', key: 'own-1' });
+  });
+
+  it('says where a folder is when it is not a new one in the folder being organized, its whole path on hover', () => {
+    show({ folders: [own({ name: 'Trips', where: 'Already there', path: 'C:\\Users\\jamie\\Phone Pictures\\Trips' }), own({ id: 'own-2', name: 'Glacier', where: 'In D:\\Archive', path: 'D:\\Archive\\Glacier' })] });
+    const trips = within(panel()).getByRole('button', { name: 'Show the files for Trips' });
+    expect(trips).toHaveTextContent('TripsAlready there2 files · 11.6 MB · not moved yet');
+    expect(within(trips).getByText('Already there')).toHaveAttribute('title', 'C:\\Users\\jamie\\Phone Pictures\\Trips');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Glacier' })).toHaveTextContent('GlacierIn D:\\Archive2 files');
+    expect(within(panel()).getByText('Glacier')).toHaveAttribute('title', 'D:\\Archive\\Glacier');
   });
 
   it('offers to add to a folder only while files are selected, and lets go of the one picked', async () => {

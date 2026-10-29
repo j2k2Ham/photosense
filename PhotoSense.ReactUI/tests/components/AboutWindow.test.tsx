@@ -14,7 +14,7 @@ const about: AboutDto = {
 };
 
 const documents: Record<AboutDocument, string> = {
-  support: '# Support\n\nChoose **Help** in the menu, or open `_PhotoSense_Removed`.\n\n## Common questions\n\n### Where do files go?\n\nSee [the policy](https://photosense.example/privacy).\n\n- which device\n- which version\n\n1. first\n2. second\n',
+  support: '# Support\n\nChoose **Help** in the menu, or open `_PhotoSense_Removed`.\n\n## Frequently asked questions\n\n### Where do files go?\n\nSee [the policy](https://photosense.example/privacy).\n\n### Can I undo?\n\nYes.\n\n## Writing to us\n\n### What to say\n\n- which device\n- which version\n\n1. first\n2. second\n',
   privacy: '# Privacy Policy\n\nLast updated: October 28, 2026\n\nNothing is uploaded.',
   terms: '# Terms of Use\n\nUse it with care.',
   notices: 'Third-party notices for PhotoSense for Windows and Mac\n\n    LiteDB 5.0.21 (MIT)',
@@ -74,7 +74,7 @@ describe('About PhotoSense', () => {
     expect(api.useAboutText).toHaveBeenLastCalledWith('support');
     expect(screen.getByRole('button', { name: 'Support' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'PhotoSense' })).not.toHaveAttribute('aria-current');
-    expect(within(article()).getAllByRole('heading').map(h => [h.tagName, h.textContent])).toEqual([['H2', 'Support'], ['H3', 'Common questions'], ['H4', 'Where do files go?']]);
+    expect(within(article()).getAllByRole('heading').map(h => [h.tagName, h.textContent])).toEqual([['H2', 'Support'], ['H3', 'Frequently asked questions'], ['H3', 'Writing to us'], ['H4', 'What to say']]);
     expect(within(article()).getByText('Help', { selector: 'strong' })).toBeInTheDocument();
     expect(within(article()).getByText('_PhotoSense_Removed', { selector: 'code' })).toBeInTheDocument();
     const link = within(article()).getByRole('link', { name: 'the policy' });
@@ -89,6 +89,22 @@ describe('About PhotoSense', () => {
     expect(article()).toHaveTextContent('Last updated: October 28, 2026');
     await userEvent.click(screen.getByRole('button', { name: 'Terms of use' }));
     expect(article()).toHaveTextContent('Use it with care.');
+  });
+
+  it('shows each frequently asked question with a plus, opening its answer under it and closing it again', async () => {
+    render(<AboutWindow onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Support' }));
+    const questions = [...article().querySelectorAll('details')];
+    expect(questions.map(q => [q.querySelector('summary')!.textContent, q.open])).toEqual([['Where do files go?', false], ['Can I undo?', false]]);
+    // The plus is drawn, not said.
+    expect(questions[0].querySelector('summary > [aria-hidden]')).toHaveClass('group-open:bg-brand');
+    await userEvent.click(within(questions[1]).getByText('Can I undo?'));
+    expect(questions.map(q => q.open)).toEqual([false, true]);
+    expect(within(questions[1]).getByText('Yes.')).toBeVisible();
+    await userEvent.click(within(questions[0]).getByText('Where do files go?'));
+    expect(questions.map(q => q.open)).toEqual([true, true]);
+    await userEvent.click(within(questions[1]).getByText('Can I undo?'));
+    expect(questions.map(q => q.open)).toEqual([true, false]);
   });
 
   it('shows the acknowledgements as the plain text they are written in', async () => {

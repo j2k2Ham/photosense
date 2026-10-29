@@ -10,7 +10,11 @@ export type Inline =
 export type Block =
   | { kind: 'heading'; level: 1 | 2 | 3; text: string }
   | { kind: 'paragraph'; inline: Inline[] }
-  | { kind: 'list'; ordered: boolean; items: Inline[][] };
+  | { kind: 'list'; ordered: boolean; items: Inline[][] }
+  | { kind: 'questions'; items: Question[] };
+
+/** A question of the frequently asked ones, with its answer: what follows its heading up to the next one. */
+export interface Question { question: string; answer: Block[]; }
 
 // A link written out, a bare web address, an email address, a bold run or code.
 const INLINE = /\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s)]+[^\s).,;:])|([\w.+-]+@[\w-]+(?:\.[\w-]+)+)|\*\*([^*]+)\*\*|`([^`]+)`/g;
@@ -33,8 +37,35 @@ export function inline(text: string): Inline[] {
   return parts;
 }
 
-/** Headings (#, ##, ###), paragraphs, and lists (- or 1.), each item one line; blank lines end a paragraph or list. */
+/**
+ * Headings (#, ##, ###), paragraphs, and lists (- or 1.), each item one line; blank lines end a paragraph or list.
+ * A ### heading that ends in a question mark is a question, answered by what follows it; questions in a row are one list.
+ */
 export function parse(markdown: string): Block[] {
+  return asked(blocks(markdown));
+}
+
+function asked(flat: Block[]): Block[] {
+  const out: Block[] = [];
+  let questions: Question[] | undefined;
+  for (const block of flat) {
+    if (block.kind === 'heading' && block.level === 3 && block.text.endsWith('?')) {
+      if (!questions) {
+        questions = [];
+        out.push({ kind: 'questions', items: questions });
+      }
+      questions.push({ question: block.text, answer: [] });
+    } else if (block.kind === 'heading' || !questions) {
+      questions = undefined;
+      out.push(block);
+    } else {
+      questions.at(-1)!.answer.push(block);
+    }
+  }
+  return out;
+}
+
+function blocks(markdown: string): Block[] {
   const blocks: Block[] = [];
   let paragraph: string[] = [];
   let list: { ordered: boolean; items: Inline[][] } | undefined;

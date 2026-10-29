@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { appIconUrl, useAbout, useAboutText } from '../lib/apiClient';
-import { parse, type Inline } from '../lib/markdown';
+import { parse, type Block, type Inline, type Question } from '../lib/markdown';
 import type { AboutDocument, AboutDto } from '../types';
 import { WindowShell } from './WindowShell';
 
@@ -28,22 +28,55 @@ function Words({ parts }: { readonly parts: Inline[] }) {
   })}</>;
 }
 
-/** A document as the web site has it; its own title is the topic's, shown above it. */
-function Markdown({ text }: { readonly text: string }) {
+/** The plus on a question, which turns into a minus while its answer is open. */
+function OpenMark() {
+  return (
+    <span aria-hidden className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line bg-bg text-brand transition-colors group-open:border-brand group-open:bg-brand group-open:text-on-brand">
+      <span className="absolute h-0.5 w-3 rounded-full bg-current" />
+      <span className="absolute h-3 w-0.5 rounded-full bg-current transition-transform duration-200 group-open:rotate-90" />
+    </span>
+  );
+}
+
+/** Questions one under another, each answer folded away until its question is opened. */
+function Questions({ items }: { readonly items: Question[] }) {
+  return (
+    <div className="flex flex-col divide-y divide-line overflow-hidden rounded-2xl border border-line bg-s1">
+      {items.map((q, n) => (
+        <details key={n} className="group">
+          {/* The ring is drawn inside the row: the rounded box around the questions would cut one outside it. */}
+          <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-3.5 text-[15.5px] font-semibold leading-snug text-t1 hover:bg-s2 focus-visible:outline-offset-[-2px] sm:px-5 [&::-webkit-details-marker]:hidden">
+            <span className="min-w-0 flex-1">{q.question}</span>
+            <OpenMark />
+          </summary>
+          <div className="px-4 pb-5 pt-1 sm:px-5"><Blocks blocks={q.answer} /></div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+function Blocks({ blocks }: { readonly blocks: Block[] }) {
   return (
     <div className="flex flex-col gap-4 text-[15px] leading-relaxed text-t2">
-      {parse(text).map((block, i) => {
+      {blocks.map((block, i) => {
         if (block.kind === 'heading') {
           if (block.level === 1) return null;
           const Heading = block.level === 2 ? 'h3' : 'h4';
           return <Heading key={i} className={`font-semibold text-t1 ${block.level === 2 ? 'mt-3 text-[18px]' : 'text-[16px]'}`}>{block.text}</Heading>;
         }
         if (block.kind === 'paragraph') return <p key={i}><Words parts={block.inline} /></p>;
+        if (block.kind === 'questions') return <Questions key={i} items={block.items} />;
         const List = block.ordered ? 'ol' : 'ul';
         return <List key={i} className={`flex flex-col gap-2 pl-5 ${block.ordered ? 'list-decimal' : 'list-disc'}`}>{block.items.map((item, n) => <li key={n}><Words parts={item} /></li>)}</List>;
       })}
     </div>
   );
+}
+
+/** A document as the web site has it; its own title is the topic's, shown above it. */
+function Markdown({ text }: { readonly text: string }) {
+  return <Blocks blocks={parse(text)} />;
 }
 
 function Waiting({ error }: { readonly error?: Error }) {

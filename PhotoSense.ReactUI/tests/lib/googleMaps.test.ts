@@ -21,11 +21,20 @@ describe('Google\'s map library', () => {
     expect(maps.googleMapsKey()).toBe('key-1');
   });
 
+  it('draws the maps with the map ID set for the UI, or with Google\'s own one for trying maps out', async () => {
+    const maps = await load();
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_ID', '');
+    expect(maps.googleMapsId()).toBe('DEMO_MAP_ID');
+    vi.stubEnv('NEXT_PUBLIC_GOOGLE_MAPS_ID', 'abc123');
+    expect(maps.googleMapsId()).toBe('abc123');
+  });
+
   it('is fetched from Google once, however many maps ask for it', async () => {
     const maps = await load();
     const first = maps.loadGoogleMaps('key 1&x'), second = maps.loadGoogleMaps('key 1&x');
     expect(second).toBe(first);
-    expect(scripts().map(s => [s.src, s.async])).toEqual([['https://maps.googleapis.com/maps/api/js?key=key%201%26x&v=weekly&loading=async&callback=photosenseMapsReady', true]]);
+    // With the library of markers drawn from the page's own elements.
+    expect(scripts().map(s => [s.src, s.async])).toEqual([['https://maps.googleapis.com/maps/api/js?key=key%201%26x&v=weekly&loading=async&libraries=marker&callback=photosenseMapsReady', true]]);
     const library = { Map: vi.fn() };
     page.google = { maps: library };
     page.photosenseMapsReady!();

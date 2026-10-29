@@ -41,6 +41,13 @@ describe('the documents', () => {
     ]), '<h2>Q &amp; A</h2>\n<p>Use &lt;b&gt;<strong>Undo</strong><code>a&quot;b</code><a href="mailto:help@photosense.example">us</a></p>\n<ul><li>one</li></ul>\n<ol><li>first</li><li>second</li></ol>');
   });
 
+  it('write the frequently asked questions as ones the browser opens and closes, each answer under its question', () => {
+    assert.equal(html([{ kind: 'questions', items: [
+      { question: 'Does it <upload>?', answer: [{ kind: 'paragraph', inline: [{ kind: 'text', text: 'No.' }] }] },
+      { question: 'Can I undo?', answer: [{ kind: 'paragraph', inline: [{ kind: 'text', text: 'Yes:' }] }, { kind: 'list', ordered: false, items: [[{ kind: 'text', text: 'Undo' }]] }] },
+    ] }]), '<div class="questions"><details><summary>Does it &lt;upload&gt;?</summary>\n<p>No.</p>\n</details><details><summary>Can I undo?</summary>\n<p>Yes:</p>\n<ul><li>Undo</li></ul>\n</details></div>');
+  });
+
   it('each make a page that says which it is, with the way to the others, and marks a draft as one', () => {
     const terms = page({ title: 'Terms of Use', file: 'terms.html', body: '<p>Body</p>', product, draft: false });
     assert.match(terms, /<title>Terms of Use \| PhotoSense<\/title>/);
@@ -63,7 +70,8 @@ describe('the site', () => {
     assert.match(out('privacy.html'), /<h1>Privacy Policy<\/h1>/);
     assert.match(out('privacy.html'), /<a href="mailto:help@photosense.example">help@photosense.example<\/a>/);
     assert.match(out('terms.html'), /governed by the laws of the State of Example/);
-    assert.match(out('support.html'), /<h3>Where do the files I delete go\?<\/h3>/);
+    assert.match(out('support.html'), /<h2>Frequently asked questions<\/h2>\n<div class="questions"><details><summary>Where do the files I delete go\?<\/summary>/);
+    assert.match(out('support.html'), /<summary>Why does PhotoSense not show all my photos on my iPhone or iPad\?<\/summary>/);
     assert.doesNotMatch(out('support.html') + out('terms.html') + out('privacy.html'), /\{\{|not set yet/);
     assert.deepEqual(readFileSync(join(root, 'site', 'out', 'icon.png')), readFileSync(join(repo, 'branding', 'app-icon.png')));
   });

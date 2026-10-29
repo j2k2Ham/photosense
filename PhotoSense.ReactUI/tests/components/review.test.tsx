@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { Differences, DiffTable } from '../../components/Differences';
@@ -126,47 +126,35 @@ describe('DuplicateStrip', () => {
     expect(tile('IMG_4198 (1).JPG')).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('describes the copy under the pointer: what differs, and why the original was preferred', () => {
+  it('describes the copy under the pointer: its details, what differs, and why the original was preferred', async () => {
     show();
-    fireEvent.mouseEnter(tile('IMG_4198.HEIC'));
-    const card = screen.getByRole('tooltip');
+    fireEvent.pointerEnter(tile('IMG_4198.HEIC'), { pointerType: 'mouse' });
+    const card = await screen.findByRole('tooltip');
     expect(card.parentElement).toBe(document.body);
+    expect(card).toHaveStyle({ width: '420px' });
     expect(card).toHaveTextContent('IMG_4198.HEICSame picture');
     expect(within(card).getByText('Folder').nextElementSibling).toHaveTextContent('C:\\photos\\2024');
+    expect(within(card).getByText('Camera').nextElementSibling).toHaveTextContent('Not recorded');
     expect(within(card).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Name: the original is IMG_4198.JPG', 'Format: HEIC, the original is JPEG', 'File size: 2.9 MB, the original is 5.8 MB']);
     expect(card).toHaveTextContent('Original preferred: Opens everywhere: JPEG rather than HEIC');
 
-    fireEvent.mouseLeave(tile('IMG_4198.HEIC'));
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    fireEvent.pointerLeave(tile('IMG_4198.HEIC'), { pointerType: 'mouse' });
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
   });
 
-  it('says of a similar shot that it is not a copy, and of a kept one that it is kept', () => {
+  it('says of a similar shot that it is not a copy, and of a kept one that it is kept', async () => {
     show();
-    fireEvent.mouseEnter(tile('IMG_4199.JPG'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('A different shot or an edited version. Never removed along with the duplicates.');
-    fireEvent.mouseEnter(tile('IMG_4198 (2).JPG'));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('IMG_4198 (2).JPGKeeping');
+    fireEvent.pointerEnter(tile('IMG_4199.JPG'), { pointerType: 'mouse' });
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('A different shot or an edited version. Never removed along with the duplicates.');
+    fireEvent.pointerEnter(tile('IMG_4198 (2).JPG'), { pointerType: 'mouse' });
+    await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('IMG_4198 (2).JPGKeeping'));
   });
 
-  it('places the description above the tile and inside the window', () => {
-    // The test window is 1024 by 768.
-    show();
-    const at = (left: number, top: number) => vi.spyOn(tile('IMG_4198.HEIC'), 'getBoundingClientRect').mockReturnValue({ left, top } as DOMRect);
-    at(300, 500);
-    fireEvent.mouseEnter(tile('IMG_4198.HEIC'));
-    expect(screen.getByRole('tooltip')).toHaveStyle({ left: '300px', bottom: '278px', width: '420px' });
-    at(900, 500);
-    fireEvent.mouseEnter(tile('IMG_4198.HEIC'));
-    expect(screen.getByRole('tooltip')).toHaveStyle({ left: '592px' });
-    at(2, 500);
-    fireEvent.mouseEnter(tile('IMG_4198.HEIC'));
-    expect(screen.getByRole('tooltip')).toHaveStyle({ left: '12px' });
-  });
-
-  it('shows the clicked copy beside the original and puts the description away', () => {
+  it('shows the clicked copy beside the original and puts the description away', async () => {
     const onSelect = show();
-    fireEvent.mouseEnter(tile('IMG_4198.HEIC'));
-    fireEvent.click(tile('IMG_4198.HEIC'));
+    fireEvent.pointerEnter(tile('IMG_4198.HEIC'), { pointerType: 'mouse' });
+    await screen.findByRole('tooltip');
+    await userEvent.click(tile('IMG_4198.HEIC'));
     expect(onSelect).toHaveBeenCalledExactlyOnceWith(1);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
@@ -242,6 +230,24 @@ describe('GroupList', () => {
 
     await userEvent.click(first);
     expect(onSelect).toHaveBeenCalledExactlyOnceWith('g1');
+  });
+
+  it('shows what is known of a group\'s best copy on a card while its tile is pointed at or reached by the keyboard', async () => {
+    const keeper = photo({ fileName: 'IMG_4198.JPG', folder: 'C:\\photos\\2024', takenOn: '2024-04-07T17:35:59', placeName: 'Buxton, North Carolina, US', cameraModel: 'iPhone 15 Pro', format: 'JPEG' });
+    const { rerender } = show({ groups: [group({ keeper, members: [identical, converted] })], total: 1 });
+    const tile = screen.getAllByRole('button')[0];
+    fireEvent.pointerEnter(tile, { pointerType: 'mouse' });
+    const card = await screen.findByRole('tooltip');
+    expect(card).toHaveTextContent('IMG_4198.JPGOriginalTaken');
+    expect(card).toHaveTextContent('FolderC:\\photos\\2024PlaceBuxton, North Carolina, USFile4032 × 3024 · JPEG · 5.8 MBCameraiPhone 15 Pro');
+    expect(card).toHaveTextContent('The best copy, which stays.With it: 2 duplicates · 5.8 MB');
+    fireEvent.pointerLeave(tile, { pointerType: 'mouse' });
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+
+    rerender(<GroupList groups={[group({ keeper, members: [burst] })]} mode="similar" total={1} page={1} totalPages={1} query="" onSelect={() => undefined} onPage={() => undefined} {...unticked} />);
+    fireEvent.focus(screen.getAllByRole('button')[0]);
+    expect(screen.getByRole('tooltip')).toHaveTextContent('IMG_4198.JPGBest shot');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('The best shot of its group, which stays.With it: 1 similar shot');
   });
 
   it('has a tick on every group, apart from showing it, and a box that ticks every group on the page', async () => {

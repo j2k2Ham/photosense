@@ -4,12 +4,13 @@ import { formatBytes, leaf } from '../../lib/format';
 import {
   PREVIEW_PAGE, checkFolderName, clashSummary, dateRange, joinPath, monthOf, relativeFolder, resolveNames, separatorOf, totalBytes, type Clash, type ClashChoice, type FileRef,
 } from '../../lib/organize';
-import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlanDto } from '../../types';
+import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto, OrganizePlanDto } from '../../types';
 import { FolderPicker } from '../FolderPicker';
+import { useHoverCard } from '../HoverCard';
 import { Segmented } from '../ModeSwitch';
 import { WindowShell } from '../WindowShell';
 import { NameClashWindow } from './NameClashWindow';
-import { Check, Pager, Thumb, countFiles } from './shared';
+import { Check, FileFacts, Pager, Thumb, countFiles } from './shared';
 
 interface Props {
   /** Whose folder this is: one that was suggested, or one of the person's own. */
@@ -17,7 +18,12 @@ interface Props {
   readonly root: string;
   /** Every file set to go to the folder. */
   readonly files: readonly OrganizeFileDto[];
+  /** The places of the listing the files come from, which a file's place is the number of. */
+  readonly places: readonly OrganizePlaceDto[];
   readonly name: string;
+  /** Where the folder is made, when not in the root, and whether the files go straight into that folder instead. */
+  readonly base?: string;
+  readonly direct?: boolean;
   /** What the folder is split by inside, when it is: a subfolder for each year, month or place of its files. */
   readonly split?: 'year' | 'month' | 'place';
   /** The subfolder a file goes to in a folder that is split; none for a file with nothing to split it by. */
@@ -47,12 +53,13 @@ const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the Ph
 const NAMED_SUBFOLDERS = 6;
 
 /** Everything a folder would take, where it would go and under what names, before anything moves. */
-export function MovePreview({ kind, root, files, name, split, subfolderOf, merge, mode, companions, busy, asking, placeOf, onName, onMode, onCompanions, onMove, onDelete, onClose }: Props) {
+export function MovePreview({ kind, root, files, places, name, base: home, direct: straight = false, split, subfolderOf, merge, mode, companions, busy, asking, placeOf, onName, onMode, onCompanions, onMove, onDelete, onClose }: Props) {
   const [excluded, setExcluded] = useState<Record<string, boolean>>({});
   const [choices, setChoices] = useState<Record<string, ClashChoice>>({});
-  // A folder chosen for the files in place of the root, and whether they go straight into it.
+  // A folder chosen here for the files in place of the folder's own place, and whether they go straight into it.
   const [base, setBase] = useState<string>();
-  const [direct, setDirect] = useState(false);
+  const [direct, setDirect] = useState(straight);
+  const hover = useHoverCard<OrganizeFileDto>();
   const [page, setPage] = useState(1);
   const [choosing, setChoosing] = useState(false);
   const [reviewing, setReviewing] = useState<number>();
@@ -60,9 +67,12 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
   const [problem, setProblem] = useState<string>();
 
   // Typed as the check's answer, so that every kind of answer is known to say whether there is an error.
-  const named: ReturnType<typeof checkFolderName> = direct ? { name: '' } : checkFolderName(name);
+  // A folder that is already there has no name to change here: a new folder made from its preview is named in the preview alone.
+  const [newName, setNewName] = useState('');
+  const typed = straight ? newName : name, rename = straight ? setNewName : onName;
+  const named: ReturnType<typeof checkFolderName> = direct ? { name: '' } : checkFolderName(typed);
   const folderName = named.error === undefined ? named.name : undefined;
-  const basePath = base ?? root, copy = mode === 'copy';
+  const basePath = base ?? home ?? root, copy = mode === 'copy';
   const asked = useMemo(() => files.map(f => ({ id: f.id, subfolder: subfolderOf?.(f) })), [files, subfolderOf]);
 
   // Asked afresh whenever where the files go changes; an answer to an earlier question is dropped.
@@ -155,7 +165,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
               const settled = planned !== undefined && !planned.has(f.id), off = !!excluded[f.id];
               return (
                 <li key={f.id}>
-                  <button type="button" aria-pressed={!off && !settled} disabled={settled} onClick={() => toggle(f.id)} title={f.name}
+                  <button type="button" aria-pressed={!off && !settled} disabled={settled} onClick={() => toggle(f.id)} {...hover.on(f.id, f)}
                     className={`flex w-full min-w-0 select-none flex-col gap-[5px] text-left ${off || settled ? 'opacity-35' : ''}`}>
                     <span className="relative block aspect-square overflow-hidden rounded-[9px]">
                       <Thumb file={f} className="h-full w-full" play={12} />
@@ -172,6 +182,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
               );
             })}
           </ul>
+          {hover.card(f => <FileFacts file={f} places={places} root={root} />)}
         </div>
 
         <aside className="flex min-h-0 flex-col gap-5 overflow-y-auto border-line p-4 max-lg:border-t lg:border-l lg:p-6">
@@ -183,7 +194,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
           ) : (
             <label className="flex flex-col gap-[7px]">
               <span className="text-[13px] text-t2">Folder name</span>
-              <input value={name} onChange={e => onName(e.target.value)} aria-invalid={named.error !== undefined}
+              <input value={typed} onChange={e => rename(e.target.value)} aria-invalid={named.error !== undefined}
                 className={`h-[46px] rounded-xl border bg-bg px-3.5 text-[15px] font-medium outline-none ${named.error === undefined ? 'border-line' : 'border-rose'}`} />
               {named.error === undefined
                 ? <span className="text-[12.5px] text-t3">Rename it here. Use \ to make subfolders.</span>
@@ -199,7 +210,7 @@ export function MovePreview({ kind, root, files, name, split, subfolderOf, merge
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2.5">
               <span className="label-caps flex-1 tracking-[0.08em]">Goes to</span>
-              {base !== undefined && <button type="button" onClick={() => { setBase(undefined); setDirect(false); }} className="text-[12.5px] text-t2 underline underline-offset-[3px]">Use the default</button>}
+              {base !== undefined && <button type="button" onClick={() => { setBase(undefined); setDirect(straight); }} className="text-[12.5px] text-t2 underline underline-offset-[3px]">Use the default</button>}
               <button type="button" onClick={() => setChoosing(true)} className="pill-quiet h-[30px] border border-line px-3.5 text-[12.5px]">Change</button>
             </div>
             <p aria-label="Destination" className="font-mono text-[13px] leading-normal [overflow-wrap:anywhere]">{destination}{separatorOf(root)}</p>

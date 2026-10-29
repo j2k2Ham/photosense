@@ -57,7 +57,9 @@ const chip = () => screen.getByLabelText('Folder being organized');
 const gallery = () => screen.getByRole('list', { name: 'Files' });
 const tiles = () => within(gallery()).queryAllByRole('button');
 const tile = (name: string) => within(gallery()).getByRole('button', { name: new RegExp(`${name.replace('.', '\\.')}`) });
-const shownNames = () => tiles().map(t => t.getAttribute('title'));
+// The name under a tile's picture.
+const nameOf = (t: HTMLElement) => t.querySelector('.truncate.font-medium')!.textContent;
+const shownNames = () => tiles().map(nameOf);
 const panel = () => screen.getByRole('complementary', { name: 'Suggested folders' });
 const cards = () => within(panel()).getAllByRole('button', { name: /^Show the files for / }).map(c => c.textContent);
 const bar = () => screen.getByRole('region', { name: 'Selection' });
@@ -65,7 +67,13 @@ const preview = () => screen.getByRole('dialog', { name: 'Preview' });
 const moveButton = () => within(preview()).getByRole('button', { name: /^(Move|Copy) [\d,]+ files?$|^(Moving|Copying)…$/ });
 const said = () => notify.mock.calls.map(c => [c[0], c[1]]);
 const dragged = () => ({ dataTransfer: { setData: vi.fn(), effectAllowed: '' } });
-const selected = () => tiles().filter(t => t.getAttribute('aria-pressed') === 'true').map(t => t.getAttribute('title'));
+const selected = () => tiles().filter(t => t.getAttribute('aria-pressed') === 'true').map(nameOf);
+const folderDialog = () => screen.getByRole('dialog', { name: /^Put [\d,]+ files? in a folder$|^New folder$/ });
+/** Sets up a new folder of the person's own, asked for from the bar under the files or the panel. */
+async function makeFolder(name: string, from: 'bar' | 'panel' = 'panel') {
+  await userEvent.click(from === 'bar' ? within(bar()).getByRole('button', { name: 'New folder from these' }) : within(panel()).getByRole('button', { name: 'New folder' }));
+  await userEvent.type(within(folderDialog()).getByRole('textbox', { name: 'Name' }), `${name}{Enter}`);
+}
 
 describe('choosing the folder', () => {
   it('starts with the folder last scanned, saying how many files it holds and that nothing had to be read', () => {
@@ -428,10 +436,12 @@ describe('selecting files and making folders', () => {
     await userEvent.click(tile('a1.JPG'));
     await userEvent.click(tile('b1.JPG'));
     await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    await userEvent.type(within(bar()).getByRole('textbox'), 'Trips\\Glacier 2022');
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Create folder' }));
+    expect(folderDialog()).toHaveAccessibleName('Put 2 files in a folder');
+    await userEvent.type(within(folderDialog()).getByRole('textbox', { name: 'Name' }), 'Trips\\Glacier 2022');
+    await userEvent.click(within(folderDialog()).getByRole('button', { name: 'Create folder' }));
 
     expect(said()).toEqual([['Made Trips\\Glacier 2022 with 2 files. Preview it when you are ready.', 'ok']]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Selection' })).not.toBeInTheDocument();
     expect(within(panel()).getByRole('button', { name: 'Show the files for Trips\\Glacier 2022' })).toHaveTextContent('2 files · 11.6 MB · not moved yet');
     expect(tile('a1.JPG')).toHaveTextContent('For Trips\\Glacier 2022');
@@ -452,45 +462,112 @@ describe('selecting files and making folders', () => {
     expect(panel()).toHaveTextContent('No location · 1 file');
   });
 
-  it('refuses a folder name that cannot be used, and one that is already taken', async () => {
+  it('refuses a folder name that cannot be used, and one that is already taken there', async () => {
     open();
     await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    const name = within(panel()).getByRole('textbox', { name: 'Folder name' });
+    expect(folderDialog()).toHaveAccessibleName('New folder');
+    const name = within(folderDialog()).getByRole('textbox', { name: 'Name' });
     fireEvent.keyDown(name, { key: 'Enter' });
+    expect(within(folderDialog()).getByRole('alert')).toHaveTextContent('Give the new folder a name.');
     await userEvent.type(name, 'What?{Enter}');
+    expect(within(folderDialog()).getByRole('alert')).toHaveTextContent('Folder names cannot contain < > : " / | ? or *');
     await userEvent.clear(name);
     await userEvent.type(name, 'Trips{Enter}');
-    expect(said()).toEqual([['Give the new folder a name.', 'error'], ['Folder names cannot contain < > : " / | ? or *', 'error'], ['Made Trips. Select or drag files onto it.', 'ok']]);
-    expect(within(panel()).queryByRole('textbox', { name: 'Folder name' })).not.toBeInTheDocument();
+    expect(said()).toEqual([['Made Trips. Select or drag files onto it.', 'ok']]);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    await userEvent.type(within(panel()).getByRole('textbox', { name: 'Folder name' }), 'trips{Enter}');
-    expect(said()[3]).toEqual(['You already have a folder called trips.', 'error']);
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Cancel' }));
-    expect(within(panel()).queryByRole('textbox', { name: 'Folder name' })).not.toBeInTheDocument();
+    await makeFolder('trips');
+    expect(within(folderDialog()).getByRole('alert')).toHaveTextContent('You already have a folder called trips there.');
+    await userEvent.click(within(folderDialog()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     // The name that was being typed is not kept for next time.
     await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    expect(within(panel()).getByRole('textbox', { name: 'Folder name' })).toHaveValue('');
+    expect(within(folderDialog()).getByRole('textbox', { name: 'Name' })).toHaveValue('');
+    expect(said()).toHaveLength(1);
   });
 
-  it('gives up naming a folder from the bar on Cancel, or when the selection is let go', async () => {
+  it('gives up setting up a folder on Cancel, Escape or a press outside the window, keeping the selection', async () => {
+    open();
+    await userEvent.click(tile('a1.JPG'));
+    for (const away of [() => userEvent.click(within(folderDialog()).getByRole('button', { name: 'Cancel' })), () => userEvent.keyboard('{Escape}'), () => userEvent.pointer({ keys: '[MouseLeft]', target: folderDialog().parentElement! })]) {
+      await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
+      await userEvent.type(within(folderDialog()).getByRole('textbox', { name: 'Name' }), 'Half a name');
+      await away();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(selected()).toEqual(['a1.JPG']);
+    }
+    await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
+    expect(within(folderDialog()).getByRole('textbox', { name: 'Name' })).toHaveValue('');
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('makes a new folder somewhere other than the folder being organized, and moves the files there', async () => {
+    api.applyOrganize.mockResolvedValue(applied({ done: 1, bytes: 6_093_000, items: [{ id: 'a1', path: `${OTHER}\\Glacier\\a1.JPG` }] }));
     open();
     await userEvent.click(tile('a1.JPG'));
     await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    await userEvent.type(within(bar()).getByRole('textbox'), 'Half a name');
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }));
-    expect(within(bar()).getByRole('button', { name: 'New folder from these' })).toBeInTheDocument();
+    await userEvent.click(within(folderDialog()).getByRole('button', { name: 'Change' }));
+    const picker = screen.getByRole('dialog', { name: 'Choose where the new folder is made' });
+    await userEvent.click(await within(picker).findByRole('button', { name: 'Phone 2022' }));
+    await waitFor(() => expect(within(picker).getByRole('button', { name: 'Make it here' })).toBeEnabled());
+    await userEvent.click(within(picker).getByRole('button', { name: 'Make it here' }));
+    expect(folderDialog()).toHaveTextContent(`Made inside${OTHER}Change`);
+    await userEvent.type(within(folderDialog()).getByRole('textbox', { name: 'Name' }), 'Glacier{Enter}');
+
+    expect(said()).toEqual([['Made Glacier with 1 file. Preview it when you are ready.', 'ok']]);
+    const card = within(panel()).getByRole('button', { name: 'Show the files for Glacier' });
+    expect(card).toHaveTextContent(`GlacierIn ${OTHER}1 file`);
+    expect(within(card).getByText('Glacier')).toHaveAttribute('title', `${OTHER}\\Glacier`);
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Preview Glacier' }));
+    await waitFor(() => expect(moveButton()).toBeEnabled());
+    expect(api.planOrganize).toHaveBeenLastCalledWith({ basePath: OTHER, folderName: 'Glacier', direct: false }, [{ id: 'a1', subfolder: undefined }]);
+    expect(within(preview()).getByLabelText('Destination')).toHaveTextContent(`${OTHER}\\Glacier\\`);
+    await userEvent.click(moveButton());
+    expect(api.applyOrganize).toHaveBeenCalledWith(expect.objectContaining({ basePath: OTHER, folderName: 'Glacier', direct: false, label: 'Glacier' }));
+  });
+
+  it('puts the selected files into a folder that is already there, straight into it', async () => {
+    api.browseFolders.mockImplementation(async (path?: string) => ({ path, parent: 'C:\\Users\\jamie', folders: [{ name: 'Trips', path: `${ROOT}\\Trips` }] }));
+    open();
+    await userEvent.click(tile('a1.JPG'));
+    await userEvent.click(tile('b1.JPG'));
     await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    expect(within(bar()).getByRole('textbox')).toHaveValue('');
+    await userEvent.click(within(within(folderDialog()).getByRole('group', { name: 'Which folder' })).getByRole('button', { name: 'Folder already there' }));
+    await userEvent.click(await within(folderDialog()).findByRole('button', { name: 'Trips' }));
+    await userEvent.click(within(folderDialog()).getByRole('button', { name: 'Use Trips' }));
+
+    expect(said()).toEqual([['2 files will go into Trips. Preview it when you are ready.', 'ok']]);
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' })).toHaveTextContent('TripsAlready there2 files · 11.6 MB · not moved yet');
+    expect(tile('a1.JPG')).toHaveTextContent('For Trips');
+    await userEvent.click(within(panel()).getByRole('button', { name: 'Preview Trips' }));
+    await waitFor(() => expect(moveButton()).toBeEnabled());
+    expect(api.planOrganize).toHaveBeenLastCalledWith({ basePath: `${ROOT}\\Trips`, folderName: '', direct: true }, [{ id: 'a1', subfolder: undefined }, { id: 'b1', subfolder: undefined }]);
+    expect(preview()).toHaveTextContent('The files go straight into Trips, without a new folder.');
+
+    // Set up once: the same folder is not taken twice, nor is a new one made where it is.
+    await userEvent.click(within(preview()).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
+    await userEvent.click(within(within(folderDialog()).getByRole('group', { name: 'Which folder' })).getByRole('button', { name: 'Folder already there' }));
+    await userEvent.click(await within(folderDialog()).findByRole('button', { name: 'Trips' }));
+    expect(within(folderDialog()).getByRole('alert')).toHaveTextContent('Trips is already one of your folders. Use Add here on its card.');
+    expect(within(folderDialog()).getByRole('button', { name: 'Use Trips' })).toBeDisabled();
+  });
+
+  it('adds a folder already there to your folders empty, to fill afterwards', async () => {
+    api.browseFolders.mockImplementation(async (path?: string) => ({ path, parent: null, folders: [{ name: 'Trips', path: `${ROOT}\\Trips` }] }));
+    open();
+    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
+    await userEvent.click(within(within(folderDialog()).getByRole('group', { name: 'Which folder' })).getByRole('button', { name: 'Folder already there' }));
+    await userEvent.click(await within(folderDialog()).findByRole('button', { name: 'Trips' }));
+    await userEvent.click(within(folderDialog()).getByRole('button', { name: 'Use Trips' }));
+    expect(said()).toEqual([['Added Trips to your folders. Select or drag files onto it.', 'ok']]);
   });
 
   it('removes a folder of your own, giving its files back to the suggestions', async () => {
     open();
     await userEvent.click(tile('a1.JPG'));
-    await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    await userEvent.type(within(bar()).getByRole('textbox'), 'Trips{Enter}');
-    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    await userEvent.type(within(panel()).getByRole('textbox', { name: 'Folder name' }), 'Family{Enter}');
+    await makeFolder('Trips', 'bar');
+    await makeFolder('Family');
     await userEvent.click(within(panel()).getByRole('button', { name: 'Show the files for Trips' }));
     expect(shownNames()).toEqual(['a1.JPG']);
 
@@ -506,8 +583,7 @@ describe('selecting files and making folders', () => {
 
   it('removes a folder while another kind of folder is picked without letting go of that', async () => {
     open();
-    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    await userEvent.type(within(panel()).getByRole('textbox', { name: 'Folder name' }), 'Family{Enter}');
+    await makeFolder('Family');
     await userEvent.click(within(panel()).getByRole('button', { name: 'Show the files for Anaconda' }));
     await userEvent.click(within(panel()).getByRole('button', { name: 'Remove Family' }));
     expect(screen.getByText('Suggested: Anaconda')).toBeInTheDocument();
@@ -517,8 +593,7 @@ describe('selecting files and making folders', () => {
 describe('dragging files', () => {
   it('puts one file, or the whole selection, into the folder it is dropped on', async () => {
     open();
-    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    await userEvent.type(within(panel()).getByRole('textbox', { name: 'Folder name' }), 'Trips{Enter}');
+    await makeFolder('Trips');
     const folder = () => within(panel()).getByRole('button', { name: 'Show the files for Trips' }).parentElement!;
 
     // A file that is not part of the selection goes alone.
@@ -542,8 +617,7 @@ describe('dragging files', () => {
   it('adds a file to the suggested folder it is dropped on, taking it out of a folder of your own', async () => {
     open();
     await userEvent.click(tile('n1.JPG'));
-    await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    await userEvent.type(within(bar()).getByRole('textbox'), 'Trips{Enter}');
+    await makeFolder('Trips', 'bar');
     fireEvent.dragStart(tile('n1.JPG'), dragged());
     fireEvent.drop(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement!);
     expect(said()[1]).toEqual(['Added 1 file to the suggested folder Uptown Butte', 'ok']);
@@ -561,11 +635,9 @@ describe('dragging files', () => {
     fireEvent.dragStart(tile('b2.JPG'), dragged());
     fireEvent.drop(within(panel()).getByRole('group', { name: 'Drop the files on a folder' }).querySelector('[data-drop="New folder"]')!);
     expect(selected()).toEqual(['b2.JPG']);
-    expect(within(bar()).getByRole('textbox', { name: 'Name of the new folder' })).toBeInTheDocument();
-    // Letting the selection go from here gives the naming up too.
-    await userEvent.type(within(bar()).getByRole('textbox'), 'x');
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Cancel' }));
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Clear' }));
+    expect(folderDialog()).toHaveAccessibleName('Put 1 file in a folder');
+    await userEvent.type(within(folderDialog()).getByRole('textbox', { name: 'Name' }), 'Butte{Enter}');
+    expect(said()).toEqual([['Made Butte with 1 file. Preview it when you are ready.', 'ok']]);
     expect(screen.queryByRole('region', { name: 'Selection' })).not.toBeInTheDocument();
   });
 });
@@ -826,8 +898,7 @@ describe('moving, copying and undoing', () => {
     // One of the person's own folders, with a picture and a video in it.
     await userEvent.click(tile('a1.JPG'));
     await userEvent.click(tile('a4.MOV'));
-    await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    await userEvent.type(within(bar()).getByRole('textbox'), 'Trips{Enter}');
+    await makeFolder('Trips', 'bar');
 
     await userEvent.click(type(/^Photos\d/));
     expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' })).toHaveTextContent('1 file');
@@ -874,10 +945,8 @@ describe('moving, copying and undoing', () => {
     api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
     const { refresh } = open();
     await userEvent.click(tile('a1.JPG'));
-    await userEvent.click(within(bar()).getByRole('button', { name: 'New folder from these' }));
-    await userEvent.type(within(bar()).getByRole('textbox'), 'Trips{Enter}');
-    await userEvent.click(within(panel()).getByRole('button', { name: 'New folder' }));
-    await userEvent.type(within(panel()).getByRole('textbox', { name: 'Folder name' }), 'Family{Enter}');
+    await makeFolder('Trips', 'bar');
+    await makeFolder('Family');
     await previewOf('Trips');
     expect(preview()).toHaveTextContent('Your folder');
     // Renaming it here renames the folder itself.

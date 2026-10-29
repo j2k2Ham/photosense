@@ -8,18 +8,24 @@ export interface GoogleMap {
   /** A click on the map itself: not on a marker, and not the end of a drag. */
   addListener(event: 'click', handler: () => void): void;
 }
-export interface GoogleMarker { setMap(map: GoogleMap | null): void; addListener(event: 'click', handler: () => void): void; }
+/** A marker drawn from the page's own element; it is taken off its map by setting `map` to null. */
+export interface GoogleMarker { map: GoogleMap | null; addEventListener(event: 'gmp-click', handler: () => void): void; }
 export interface GoogleMaps {
   Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMap;
-  Marker: new (options: Record<string, unknown>) => GoogleMarker;
   LatLngBounds: new () => GoogleBounds;
-  SymbolPath: { CIRCLE: unknown };
+  marker: { AdvancedMarkerElement: new (options: Record<string, unknown>) => GoogleMarker };
 }
 
 interface MapsWindow { google?: { maps: GoogleMaps }; photosenseMapsReady?(): void; gm_authFailure?(): void; }
 
 /** The key Google's maps are asked for with; none unless NEXT_PUBLIC_GOOGLE_MAPS_KEY was set when the UI was started. */
 export const googleMapsKey = () => process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY || undefined;
+
+/**
+ * The map ID the maps are drawn with, which Google requires of markers drawn from the page's own elements. Google's
+ * DEMO_MAP_ID stands in until one made in the Google Cloud console is set as NEXT_PUBLIC_GOOGLE_MAPS_ID.
+ */
+export const googleMapsId = () => process.env.NEXT_PUBLIC_GOOGLE_MAPS_ID || 'DEMO_MAP_ID';
 
 let loading: Promise<GoogleMaps> | undefined;
 let refused = false;
@@ -33,7 +39,7 @@ export function loadGoogleMaps(key: string): Promise<GoogleMaps> {
     // Google says a key is no good only after the library has loaded and a map has been drawn with it.
     page.gm_authFailure = () => { refused = true; watchers.forEach(tell => tell()); };
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&callback=photosenseMapsReady`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&libraries=marker&callback=photosenseMapsReady`;
     script.async = true;
     script.onerror = () => {
       // Tried again the next time a map is shown: the connection may be back by then.

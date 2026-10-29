@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import type { DuplicateGroupDto, GroupMode } from '../types';
 import { groupSummary } from '../lib/format';
-import { PhotoThumb } from './PhotoThumb';
+import { useHoverCard } from './HoverCard';
+import { PhotoFacts, PhotoThumb } from './PhotoThumb';
 import { SelectAll } from './SelectAll';
 
 interface Props {
@@ -41,6 +42,7 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
   const pager = 'pill-outline h-[30px] px-3 text-[13px]';
   const chosenHere = groups.filter(g => chosen.has(g.key)).length;
   const list = useRef<HTMLUListElement>(null);
+  const hover = useHoverCard<DuplicateGroupDto>();
   // A page starts at its top, wherever the one before it was left.
   useEffect(() => {
     if (list.current) list.current.scrollTop = 0;
@@ -80,7 +82,7 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
               const summary = groupSummary(g, mode), on = chosen.has(g.key);
               return (
                 <li key={g.key} className="relative">
-                  <button type="button" aria-pressed={g.key === selectedKey} onClick={() => onSelect(g.key)} className="block w-full text-left">
+                  <button type="button" aria-pressed={g.key === selectedKey} onClick={() => onSelect(g.key)} {...hover.on(g.key, g)} className="block w-full text-left">
                     <span className={`relative block aspect-square overflow-hidden rounded-[10px] ${g.key === selectedKey ? 'shadow-selected' : ''}`}>
                       <PhotoThumb photo={g.keeper} className="h-full w-full" />
                       {g.keeper.isVideo && <span className="absolute bottom-2 left-2 rounded bg-white/15 px-1.5 text-[11px] font-bold text-white">VIDEO</span>}
@@ -99,6 +101,19 @@ export function GroupList({ groups, mode, total, page, totalPages, query, select
             })}
           </ul>
         )}
+      {hover.card(g => (
+        <>
+          <div className="mb-2 flex items-start gap-2">
+            <span className="min-w-0 flex-1 text-[14.5px] font-semibold text-t1 [overflow-wrap:anywhere]">{g.keeper.fileName}</span>
+            <span className="badge bg-keep-bg text-keep">{mode === 'similar' ? 'Best shot' : 'Original'}</span>
+          </div>
+          <PhotoFacts photo={g.keeper} />
+          <div className="mt-3 border-t border-line pt-3 text-t2">
+            <p>{mode === 'similar' ? 'The best shot of its group, which stays.' : 'The best copy, which stays.'}</p>
+            <p className="text-t3">With it: {groupSummary(g, mode).text}</p>
+          </div>
+        </>
+      ))}
       {footer}
     </section>
   );

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
-import { formatBytes, leaf } from '../../lib/format';
+import { formatBytes, leaf, sameFolder } from '../../lib/format';
 import {
-  GALLERY_PAGE, checkFolderName, defaultSettings, fileTag, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
+  GALLERY_PAGE, defaultSettings, fileTag, joinPath, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
   type FileRef, type OrganizeChoices, type OrganizeSettings, type OrganizedMark,
 } from '../../lib/organize';
 import { loadOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
@@ -13,6 +13,7 @@ import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { FileGallery, type FileFilter, type FileKind } from './FileGallery';
+import { FolderDialog, type FolderPlace } from './FolderDialog';
 import { MovePreview } from './MovePreview';
 import { ReadingOverlay } from './ReadingOverlay';
 import { SelectionBar } from './SelectionBar';
@@ -26,6 +27,8 @@ interface Props {
 }
 
 type Target = { kind: 'suggested' | 'own'; key: string };
+/** A folder of the person's own: new in the root unless `base` says where, or `base` itself when the files go straight into it. */
+interface Own { id: string; name: string; base?: string; direct?: boolean; }
 /** What an undo has to put back in this page, beyond what the service puts back on disk. */
 interface Undoable { paths: string[]; assigned: Record<string, string>; added: Record<string, string>; removed: string[]; }
 /** The folder inside the root that holds what was deleted, as it does what Clean up removes. */
@@ -57,12 +60,12 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const [page, setPage] = useState(1);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const lastPick = useRef(-1);
-  const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
+  const [folders, setFolders] = useState<Own[]>([]);
   const folderSeq = useRef(0);
   const [choices, setChoices] = useState<OrganizeChoices>(noChoices);
   const [focus, setFocus] = useState<Focus>();
-  const [naming, setNaming] = useState<'bar' | 'panel'>();
-  const [newName, setNewName] = useState('');
+  // Which folder the selected files go in is being asked.
+  const [making, setMaking] = useState(false);
   const [dragging, setDragging] = useState<string[]>([]);
   const [preview, setPreview] = useState<Target>();
   const [mode, setMode] = useState<'move' | 'copy'>('move');
@@ -105,7 +108,10 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const suggestions = useMemo(() => (arranged ? suggest(arranged, settings, choices) : []), [arranged, settings, choices]);
   const byKey = useMemo(() => new Map(suggestions.map(s => [s.key, s])), [suggestions]);
   // Files of the other kind stay in the person's folder, for when that kind is shown.
-  const own: OwnFolder[] = useMemo(() => folders.map(f => ({ ...f, files: files.filter(x => choices.assigned[x.id] === f.id && goes(x)) })), [folders, files, choices.assigned, goes]);
+  const own: OwnFolder[] = useMemo(() => folders.map(f => ({
+    id: f.id, name: f.name, files: files.filter(x => choices.assigned[x.id] === f.id && goes(x)),
+    where: f.direct ? 'Already there' : f.base && `In ${relativeFolder(root!, f.base)}`, path: f.direct ? f.base : joinPath(f.base ?? root!, f.name),
+  })), [folders, files, choices.assigned, goes, root]);
   const folderNames = useMemo(() => Object.fromEntries(folders.map(f => [f.id, f.name])), [folders]);
   const noPlace = useMemo(() => (arranged ? unplaced(arranged, choices, suggestions) : []), [arranged, choices, suggestions]);
   const searchable = useMemo(() => new Map(files.map(f => [f.id, searchText(f, places)])), [files, places]);
@@ -153,7 +159,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
     saveOrganizeRoot(path);
     announce.current = path;
     // Everything arranged was arranged for the other folder's files.
-    setFolders([]); setChoices(noChoices); setFocus(undefined); setPreview(undefined); setPage(1); setNaming(undefined); clearPicks(); setGone(new Set());
+    setFolders([]); setChoices(noChoices); setFocus(undefined); setPreview(undefined); setPage(1); setMaking(false); clearPicks(); setGone(new Set());
     undoable.current.clear();
   }
 
@@ -183,19 +189,19 @@ export function OrganizeView({ startRoot, notify }: Props) {
   function drop(target: Target | 'new') {
     const ids = dragging;
     setDragging([]);
-    if (target === 'new') { setPicked(new Set(ids)); setNaming('bar'); }
+    if (target === 'new') { setPicked(new Set(ids)); setMaking(true); }
     else if (target.kind === 'own') addToOwn(target.key, ids);
     else addToSuggested(target.key, ids);
   }
 
-  function createFolder() {
-    const checked = checkFolderName(newName, folders.map(f => f.name));
-    if (checked.error !== undefined) return notify(checked.error, 'error');
+  function createFolder({ name, base, direct }: FolderPlace) {
     const id = `own-${++folderSeq.current}`, ids = [...picked];
-    setFolders(f => [...f, { id, name: checked.name }]);
+    // A new folder in the root needs no place of its own: its preview starts from the root, as a suggested folder's does.
+    setFolders(f => [...f, { id, name, direct, base: direct || !sameFolder(base, root!) ? base : undefined }]);
     setChoices(c => ({ ...c, assigned: { ...c.assigned, ...Object.fromEntries(ids.map(x => [x, id])) } }));
-    setNaming(undefined); setNewName(''); clearPicks();
-    notify(ids.length > 0 ? `Made ${checked.name} with ${countFiles(ids.length)}. Preview it when you are ready.` : `Made ${checked.name}. Select or drag files onto it.`, 'ok');
+    setMaking(false); clearPicks();
+    if (direct) notify(ids.length > 0 ? `${countFiles(ids.length)} will go into ${name}. Preview it when you are ready.` : `Added ${name} to your folders. Select or drag files onto it.`, 'ok');
+    else notify(ids.length > 0 ? `Made ${name} with ${countFiles(ids.length)}. Preview it when you are ready.` : `Made ${name}. Select or drag files onto it.`, 'ok');
   }
   function removeFolder(id: string) {
     setFolders(f => f.filter(x => x.id !== id));
@@ -213,6 +219,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
 
   // What is being previewed, as it is now: a suggestion's files change as its name does.
   const previewed = preview?.kind === 'suggested' ? byKey.get(preview.key) : undefined, previewedOwn = preview?.kind === 'own' ? own.find(f => f.id === preview.key) : undefined;
+  const ownPreviewed = previewedOwn && folders.find(f => f.id === previewedOwn.id);
   // A folder whose last file was deleted from the preview has nothing left to preview.
   const nothingPreviewed = preview !== undefined && !(previewed ?? previewedOwn)?.files.length;
   useEffect(() => { if (nothingPreviewed) setPreview(undefined); }, [nothingPreviewed]);
@@ -344,27 +351,25 @@ export function OrganizeView({ startRoot, notify }: Props) {
           {reading && !data && <ReadingOverlay folder={leaf(root)} progress={soFar} />}
           <section aria-label="All files" className={`${pane === 'files' ? 'flex' : 'hidden lg:flex'} min-h-0 min-w-0 flex-col`}>
             {reading && data && <ReadingOverlay compact folder={leaf(root)} progress={soFar} />}
-            <FileGallery files={shown} places={places} page={Math.min(page, pages)} filter={filter} counts={counts} kind={kind} kindCounts={kindCounts} focus={focusLabel} narrowed={focusLabel !== undefined || q !== '' || filter !== 'all' || kind !== 'any'} picked={picked}
+            <FileGallery files={shown} places={places} root={root} page={Math.min(page, pages)} filter={filter} counts={counts} kind={kind} kindCounts={kindCounts} focus={focusLabel} narrowed={focusLabel !== undefined || q !== '' || filter !== 'all' || kind !== 'any'} picked={picked}
               reading={reading && !data} empty={listing.error ? 'This folder could not be read.' : q ? `No files match “${query.trim()}”` : 'No files here'}
               tagOf={f => fileTag(f, choices, folderNames, suggestedNames)} onPage={setPage} onFilter={f => { setFilter(f); setPage(1); }} onKind={k => { setKind(k); setPage(1); }} onClearFocus={() => turnTo(undefined)} onClearAll={showEverything} onPickAll={pickAll}
               onPick={pick} onOpen={open} onDragStart={f => setDragging(picked.has(f.id) ? [...picked] : [f.id])} onDragEnd={() => setDragging([])} />
             {picked.size > 0 && (
-              <SelectionBar count={picked.size} shown={shown.length} hint={folders.length > 0 ? 'or add them to one of your folders' : ''} naming={naming === 'bar'} name={newName} onName={setNewName}
-                onSelectAll={() => setPicked(new Set(shown.map(f => f.id)))} onStartNaming={() => setNaming('bar')} onCancelNaming={() => { setNaming(undefined); setNewName(''); }}
-                onCreate={createFolder} onDelete={askToDelete} onClear={clearPicks} />
+              <SelectionBar count={picked.size} shown={shown.length} hint={folders.length > 0 ? 'or add them to one of your folders' : ''}
+                onSelectAll={() => setPicked(new Set(shown.map(f => f.id)))} onNewFolder={() => setMaking(true)} onDelete={askToDelete} onClear={clearPicks} />
             )}
           </section>
           <SuggestionsPanel className={pane === 'folders' ? 'flex' : 'hidden lg:flex'} settings={settings} showMap={showMap} suggestions={suggestions} map={map} focus={focus} unplaced={noPlace.length} folders={own} picked={picked.size}
-            dragging={dragging.length} naming={naming === 'panel'} name={newName} batches={batches.data ?? []} busy={busy} reading={reading} rootName={leaf(root)}
+            dragging={dragging.length} batches={batches.data ?? []} busy={busy} reading={reading} rootName={leaf(root)}
             onSettings={changeSettings} onShowMap={setShowMap} onFocus={showFolder} onPreview={showPreview} onDrop={drop} onGroupByDate={() => changeSettings({ group: 'date' })}
-            onName={setNewName} onStartNaming={() => setNaming('panel')} onCancelNaming={() => { setNaming(undefined); setNewName(''); }} onCreate={createFolder}
-            onAddPicked={id => addToOwn(id, [...picked])} onRemoveFolder={removeFolder} onUndo={b => void undo(b.id, b.label, b.mode === 'copy')} />
+            onNewFolder={() => setMaking(true)} onAddPicked={id => addToOwn(id, [...picked])} onRemoveFolder={removeFolder} onUndo={b => void undo(b.id, b.label, b.mode === 'copy')} />
         </div>
       )}
 
       {root !== undefined && (previewed || previewedOwn) && (
-        <MovePreview key={`${preview!.kind}:${preview!.key}`} kind={previewed ? 'Suggested folder' : 'Your folder'} root={root} files={previewed?.files ?? previewedOwn!.files}
-          name={previewed?.name ?? previewedOwn!.name} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={mode} companions={companions} busy={busy} asking={deleting !== undefined}
+        <MovePreview key={`${preview!.kind}:${preview!.key}`} kind={previewed ? 'Suggested folder' : 'Your folder'} root={root} files={previewed?.files ?? previewedOwn!.files} places={places}
+          name={previewed?.name ?? previewedOwn!.name} base={ownPreviewed?.base} direct={ownPreviewed?.direct} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={mode} companions={companions} busy={busy} asking={deleting !== undefined}
           placeOf={id => { const f = files.find(x => x.id === id); return f?.place == null ? undefined : `${places[f.place].town}, ${places[f.place].state}`; }}
           onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move(request, going)}
           onDelete={(file, stays) => setDeleting({ files: [file], stays })} onClose={() => setPreview(undefined)} />
@@ -381,6 +386,9 @@ export function OrganizeView({ startRoot, notify }: Props) {
             </>
           ) : <p>{countFiles(deleting.files.length)} taking {formatBytes(totalBytes(deleting.files))} will be removed from {leaf(root!)}, along with any Live Photo videos and edit files that belong only to them.</p>}
         </ConfirmDialog>
+      )}
+      {making && root !== undefined && (
+        <FolderDialog count={picked.size} root={root} taken={own.map(f => f.path!)} onDone={createFolder} onCancel={() => setMaking(false)} />
       )}
       {browsing && <FolderPicker title="Choose a folder to organize" startAt={root} onPick={chooseRoot} onCancel={() => setBrowsing(false)} />}
     </>

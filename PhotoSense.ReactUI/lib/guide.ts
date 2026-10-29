@@ -114,7 +114,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Going through a group',
         steps: [
           'Click a group. The original is shown beside one of its copies, with what differs between the two and why the original was preferred.',
-          'Under them is a strip of every copy. Click one to show it beside the original; hover over it for its name, date, folder and where it was taken.',
+          'Under them is a strip of every copy. Click one to show it beside the original; hover over it for its name, date, folder, where it was taken and what differs from the original.',
           'Click either picture to open the two large, side by side. There, **Space** flips between them in the same spot, and the arrow keys go through the copies.',
           'Press **Keep this copy** to mark a copy you want to keep. Deleting in bulk skips it.',
           'Press **Delete this copy** to remove the copy shown, or **Delete all copies** (the button says how many) to remove every copy of the group. The original stays.',
@@ -131,6 +131,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Good to know',
         tips: [
+          'Hover over a tile, or reach it with **Tab**, for the details of the picture on it: its name, when and where it was taken, its folder, its size and the camera. **Esc** puts the details away.',
           'Every question asked before a removal names the file that goes and the file that stays: two files holding one picture look alike, and are two files all the same.',
           'The message after a removal has an **Undo** button, which puts every file it took back where it was, into its group again.',
           'The last copy of a picture is never removed as a duplicate. If the original has been moved, changed or deleted since the scan, its copies are left alone; scan again to bring the results up to date.',
@@ -201,20 +202,22 @@ export const GUIDE: GuideTopic[] = [
   {
     id: 'own',
     title: 'Organize: folders of your own',
-    summary: 'Making your own folders and putting files in them.',
+    summary: 'Making your own folders, or using ones already there, and putting files in them.',
     go: { label: 'Open Organize', place: 'organize' },
     sections: [
       {
         steps: [
-          'Under **Your folders**, press **New folder** and name it. A \\ in the name makes a folder inside a folder, as in Trips\\Glacier 2022.',
+          'Under **Your folders**, press **New folder** and name it. It is made inside the folder being organized; **Change**, beside **Made inside**, makes it somewhere else. A \\ in the name makes a folder inside a folder, as in Trips\\Glacier 2022.',
+          'Or choose **Folder already there** and pick one, such as a folder you made before: the files go straight into it. **›** shows the folders inside a folder, and **Up** the folder above.',
           'Select files and press the **Add here** button on the folder’s card (it says how many, as in Add 3 here), or drag files onto the card.',
-          'Or the other way round: select files first, then press **New folder from these** in the bar under the files.',
+          'Or the other way round: select files first, then press **New folder from these** in the bar under the files. The same window opens, and the selected files go in the folder you set up.',
         ],
       },
       {
         tips: [
           'Files in your own folders are left out of the suggested folders. A file can also be dragged onto a suggested folder.',
-          'Nothing is moved by any of this. A folder exists on disk only once you preview it and confirm.',
+          'Nothing is moved by any of this. A new folder exists on disk only once you preview it and confirm.',
+          'Nothing in a folder already there is replaced: a file arriving under a name it already has gets a number. A card says where its folder is when that is not a new folder in the folder being organized; hover over it for the whole path.',
           'What you have arranged but not carried out lives in the page, and is gone if the page is loaded again.',
         ],
       },
@@ -271,6 +274,7 @@ export const GUIDE: GuideTopic[] = [
           'Hold **Shift** and click to select everything from the last file you clicked to this one.',
           '**Select all**, above the files, selects every file being shown, on every page; turned off, it lets them go. With a folder picked, a search or a filter on, that is only the files those leave.',
           'Double-click a file to open it in the computer’s own viewer or player.',
+          'Hover over a file, or reach it with **Tab**, for its details: its name, when and where it was taken, its folder and its size. **Esc** puts them away.',
         ],
       },
       {
@@ -279,7 +283,7 @@ export const GUIDE: GuideTopic[] = [
           'A bar appears under the files as soon as one is selected.',
         ],
         tips: [
-          '**New folder from these** makes a folder of your own with the selected files in it.',
+          '**New folder from these** puts the selected files in a folder of your own: a new one, wherever you choose, or one that is already there.',
           'The bin deletes the selected files. It asks first, then moves them to **_PhotoSense_Removed** inside the folder being organized, with any Live Photo videos and edit files that belong only to them. **Undo** puts them back.',
           '**Clear** lets every file go.',
         ],
@@ -333,7 +337,7 @@ export const GUIDE: GuideTopic[] = [
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
           '**Settings** has the switch for the second question before deleting permanently. Settings are kept in this browser.',
           '**Help** opens this guide.',
-          '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
+          '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
         ],
       },
     ],

@@ -1,7 +1,19 @@
 import React, { useState } from 'react';
 import type { PhotoDto } from '../types';
 import { imageUrl, thumbnailUrl, videoUrl } from '../lib/apiClient';
-import { formatDuration } from '../lib/format';
+import { formatDuration, formatFile, formatPlace, formatTaken } from '../lib/format';
+import { Facts } from './HoverCard';
+
+/** What is known of a picture or video, on the card shown while its tile is pointed at. */
+export function PhotoFacts({ photo }: { readonly photo: PhotoDto }) {
+  return <Facts rows={[
+    ['Taken', formatTaken(photo.takenOn)],
+    ['Folder', photo.folder, true],
+    ['Place', formatPlace(photo)],
+    ['File', formatFile(photo)],
+    ['Camera', photo.cameraModel ?? 'Not recorded'],
+  ]} />;
+}
 
 /** Small preview of a picture, or a dark tile with its playing time for a video (videos are never decoded). */
 export function PhotoThumb({ photo, className = '' }: { readonly photo: PhotoDto; readonly className?: string }) {

@@ -35,6 +35,8 @@ export function html(blocks) {
   return blocks.map(block => {
     if (block.kind === 'heading') return `<h${block.level}>${escape(block.text)}</h${block.level}>`;
     if (block.kind === 'paragraph') return `<p>${words(block.inline)}</p>`;
+    // Each answer folded away under its question, opened by the browser itself: the site has no script.
+    if (block.kind === 'questions') return `<div class="questions">${block.items.map(q => `<details><summary>${escape(q.question)}</summary>\n${html(q.answer)}\n</details>`).join('')}</div>`;
     const list = block.ordered ? 'ol' : 'ul';
     return `<${list}>${block.items.map(item => `<li>${words(item)}</li>`).join('')}</${list}>`;
   }).join('\n');
@@ -47,7 +49,11 @@ header,main,footer{max-width:760px;margin:0 auto;padding:0 16px}header{display:f
 header a.home{display:flex;align-items:center;gap:10px;font-weight:600;font-size:18px;color:var(--fg);text-decoration:none}header img{width:32px;height:32px;border-radius:8px}
 nav{display:flex;flex-wrap:wrap;gap:16px}nav a{color:var(--muted)}nav a[aria-current]{color:var(--fg);font-weight:600}
 a{color:var(--brand)}main{padding-top:8px;padding-bottom:40px}h1{font-size:32px;line-height:1.2}h2{margin-top:32px}code{font-size:.92em}
-li{margin:4px 0}.draft{background:#fff4d6;color:#5c4400;border:1px solid #e6c46a;border-radius:8px;padding:8px 12px}
+li{margin:4px 0}.questions{border:1px solid var(--line);border-radius:16px;overflow:hidden}.questions details+details{border-top:1px solid var(--line)}
+.questions summary{display:flex;align-items:center;gap:16px;padding:14px 18px;font-weight:600;cursor:pointer;list-style:none}.questions summary::-webkit-details-marker{display:none}
+.questions summary::after{content:"+";flex:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;margin-left:auto;border:1px solid var(--line);border-radius:50%;color:var(--brand);font-size:20px;line-height:1}
+.questions details[open]>summary::after{content:"\\2212";background:var(--brand);border-color:var(--brand);color:var(--bg)}.questions summary:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
+.questions details>:not(summary){margin:0 18px 14px}.draft{background:#fff4d6;color:#5c4400;border:1px solid #e6c46a;border-radius:8px;padding:8px 12px}
 footer{padding-top:16px;padding-bottom:32px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}`;
 
 /** A whole page of the site, with the way to the others. */

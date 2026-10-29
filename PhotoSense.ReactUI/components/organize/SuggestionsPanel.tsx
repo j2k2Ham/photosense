@@ -27,9 +27,6 @@ interface Props {
   readonly picked: number;
   /** How many files are being dragged; none when nothing is. */
   readonly dragging: number;
-  /** The name of a new folder is being typed in the panel. */
-  readonly naming: boolean;
-  readonly name: string;
   readonly batches: readonly OrganizeBatchDto[];
   readonly busy: boolean;
   /** The listing is still being read, so there is nothing yet to say there is none of. */
@@ -41,10 +38,8 @@ interface Props {
   onPreview(target: { kind: 'suggested' | 'own'; key: string }): void;
   onDrop(target: { kind: 'suggested' | 'own'; key: string } | 'new'): void;
   onGroupByDate(): void;
-  onName(name: string): void;
-  onStartNaming(): void;
-  onCancelNaming(): void;
-  onCreate(): void;
+  /** Asks which folder to set up: a new one, or one already there. The selected files, if any, go in it. */
+  onNewFolder(): void;
   onAddPicked(folderId: string): void;
   onRemoveFolder(folderId: string): void;
   onUndo(batch: OrganizeBatchDto): void;
@@ -192,27 +187,13 @@ export function SuggestionsPanel(p: Props) {
 
         <div className="mt-2 flex items-center gap-2.5 border-t border-line pt-[18px]">
           <h3 className="flex-1 text-[17px] font-semibold">Your folders</h3>
-          <button type="button" onClick={p.onStartNaming} className="pill-outline h-[34px] px-4 text-[13.5px]">New folder</button>
+          <button type="button" onClick={p.onNewFolder} className="pill-outline h-[34px] px-4 text-[13.5px]">New folder</button>
         </div>
-        {p.naming && (
-          <div className="flex flex-col gap-2 rounded-[14px] border border-brand bg-bg p-3">
-            {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-            <input autoFocus value={p.name} onChange={e => p.onName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') p.onCreate(); }}
-              aria-label="Folder name" placeholder="Folder name, for example Trips\Glacier 2022" className="h-10 rounded-[10px] border border-line bg-s1 px-3 text-[14px] outline-none placeholder:text-t3" />
-            <div className="flex items-center gap-2">
-              <p className="flex-1 text-[12.5px] text-t3">
-                {p.picked > 0 ? `The ${p.picked.toLocaleString()} selected ${p.picked === 1 ? 'file goes' : 'files go'} in it. Use \\ for subfolders.` : 'Use \\ for subfolders. Add files to it afterwards.'}
-              </p>
-              <button type="button" onClick={p.onCancelNaming} className="pill-outline h-[34px] px-3.5 text-[13px] font-medium">Cancel</button>
-              <button type="button" onClick={p.onCreate} className="pill-brand h-[34px] px-4 text-[13px]">Create</button>
-            </div>
-          </div>
-        )}
         {p.folders.map(f => (
           <CustomFolderCard key={f.id} folder={f} on={focusOf('own', f.id)} picked={p.picked} onFocus={() => p.onFocus(focusOf('own', f.id) ? undefined : { kind: 'own', key: f.id })}
             onAdd={() => p.onAddPicked(f.id)} onPreview={() => p.onPreview({ kind: 'own', key: f.id })} onRemove={() => p.onRemoveFolder(f.id)} onDrop={() => p.onDrop({ kind: 'own', key: f.id })} />
         ))}
-        {p.folders.length === 0 && !p.naming && <p className="px-0.5 pt-0.5 text-[13px] text-t3">Make a folder of your own, then select or drag files onto it. Files you add are left out of the suggestions.</p>}
+        {p.folders.length === 0 && <p className="px-0.5 pt-0.5 text-[13px] text-t3">Make a folder of your own, or pick one already there, then select or drag files onto it. Files you add are left out of the suggestions.</p>}
 
         {p.batches.length > 0 && (
           <div className="mt-2 border-t border-line pt-[18px]">
@@ -222,7 +203,7 @@ export function SuggestionsPanel(p: Props) {
           </div>
         )}
         <p className="pt-3.5 text-[12.5px] text-t3">
-          Folders are made inside <span className="font-mono text-t2">{p.rootName}</span>. Files already in the right folder are left alone, and nothing is ever replaced: if a name is taken, (1) is added.
+          Folders are made inside <span className="font-mono text-t2">{p.rootName}</span> unless you choose another place. Files already in the right folder are left alone, and nothing is ever replaced: if a name is taken, (1) is added.
         </p>
       </div>
       {showMoves && <RecentMovesWindow batches={p.batches} busy={p.busy} onUndo={p.onUndo} onClose={() => setShowMoves(false)} />}

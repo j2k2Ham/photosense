@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  checkFolderName, clashSummary, clusterPlaces, dateRange, defaultSettings, fileTag, haversineKm, joinPath, mapLayout, nextFreeName, noChoices, pathOf, placeKey,
-  placeName, placeOf, relativeFolder, resolveNames, searchText, separatorOf, shortDate, splitName, suggest, totalBytes, unplaced,
+  checkFolderName, clashSummary, clusterPlaces, dateRange, defaultSettings, fileLine, fileTag, haversineKm, joinPath, mapLayout, nextFreeName, noChoices, pathOf, placeKey,
+  placeInFull, placeName, placeOf, relativeFolder, resolveNames, searchText, separatorOf, shortDate, splitName, suggest, totalBytes, unplaced,
   type OrganizeChoices, type OrganizeSettings,
 } from '../../lib/organize';
 import type { OrganizeFileDto, OrganizeFilesDto, OrganizePlaceDto, OrganizePlanDto } from '../../types';
@@ -107,6 +107,21 @@ describe('names and paths', () => {
     expect(searchText(file({ name: 'b.JPG', date: '2022-07-04T10:00:00' }), PLACES)).toBe('b.jpg no location jul 4, 2022 july');
     expect(placeOf(at, PLACES)).toBe('Butte');
     expect(placeOf(file({ place: null }), PLACES)).toBe('No location');
+  });
+
+  it('names a place in full, each name once', () => {
+    expect(placeInFull(butte)).toBe('Uptown Butte, Butte, Montana, US');
+    expect(placeInFull(anaconda)).toBe('Anaconda, Montana, US');
+    expect(placeInFull(oldFaithful)).toBe('Old Faithful, Yellowstone, Old Faithful, Wyoming, US');
+    expect(placeInFull(place({ town: 'Monaco', state: 'Monaco', country: 'MC' }))).toBe('Monaco, MC');
+  });
+
+  it('says what a file is on one line: its pixels, its kind, a video\'s playing time, and its size', () => {
+    expect(fileLine(file({ name: 'IMG_1.heic', width: 4032, height: 3024, sizeBytes: 2_400_000 }))).toBe('4032 × 3024 · HEIC · 2.3 MB');
+    expect(fileLine(file({ name: 'clip.MOV', isVideo: true, width: 1920, height: 1080, durationSeconds: 75, sizeBytes: 40_000_000 }))).toBe('1920 × 1080 · MOV · 1:15 · 38.1 MB');
+    // A name with no kind of its own, or one that starts with a dot, and pixels that are not known.
+    expect(fileLine(file({ name: 'README', width: 0, sizeBytes: 900 }))).toBe('Size unknown · 1 KB');
+    expect(fileLine(file({ name: '.hidden', width: 0, sizeBytes: 900 }))).toBe('Size unknown · 1 KB');
   });
 
   it('checks a folder name before it is used', () => {

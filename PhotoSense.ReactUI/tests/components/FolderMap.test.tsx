@@ -8,7 +8,7 @@ import type { GoogleMaps, LatLng } from '../../lib/googleMaps';
 import type { MapDot, MapLayout } from '../../lib/organize';
 import { deferred } from '../deferred';
 
-const google = vi.hoisted(() => ({ googleMapsKey: vi.fn(), loadGoogleMaps: vi.fn(), onGoogleMapsRefused: vi.fn() }));
+const google = vi.hoisted(() => ({ googleMapsKey: vi.fn(), googleMapsId: vi.fn(), loadGoogleMaps: vi.fn(), onGoogleMapsRefused: vi.fn() }));
 vi.mock('../../lib/googleMaps', () => google);
 
 // Stand-ins for Google's own classes, which keep what they were made with and told to do.
@@ -23,19 +23,21 @@ class FakeMap {
   constructor(public element: HTMLElement, public options: Record<string, unknown>) { FakeMap.made.push(this); }
   addListener(_event: string, handler: () => void) { this.click = handler; }
 }
+interface MarkerOptions { map: unknown; position: LatLng; title: string; zIndex: number; content: HTMLElement; gmpClickable: boolean; anchorLeft: string; anchorTop: string; }
 class FakeMarker {
   static made: FakeMarker[] = [];
   map: unknown;
   click!: () => void;
-  constructor(public options: { map: unknown; position: LatLng; title: string; zIndex: number; icon: Record<string, unknown> }) { this.map = options.map; FakeMarker.made.push(this); }
-  setMap(map: unknown) { this.map = map; }
-  addListener(_event: string, handler: () => void) { this.click = handler; }
+  event = '';
+  constructor(public options: MarkerOptions) { this.map = options.map; FakeMarker.made.push(this); }
+  addEventListener(event: string, handler: () => void) { this.event = event; this.click = handler; }
 }
 class FakeBounds {
   points: LatLng[] = [];
   extend(at: LatLng) { this.points.push(at); }
 }
-const LIBRARY = { Map: FakeMap, Marker: FakeMarker, LatLngBounds: FakeBounds, SymbolPath: { CIRCLE: 'circle' } } as unknown as GoogleMaps;
+const LIBRARY = { Map: FakeMap, LatLngBounds: FakeBounds, marker: { AdvancedMarkerElement: FakeMarker } } as unknown as GoogleMaps;
+const look = (m: FakeMarker) => ({ size: m.options.content.style.width, fill: m.options.content.style.background, edge: m.options.content.style.border });
 
 const dot = (key: string, latitude: number, longitude: number, size = 14): MapDot => ({ key, x: 40, y: 60, size, label: key, labelled: true, labelSide: 'right', tip: `${key} · 3 files`, latitude, longitude });
 const layout = (...dots: MapDot[]): MapLayout => ({ dots, rings: [], merged: [], aspect: 1, scale: { miles: 5, percent: 20 } });
@@ -56,6 +58,7 @@ beforeEach(() => {
   for (const mock of Object.values(google)) mock.mockReset();
   stopWatching.mockReset();
   google.googleMapsKey.mockReturnValue('key-1');
+  google.googleMapsId.mockReturnValue('map-1');
   google.loadGoogleMaps.mockResolvedValue(LIBRARY);
   google.onGoogleMapsRefused.mockImplementation((tell: () => void) => { refuse = tell; return stopWatching; });
 });
@@ -94,11 +97,13 @@ describe('the map of the suggested folders', () => {
     expect(map()).toContainElement(made.element);
     expect(map()).toHaveClass('h-[380px]');
     // The small map is opened large by a click, so nothing on it but the dots answers one; its own button stands in for Google's way to the whole screen.
-    expect(made.options).toMatchObject({ mapTypeId: 'roadmap', mapTypeControl: false, zoomControl: true, fullscreenControl: false, clickableIcons: false, streetViewControl: false });
-    expect(shown().map(m => [m.options.title, m.options.position, m.options.icon.scale, m.options.zIndex])).toEqual([
-      ['Butte · 3 files', { lat: 46.0038, lng: -112.5348 }, 10, 1], ['Glacier · 3 files', { lat: 48.495, lng: -113.9819 }, 7, 1],
+    expect(made.options).toMatchObject({ mapId: 'map-1', mapTypeId: 'roadmap', mapTypeControl: false, zoomControl: true, fullscreenControl: false, clickableIcons: false, streetViewControl: false });
+    // Each dot is drawn by the page, as wide as its folder has files, and centred on the place.
+    expect(shown().map(m => [m.options.title, m.options.position, look(m).size, m.options.zIndex])).toEqual([
+      ['Butte · 3 files', { lat: 46.0038, lng: -112.5348 }, '21.5px', 1], ['Glacier · 3 files', { lat: 48.495, lng: -113.9819 }, '15.5px', 1],
     ]);
-    expect(shown().every(m => m.options.map === made && m.options.icon.path === 'circle')).toBe(true);
+    expect(shown().every(m => m.options.map === made && m.options.gmpClickable && m.options.anchorLeft === '-50%' && m.options.anchorTop === '-50%' && m.event === 'gmp-click')).toBe(true);
+    expect(look(shown()[0])).toEqual({ size: '21.5px', fill: 'rgba(13, 143, 161, 0.85)', edge: '1.5px solid rgb(255, 255, 255)' });
     const [bounds, padding] = made.fitBounds.mock.calls[0] as [FakeBounds, number];
     expect([bounds.points, padding]).toEqual([[{ lat: 46.0038, lng: -112.5348 }, { lat: 48.495, lng: -113.9819 }], 36]);
     expect(map().parentElement).toHaveTextContent(`${NOTE} Each dot is a suggested folder: hover for its name, click to see its files. Click the map itself to open it large. Switch between Map and Satellite at its top left, and zoom with the wheel or the buttons. The map comes from Google; your pictures are not sent to it.`);
@@ -130,7 +135,9 @@ describe('the map of the suggested folders', () => {
     // The dots are drawn again, the picked one on top with a heavier edge; what is in view is left as the person has it.
     expect(shown()).toHaveLength(2);
     expect(FakeMarker.made).toHaveLength(4);
-    expect(shown().map(m => [m.options.zIndex, m.options.icon.strokeWeight, m.options.icon.fillOpacity])).toEqual([[1, 1.5, 0.85], [2, 3, 1]]);
+    expect(shown().map(m => [m.options.zIndex, look(m)])).toEqual([
+      [1, { size: '21.5px', fill: 'rgba(13, 143, 161, 0.85)', edge: '1.5px solid rgb(255, 255, 255)' }], [2, { size: '17px', fill: 'rgb(0, 82, 95)', edge: '3px solid rgb(255, 255, 255)' }],
+    ]);
     expect(FakeMap.made[0].fitBounds).toHaveBeenCalledOnce();
     act(() => shown()[1].click());
     expect(onFocus).toHaveBeenLastCalledWith(undefined);

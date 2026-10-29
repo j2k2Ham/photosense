@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { organizeThumbnailUrl } from '../../lib/apiClient';
-import { formatDuration } from '../../lib/format';
-import type { OrganizeFileDto } from '../../types';
+import { formatDuration, formatTaken } from '../../lib/format';
+import { fileLine, placeInFull, relativeFolder } from '../../lib/organize';
+import type { OrganizeFileDto, OrganizePlaceDto } from '../../types';
+import { Facts } from '../HoverCard';
 
 /** "1 file", "4,212 files". */
 export const countFiles = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'}`;
@@ -19,6 +21,24 @@ export function Thumb({ file, className = '', play = 14, duration = false }: { r
     );
   // The tile is what is dragged, not the picture inside it.
   return <img src={organizeThumbnailUrl(file.id)} alt="" loading="lazy" decoding="async" draggable={false} className={`bg-s3 object-cover ${className}`} />;
+}
+
+/** What is known of a file, on the card shown while its tile is pointed at. */
+export function FileFacts({ file, places, root }: { readonly file: OrganizeFileDto; readonly places: readonly OrganizePlaceDto[]; readonly root: string }) {
+  const place = file.place == null ? undefined : places[file.place];
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-[14.5px] font-semibold text-t1 [overflow-wrap:anywhere]">{file.name}</p>
+      <Facts rows={[
+        [file.dateFromFile ? 'Changed' : 'Taken', formatTaken(file.date)],
+        ['Place', place ? placeInFull(place) : 'No location in this file'],
+        ['Folder', relativeFolder(root, file.folder), true],
+        ['File', fileLine(file)],
+      ]} />
+      {file.dateFromFile && <p className="text-[12.5px] text-t3">Nothing in the file says when it was taken, so this is when the file was last changed.</p>}
+      {file.livePhoto && <p className="text-[12.5px] text-t3">The video of a Live Photo. It goes wherever its picture goes.</p>}
+    </div>
+  );
 }
 
 /** The bin, on a button that deletes. */

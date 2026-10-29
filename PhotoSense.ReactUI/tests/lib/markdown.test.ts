@@ -49,6 +49,24 @@ describe('a document', () => {
       ['paragraph', 'bullets 1', 'paragraph', 'numbered 1', 'bullets 1']);
   });
 
+  it('makes a run of headings put as questions one list of questions, each answered by what follows it up to the next heading', () => {
+    const blocks = parse('## Questions\n\n### Where?\n\nIn a folder.\n\n- kept\n\n### When?\n\n### Why not\n\nPlain.\n\n### Again?\n\nYes.');
+    const text = (t: string) => ({ kind: 'paragraph', inline: [{ kind: 'text', text: t }] });
+    expect(blocks).toEqual([
+      { kind: 'heading', level: 2, text: 'Questions' },
+      { kind: 'questions', items: [
+        { question: 'Where?', answer: [text('In a folder.'), { kind: 'list', ordered: false, items: [[{ kind: 'text', text: 'kept' }]] }] },
+        { question: 'When?', answer: [] },
+      ] },
+      // A heading that is not a question ends the list, and the next question starts another.
+      { kind: 'heading', level: 3, text: 'Why not' },
+      text('Plain.'),
+      { kind: 'questions', items: [{ question: 'Again?', answer: [text('Yes.')] }] },
+    ]);
+    // Only the smallest heading asks.
+    expect(parse('## Why?\n\nBecause.').map(b => b.kind)).toEqual(['heading', 'paragraph']);
+  });
+
   it('is nothing at all when it is empty', () => {
     expect(parse('\n\n')).toEqual([]);
   });

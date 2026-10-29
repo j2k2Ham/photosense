@@ -1,9 +1,10 @@
 import React from 'react';
 import { GALLERY_PAGE, placeOf, shortDate } from '../../lib/organize';
 import type { OrganizeFileDto, OrganizePlaceDto } from '../../types';
+import { useHoverCard } from '../HoverCard';
 import { Segmented } from '../ModeSwitch';
 import { SelectAll } from '../SelectAll';
-import { Check, Pager, Thumb } from './shared';
+import { Check, FileFacts, Pager, Thumb } from './shared';
 
 export type FileFilter = 'all' | 'todo' | 'noloc';
 /** Which kind of file is shown: both, pictures alone, or videos alone. */
@@ -13,6 +14,8 @@ interface Props {
   /** The files to show, on every page together: what the filter, the search and the folder picked leave. */
   readonly files: readonly OrganizeFileDto[];
   readonly places: readonly OrganizePlaceDto[];
+  /** The folder being organized, which a file's folder is named within. */
+  readonly root: string;
   readonly page: number;
   readonly filter: FileFilter;
   /** How many files each filter would show, of the kind chosen. */
@@ -48,8 +51,9 @@ interface Props {
 const count = (n: number) => <span className="font-mono text-[11.5px] font-medium opacity-75">{n.toLocaleString()}</span>;
 
 /** Every file of the folder as a grid of pictures, a page at a time, to select from and drag out of. */
-export function FileGallery({ files, places, page, filter, counts, kind, kindCounts, focus, narrowed, picked, reading, empty, tagOf, onPage, onFilter, onKind, onClearFocus, onClearAll, onPickAll, onPick, onOpen, onDragStart, onDragEnd }: Props) {
+export function FileGallery({ files, places, root, page, filter, counts, kind, kindCounts, focus, narrowed, picked, reading, empty, tagOf, onPage, onFilter, onKind, onClearFocus, onClearAll, onPickAll, onPick, onOpen, onDragStart, onDragEnd }: Props) {
   const pages = Math.max(1, Math.ceil(files.length / GALLERY_PAGE)), from = (page - 1) * GALLERY_PAGE;
+  const hover = useHoverCard<OrganizeFileDto>();
   // How many of the files shown are selected: all of them, some, or none.
   const pickedHere = picked.size === 0 ? 0 : files.reduce((n, f) => n + (picked.has(f.id) ? 1 : 0), 0);
   return (
@@ -88,7 +92,7 @@ export function FileGallery({ files, places, page, filter, counts, kind, kindCou
             return (
               <li key={f.id}>
                 {/* Not a button element: some browsers will not let one be dragged. */}
-                <div role="button" tabIndex={0} aria-pressed={on} draggable title={f.name} className="flex w-full min-w-0 cursor-pointer select-none flex-col gap-1.5 text-left"
+                <div role="button" tabIndex={0} aria-pressed={on} draggable {...hover.on(f.id, f)} className="flex w-full min-w-0 cursor-pointer select-none flex-col gap-1.5 text-left"
                   onClick={e => onPick(f, from + i, e.shiftKey)} onDoubleClick={() => onOpen(f)} onDragEnd={onDragEnd}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(f, from + i, e.shiftKey); } }}
                   // A drag that carries nothing is not started by every browser.
@@ -109,6 +113,7 @@ export function FileGallery({ files, places, page, filter, counts, kind, kindCou
         </ul>
         {!reading && files.length === 0 && <p className="px-5 py-20 text-center text-[15px] text-t3">{empty}</p>}
       </div>
+      {hover.card(f => <FileFacts file={f} places={places} root={root} />)}
     </>
   );
 }

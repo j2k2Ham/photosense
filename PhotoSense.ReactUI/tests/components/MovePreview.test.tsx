@@ -59,7 +59,7 @@ function Harness({ initial, ...props }: Partial<React.ComponentProps<typeof Move
   const [mode, setMode] = React.useState<'move' | 'copy'>('move');
   const [companions, setCompanions] = React.useState(true);
   return (
-    <MovePreview kind="Suggested folder" root={ROOT} files={FILES} name={name} split="year" subfolderOf={byYear} merge="" mode={mode} companions={companions} busy={false} asking={false} placeOf={() => undefined}
+    <MovePreview kind="Suggested folder" root={ROOT} files={FILES} places={[]} name={name} split="year" subfolderOf={byYear} merge="" mode={mode} companions={companions} busy={false} asking={false} placeOf={() => undefined}
       onName={setName} onMode={setMode} onCompanions={setCompanions} onMove={vi.fn()} onDelete={vi.fn()} onClose={vi.fn()} {...props} />
   );
 }
@@ -349,6 +349,60 @@ describe('where the files go', () => {
     await ready();
     expect(destination()).toHaveTextContent(`${ROOT}\\Anaconda\\`);
     expect(within(side()).queryByRole('button', { name: 'Use the default' })).not.toBeInTheDocument();
+  });
+
+  it('starts from where one of your folders is to be made, when that is not the folder being organized', async () => {
+    const { onMove } = open({ kind: 'Your folder', base: 'D:\\Archive', split: undefined, subfolderOf: undefined, initial: 'Glacier' });
+    await ready();
+    expect(destination()).toHaveTextContent('D:\\Archive\\Glacier\\');
+    expect(api.planOrganize).toHaveBeenLastCalledWith({ basePath: 'D:\\Archive', folderName: 'Glacier', direct: false }, flat('a', 'b', 'c', 'd'));
+    // Where the folder was set to go is what it goes back to.
+    expect(within(side()).queryByRole('button', { name: 'Use the default' })).not.toBeInTheDocument();
+    await userEvent.click(moveButton());
+    expect(onMove.mock.calls[0][0]).toMatchObject({ basePath: 'D:\\Archive', folderName: 'Glacier', direct: false, label: 'Glacier' });
+  });
+
+  it('puts the files straight into one of your folders that is already there, and names a new folder made from it here alone', async () => {
+    const onName = vi.fn();
+    const { onMove } = open({ kind: 'Your folder', base: `${ROOT}\\Trips`, direct: true, split: undefined, subfolderOf: undefined, initial: 'Trips', onName });
+    await ready();
+    expect(side()).toHaveTextContent('The files go straight into Trips, without a new folder.');
+    expect(api.planOrganize).toHaveBeenLastCalledWith({ basePath: `${ROOT}\\Trips`, folderName: '', direct: true }, flat('a', 'b', 'c', 'd'));
+    await userEvent.click(moveButton());
+    expect(onMove.mock.calls[0][0]).toMatchObject({ basePath: `${ROOT}\\Trips`, direct: true, label: 'Trips' });
+
+    // A new folder inside it starts with no name, and its name is not the folder's own.
+    await userEvent.click(button('Make a new folder there instead'));
+    const name = within(side()).getByRole('textbox');
+    expect(name).toHaveValue('');
+    expect(within(side()).getByRole('alert')).toHaveTextContent('Give the new folder a name.');
+    await userEvent.type(name, 'Glacier');
+    await ready();
+    expect(destination()).toHaveTextContent(`${ROOT}\\Trips\\Glacier\\`);
+    expect(onName).not.toHaveBeenCalled();
+
+    // Somewhere else, and back to the folder itself.
+    await userEvent.click(button('Change'));
+    await userEvent.click(await within(picker()).findByRole('button', { name: 'Camera Roll' }));
+    await waitFor(() => expect(within(picker()).getByRole('button', { name: 'Make the new folder here' })).toBeEnabled());
+    await userEvent.click(within(picker()).getByRole('button', { name: 'Make the new folder here' }));
+    await ready();
+    expect(destination()).toHaveTextContent(`${ROOT}\\Camera Roll\\Glacier\\`);
+    await userEvent.click(button('Use the default'));
+    await ready();
+    expect(side()).toHaveTextContent('The files go straight into Trips, without a new folder.');
+  });
+
+  it('shows what is known of a file on a card while its tile is pointed at', async () => {
+    open();
+    await ready();
+    expect(tiles()[0]).not.toHaveAttribute('title');
+    fireEvent.pointerEnter(tiles()[0], { pointerType: 'mouse' });
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('IMG_6435.JPGTakenJun 9, 2023, 2:03:22 PMPlaceNo location in this fileFolder2023File4032 × 3024 · JPG · 5.8 MB');
+    // Esc puts the card away, and leaves the preview open.
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(preview()).toBeInTheDocument();
   });
 
   it('shows the way the files would go into a folder chosen before the plan is back', async () => {

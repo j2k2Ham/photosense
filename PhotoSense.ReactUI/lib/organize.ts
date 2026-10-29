@@ -1,5 +1,5 @@
 import type { OrganizeExistingDto, OrganizeFileDto, OrganizeFilesDto, OrganizePlaceDto, OrganizePlanDto } from '../types';
-import { sameFolder } from './format';
+import { formatBytes, formatDuration, sameFolder } from './format';
 
 /** Files on one page of the Organize gallery, and of the preview. */
 export const GALLERY_PAGE = 60;
@@ -143,6 +143,16 @@ export function searchText(f: OrganizeFileDto, places: readonly OrganizePlaceDto
 /** Where a file was taken, in a word or two. */
 export function placeOf(f: OrganizeFileDto, places: readonly OrganizePlaceDto[]): string {
   return f.place == null ? 'No location' : places[f.place].town;
+}
+
+/** A place in full, each name once: "Uptown Butte, Butte, Montana, US". */
+export const placeInFull = (p: OrganizePlaceDto) => [...new Set([p.area, p.town, p.state, p.country].filter(Boolean))].join(', ');
+
+/** Pixel size, the kind of file, the playing time of a video, and its size, on one line: "4032 × 3024 · JPG · 5.8 MB". */
+export function fileLine(f: OrganizeFileDto): string {
+  const dot = f.name.lastIndexOf('.');
+  return [f.width > 0 ? `${f.width} × ${f.height}` : 'Size unknown', dot > 0 ? f.name.slice(dot + 1).toUpperCase() : undefined,
+    f.durationSeconds == null ? undefined : formatDuration(f.durationSeconds), formatBytes(f.sizeBytes)].filter(Boolean).join(' · ');
 }
 
 /** A folder suggested for files that belong together. */
