@@ -21,7 +21,6 @@ using PhotoSense.Functions;
 using PhotoSense.Functions.Api;
 using PhotoSense.Functions.Scanning;
 using PhotoSense.Infrastructure.Persistence;
-using Xunit;
 
 namespace PhotoSense.Tests.Functions;
 
@@ -41,7 +40,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         return (new ScanResetFunction(repo, thumbnails, _progress), repo, thumbnails);
     }
 
-    [Fact]
+    [Test]
     public async Task Clearing_Forgets_Every_Record_And_Preview_And_Says_How_Many()
     {
         var (reset, repo, thumbnails) = Resetter();
@@ -54,16 +53,16 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient());
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(2, response.Json().GetProperty("forgotten").GetInt32());
-        Assert.Empty(await repo.GetAllAsync());
-        Assert.Empty(thumbnails.Saved);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(response.Json().GetProperty("forgotten").GetInt32()).IsEqualTo(2);
+        await Assert.That(await repo.GetAllAsync()).IsEmpty();
+        await Assert.That(thumbnails.Saved).IsEmpty();
 
         // With nothing left there is nothing to forget, and that is no error.
-        Assert.Equal(0, (await reset.ResetAsync(Http.Post("scan/reset").FromClient())).Json().GetProperty("forgotten").GetInt32());
+        await Assert.That((await reset.ResetAsync(Http.Post("scan/reset").FromClient())).Json().GetProperty("forgotten").GetInt32()).IsEqualTo(0);
     }
 
-    [Fact]
+    [Test]
     public async Task Results_Cannot_Be_Cleared_From_Under_A_Running_Scan()
     {
         var (reset, repo, thumbnails) = Resetter();
@@ -73,13 +72,13 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient());
 
-        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
-        Assert.Contains("A scan is running", response.Json().GetProperty("error").GetString());
-        Assert.Single(await repo.GetAllAsync());
-        Assert.Single(thumbnails.Saved);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+        await Assert.That(response.Json().GetProperty("error").GetString()).Contains("A scan is running");
+        await Assert.That(await repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(thumbnails.Saved).HasSingleItem();
     }
 
-    [Fact]
+    [Test]
     public async Task Only_The_UI_May_Clear_The_Results()
     {
         var (reset, repo, _) = Resetter();
@@ -87,8 +86,8 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         var response = await reset.ResetAsync(Http.Post("scan/reset"));
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Single(await repo.GetAllAsync());
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That(await repo.GetAllAsync()).HasSingleItem();
     }
 
     // ---- starting a scan
@@ -104,66 +103,82 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
     private string Body(string? primary, string? secondary = null)
         => System.Text.Json.JsonSerializer.Serialize(new { primaryLocation = primary, secondaryLocation = secondary, recursive = false });
 
-    [Fact]
+    [Test]
     public async Task Starting_A_Scan_Schedules_It_And_Marks_It_Running()
     {
         var (starter, client) = Starter();
         var backup = _root.CreateSubdirectory("backup").FullName;
 
-        var response = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, backup)), client.Object);
+        var response = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, backup)).FromClient(), client.Object);
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal("instance-1", response.Json().GetProperty("instanceId").GetString());
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Accepted);
+        await Assert.That(response.Json().GetProperty("instanceId").GetString()).IsEqualTo("instance-1");
         client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(nameof(ScanOrchestrator.RunScanAsync), new ScanRequest(_root.FullName, backup, false, false),
             It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
-        Assert.True(ScanHttpStarter.IsRunning(_progress.GetLatest()));
+        await Assert.That(ScanHttpStarter.IsRunning(_progress.GetLatest())).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public async Task A_Second_Scan_Is_Refused_While_One_Runs()
     {
         var (starter, client) = Starter();
-        await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object);
+        await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), client.Object);
 
-        var second = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object);
+        var second = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), client.Object);
 
-        Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
-        Assert.Contains("already running", second.Json().GetProperty("error").GetString());
+        await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+        await Assert.That(second.Json().GetProperty("error").GetString()).Contains("already running");
         client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), It.IsAny<object?>(), It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
 
         _progress.ScanCompleted("instance-1");
-        Assert.Equal(HttpStatusCode.Accepted, (await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object)).StatusCode);
+        await Assert.That((await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
     }
 
-    [Fact]
+    [Test]
     public async Task A_Folder_The_Server_Cannot_Find_Is_Reported_Instead_Of_Scanned()
     {
         var (starter, client) = Starter();
         var missing = Path.Combine(_root.FullName, "no-such-folder");
 
-        var noPrimary = await starter.StartAsync(Http.Post("scan/start", "{}"), client.Object);
-        var badPrimary = await starter.StartAsync(Http.Post("scan/start", Body("Phone Pictures")), client.Object);
-        var badSecondary = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, missing)), client.Object);
+        var noPrimary = await starter.StartAsync(Http.Post("scan/start", "{}").FromClient(), client.Object);
+        var badPrimary = await starter.StartAsync(Http.Post("scan/start", Body("Phone Pictures")).FromClient(), client.Object);
+        var badSecondary = await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName, missing)).FromClient(), client.Object);
 
-        Assert.Equal((HttpStatusCode.BadRequest, "A folder to scan is required."), (noPrimary.StatusCode, noPrimary.Json().GetProperty("error").GetString()));
-        Assert.Equal((HttpStatusCode.BadRequest, "Folder not found on the server: Phone Pictures"), (badPrimary.StatusCode, badPrimary.Json().GetProperty("error").GetString()));
-        Assert.Equal((HttpStatusCode.BadRequest, $"Folder not found on the server: {missing}"), (badSecondary.StatusCode, badSecondary.Json().GetProperty("error").GetString()));
+        await Assert.That((noPrimary.StatusCode, noPrimary.Json().GetProperty("error").GetString())).IsEqualTo((HttpStatusCode.BadRequest, "A folder to scan is required."));
+        await Assert.That((badPrimary.StatusCode, badPrimary.Json().GetProperty("error").GetString())).IsEqualTo((HttpStatusCode.BadRequest, "Folder not found on the server: Phone Pictures"));
+        await Assert.That((badSecondary.StatusCode, badSecondary.Json().GetProperty("error").GetString())).IsEqualTo((HttpStatusCode.BadRequest, $"Folder not found on the server: {missing}"));
         client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), It.IsAny<object?>(), It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
-        Assert.False(ScanHttpStarter.IsRunning(_progress.GetLatest()));
+        await Assert.That(ScanHttpStarter.IsRunning(_progress.GetLatest())).IsFalse();
     }
 
-    [Fact]
+    [Test]
+    public async Task Scans_Groups_And_The_Outbox_Answer_Only_The_UI()
+    {
+        var (starter, client) = Starter();
+        var store = new Mock<IOutboxStore>();
+        var groups = new DuplicateGroupsFunctions(new ScanGroupingFacade(Mock.Of<IDuplicateAnalysisService>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+
+        await Assert.That((await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await new OutboxDispatchFunctions(store.Object).RunManualAsync(Http.Post("outbox/dispatch"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await groups.GetDuplicateGroups(Http.Get("scan/groups"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+
+        client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), It.IsAny<object?>(), It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Never);
+        store.Verify(s => s.GetUnprocessedAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        await Assert.That(ScanHttpStarter.IsRunning(_progress.GetLatest())).IsFalse();
+    }
+
+    [Test]
     public async Task With_No_Folder_In_The_Request_The_Configured_One_Is_Scanned()
     {
         var (starter, client) = Starter(new PhotoStorageOptions { PrimaryPath = _root.FullName });
-        Assert.Equal(HttpStatusCode.Accepted, (await starter.StartAsync(Http.Post("scan/start", ""), client.Object)).StatusCode);
+        await Assert.That((await starter.StartAsync(Http.Post("scan/start", "").FromClient(), client.Object)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
         client.Verify(c => c.ScheduleNewOrchestrationInstanceAsync(It.IsAny<TaskName>(), new ScanRequest(_root.FullName, null, true, false),
             It.IsAny<StartOrchestrationOptions?>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ---- the orchestration
 
-    [Fact]
+    [Test]
     public async Task The_Orchestration_Runs_The_Whole_Scan_As_One_Activity()
     {
         var request = new ScanRequest(_root.FullName, null, true);
@@ -180,7 +195,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         await orchestrator.RunScanAsync(context.Object);
         context.Verify(c => c.CallActivityAsync<ScanSummary>(nameof(ScanOrchestrator.RunScanActivity), new RunScanInput(request, "instance-9"), It.IsAny<TaskOptions?>()), Times.Once);
 
-        Assert.Same(summary, await orchestrator.RunScanActivity(new RunScanInput(request, "instance-9")));
+        await Assert.That(await orchestrator.RunScanActivity(new RunScanInput(request, "instance-9"))).IsSameReferenceAs(summary);
 
         // An orchestration started with nothing to scan does nothing.
         var empty = new Mock<TaskOrchestrationContext>();
@@ -191,7 +206,7 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
     // ---- progress and status
 
-    [Fact]
+    [Test]
     public async Task Progress_Is_Reported_For_A_Scan_That_Was_Started_And_Not_For_An_Unknown_One()
     {
         _progress.ScanStarted("scan-1");
@@ -201,15 +216,38 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var function = new ScanProgressByInstanceFunction(_progress);
 
         var json = (await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json();
-        Assert.Equal(("scan-1", 4, 1, 2, 1), (json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(),
-            json.GetProperty("primaryProcessed").GetInt32(), json.GetProperty("secondaryTotal").GetInt32(), json.GetProperty("secondaryProcessed").GetInt32()));
-        Assert.Equal(25, json.GetProperty("primaryPercent").GetDouble());
-        Assert.Equal(System.Text.Json.JsonValueKind.Null, json.GetProperty("completedUtc").ValueKind);
+        await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(),
+            json.GetProperty("primaryProcessed").GetInt32(), json.GetProperty("secondaryTotal").GetInt32(), json.GetProperty("secondaryProcessed").GetInt32())).IsEqualTo(("scan-1", 4, 1, 2, 1));
+        await Assert.That(json.GetProperty("primaryPercent").GetDouble()).IsEqualTo(25);
+        await Assert.That(json.GetProperty("completedUtc").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
+        // Nothing to go by yet: no earlier scan, and too little of this one.
+        await Assert.That(json.GetProperty("secondsLeft").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
 
-        Assert.Equal(HttpStatusCode.NotFound, (await function.Get(Http.Get("scan/progress/other"), "other")).StatusCode);
+        // Going by earlier scans, less the moment that has passed since it started.
+        _progress.Expect("scan-1", 780);
+        var left = (await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json().GetProperty("secondsLeft").GetDouble();
+        await Assert.That(left).IsGreaterThanOrEqualTo(720).And.IsLessThanOrEqualTo(780);
+        _progress.ScanCompleted("scan-1");
+        await Assert.That((await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json().GetProperty("secondsLeft").GetDouble()).IsEqualTo(0);
+
+        await Assert.That((await function.Get(Http.Get("scan/progress/other"), "other")).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
-    [Fact]
+    [Test]
+    public async Task The_Time_Left_Counts_Down_From_What_Earlier_Scans_Took()
+    {
+        var clock = new TestClock();
+        var progress = new InMemoryScanProgressStore(clock);
+        progress.ScanStarted("scan-1");
+        progress.Expect("scan-1", 780);
+        clock.Now += TimeSpan.FromMinutes(1);
+
+        var json = (await new ScanProgressByInstanceFunction(progress, clock).Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json();
+
+        await Assert.That(json.GetProperty("secondsLeft").GetDouble()).IsEqualTo(720);
+    }
+
+    [Test]
     public async Task Status_Describes_The_Latest_Scan_And_Counts_The_Photos()
     {
         var repo = new InMemoryPhotoRepository();
@@ -220,21 +258,21 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         var json = (await new ScanStatusFunctions(repo, _progress).GetStatus(Http.Get("scan/status"))).Json();
 
-        Assert.Equal(("scan-1", 2, 1), (json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(), json.GetProperty("totalPhotos").GetInt32()));
-        Assert.NotEqual(System.Text.Json.JsonValueKind.Null, json.GetProperty("completed").ValueKind);
+        await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(), json.GetProperty("totalPhotos").GetInt32())).IsEqualTo(("scan-1", 2, 1));
+        await Assert.That(json.GetProperty("completed").ValueKind).IsNotEqualTo(System.Text.Json.JsonValueKind.Null);
     }
 
-    [Theory]
-    [InlineData(null, null, false, false)]
-    [InlineData("C:/photos", "D:/backup", true, true)]
+    [Test]
+    [Arguments(null, null, false, false)]
+    [Arguments("C:/photos", "D:/backup", true, true)]
     public async Task Health_Says_Which_Folders_Are_Configured(string? primary, string? secondary, bool hasPrimary, bool hasSecondary)
     {
         var options = Options.Create(new PhotoStorageOptions { PrimaryPath = primary ?? "", SecondaryPath = secondary ?? "" });
         var json = (await new HealthFunctions(options).GetAsync(Http.Get("health"))).Json();
-        Assert.Equal(("ok", hasPrimary, hasSecondary), (json.GetProperty("status").GetString(), json.GetProperty("storagePrimaryConfigured").GetBoolean(), json.GetProperty("storageSecondaryConfigured").GetBoolean()));
+        await Assert.That((json.GetProperty("status").GetString(), json.GetProperty("storagePrimaryConfigured").GetBoolean(), json.GetProperty("storageSecondaryConfigured").GetBoolean())).IsEqualTo(("ok", hasPrimary, hasSecondary));
     }
 
-    [Fact]
+    [Test]
     public async Task Dispatching_The_Outbox_Marks_Every_Pending_Message_Processed()
     {
         var first = new OutboxMessage { Type = "a", Payload = "{}" };
@@ -242,35 +280,45 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var store = new Mock<IOutboxStore>();
         store.Setup(s => s.GetUnprocessedAsync(100, It.IsAny<CancellationToken>())).ReturnsAsync([first, second]);
 
-        var response = await new OutboxDispatchFunctions(store.Object).RunManualAsync(Http.Post("outbox/dispatch"));
+        var response = await new OutboxDispatchFunctions(store.Object).RunManualAsync(Http.Post("outbox/dispatch").FromClient());
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Accepted);
         store.Verify(s => s.MarkProcessedAsync(first.Id, It.IsAny<CancellationToken>()), Times.Once);
         store.Verify(s => s.MarkProcessedAsync(second.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ---- groups
 
-    [Theory]
-    [InlineData("scan/groups", false, null, false, 1, 50)]
-    [InlineData("scan/groups?mode=SIMILAR&q=img&hideKept=true&page=3&pageSize=10", true, "img", true, 3, 10)]
-    [InlineData("scan/groups?mode=other&hideKept=false&page=0&pageSize=0", false, null, false, 1, 1)]
-    [InlineData("scan/groups?page=-4&pageSize=5000", false, null, false, 1, 200)]
-    [InlineData("scan/groups?page=x&pageSize=y", false, null, false, 1, 50)]
+    [Test]
+    [Arguments("scan/groups", false, null, false, 1, 50)]
+    [Arguments("scan/groups?mode=SIMILAR&q=img&hideKept=true&page=3&pageSize=10", true, "img", true, 3, 10)]
+    [Arguments("scan/groups?mode=other&hideKept=false&page=0&pageSize=0", false, null, false, 1, 1)]
+    [Arguments("scan/groups?page=-4&pageSize=5000", false, null, false, 1, 200)]
+    [Arguments("scan/groups?page=x&pageSize=y", false, null, false, 1, 50)]
     public async Task The_Groups_Query_Is_Read_With_Sensible_Limits(string url, bool similar, string? text, bool hideKept, int page, int pageSize)
     {
         var analysis = new Mock<IDuplicateAnalysisService>();
         analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis([], []));
         var function = new DuplicateGroupsFunctions(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
 
-        var json = (await function.GetDuplicateGroups(Http.Get(url))).Json();
+        var json = (await function.GetDuplicateGroups(Http.Get(url).FromClient())).Json();
 
-        Assert.Equal((similar ? "similar" : "duplicates", page, pageSize), (json.GetProperty("mode").GetString(), json.GetProperty("page").GetInt32(), json.GetProperty("pageSize").GetInt32()));
+        await Assert.That((json.GetProperty("mode").GetString(), json.GetProperty("page").GetInt32(), json.GetProperty("pageSize").GetInt32())).IsEqualTo((similar ? "similar" : "duplicates", page, pageSize));
         _ = (text, hideKept); // both only filter, and there is nothing here to filter
     }
 
-    [Fact]
-    public void A_Photo_Is_Described_With_A_Place_Only_When_It_Has_A_Position()
+    [Test]
+    public async Task Groups_Nobody_Is_Waiting_For_Any_More_Are_Given_Up()
+    {
+        var analysis = new Mock<IDuplicateAnalysisService>();
+        analysis.Setup(a => a.GetAsync(It.Is<CancellationToken>(t => t.IsCancellationRequested))).ThrowsAsync(new OperationCanceledException());
+        var function = new DuplicateGroupsFunctions(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => function.GetDuplicateGroups(Http.Abandoned("scan/groups").FromClient()));
+    }
+
+    [Test]
+    public async Task A_Photo_Is_Described_With_A_Place_Only_When_It_Has_A_Position()
     {
         var places = new Mock<IPlaceNameResolver>();
         places.Setup(p => p.Describe(35.2, -80.8)).Returns("Charlotte, North Carolina, US");
@@ -280,18 +328,18 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
         var other = TestPhotos.Make("c.jpg"); other.Longitude = -80.8;
         var video = TestPhotos.Video("clip.MOV"); video.DurationSeconds = 12.5;
 
-        Assert.Equal("Charlotte, North Carolina, US", mapper.Map(located).PlaceName);
-        Assert.Null(mapper.Map(half).PlaceName);
-        Assert.Null(mapper.Map(other).PlaceName);
-        Assert.Null(mapper.Map(TestPhotos.Make("d.jpg")).PlaceName);
-        Assert.Equal((true, 12.5, "MOV"), (mapper.Map(video).IsVideo, mapper.Map(video).DurationSeconds, mapper.Map(video).Format));
-        Assert.Equal(string.Empty, mapper.Map(new PhotoSense.Domain.Entities.Photo { SourcePath = "a.jpg", FileName = "a.jpg" }).Folder);
-        Assert.Equal(string.Empty, mapper.Map(new PhotoSense.Domain.Entities.Photo { SourcePath = "", FileName = "a.jpg" }).Folder);
+        await Assert.That(mapper.Map(located).PlaceName).IsEqualTo("Charlotte, North Carolina, US");
+        await Assert.That(mapper.Map(half).PlaceName).IsNull();
+        await Assert.That(mapper.Map(other).PlaceName).IsNull();
+        await Assert.That(mapper.Map(TestPhotos.Make("d.jpg")).PlaceName).IsNull();
+        await Assert.That((mapper.Map(video).IsVideo, mapper.Map(video).DurationSeconds, mapper.Map(video).Format)).IsEqualTo((true, 12.5, "MOV"));
+        await Assert.That(mapper.Map(new PhotoSense.Domain.Entities.Photo { SourcePath = "a.jpg", FileName = "a.jpg" }).Folder).IsEqualTo(string.Empty);
+        await Assert.That(mapper.Map(new PhotoSense.Domain.Entities.Photo { SourcePath = "", FileName = "a.jpg" }).Folder).IsEqualTo(string.Empty);
     }
 
     // ---- the service registrations
 
-    [Fact]
+    [Test]
     public async Task Every_Service_The_Functions_Need_Can_Be_Built()
     {
         var settings = new Dictionary<string, string?>
@@ -307,22 +355,22 @@ public sealed class ScanAndStatusFunctionsTests : IDisposable
 
         foreach (var type in new[]
         {
-            typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
+            typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IScanHistory), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
             typeof(IPhotoMetadataExtractor), typeof(PhotoRanking), typeof(IDuplicateAnalysisService), typeof(IDuplicateRemovalService), typeof(IPlaceNameResolver),
             typeof(PhotoDtoMapper), typeof(ScanGroupingFacade), typeof(IScanRequestPublisher), typeof(IOutboxStore), typeof(IIntegrationEventPublisher),
-            typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IFolderBrowser), typeof(IPhotoDeletionService), typeof(IPhotoQueryService), typeof(IPhotoSearchService),
+            typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IFolderBrowser), typeof(IPhotoDeletionService), typeof(IPhotoSearchService),
             typeof(IScanProgressStore), typeof(IScanLogSink), typeof(IScanExecutionService), typeof(IValidateOptions<PhotoStorageOptions>)
         })
-            Assert.NotNull(services.GetRequiredService(type));
+            await Assert.That(services.GetRequiredService(type)).IsNotNull();
 
         // The configured preference reaches the ranking: the JPEG is the keeper.
         var ranking = services.GetRequiredService<PhotoRanking>();
         var heic = TestPhotos.Make("a.HEIC");
         var jpeg = TestPhotos.Make("a.JPG", format: "JPEG");
-        Assert.Same(jpeg, new[] { heic, jpeg }.OrderBy(p => p, ranking.BestFirst).First());
-        Assert.StartsWith(_root.FullName, services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath());
+        await Assert.That(new[] { heic, jpeg }.OrderBy(p => p, ranking.BestFirst).First()).IsSameReferenceAs(jpeg);
+        await Assert.That(services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()).StartsWith(_root.FullName);
         // The folder for the database is made on first use.
-        Assert.True(File.Exists(Path.Combine(_root.FullName, "not-there-yet", "photosense.db")));
+        await Assert.That(File.Exists(Path.Combine(_root.FullName, "not-there-yet", "photosense.db"))).IsTrue();
         await host.StopAsync();
     }
 }

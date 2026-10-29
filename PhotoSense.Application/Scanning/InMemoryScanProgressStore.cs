@@ -7,10 +7,13 @@ public class InMemoryScanProgressStore : IScanProgressStore
 {
     private readonly ConcurrentDictionary<string, MutableProgress> _store = new();
     private volatile string? _latest;
+    private readonly TimeProvider _time;
+
+    public InMemoryScanProgressStore(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
 
     public void ScanStarted(string instanceId)
     {
-        var prog = new MutableProgress { InstanceId = instanceId, StartedUtc = DateTime.UtcNow };
+        var prog = new MutableProgress { InstanceId = instanceId, StartedUtc = _time.GetUtcNow().UtcDateTime };
         _store[instanceId] = prog;
         _latest = instanceId;
     }
@@ -22,6 +25,11 @@ public class InMemoryScanProgressStore : IScanProgressStore
             p.PrimaryTotal = primaryTotal;
             p.SecondaryTotal = secondaryTotal;
         }
+    }
+
+    public void Expect(string instanceId, double? seconds)
+    {
+        if (_store.TryGetValue(instanceId, out var p)) p.ExpectedSeconds = seconds;
     }
 
     public void IncrementProcessed(string instanceId, bool primary)
@@ -36,7 +44,7 @@ public class InMemoryScanProgressStore : IScanProgressStore
     public void ScanCompleted(string instanceId)
     {
         if (_store.TryGetValue(instanceId, out var p))
-            p.CompletedUtc = DateTime.UtcNow;
+            p.CompletedUtc = _time.GetUtcNow().UtcDateTime;
     }
 
     public ScanProgressSnapshot Get(string instanceId)
@@ -54,7 +62,8 @@ public class InMemoryScanProgressStore : IScanProgressStore
         public int PrimaryProcessed;
         public int SecondaryTotal;
         public int SecondaryProcessed;
+        public double? ExpectedSeconds;
         public ScanProgressSnapshot ToSnapshot() =>
-            new(InstanceId, StartedUtc, CompletedUtc, PrimaryTotal, PrimaryProcessed, SecondaryTotal, SecondaryProcessed);
+            new(InstanceId, StartedUtc, CompletedUtc, PrimaryTotal, PrimaryProcessed, SecondaryTotal, SecondaryProcessed) { ExpectedSeconds = ExpectedSeconds };
     }
 }

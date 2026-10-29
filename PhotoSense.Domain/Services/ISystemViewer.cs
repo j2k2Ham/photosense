@@ -1,5 +1,6 @@
 namespace PhotoSense.Domain.Services;
 
+/// <summary>Shows a file in the viewer or player of the machine the service runs on.</summary>
 public interface ISystemViewer
 {
     /// <summary>

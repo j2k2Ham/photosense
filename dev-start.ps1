@@ -3,12 +3,11 @@
   Starts PhotoSense Functions (Azure Functions isolated) and React (Next.js) UI concurrently for local development.
 
 .DESCRIPTION
-  - Ensures required folders exist (photo storage paths from local.settings.json)
   - Optionally cleans build outputs
-  - Builds solution (unless -NoBuild)
+  - Builds the service (unless -NoBuild)
+  - Starts the Azurite storage emulator if it is not already running
   - Launches Azure Functions via 'func start' (Core Tools)
   - Launches React UI via 'npm run dev' (Next.js)
-  - Optionally can still launch Blazor Server with -IncludeBlazor
   - Streams logs with color differentiation
   - Stops everything it started on Ctrl+C
   - Takes over from a copy that is still running: starting again is how to restart
@@ -22,12 +21,6 @@
 .PARAMETER FunctionsPort
   Override Functions HTTP port (default 7071).
 
-.PARAMETER UseWatch
-  Use 'dotnet watch run' for Blazor hot reload instead of plain 'dotnet run' (only if -IncludeBlazor).
-
-.PARAMETER IncludeBlazor
-  Also start the legacy Blazor Server UI.
-
 .PARAMETER Open
   After startup, open the default browser to the React UI URL.
 
@@ -38,7 +31,7 @@
   ./dev-start.ps1
 
 .EXAMPLE
-  ./dev-start.ps1 -UseWatch -FunctionsPort 7072
+  ./dev-start.ps1 -FunctionsPort 7072
 
 .EXAMPLE
   ./dev-start.ps1 -Stop
@@ -50,18 +43,12 @@ param(
   [switch]$NoBuild,
   [switch]$Clean,
   [int]$FunctionsPort = 7071,
-  [switch]$UseWatch,
   [switch]$Open,
   [switch]$Stop,
-  [switch]$IncludeBlazor,
-  [switch]$ForceUnlock,
   [switch]$UseDotNetFunctions,
   [int]$FunctionsRetry = 2,
   [int]$ReactBasePort = 3000,
-  [int]$ReactPortScan = 10,
-  [switch]$Diagnostics,
-  [int]$HealthRetry = 5,
-  [int]$HealthIntervalMs = 800
+  [int]$ReactPortScan = 10
 )
 
 $ErrorActionPreference = 'Stop'
@@ -69,6 +56,12 @@ $ErrorActionPreference = 'Stop'
 function Write-Section($msg){
   Write-Host "`n=== $msg ===" -ForegroundColor Cyan
 }
+
+# What the services print is read by this script itself, a line at a time, and never through PowerShell's
+# event handlers (Register-ObjectEvent). Those handlers go on firing after the script has handed the
+# terminal back, as they do when the services are stopped, and two arriving together at an idle prompt
+# race inside PowerShell and end the whole terminal.
+$outputs = [System.Collections.Generic.List[hashtable]]::new()
 
 function Start-ProcessLogged {
   param(
@@ -90,14 +83,29 @@ function Start-ProcessLogged {
 
   $null = $proc.Start()
 
-  # The handlers run apart from this function, so the label and its colour are handed to them.
-  $label = @{ Name = $Name; Color = $Color }
-  Register-ObjectEvent -InputObject $proc -EventName OutputDataReceived -MessageData $label -Action { if ($EventArgs.Data) { Write-Host "[$($Event.MessageData.Name)] $($EventArgs.Data)" -ForegroundColor $Event.MessageData.Color } } | Out-Null
+  $outputs.Add(@{ Name = $Name; Color = $Color; Reader = $proc.StandardOutput; Line = $proc.StandardOutput.ReadLineAsync() })
   # Tools put notices and progress on their error stream as well as errors, so these lines are not called errors.
-  Register-ObjectEvent -InputObject $proc -EventName ErrorDataReceived -MessageData $label -Action { if ($EventArgs.Data) { Write-Host "[$($Event.MessageData.Name)] $($EventArgs.Data)" -ForegroundColor DarkYellow } } | Out-Null
-
-  $proc.BeginOutputReadLine(); $proc.BeginErrorReadLine()
+  $outputs.Add(@{ Name = $Name; Color = [ConsoleColor]::DarkYellow; Reader = $proc.StandardError; Line = $proc.StandardError.ReadLineAsync() })
   return $proc
+}
+
+# Prints the lines the services have written since it was last called.
+function Show-Output {
+  foreach($o in $outputs){
+    # A service that prints without pause is not allowed to hold up the others, or Ctrl+C.
+    for($n = 0; $n -lt 500 -and $o.Line -and $o.Line.IsCompleted; $n++){
+      $text = if($o.Line.IsCompletedSuccessfully){ $o.Line.Result } else { $null }
+      if($null -eq $text){ $o.Line = $null; break }   # the service has closed this stream
+      if($text){ Write-Host "[$($o.Name)] $text" -ForegroundColor $o.Color }
+      $o.Line = $o.Reader.ReadLineAsync()
+    }
+  }
+}
+
+# Waits, showing what the services print meanwhile.
+function Wait-Showing([int]$Milliseconds){
+  $until = [DateTime]::UtcNow.AddMilliseconds($Milliseconds)
+  do { Start-Sleep -Milliseconds 100; Show-Output } while([DateTime]::UtcNow -lt $until)
 }
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -151,69 +159,33 @@ if($earlier -gt 0){ Write-Host "Stopped the copy of PhotoSense that was already 
 $busy = Get-PortOwner $FunctionsPort
 if($busy){ throw "Port $FunctionsPort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not PhotoSense. Close it, or start with -FunctionsPort <another port>." }
 
-if($Clean){ Write-Section 'Cleaning solution'; dotnet clean PhotoSense.sln }
-
-# Enhancement B: Optionally kill stale Blazor processes holding file locks
-if($ForceUnlock){
-  Write-Section 'Force unlocking stale processes (Blazor/React)'
-  # Kill Blazor hosts
-  Get-Process | Where-Object { $_.ProcessName -like 'PhotoSense.BlazorServer*' -or ($_.ProcessName -eq 'dotnet' -and $_.MainWindowTitle -like '*Blazor*') } | ForEach-Object {
-    try { Write-Host "Killing Blazor PID $($_.Id) ($($_.ProcessName))" -ForegroundColor DarkYellow; Stop-Process -Id $_.Id -Force } catch { Write-Warning "Failed to kill PID $($_.Id): $($_.Exception.Message)" }
-  }
-  # Kill Node processes occupying common React ports
-  function Get-PortPids($port){
-    try {
-      if(Get-Command Get-NetTCPConnection -ErrorAction SilentlyContinue){
-        Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -ErrorAction SilentlyContinue
-      } else {
-        netstat -ano | Select-String -Pattern ":$port\s" | ForEach-Object { ($_ -split '\s+')[-1] } | Where-Object { $_ -match '^\d+$' } | Select-Object -Unique
-      }
-    } catch { @() }
-  }
-  for($p=$ReactBasePort; $p -lt ($ReactBasePort + $ReactPortScan); $p++){
-    $pids = Get-PortPids $p
-    foreach($portPid in $pids){
-      try {
-        $proc = Get-Process -Id $portPid -ErrorAction SilentlyContinue
-        if($proc -and ($proc.ProcessName -like 'node*' -or $proc.ProcessName -eq 'cmd' -or $proc.ProcessName -eq 'pwsh')){
-          Write-Host "Killing process $portPid holding port $p ($($proc.ProcessName))" -ForegroundColor DarkYellow
-          Stop-Process -Id $portPid -Force
-        }
-      } catch { }
-    }
-  }
+# A build leaves worker processes waiting to be used again, and after building the service they go on
+# holding its program files. The next build then cannot replace those files and fails ("Could not copy ...
+# The file is locked by: MSBuild"). The ones doing nothing are ended here, whoever left them; one that is
+# in the middle of a build, of this project or any other, is using the processor and is left alone.
+function Stop-IdleBuildWorkers {
+  $workers = @(Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '/nodemode:1' } | ForEach-Object { Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue })
+  if($workers.Count -eq 0){ return }
+  $before = @{}
+  foreach($w in $workers){ $before[$w.Id] = $w.TotalProcessorTime }
+  Start-Sleep -Milliseconds 500
+  $idle = @($workers | Where-Object { $_.Refresh(); -not $_.HasExited -and $_.TotalProcessorTime -eq $before[$_.Id] })
+  foreach($w in $idle){ Stop-Process -Id $w.Id -Force -ErrorAction SilentlyContinue }
+  if($idle.Count -gt 0){ Write-Host "Ended $($idle.Count) idle build worker(s) left by an earlier build." -ForegroundColor DarkGray }
 }
 
-# Enhancement C: Build subset unless Blazor explicitly requested
+if($Clean){ Write-Section 'Cleaning solution'; Stop-IdleBuildWorkers; dotnet clean PhotoSense.sln -nodeReuse:false }
+
 if(-not $NoBuild){
-  if($IncludeBlazor){
-    Write-Section 'Building full solution (including Blazor)'
-    dotnet build PhotoSense.sln
-    if($LASTEXITCODE -ne 0){ throw 'The build failed; PhotoSense was not started.' }
-  } else {
-    Write-Section 'Building core projects (excluding Blazor)'
-    $projects = @(
-      'PhotoSense.Domain/PhotoSense.Domain.csproj',
-      'PhotoSense.Contracts/PhotoSense.Contracts.csproj',
-      'PhotoSense.Application/PhotoSense.Application.csproj',
-      'PhotoSense.Infrastructure/PhotoSense.Infrastructure.csproj',
-      'PhotoSense.Functions/PhotoSense.Functions.csproj',
-      'PhotoSense.ReactUI/PhotoSense.ReactUI.csproj'  # placeholder if we add a backend build for shared TS generation later
-    ) | Where-Object { Test-Path $_ }
-    foreach($p in $projects){
-      Write-Host "-> building $p" -ForegroundColor Gray
-      dotnet build $p
-      if($LASTEXITCODE -ne 0){ throw "The build of $p failed; PhotoSense was not started." }
-    }
-  }
+  Write-Section 'Building'
+  Stop-IdleBuildWorkers
+  # The service's project brings the projects it is built from with it. No workers are left waiting
+  # afterwards (-nodeReuse:false), so this build does not get in the way of the next one.
+  dotnet build PhotoSense.Functions/PhotoSense.Functions.csproj -nodeReuse:false
+  if($LASTEXITCODE -ne 0){ throw 'The build failed; PhotoSense was not started.' }
 }
 
-# Ensure photo storage directories exist (paths from local.settings.json PhotoStorage section)
 $photoRoot = Join-Path $root 'PhotoSense.Functions'
-$primary = Join-Path $photoRoot 'photos/primary'
-$secondary = Join-Path $photoRoot 'photos/secondary'
-$null = New-Item -ItemType Directory -Force -Path $primary | Out-Null
-$null = New-Item -ItemType Directory -Force -Path $secondary | Out-Null
 
 Write-Section 'Starting services'
 
@@ -237,7 +209,7 @@ if(-not $storageUp){
   if(Get-Command azurite -ErrorAction SilentlyContinue){
     Write-Host 'Starting Azurite storage emulator' -ForegroundColor DarkGray
     $azuriteProc = Start-ProcessLogged -Name 'AZURITE' -Command "azurite --silent --location `"$root\.azurite`"" -WorkingDirectory $root -Color DarkGray
-    Start-Sleep -Seconds 2
+    Wait-Showing 2000
   } else {
     Write-Warning 'Azurite is not running and is not on PATH, so scans will not start. Install it with: npm install -g azurite'
   }
@@ -253,14 +225,14 @@ function Start-FunctionsHost {
     Write-Host "Starting Functions via Core Tools (attempt $attempt)" -ForegroundColor Yellow
     # No --csharp: that flag makes Core Tools use its in-process host, which cannot load this isolated-worker app.
     # The service answers the UI's address only, so it is told which port the UI was given.
-    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --cors http://localhost:$reactPort,http://127.0.0.1:$reactPort --script-root $photoRoot/bin/Debug/net8.0" -WorkingDirectory $photoRoot -Color Yellow
+    return Start-ProcessLogged -Name 'FUNC' -Command "func start --port $FunctionsPort --cors http://localhost:$reactPort,http://127.0.0.1:$reactPort --script-root $photoRoot/bin/Debug/net10.0" -WorkingDirectory $photoRoot -Color Yellow
   }
 }
 
 $funcProc = $null
 for($a=1; $a -le ([math]::Max(1,$FunctionsRetry+1)); $a++){
   $funcProc = Start-FunctionsHost -attempt $a
-  Start-Sleep -Milliseconds 700
+  Wait-Showing 700
   if(-not $funcProc.HasExited){ break }
   Write-Warning "Functions host exited immediately (attempt $a)."
   if(-not $UseDotNetFunctions -and $a -eq 1){
@@ -281,110 +253,17 @@ if(!(Test-Path (Join-Path $reactDir 'node_modules'))){
 $env:PORT = $reactPort
 $reactProc = Start-ProcessLogged -Name 'WEB' -Command 'npm run dev' -WorkingDirectory $reactDir -Color Green
 
-# Optional Blazor
-$blazorProc = $null
-$httpsPort = $null; $httpPort = $null
-if($IncludeBlazor){
-  $blazorDir = Join-Path $root 'PhotoSense.BlazorServer'
-  $launchSettings = Join-Path $blazorDir 'Properties/launchSettings.json'
-  if(Test-Path $launchSettings){
-    try {
-      $json = Get-Content $launchSettings -Raw | ConvertFrom-Json
-      $profiles = $json.profiles | Get-Member -MemberType NoteProperty | Select-Object -ExpandProperty Name
-      foreach($p in $profiles){
-        $appUrl = $json.profiles.$p.applicationUrl
-        if($appUrl){
-          foreach($part in $appUrl -split ';'){
-            if($part -match '^https://localhost:(\d+)$'){ $httpsPort = $Matches[1] }
-            if($part -match '^http://localhost:(\d+)$'){ $httpPort = $Matches[1] }
-          }
-          if($httpsPort -or $httpPort){ break }
-        }
-      }
-    } catch { }
-  }
-  $blazorCmd = $UseWatch ? 'dotnet watch run' : 'dotnet run'
-  $blazorProc = Start-ProcessLogged -Name 'BLAZOR' -Command $blazorCmd -WorkingDirectory $blazorDir -Color Magenta
-}
-
 Write-Section 'Startup summary'
 Write-Host "Functions:  http://localhost:$FunctionsPort" -ForegroundColor Yellow
 Write-Host ("React UI:   http://localhost:{0}" -f $reactPort) -ForegroundColor Green
-if($IncludeBlazor){
-  if($httpsPort -or $httpPort){
-    Write-Host ("Blazor:     https://localhost:{0}  (http://localhost:{1})" -f $httpsPort,$httpPort) -ForegroundColor Magenta
-  } else {
-    Write-Host 'Blazor:     (See launchSettings for exact ports, printed in BLAZOR logs)' -ForegroundColor Magenta
-  }
-}
-
 Write-Host "Press Ctrl+C here to stop PhotoSense, or run ./dev-start.ps1 -Stop from another terminal." -ForegroundColor Cyan
 
 if($Open){ Start-Process ("http://localhost:{0}" -f $reactPort) | Out-Null }
 
-# Emit JSON startup summary
-$summary = [pscustomobject]@{
-  timestamp = (Get-Date).ToString('o')
-  functionsUrl = "http://localhost:$FunctionsPort"
-  reactUrl = "http://localhost:$reactPort"
-  includeBlazor = [bool]$IncludeBlazor
-  usedDotNetFunctions = [bool]$UseDotNetFunctions
-  pid = $PID
-  diagnostics = [bool]$Diagnostics
-  health = @{}
-}
-$summaryPath = Join-Path $root '.dev-start-summary.json'
-$summary | ConvertTo-Json -Depth 4 | Out-File -FilePath $summaryPath -Encoding utf8
-Write-Host "Wrote summary: $summaryPath" -ForegroundColor Cyan
-
-# Health checks (simple pings)
-function Test-Url($url){
-  try { (Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 5).StatusCode } catch { 0 }
-}
-
-function Update-SummaryHealth($key,$status){
-  try {
-    $json = Get-Content $summaryPath -Raw | ConvertFrom-Json
-    $json.health[$key] = $status
-    $json | ConvertTo-Json -Depth 6 | Out-File $summaryPath -Encoding utf8
-  } catch {}
-}
-
-Start-Job -ScriptBlock {
-  param($funcUrl,$reactUrl,$summaryPath,$retries,$intervalMs,$diag)
-  function Ping($u){ try { (Invoke-WebRequest -UseBasicParsing -Uri $u -TimeoutSec 5).StatusCode } catch { 0 } }
-  $funcStatus = 0; $reactStatus = 0
-  for($i=0; $i -lt $retries; $i++){
-    Start-Sleep -Milliseconds $intervalMs
-    if($funcStatus -eq 0){
-      $funcStatus = Ping "$funcUrl/api/scan/logs"
-      if($funcStatus -eq 0){ $funcStatus = Ping $funcUrl }
-      if($funcStatus -ne 0){
-        if($funcStatus -ge 200 -and $funcStatus -lt 400){ Write-Host "[HEALTH] Functions OK ($funcStatus)" -ForegroundColor Green } else { Write-Host "[HEALTH] Functions FAIL ($funcStatus)" -ForegroundColor Red }
-        if($diag){ Write-Host "[DIAG] Functions attempt $i status $funcStatus" -ForegroundColor DarkCyan }
-        try { $js = Get-Content $summaryPath -Raw | ConvertFrom-Json; $js.health.functions = $funcStatus; $js | ConvertTo-Json -Depth 6 | Out-File $summaryPath -Encoding utf8 } catch {}
-      }
-    }
-    if($reactStatus -eq 0){
-      $reactStatus = Ping $reactUrl
-      if($reactStatus -ne 0){
-        if($reactStatus -ge 200 -and $reactStatus -lt 400){ Write-Host "[HEALTH] React OK ($reactStatus)" -ForegroundColor Green } else { Write-Host "[HEALTH] React FAIL ($reactStatus)" -ForegroundColor Red }
-        if($diag){ Write-Host "[DIAG] React attempt $i status $reactStatus" -ForegroundColor DarkCyan }
-        try { $js = Get-Content $summaryPath -Raw | ConvertFrom-Json; $js.health.react = $reactStatus; $js | ConvertTo-Json -Depth 6 | Out-File $summaryPath -Encoding utf8 } catch {}
-      }
-    }
-    if($funcStatus -ne 0 -and $reactStatus -ne 0){ break }
-  }
-  if($funcStatus -eq 0){ Write-Host '[HEALTH] Functions UNREACHABLE' -ForegroundColor Red }
-  if($reactStatus -eq 0){ Write-Host '[HEALTH] React UNREACHABLE' -ForegroundColor Red }
-} -ArgumentList "http://localhost:$FunctionsPort","http://localhost:$reactPort",$summaryPath,$HealthRetry,$HealthIntervalMs,$Diagnostics | Out-Null
-
-if($Diagnostics){ Write-Host "Diagnostics enabled: retries=$HealthRetry interval=${HealthIntervalMs}ms" -ForegroundColor DarkCyan }
-
 # Shutdown. Whatever ends the wait below (Ctrl+C, or one of the services dying) lands in the finally
 # block, which ends each service this run started together with everything underneath its wrapper.
 # It ends nothing else: a later run that has taken over must not lose what it has just started.
-$started = @($funcProc,$reactProc,$blazorProc,$azuriteProc)
+$started = @($funcProc,$reactProc,$azuriteProc)
 function Stop-Started {
   foreach($p in $started){
     if($p -and -not $p.HasExited){ Stop-Tree $p.Id }
@@ -401,10 +280,13 @@ Register-EngineEvent PowerShell.Exiting -MessageData $started -Action {
 
 try {
   while($true){
-    Start-Sleep -Seconds 1
-    if($funcProc.HasExited){ Write-Host "Functions host exited (code $($funcProc.ExitCode))" -ForegroundColor Red; break }
-    if($reactProc.HasExited){ Write-Host "React UI exited (code $($reactProc.ExitCode))" -ForegroundColor Red; break }
-    if($blazorProc -and $blazorProc.HasExited){ Write-Host "Blazor host exited (code $($blazorProc.ExitCode))" -ForegroundColor Red; break }
+    Wait-Showing 1000
+    $ended = if($funcProc.HasExited){ 'Functions host', $funcProc } elseif($reactProc.HasExited){ 'React UI', $reactProc }
+    if($ended){
+      Wait-Showing 300   # its last lines, which say why
+      Write-Host "$($ended[0]) exited (code $($ended[1].ExitCode))" -ForegroundColor Red
+      break
+    }
   }
 }
 finally {

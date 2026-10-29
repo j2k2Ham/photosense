@@ -33,7 +33,6 @@ public class PhotosFunctions
 
     private readonly IPhotoRepository _repo;
     private readonly IPhotoSearchService _search;
-    private readonly IPhotoDeletionService _deleter;
     private readonly IDuplicateRemovalService _remover;
     private readonly IThumbnailStore _thumbnails;
     private readonly IImageAnalyzer _analyzer;
@@ -43,12 +42,12 @@ public class PhotosFunctions
     private readonly ISystemViewer _viewer;
 
     // Services arrive through the constructor: this Functions model does not pass them as method parameters.
-    public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IPhotoDeletionService deleter, IDuplicateRemovalService remover,
+    public PhotosFunctions(IPhotoRepository repo, IPhotoSearchService search, IDuplicateRemovalService remover,
         IThumbnailStore thumbnails, IImageAnalyzer analyzer, IAuditRepository audit, IScanLogSink log, PhotoDtoMapper mapper, ISystemViewer viewer)
     {
         _mapper = mapper;
         _viewer = viewer;
-        _repo = repo; _search = search; _deleter = deleter; _remover = remover;
+        _repo = repo; _search = search; _remover = remover;
         _thumbnails = thumbnails; _analyzer = analyzer; _audit = audit; _log = log;
     }
 
@@ -67,6 +66,7 @@ public class PhotosFunctions
     public async Task<HttpResponseData> GetPhotosAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos")] HttpRequestData req)
     {
+        if (!Authorize(req)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var qs = HttpUtility.ParseQueryString(req.Url.Query);
         int page = int.TryParse(qs.Get("page"), out var p) ? p : 1;
         int pageSize = int.TryParse(qs.Get("pageSize"), out var ps) ? Math.Clamp(ps,1,500) : 50;
@@ -74,7 +74,7 @@ public class PhotosFunctions
         var hash = qs.Get("hash");
         var phash = qs.Get("phash");
         var set = qs.Get("set");
-        var result = await _search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set));
+        var result = await _search.SearchAsync(new PhotoSearchQuery(page, pageSize, text, hash, phash, set), req.FunctionContext.CancellationToken);
         var resp = req.CreateResponse(HttpStatusCode.OK);
         await resp.WriteAsJsonAsync(new {
             result.Page,
@@ -91,6 +91,7 @@ public class PhotosFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "photos/{id:guid}")] HttpRequestData req,
         string id)
     {
+        if (!Authorize(req)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var resp = req.CreateResponse();
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null)
@@ -117,7 +118,7 @@ public class PhotosFunctions
             // The cache was cleared since the scan: make the thumbnail again from the file.
             try
             {
-                await using var stream = File.OpenRead(photo.SourcePath);
+                await using var stream = OpenForShowing(photo.SourcePath);
                 jpeg = (await _analyzer.AnalyzeAsync(stream)).ThumbnailJpeg;
                 await _thumbnails.SaveAsync(photo.ContentHash, jpeg);
             }
@@ -136,16 +137,23 @@ public class PhotosFunctions
     {
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null || photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
+        return await ShowImageAsync(req, photo.SourcePath, photo.ContentHash, _analyzer);
+    }
 
+    /// <summary>The picture in a file, in a form a browser can show at full size.</summary>
+    public static async Task<HttpResponseData> ShowImageAsync(HttpRequestData req, string path, string? contentHash, IImageAnalyzer analyzer)
+    {
         try
         {
-            if (BrowserFormats.TryGetValue(Path.GetExtension(photo.SourcePath), out var contentType))
-                return await ImageResponseAsync(req, await File.ReadAllBytesAsync(photo.SourcePath), contentType, photo.ContentHash);
-
-            byte[] jpeg;
-            await using (var stream = File.OpenRead(photo.SourcePath))
-                jpeg = await _analyzer.RenderJpegAsync(stream, ReviewImageEdge);
-            return await ImageResponseAsync(req, jpeg, "image/jpeg", photo.ContentHash);
+            // What browsers can show is sent as it is; anything else is converted for viewing.
+            var asItIs = BrowserFormats.TryGetValue(Path.GetExtension(path), out var contentType);
+            byte[] bytes;
+            await using (var stream = OpenForShowing(path))
+            {
+                if (asItIs) await stream.ReadExactlyAsync(bytes = new byte[stream.Length]);
+                else bytes = await analyzer.RenderJpegAsync(stream, ReviewImageEdge);
+            }
+            return await ImageResponseAsync(req, bytes, contentType ?? "image/jpeg", contentHash);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -163,7 +171,7 @@ public class PhotosFunctions
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)));
         if (photo is null || !photo.IsVideo || !File.Exists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        await using var file = new FileStream(photo.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await using var file = OpenForShowing(photo.SourcePath);
         var requested = req.Headers.TryGetValues("Range", out var values) ? values.FirstOrDefault() : null;
         if (ByteRange.Parse(requested, file.Length) is not { } range)
         {
@@ -212,8 +220,16 @@ public class PhotosFunctions
         return resp;
     }
 
+    /// <summary>
+    /// Opens a file to show it on the page without holding on to it: while it is being read it can still be
+    /// moved to the holding folder. Opened the usual way, a video could not be deleted at a moment when its
+    /// player was fetching the next piece of it, nor a picture while it was being converted for viewing.
+    /// </summary>
+    public static FileStream OpenForShowing(string path)
+        => new(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+
     // A file's bytes never change under the same content hash, so the browser may keep what it was sent.
-    private static async Task<HttpResponseData> ImageResponseAsync(HttpRequestData req, byte[] bytes, string contentType, string? contentHash)
+    public static async Task<HttpResponseData> ImageResponseAsync(HttpRequestData req, byte[] bytes, string contentType, string? contentHash)
     {
         var resp = req.CreateResponse(HttpStatusCode.OK);
         resp.Headers.Add("Content-Type", contentType);
@@ -232,7 +248,7 @@ public class PhotosFunctions
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
         var physical = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("physical") == "true";
         var gid = Guid.Parse(id);
-        var result = await _deleter.DeleteAsync(new PhotoId(gid), physical);
+        var result = await _remover.RemoveAsync(new PhotoId(gid), physical);
         switch (result.Outcome)
         {
             case RemovalOutcome.NotFound:
@@ -240,6 +256,10 @@ public class PhotosFunctions
                 return resp;
             case RemovalOutcome.Changed:
                 await resp.WriteStringAsync("The file has changed since it was scanned, so it was left alone. Scan again.");
+                resp.StatusCode = HttpStatusCode.Conflict;
+                return resp;
+            case RemovalOutcome.LastCopy:
+                await resp.WriteStringAsync("Not removed: the file it is a copy of is no longer there as it was scanned, so this may be the only copy left. Scan again.");
                 resp.StatusCode = HttpStatusCode.Conflict;
                 return resp;
             case RemovalOutcome.Failed:
@@ -306,18 +326,27 @@ public class PhotosFunctions
         return resp;
     }
 
-    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group)
+    [Function("RemoveDuplicates")] // POST /api/photos/bulk/remove-duplicates  (add ?group=key for one group, once for each of several, and &mode=similar for their look-alikes)
     public async Task<HttpResponseData> RemoveDuplicatesAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "photos/bulk/remove-duplicates")] HttpRequestData req)
     {
         var resp = req.CreateResponse();
         if (!Authorize(req)) { resp.StatusCode = HttpStatusCode.Unauthorized; return resp; }
-        // No group, or a blank one, means every group.
-        var group = System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("group");
-        if (string.IsNullOrWhiteSpace(group)) group = null;
-        var result = await _remover.RemoveDuplicatesAsync(group);
-        _log.Log("audit", "Info", $"Removed {result.Removed} duplicates ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
-        await _audit.AddAsync(new AuditEntry { Action = "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}" });
+        var query = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
+        // No group, or only blank ones, means every group.
+        var groups = (query.GetValues("group") ?? []).Where(g => !string.IsNullOrWhiteSpace(g)).ToList();
+        var group = groups.Count == 1 ? groups[0] : null;
+        var similar = string.Equals(query.Get("mode"), "similar", StringComparison.OrdinalIgnoreCase);
+        if (similar && groups.Count == 0)
+        {
+            await resp.WriteStringAsync("Similar shots are removed one group at a time: name the group.");
+            resp.StatusCode = HttpStatusCode.BadRequest;
+            return resp;
+        }
+        var result = groups.Count > 1 ? await _remover.RemoveGroupsAsync(groups, similar) : await _remover.RemoveDuplicatesAsync(group, similar);
+        var what = similar ? "similar shots" : "duplicates";
+        _log.Log("audit", "Info", $"Removed {result.Removed} {what} ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
+        await _audit.AddAsync(new AuditEntry { Action = similar ? "RemoveSimilar" : "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}{(groups.Count > 1 ? $" groups={groups.Count}" : "")}" });
         await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems });
         return resp;
     }

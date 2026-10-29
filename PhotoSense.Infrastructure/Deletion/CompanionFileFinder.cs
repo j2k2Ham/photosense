@@ -25,7 +25,11 @@ public class CompanionFileFinder : ICompanionFileFinder
         var siblings = Directory.EnumerateFiles(folder)
             .Where(f => PhotoNaming.ItemOf(f) == item && PhotoPath.Key(f) != self)
             .ToList();
+        return FindAmong(path, siblings);
+    }
 
+    public IReadOnlyList<string> FindAmong(string path, IReadOnlyList<string> siblings)
+    {
         // While another picture of the item stays, its sidecars and its Live Photo video still have an owner.
         if (siblings.Any(MediaFiles.IsImage)) return [];
 

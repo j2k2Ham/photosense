@@ -75,6 +75,7 @@ describe('requests that act on photos', () => {
     // Only the group listings are refreshed, whatever else is cached.
     const isGroupListing = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
     expect(isGroupListing(`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`)).toBe(true);
+    expect(isGroupListing(`${API}/scan/status`)).toBe(true);        // the count of files on record changes with them
     expect(isGroupListing(`${API}/scan/progress/scan-1`)).toBe(false);
     expect(isGroupListing(['/scan/groups'])).toBe(false);
     expect(isGroupListing(null)).toBe(false);
@@ -100,6 +101,45 @@ describe('requests that act on photos', () => {
     await api.removeDuplicates('');
     expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates`);
     expect(swr.mutate).toHaveBeenCalledTimes(3);
+  });
+
+  it('remove the similar shots of one group when asked for those, and never those of every group', async () => {
+    answering({ removed: 2, bytes: 600, skipped: 0, companions: 0, problems: [] });
+    const api = await load();
+
+    await api.removeDuplicates('gS', 'similar');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS&mode=similar`);
+    await api.removeDuplicates('gS', 'duplicates');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS`);
+    // With no group named it still says similar, which the service refuses; it is never sent as "every duplicate".
+    await api.removeDuplicates(undefined, 'similar');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
+  });
+
+  it('remove the copies of several groups together, a few dozen named in each request, and list the groups afresh once', async () => {
+    fetchMock.mockImplementation(async url => reply({ removed: String(url).split('group=').length - 1, bytes: 100, skipped: 1, companions: 2, problems: ['one was left alone'] }));
+    const api = await load();
+    const keys = Array.from({ length: 85 }, (_, i) => `g ${i}`);
+
+    await expect(api.removeGroups(keys, 'duplicates')).resolves.toEqual({ removed: 85, bytes: 300, skipped: 3, companions: 6, problems: ['one was left alone', 'one was left alone', 'one was left alone'] });
+    expect(api.GROUPS_AT_ONCE).toBe(40);
+    expect(fetchMock.mock.calls.map(c => String(c[0]).split('group=').length - 1)).toEqual([40, 40, 5]);
+    expect(lastRequest()).toEqual({ url: `${API}/photos/bulk/remove-duplicates?group=g%2080&group=g%2081&group=g%2082&group=g%2083&group=g%2084`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    expect(swr.mutate).toHaveBeenCalledOnce();
+
+    await api.removeGroups(['gS', 'gT'], 'similar');
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS&group=gT&mode=similar`);
+    // With no group named nothing is asked for, least of all "every duplicate".
+    fetchMock.mockClear();
+    await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('list the groups afresh even when removing the copies of several failed part of the way', async () => {
+    fetchMock.mockImplementationOnce(async () => reply({ removed: 40, bytes: 0, skipped: 0, companions: 0, problems: [] })).mockImplementationOnce(async () => reply('The disk is full', 500));
+    const api = await load();
+    await expect(api.removeGroups(Array.from({ length: 50 }, (_, i) => `g${i}`), 'duplicates')).rejects.toMatchObject({ message: 'The disk is full' });
+    expect(swr.mutate).toHaveBeenCalledOnce();
   });
 
   it('list the folders of the service\'s machine, from the top or inside one of them', async () => {
@@ -156,15 +196,62 @@ describe('requests that act on photos', () => {
 });
 
 describe('what the page reads', () => {
-  it('asks for groups by mode, page, search text and whether reviewed ones are hidden', async () => {
+  it('asks for groups fifty to a page, by mode, page, search text and whether reviewed ones are hidden', async () => {
     swr.useSWR.mockReturnValue({ data: 'the groups' });
     const api = await load();
 
     expect(api.useGroups('duplicates', '', 1, false)).toEqual({ data: 'the groups' });
-    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`, expect.any(Function), { refreshInterval: 5000, keepPreviousData: true });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/groups?mode=duplicates&page=1&pageSize=50&hideKept=false&q=`, expect.any(Function), { refreshInterval: 5000, keepPreviousData: true });
 
     api.useGroups('similar', 'trip & beach', 3, true);
-    expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&hideKept=true&q=trip%20%26%20beach`);
+    expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&pageSize=50&hideKept=true&q=trip%20%26%20beach`);
+  });
+
+  it('fetches a page ahead of its being turned to, with the pictures its tiles show', async () => {
+    const pictures: string[] = [];
+    vi.stubGlobal('Image', class { set src(url: string) { pictures.push(url); } });
+    swr.mutate.mockImplementation(async (_key: string, data: Promise<unknown>) => data);
+    answering({ mode: 'duplicates', items: [{ keeper: { id: 'p1', isVideo: false } }, { keeper: { id: 'v1', isVideo: true } }, { keeper: { id: 'p2', isVideo: false } }] });
+    const api = await load();
+
+    await api.prefetchGroups('duplicates', 'trip', 2, true);
+
+    const url = `${API}/scan/groups?mode=duplicates&page=2&pageSize=50&hideKept=true&q=trip`;
+    expect(lastRequest().url).toBe(url);
+    // Left where the page's own request will find it, without asking for it a second time.
+    expect(swr.mutate).toHaveBeenCalledExactlyOnceWith(url, expect.any(Promise), { revalidate: false });
+    expect(pictures).toEqual([api.thumbnailUrl('p1'), api.thumbnailUrl('p2')]);
+  });
+
+  it('makes nothing of a page that could not be fetched ahead', async () => {
+    const pictures: string[] = [];
+    vi.stubGlobal('Image', class { set src(url: string) { pictures.push(url); } });
+    swr.mutate.mockImplementation(async (_key: string, data: Promise<unknown>) => data);
+    answering('The database is busy', 500);
+    const api = await load();
+    await expect(api.prefetchGroups('similar', '', 2, false)).resolves.toBeUndefined();
+    expect(pictures).toEqual([]);
+  });
+
+  it('asks how many files are on record', async () => {
+    swr.useSWR.mockReturnValue({ data: { totalPhotos: 6941 } });
+    const api = await load();
+    expect(api.useScanStatus()).toEqual({ data: { totalPhotos: 6941 } });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/status`, expect.any(Function), { refreshInterval: 5000 });
+  });
+
+  it('asks afresh how many groups of each kind there are', async () => {
+    fetchMock.mockImplementation(async url => reply({ total: String(url).includes('mode=similar') ? 170 : 263 }));
+    const api = await load();
+    await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170 });
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([`${API}/scan/groups?mode=duplicates&page=1&pageSize=50&hideKept=false&q=`, `${API}/scan/groups?mode=similar&page=1&pageSize=50&hideKept=false&q=`]);
+  });
+
+  it('asks again for everything on screen when told to retry', async () => {
+    const api = await load();
+    await api.retryNow();
+    const everything = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
+    expect(everything('anything')).toBe(true);
   });
 
   it('follows a scan only once one has been started', async () => {
@@ -191,6 +278,110 @@ describe('what the page reads', () => {
   });
 });
 
+describe('organize', () => {
+  const destination = { basePath: 'C:\\photos', folderName: 'Trips\\Glacier 2022', direct: false };
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('shows a file by its id', async () => {
+    const api = await load();
+    expect(api.organizeThumbnailUrl('abc')).toBe(`${API}/organize/files/abc/thumbnail`);
+    expect(api.organizeImageUrl('abc')).toBe(`${API}/organize/files/abc/image`);
+  });
+
+  it('lists a folder only once one is chosen, and does not ask again merely because the window came forward', async () => {
+    swr.useSWR.mockReturnValue({ data: 'listing' });
+    const api = await load();
+    expect(api.useOrganizeFiles()).toEqual({ data: 'listing' });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(null, expect.any(Function), { revalidateOnFocus: false, shouldRetryOnError: false });
+    api.useOrganizeFiles('C:\\Phone Pictures');
+    expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/organize/files?root=C%3A%5CPhone%20Pictures`);
+    api.useOrganizeBatches();
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/organize/batches`, expect.any(Function), { revalidateOnFocus: false });
+  });
+
+  it('asks how far the reading of a folder has got, saying how much of it the page already has', async () => {
+    const progress = { reading: true, readingId: 'r1', total: 9000, done: 4100, from: 4000, more: false, files: [], places: [] };
+    answering(progress);
+    const api = await load();
+    await expect(api.fetchOrganizeProgress('C:\\Phone Pictures', 4000, 12)).resolves.toEqual(progress);
+    expect(lastRequest()).toEqual({ url: `${API}/organize/progress?root=C%3A%5CPhone%20Pictures&from=4000&places=12`, init: { headers: json } });
+  });
+
+  it('asks where files would go without moving them', async () => {
+    answering({ destination: 'C:\\photos\\Trips', items: [] });
+    const api = await load();
+    await expect(api.planOrganize(destination, [{ id: 'a', subfolder: '2022' }, { id: 'b' }])).resolves.toEqual({ destination: 'C:\\photos\\Trips', items: [] });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/plan`, init: { method: 'POST', body: JSON.stringify({ ...destination, files: [{ id: 'a', subfolder: '2022' }, { id: 'b' }] }), headers: json } });
+    expect(swr.mutate).not.toHaveBeenCalled();
+  });
+
+  it('moves or copies files, undoes that, and each time asks again for what both areas show', async () => {
+    const api = await load();
+    const request = { ...destination, mode: 'move' as const, companions: true, label: 'Trips\\Glacier 2022', files: [{ id: 'a', name: 'IMG_1.JPG' }] };
+    answering({ batchId: 'b1', done: 1 });
+    await expect(api.applyOrganize(request)).resolves.toEqual({ batchId: 'b1', done: 1 });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/apply`, init: { method: 'POST', body: JSON.stringify(request), headers: json } });
+
+    const [organize, groups] = swr.mutate.mock.calls.map(c => c[0] as (key: unknown) => boolean);
+    // The listing and what was moved are asked for again; how far a reading has got is not something a move changes.
+    expect([`${API}/organize/files?root=x`, `${API}/organize/batches`, `${API}/organize/progress?root=x`, `${API}/scan/groups?mode=duplicates`, 7].map(organize)).toEqual([true, true, false, false, false]);
+    expect(groups(`${API}/scan/groups?mode=duplicates`)).toBe(true);
+
+    // Deleting files changes the same lists.
+    swr.mutate.mockClear();
+    answering({ batchId: 'b2', done: 2 });
+    await expect(api.removeOrganize('C:\\photos', ['a', 'b'])).resolves.toEqual({ batchId: 'b2', done: 2 });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/remove`, init: { method: 'POST', body: JSON.stringify({ root: 'C:\\photos', files: [{ id: 'a' }, { id: 'b' }] }), headers: json } });
+    expect(swr.mutate).toHaveBeenCalledTimes(2);
+
+    swr.mutate.mockClear();
+    answering({ restored: 1, skipped: 0, problems: [] });
+    await expect(api.undoOrganize('b 1')).resolves.toEqual({ restored: 1, skipped: 0, problems: [] });
+    expect(lastRequest()).toEqual({ url: `${API}/organize/undo/b%201`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    expect(swr.mutate).toHaveBeenCalledTimes(2);
+
+    answering('There is nothing to undo: this was undone already, or was never done.', 404);
+    await expect(api.undoOrganize('b1')).rejects.toMatchObject({ message: 'There is nothing to undo: this was undone already, or was never done.' });
+  });
+
+  it('opens a file in the default viewer of the service\'s machine', async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.openOrganizeFile('abc');
+    expect(lastRequest()).toEqual({ url: `${API}/organize/files/abc/open`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+  });
+});
+
+describe('removed files', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('are counted in and around the folders the page knows of', async () => {
+    const found = { folders: [{ path: 'C:\\photos\\_PhotoSense_Removed', files: 3, bytes: 900 }], files: 3, bytes: 900 };
+    answering(found);
+    const api = await load();
+    await expect(api.fetchRemoved(['C:\\photos', 'D:\\Trips & days'])).resolves.toEqual(found);
+    expect(lastRequest()).toEqual({ url: `${API}/removed?root=C%3A%5Cphotos&root=D%3A%5CTrips%20%26%20days`, init: { headers: json } });
+    // With no folder known here, the service goes by what it has on record.
+    await api.fetchRemoved([]);
+    expect(lastRequest().url).toBe(`${API}/removed?`);
+  });
+
+  it('are erased from the folders named, and what could have been undone is listed afresh', async () => {
+    const erased = { erased: 3, bytes: 900, skipped: 0, problems: [] };
+    answering(erased);
+    const api = await load();
+    await expect(api.eraseRemoved(['C:\\photos\\_PhotoSense_Removed'])).resolves.toEqual(erased);
+    expect(lastRequest()).toEqual({ url: `${API}/removed/erase`, init: { method: 'POST', body: JSON.stringify({ folders: ['C:\\photos\\_PhotoSense_Removed'] }), headers: json } });
+    const matches = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
+    expect([`${API}/organize/batches`, `${API}/organize/files?root=x`, 7].map(matches)).toEqual([true, false, false]);
+
+    swr.mutate.mockClear();
+    answering('Not a folder of removed files: C:\\photos', 400);
+    await expect(api.eraseRemoved(['C:\\photos'])).rejects.toMatchObject({ message: 'Not a folder of removed files: C:\\photos' });
+    expect(swr.mutate).not.toHaveBeenCalled();
+  });
+});
+
 describe('the log stream', () => {
   const negotiate = `${API}/scan/logs/negotiate`;
   const polled = `${API}/scan/logs?limit=200`;
@@ -208,7 +399,8 @@ describe('the log stream', () => {
     const dispose = api.connectLogStream(l => lines.push(l));
     await settle();
 
-    expect(lastRequest()).toEqual({ url: negotiate, init: { method: 'POST' } });
+    // The service shows its log only to the UI, so both requests say where they come from.
+    expect(lastRequest()).toEqual({ url: negotiate, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
     expect(hub.connection.url).toBe('https://hub.example/client');
     expect(hub.connection.options.accessTokenFactory()).toBe('token-1');
     expect(hub.connection.start).toHaveBeenCalledOnce();
@@ -266,6 +458,7 @@ describe('the log stream', () => {
     await settle();
 
     expect(fetchMock.mock.calls.map(c => c[0])).toEqual([negotiate, polled]);
+    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { 'x-photosense-client': 'web' } });
     expect(lines).toEqual(['12:00:01 Info line 1', '12:00:02 Info line 2']);
 
     // Every second and a half, through empty answers, refusals and a lost connection alike.

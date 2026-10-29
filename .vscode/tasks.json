@@ -71,7 +71,7 @@
 			"type": "func",
 			"dependsOn": "build (functions)",
 			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Functions/bin/Debug/net8.0"
+				"cwd": "${workspaceFolder}/PhotoSense.Functions/bin/Debug/net10.0"
 			},
 			"command": "host start",
 			"isBackground": true,
@@ -95,7 +95,7 @@
 		{
 			"label": "run:functions (core tools)",
 			"type": "shell",
-			"command": "func start --csharp --port 7071 --script-root PhotoSense.Functions/bin/Debug/net8.0",
+			"command": "func start --port 7071 --script-root PhotoSense.Functions/bin/Debug/net10.0",
 			"dependsOn": ["build:solution"],
 			"problemMatcher": []
 		},

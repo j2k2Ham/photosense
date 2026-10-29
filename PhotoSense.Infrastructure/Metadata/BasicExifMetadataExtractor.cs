@@ -22,7 +22,8 @@ public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
             imageStream.Position = 0;
             Read(photo, ImageMetadataReader.ReadMetadata(imageStream));
         }
-        catch { /* swallow - metadata optional */ }
+        // A file whose details cannot be read is still recorded; a malformed one must not stop the whole scan.
+        catch (Exception ex) when (ex is not OperationCanceledException) { }
         return Task.CompletedTask;
     }
 
@@ -84,7 +85,7 @@ public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
 
         var meta = directories.OfType<QuickTimeMetadataHeaderDirectory>().FirstOrDefault();
         photo.CameraModel = meta?.GetString(QuickTimeModel);
-        if (meta?.GetString(QuickTimeGpsLocation) is { } position && Iso6709.Match(position) is { Success: true } m)
+        if (meta?.GetString(QuickTimeGpsLocation) is { } position && Iso6709.Match(position) is var m && m.Success)
         {
             var latitude = double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture);
             var longitude = double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);

@@ -1,3 +1,6 @@
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
+
 namespace PhotoSense.Application.Scanning.Interfaces;
 
 /// <param name="Removed">Files moved to the holding folder.</param>
@@ -10,7 +13,24 @@ public interface IDuplicateRemovalService
 {
     /// <summary>
     /// Removes the duplicates of one group, or of every group when <paramref name="groupKey"/> is null.
-    /// Only identical files and confirmed copies are taken; kept photos and look-alikes never are.
+    /// Photos marked keep are never taken, and neither is the photo a group is built around.
     /// </summary>
-    Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, CancellationToken ct = default);
+    /// <param name="similar">
+    /// Take the look-alikes of the group named instead of its duplicates. Look-alikes are different shots, so
+    /// they go one group at a time, when asked for by name: with no group named, nothing is removed.
+    /// </param>
+    Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, bool similar = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes the duplicates of each of the groups named, or with <paramref name="similar"/> their
+    /// look-alikes, as <see cref="RemoveDuplicatesAsync"/> does for one. The groups are worked out once for
+    /// all of them; a name that is no group's is passed over.
+    /// </summary>
+    Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar = false, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes one photo. A photo in a duplicate group goes only while another file of the group stays
+    /// behind as it was scanned: the photo kept for one of its copies, a copy for the photo kept.
+    /// </summary>
+    Task<RemovalResult> RemoveAsync(PhotoId id, bool deleteFile, CancellationToken ct = default);
 }

@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.Azure.Functions.Worker.SignalRService;
 #endif
 using System.Net;
+using PhotoSense.Functions.Api;
 using PhotoSense.Infrastructure.Scanning;
 
 namespace PhotoSense.Functions.Realtime;
@@ -56,6 +57,8 @@ public static class SignalRLogFunctions
     public static async Task<HttpResponseData> GetScanLogs(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "scan/logs")] HttpRequestData req)
     {
+        // Lines are taken off the queue as they are read, so another page asking would steal them from the UI.
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         // Parse limit
         var uri = req.Url;
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
@@ -84,6 +87,7 @@ public static class SignalRLogFunctions
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", "get", Route = "scan/logs/negotiate")] HttpRequestData req,
         [SignalRConnectionInfoInput(HubName = "scanlogs")] SignalRConnectionInfo connectionInfo)
     {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var resp = req.CreateResponse(HttpStatusCode.OK);
         await resp.WriteAsJsonAsync(connectionInfo);
         return resp;

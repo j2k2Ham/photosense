@@ -9,10 +9,12 @@ public class LiteDbOutboxStore : IOutboxStore
 {
     private readonly LiteDatabase _db;
     private readonly ILiteCollection<OutboxMessage> _col;
+    private readonly TimeProvider _time;
 
-    public LiteDbOutboxStore(LiteDatabase db)
+    public LiteDbOutboxStore(LiteDatabase db, TimeProvider? time = null)
     {
         _db = db;
+        _time = time ?? TimeProvider.System;
         LiteDbMapping.Prepare<OutboxMessage>();
         _col = _db.GetCollection<OutboxMessage>("outbox");
         _col.EnsureIndex(x => x.ProcessedUtc);
@@ -39,7 +41,7 @@ public class LiteDbOutboxStore : IOutboxStore
         var msg = _col.FindById(id);
         if (msg != null)
         {
-            msg.ProcessedUtc = DateTime.UtcNow;
+            msg.ProcessedUtc = _time.GetUtcNow().UtcDateTime;
             _col.Update(msg);
         }
         return Task.CompletedTask;

@@ -36,6 +36,24 @@ internal static class TestFiles
     }
 
     /// <summary>
+    /// Makes <paramref name="link"/> a second path to the folder <paramref name="target"/> until disposed.
+    /// Windows asks for a privilege to create a symbolic link, which this account may lack, and for none to
+    /// create a junction. The link is taken away again because deleting a folder that holds one can fail.
+    /// </summary>
+    public static IDisposable LinkFolder(string link, string target)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            using var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", ["/c", "mklink", "/J", link, target])
+            { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true })!;
+            mklink.WaitForExit();
+            if (!Directory.Exists(link)) throw new IOException($"Could not link {link} to {target}");
+        }
+        else Directory.CreateSymbolicLink(link, target);
+        return new Restore(() => Directory.Delete(link));
+    }
+
+    /// <summary>
     /// Takes away this user's access to a file or folder until disposed, so that code which must cope with
     /// "access denied" can be shown to. Returns null where that cannot be arranged (running as root).
     /// </summary>

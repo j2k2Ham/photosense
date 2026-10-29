@@ -22,6 +22,26 @@ name    region    country code    latitude    longitude
 Buxton  North Carolina  US  35.2677  -75.5424
 ```
 
+## Landmarks
+
+`landmarks.tsv.gz` is the second list: sights, parks, beaches and districts, from the GeoNames file
+`allCountries.zip` under the same licence. It lets Organize name a folder after the landmark or area the
+pictures were taken at. Downloaded 2026-10-08: 363,564 landmarks.
+
+```
+name    latitude    longitude    reach in metres
+Old Faithful Geyser  44.4605  -110.8281  300
+```
+
+GeoNames gives a feature one point however large it is, so each kind is given a short reach (200 m for a
+theatre or a square, up to 1 km for a district): within it a picture was taken at the place, not merely
+near it. `build_landmarks.py` in this folder holds the kinds that are taken and the reach of each, and
+rebuilds the file:
+
+```
+python build_landmarks.py allCountries.zip landmarks.tsv.gz
+```
+
 ## Rebuilding
 
 Download `cities1000.zip` and `admin1CodesASCII.txt` from

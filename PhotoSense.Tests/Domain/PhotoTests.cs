@@ -1,35 +1,34 @@
 using PhotoSense.Domain.Entities;
-using Xunit;
 
 namespace PhotoSense.Tests.Domain;
 
 public class PhotoTests
 {
-    [Fact]
-    public void AddCategory_ShouldAdd_WhenNew()
+    [Test]
+    public async Task AddCategory_ShouldAdd_WhenNew()
     {
         var photo = new Photo { SourcePath = "a", FileName = "b", FileSizeBytes = 1, Set = PhotoSet.Primary };
         photo.AddCategory("Nature");
-        Assert.Contains("Nature", photo.Categories);
+        await Assert.That(photo.Categories).Contains("Nature");
     }
 
-    [Fact]
-    public void AddCategory_ShouldIgnore_Duplicates_And_Whitespace()
+    [Test]
+    public async Task AddCategory_ShouldIgnore_Duplicates_And_Whitespace()
     {
         var photo = new Photo { SourcePath = "a", FileName = "b", FileSizeBytes = 1, Set = PhotoSet.Primary };
         photo.AddCategory("Nature");
         photo.AddCategory("nature");
         photo.AddCategory(" ");
-        Assert.Single(photo.Categories);
+        await Assert.That(photo.Categories).HasSingleItem();
     }
 
-    [Fact]
-    public void LoadCategories_ReplacesExisting()
+    [Test]
+    public async Task LoadCategories_ReplacesExisting()
     {
         var photo = new Photo { SourcePath = "a", FileName = "b", FileSizeBytes = 1, Set = PhotoSet.Primary };
         photo.AddCategory("A");
         photo.LoadCategories(new []{"B","C"});
-        Assert.DoesNotContain("A", photo.Categories);
-        Assert.Equal(2, photo.Categories.Count);
+        await Assert.That(photo.Categories).DoesNotContain("A");
+        await Assert.That(photo.Categories.Count).IsEqualTo(2);
     }
 }

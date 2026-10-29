@@ -5,8 +5,6 @@ VisualStudioVersion = 17.14.36429.23
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.Application", "PhotoSense.Application\PhotoSense.Application.csproj", "{96D72339-7466-FAFA-735F-FAC0B79F003B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.BlazorServer", "PhotoSense.BlazorServer\PhotoSense.BlazorServer.csproj", "{7835CDC6-BCFC-E496-AFFA-FFE329556E53}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.Functions", "PhotoSense.Functions\PhotoSense.Functions.csproj", "{A5193473-1B35-D265-F226-167832E4104D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PhotoSense.Infrastructure", "PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj", "{114991E0-0126-2B5C-5CF9-8CB84A4B3AEC}"
@@ -29,10 +27,6 @@ Global
 		{96D72339-7466-FAFA-735F-FAC0B79F003B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{96D72339-7466-FAFA-735F-FAC0B79F003B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{96D72339-7466-FAFA-735F-FAC0B79F003B}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7835CDC6-BCFC-E496-AFFA-FFE329556E53}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7835CDC6-BCFC-E496-AFFA-FFE329556E53}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7835CDC6-BCFC-E496-AFFA-FFE329556E53}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7835CDC6-BCFC-E496-AFFA-FFE329556E53}.Release|Any CPU.Build.0 = Release|Any CPU
 		{A5193473-1B35-D265-F226-167832E4104D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{A5193473-1B35-D265-F226-167832E4104D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A5193473-1B35-D265-F226-167832E4104D}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -49,14 +43,14 @@ Global
 		{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D3FFA552-917A-358B-E88E-AEE6B1AC43E9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E6F7ABCD-1234-4D55-9F00-ABCDEF123456}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{E6F7ABCD-1234-4D55-9F00-ABCDEF123456}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E6F7ABCD-1234-4D55-9F00-ABCDEF123456}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E6F7ABCD-1234-4D55-9F00-ABCDEF123456}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7B5F2A6-3A4F-4C71-9D7B-6BBF3E6E4D11}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

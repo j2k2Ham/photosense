@@ -3,7 +3,6 @@ using PhotoSense.Application.Photos.Services;
 using PhotoSense.Application.Photos.Interfaces;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
-using Xunit;
 
 namespace PhotoSense.Tests.Application;
 
@@ -16,49 +15,49 @@ public class PhotoSearchServiceTests
         new() { SourcePath = "p3", FileName = "cat2.jpg", FileSizeBytes = 1, ContentHash = "H3", PerceptualHash = "FFFF", Set = PhotoSet.Secondary }
     };
 
-    [Fact]
+    [Test]
     public async Task Text_Filter_Works()
     {
         var repo = new Mock<IPhotoRepository>();
         repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(CreatePhotos());
         var svc = new PhotoSearchService(repo.Object);
         var result = await svc.SearchAsync(new PhotoSearchQuery(Text: "cat"));
-        Assert.Equal(2, result.Items.Count);
+        await Assert.That(result.Items.Count).IsEqualTo(2);
     }
 
-    [Fact]
+    [Test]
     public async Task Hash_Filter_Works()
     {
         var repo = new Mock<IPhotoRepository>();
         repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(CreatePhotos());
         var svc = new PhotoSearchService(repo.Object);
         var result = await svc.SearchAsync(new PhotoSearchQuery(Hash: "H2"));
-        Assert.Single(result.Items);
-        Assert.Equal("dog.png", result.Items[0].FileName);
+        await Assert.That(result.Items).HasSingleItem();
+        await Assert.That(result.Items[0].FileName).IsEqualTo("dog.png");
     }
 
-    [Fact]
+    [Test]
     public async Task PerceptualHash_Filter_Works()
     {
         var repo = new Mock<IPhotoRepository>();
         repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(CreatePhotos());
         var svc = new PhotoSearchService(repo.Object);
         var result = await svc.SearchAsync(new PhotoSearchQuery(PerceptualHash: "FFFF"));
-        Assert.Single(result.Items);
+        await Assert.That(result.Items).HasSingleItem();
     }
 
-    [Fact]
+    [Test]
     public async Task Set_Filter_Works()
     {
         var repo = new Mock<IPhotoRepository>();
         repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(CreatePhotos());
         var svc = new PhotoSearchService(repo.Object);
         var result = await svc.SearchAsync(new PhotoSearchQuery(Set: nameof(PhotoSet.Secondary)));
-        Assert.Single(result.Items);
-        Assert.Equal(PhotoSet.Secondary, result.Items[0].Set);
+        await Assert.That(result.Items).HasSingleItem();
+        await Assert.That(result.Items[0].Set).IsEqualTo(PhotoSet.Secondary);
     }
 
-    [Fact]
+    [Test]
     public async Task Paging_Works()
     {
         var repo = new Mock<IPhotoRepository>();
@@ -68,8 +67,8 @@ public class PhotoSearchServiceTests
         repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(many);
         var svc = new PhotoSearchService(repo.Object);
         var result = await svc.SearchAsync(new PhotoSearchQuery(Page: 2, PageSize: 50));
-        Assert.Equal(50, result.Items.Count);
-        Assert.Equal(120, result.TotalCount);
-        Assert.Equal(3, result.TotalPages);
+        await Assert.That(result.Items.Count).IsEqualTo(50);
+        await Assert.That(result.TotalCount).IsEqualTo(120);
+        await Assert.That(result.TotalPages).IsEqualTo(3);
     }
 }
