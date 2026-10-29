@@ -77,6 +77,8 @@ export const GUIDE: GuideTopic[] = [
         heading: 'On an iPhone or iPad',
         text: [
           'The phone\'s photos are the one folder, **Photo Library**. If you let PhotoSense see only some of them, the scan screen says so: **Choose more photos** opens the phone\'s own picker, and **Open Settings** goes to where all of them can be allowed.',
+          'There, a folder is an album. Organizing a photo puts it in an album, inside a folder where the name has a \\, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied.',
+          'What you delete waits in an album called **PhotoSense Removed**, where **Undo** can still take it back. **Delete permanently** sends it to the phone\'s **Recently Deleted**, which keeps it for 30 days; the phone asks you first.',
         ],
       },
       {

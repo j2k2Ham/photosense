@@ -74,7 +74,27 @@ public sealed class RemovedFiles
             if (!_files.FolderExists(path) || _files.IsLink(path)) continue;
             emptied++;
             var inside = Throughout(path);
-            foreach (var (file, size) in FilesIn(inside))
+            var files = FilesIn(inside).ToList();
+            var deepestFirst = inside.OrderByDescending(d => d.Length).ToList();
+            if (_files is IPhotoChangesTogether together)
+            {
+                // One question for the whole folder, which is answered for every file in it.
+                try
+                {
+                    together.EraseAll([.. files.Select(f => f.Path)]);
+                    erased += files.Count;
+                    bytes += files.Sum(f => f.Bytes);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    skipped += files.Count;
+                    problems.Add(ex.Message);
+                }
+                try { together.RemoveEmptyFolders(deepestFirst); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* they stay */ }
+                continue;
+            }
+            foreach (var (file, size) in files)
             {
                 try
                 {
@@ -89,7 +109,7 @@ public sealed class RemovedFiles
                 }
             }
             // The folders go too, deepest first. One that still holds something stays.
-            foreach (var folder in inside.OrderByDescending(d => d.Length))
+            foreach (var folder in deepestFirst)
             {
                 try { _files.RemoveEmptyFolder(folder); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* stays */ }

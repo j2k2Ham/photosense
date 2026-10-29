@@ -24,6 +24,8 @@ interface Props {
   /** Where the folder is made, when not in the root, and whether the files go straight into that folder instead. */
   readonly base?: string;
   readonly direct?: boolean;
+  /** Files can be copied as well as moved: not on a phone, which keeps each picture once. */
+  readonly canCopy?: boolean;
   /** What the folder is split by inside, when it is: a subfolder for each year, month or place of its files. */
   readonly split?: 'year' | 'month' | 'place';
   /** The subfolder a file goes to in a folder that is split; none for a file with nothing to split it by. */
@@ -53,7 +55,7 @@ const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the Ph
 const NAMED_SUBFOLDERS = 6;
 
 /** Everything a folder would take, where it would go and under what names, before anything moves. */
-export function MovePreview({ kind, root, files, places, name, base: home, direct: straight = false, split, subfolderOf, merge, mode, companions, busy, asking, placeOf, onName, onMode, onCompanions, onMove, onDelete, onClose }: Props) {
+export function MovePreview({ kind, root, files, places, name, base: home, direct: straight = false, canCopy = true, split, subfolderOf, merge, mode, companions, busy, asking, placeOf, onName, onMode, onCompanions, onMove, onDelete, onClose }: Props) {
   const [excluded, setExcluded] = useState<Record<string, boolean>>({});
   const [choices, setChoices] = useState<Record<string, ClashChoice>>({});
   // A folder chosen here for the files in place of the folder's own place, and whether they go straight into it.
@@ -202,10 +204,15 @@ export function MovePreview({ kind, root, files, places, name, base: home, direc
             </label>
           )}
 
-          <div className="flex flex-col gap-2">
-            <Segmented label="Move or copy" size="wide" value={mode} onChange={onMode} options={[{ value: 'move', name: 'Move' }, { value: 'copy', name: 'Copy' }]} />
-            <p className="text-[12.5px] text-t3">{copy ? `The originals stay where they are. The copies use ${formatBytes(totalBytes(going))} more space.` : 'The files leave their current folders. Nothing is copied.'}</p>
-          </div>
+          {canCopy ? (
+            <div className="flex flex-col gap-2">
+              <Segmented label="Move or copy" size="wide" value={mode} onChange={onMode} options={[{ value: 'move', name: 'Move' }, { value: 'copy', name: 'Copy' }]} />
+              <p className="text-[12.5px] text-t3">{copy ? `The originals stay where they are. The copies use ${formatBytes(totalBytes(going))} more space.` : 'The files leave their current folders. Nothing is copied.'}</p>
+            </div>
+          ) : (
+            // A phone keeps each picture once: a folder there is an album, which a picture is moved into.
+            <p className="text-[12.5px] text-t3">Each picture goes into this album and out of the other albums PhotoSense made. Your own albums are left as they are, and nothing is copied.</p>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2.5">

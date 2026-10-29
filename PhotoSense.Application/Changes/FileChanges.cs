@@ -96,24 +96,40 @@ public sealed class FileChanges
                     made.Add(f);
                 }
                 folder = null;
-                var lettingGo = false;
-                foreach (var item in batch.Items)
+                if (Together(batch) is { } together)
                 {
+                    // All at once, and then those to be let go of all at once, with their companions.
                     ct.ThrowIfCancellationRequested();
-                    // The companions of a file let go of stay where they are with it.
-                    if (item.Companion && lettingGo) { left.Add(item); continue; }
-                    at = item;
-                    if (batch.Copy) _files.Copy(item.From, item.To); else _files.Move(item.From, item.To);
-                    done.Add(item);
-                    var arrived = _files.Describe(item.To)!;
-                    item.SizeBytes = arrived.Length;
-                    item.ModifiedUtcTicks = arrived.ModifiedUtc.Ticks;
-                    if (item.Companion) continue;
-                    lettingGo = keep?.Invoke(item) == false;
-                    if (!lettingGo) continue;
-                    Reverse(item, batch.Copy);
-                    done.Remove(item);
-                    left.Add(item);
+                    together.MoveAll([.. batch.Items.Select(i => new FileMove(i.From, i.To))]);
+                    done.AddRange(batch.Items);
+                    batch.Items.ForEach(Arrived);
+                    var back = LetGo(batch.Items, keep);
+                    if (back.Count > 0)
+                    {
+                        together.MoveAll([.. back.Select(i => new FileMove(i.To, i.From))]);
+                        done.RemoveAll(back.Contains);
+                        left.AddRange(back);
+                    }
+                }
+                else
+                {
+                    var lettingGo = false;
+                    foreach (var item in batch.Items)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        // The companions of a file let go of stay where they are with it.
+                        if (item.Companion && lettingGo) { left.Add(item); continue; }
+                        at = item;
+                        if (batch.Copy) _files.Copy(item.From, item.To); else _files.Move(item.From, item.To);
+                        done.Add(item);
+                        Arrived(item);
+                        if (item.Companion) continue;
+                        lettingGo = keep?.Invoke(item) == false;
+                        if (!lettingGo) continue;
+                        Reverse(item, batch.Copy);
+                        done.Remove(item);
+                        left.Add(item);
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
@@ -191,11 +207,19 @@ public sealed class FileChanges
                         made.Add(f);
                     }
                     folder = null;
-                    foreach (var item in going)
+                    if (Together(batch) is { } together)
                     {
-                        at = item;
-                        _files.Move(item.To, item.Back!);
-                        moved.Add(item);
+                        together.MoveAll([.. going.Select(i => new FileMove(i.To, i.Back!))]);
+                        moved.AddRange(going);
+                    }
+                    else
+                    {
+                        foreach (var item in going)
+                        {
+                            at = item;
+                            _files.Move(item.To, item.Back!);
+                            moved.Add(item);
+                        }
                     }
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -257,6 +281,29 @@ public sealed class FileChanges
         }
     }
 
+    // Where the photos are kept by something that takes many changes as one, a move is handed over whole; a copy never is.
+    private IPhotoChangesTogether? Together(OrganizeBatch batch) => batch.Copy ? null : _files as IPhotoChangesTogether;
+
+    private void Arrived(OrganizeBatchItem item)
+    {
+        var arrived = _files.Describe(item.To)!;
+        item.SizeBytes = arrived.Length;
+        item.ModifiedUtcTicks = arrived.ModifiedUtc.Ticks;
+    }
+
+    // The files `keep` lets go of once they have gone, each with the companions that follow it.
+    private static List<OrganizeBatchItem> LetGo(List<OrganizeBatchItem> items, Func<OrganizeBatchItem, bool>? keep)
+    {
+        var back = new List<OrganizeBatchItem>();
+        var lettingGo = false;
+        foreach (var item in items)
+        {
+            if (!item.Companion) lettingGo = keep?.Invoke(item) == false;
+            if (lettingGo) back.Add(item);
+        }
+        return back;
+    }
+
     // A file that is moved goes back; a copy is deleted.
     private void Reverse(OrganizeBatchItem item, bool copy)
     {
@@ -268,12 +315,23 @@ public sealed class FileChanges
     private async Task<string?> PutBackAsync(OrganizeBatch batch, List<OrganizeBatchItem> done, List<string> made)
     {
         string? stuck = null;
-        foreach (var item in Enumerable.Reverse(done))
+        if (Together(batch) is { } together && done.Count > 0)
         {
-            try { Reverse(item, batch.Copy); }
+            try { together.MoveAll([.. Enumerable.Reverse(done).Select(i => new FileMove(i.To, i.From))]); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                stuck ??= $"{Path.GetFileName(item.To)} could not be put back where it was: {Sentence(ex.Message)} PhotoSense puts it back the next time it starts.";
+                stuck = $"The files could not be put back where they were: {Sentence(ex.Message)} PhotoSense puts them back the next time it starts.";
+            }
+        }
+        else
+        {
+            foreach (var item in Enumerable.Reverse(done))
+            {
+                try { Reverse(item, batch.Copy); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    stuck ??= $"{Path.GetFileName(item.To)} could not be put back where it was: {Sentence(ex.Message)} PhotoSense puts it back the next time it starts.";
+                }
             }
         }
         // Left as begun, the change is put back once more at the next start.
@@ -422,16 +480,26 @@ public sealed class FileChanges
     // Folders a change made go again where it leaves them empty; one that will not go is no loss.
     private void TidyAway(IEnumerable<string> folders)
     {
-        foreach (var folder in folders.OrderByDescending(f => f.Length))
+        var deepestFirst = folders.OrderByDescending(f => f.Length).ToList();
+        if (_files is IPhotoChangesTogether together)
+        {
+            try { together.RemoveEmptyFolders(deepestFirst); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* they stay */ }
+            return;
+        }
+        foreach (var folder in deepestFirst)
         {
             try { _files.RemoveEmptyFolder(folder); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* stays */ }
         }
     }
 
+    // With no one file to blame, the files are spoken of together: they were handed over as one.
     private static string Problem(OrganizeBatch batch, OrganizeBatchItem? item, string? folder, Exception ex)
     {
-        var what = folder is not null ? CouldNotMake(folder) : $"{Path.GetFileName(item!.From)} could not be {(batch.Copy ? "copied" : "moved")}";
+        var what = folder is not null ? CouldNotMake(folder)
+            : item is null ? $"The files could not be {(batch.Removed ? "removed" : "moved")}"
+            : $"{Path.GetFileName(item.From)} could not be {(batch.Copy ? "copied" : "moved")}";
         var nothing = batch.Removed ? "Nothing was removed: every file is where it was." : batch.Copy ? "Nothing was copied, and no copy was left behind." : "Nothing was moved: every file is where it was.";
         return $"{what}: {Sentence(ex.Message)} {nothing}";
     }
@@ -439,7 +507,7 @@ public sealed class FileChanges
     private static string UndoProblem(OrganizeBatch batch, OrganizeBatchItem? item, string? folder, Exception ex)
     {
         if (batch.Copy) return $"The copy {Path.GetFileName(item!.To)} could not be deleted: {Sentence(ex.Message)} No copy was deleted.";
-        var what = folder is not null ? CouldNotMake(folder) : $"{Path.GetFileName(item!.To)} could not be put back";
+        var what = folder is not null ? CouldNotMake(folder) : item is null ? "The files could not be put back" : $"{Path.GetFileName(item.To)} could not be put back";
         return $"{what}: {Sentence(ex.Message)} Nothing was put back: every file is where it is.";
     }
 

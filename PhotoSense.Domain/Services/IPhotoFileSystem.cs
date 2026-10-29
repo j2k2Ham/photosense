@@ -56,3 +56,26 @@ public interface IPhotoFileSystem
     /// <summary>Erases a removed file for good, marked read-only or not. Only Delete permanently asks for this.</summary>
     void Erase(string path);
 }
+
+/// <summary>A file to be moved, and where to.</summary>
+public sealed record FileMove(string From, string To);
+
+/// <summary>
+/// Photos kept where many changes are best made as one: a phone's photo library, which asks the person once for all
+/// the changes made together, before it deletes any photo, and makes every one of them or none. Where the photos are
+/// kept so, changes are handed over whole rather than one file at a time.
+/// </summary>
+public interface IPhotoChangesTogether
+{
+    /// <summary>Moves every file where it is to go, making the folders that takes.</summary>
+    /// <exception cref="IOException">None was moved: one could not be, or the person said no.</exception>
+    /// <exception cref="UnauthorizedAccessException">None was moved: one of them may not be.</exception>
+    void MoveAll(IReadOnlyList<FileMove> moves);
+
+    /// <summary>Erases every file given; on a phone they go to its own bin, where they can still be found for a while.</summary>
+    /// <exception cref="IOException">None was erased.</exception>
+    void EraseAll(IReadOnlyList<string> paths);
+
+    /// <summary>Takes away those of the folders given that are empty; one that holds anything stays.</summary>
+    void RemoveEmptyFolders(IReadOnlyList<string> folders);
+}

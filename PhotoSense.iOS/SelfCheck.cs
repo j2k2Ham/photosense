@@ -80,13 +80,33 @@ public static class SelfCheck
               const answer = await ask('photos/' + groups.keeper + '/image');
               return { type: answer.headers.get('Content-Type'), bytes: (await answer.arrayBuffer()).byteLength };
             });
-            await step('Organize lists the library', async () =>
-              (await (await ask('organize/files?root=' + encodeURIComponent(root))).json()).files.length);
-            await step('a removal is refused', async () => {
-              const answer = await fetch('/api/photos/bulk/remove-duplicates', { method: 'POST', headers });
-              const said = await answer.text();
-              if (!said.includes('cannot change the photos on this phone')) throw new Error(answer.status + ' ' + said);
-              return answer.status;
+            const files = await step('Organize lists the library', async () =>
+              (await (await ask('organize/files?root=' + encodeURIComponent(root))).json()).files);
+            // What makes albums comes first, what takes them away last: should the phone stop to ask about taking one
+            // away, the steps before it have still been made.
+            const moved = await step('Organize puts a picture in an album in a folder', async () => {
+              const picture = files.find(f => !f.isVideo);
+              const done = await (await ask('organize/apply', { method: 'POST', body: JSON.stringify({
+                basePath: root, folderName: 'PhotoSense Check\\Album', direct: false, mode: 'move', companions: true, label: 'Album',
+                files: [{ id: picture.id, name: picture.name }] }) })).json();
+              if (done.done !== 1) throw new Error(JSON.stringify(done));
+              return { batchId: done.batchId, now: done.items[0].path };
+            });
+            const removed = await step('a copy is removed into the album of removed pictures', async () => {
+              const done = await (await ask('photos/bulk/remove-duplicates', { method: 'POST' })).json();
+              const waiting = await (await ask('removed?root=' + encodeURIComponent(root))).json();
+              if (done.removed < 1 || waiting.files < 1) throw new Error(JSON.stringify({ done, waiting }));
+              return { batchId: done.batchId, removed: done.removed, waiting: waiting.files };
+            });
+            await step('the removal is undone', async () => {
+              const undone = await (await ask('organize/undo/' + removed.batchId, { method: 'POST' })).json();
+              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
+              return undone.restored;
+            });
+            await step('the move is undone', async () => {
+              const undone = await (await ask('organize/undo/' + moved.batchId, { method: 'POST' })).json();
+              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
+              return undone.restored;
             });
             report.photos = status.totalPhotos;
             report.passed = true;

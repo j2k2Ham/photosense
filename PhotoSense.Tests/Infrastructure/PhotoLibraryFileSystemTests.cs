@@ -109,29 +109,165 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Nothing_In_The_Library_Can_Be_Changed_Yet()
+    public async Task Each_Album_PhotoSense_Made_Is_A_Folder_Inside_It_With_Its_Pictures_And_The_Folders_It_Is_In_Above_It()
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
-        var picture = In("IMG_1.JPG");
-        Action[] changes =
-        [
-            () => _photos.Move(picture, In("IMG_2.JPG")), () => _photos.Copy(picture, In("IMG_2.JPG")), () => _photos.MakeFolder(In("Trips")),
-            () => _photos.RemoveEmptyFolder(In("Trips")), () => _photos.DeleteCopy(picture), () => _photos.Erase(picture),
-        ];
-        foreach (var change in changes)
-            await Assert.That(Assert.Throws<UnauthorizedAccessException>(change)!.Message).IsEqualTo(PhotoLibraryFileSystem.ReadOnly);
+        _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"), File(LibraryFileKind.PairedVideo, "IMG_2.MOV"));
+        _library.Add("C3", File(LibraryFileKind.Photo, "IMG_3.JPG"));
+        _library.Add("D4", File(LibraryFileKind.Photo, "IMG_4.JPG"));
+        _library.Album(["Trips", "Glacier"], "B2");
+        _library.Album(["Butte"], "C3", "C3-gone");
+        _library.Album([PhotoLibraryFileSystem.RemovedAlbum], "D4");
+        // One the person renamed in the Photos app, to a name a path cannot hold, and one put in two albums.
+        _library.Album(["Trips/2022\\Summer", ".."], "C3");
+
         await Assert.That(Listed()).IsEquivalentTo(["IMG_1.JPG"], CollectionOrdering.Matching);
+        await Assert.That(_photos.FoldersIn(Root)).IsEquivalentTo([In("Butte"), In("Trips"), In("Trips-2022-Summer"), In("_PhotoSense_Removed")], CollectionOrdering.Matching);
+        await Assert.That(_photos.FoldersIn(In("Trips"))).IsEquivalentTo([In(Path.Combine("Trips", "Glacier"))], CollectionOrdering.Matching);
+        await Assert.That(_photos.FilesIn(In(Path.Combine("Trips", "Glacier")))).IsEquivalentTo([In(Path.Combine("Trips", "Glacier", "IMG_2.JPG")), In(Path.Combine("Trips", "Glacier", "IMG_2.MOV"))], CollectionOrdering.Matching);
+        await Assert.That(_photos.FilesIn(In("Butte"))).IsEquivalentTo([In(Path.Combine("Butte", "IMG_3.JPG"))], CollectionOrdering.Matching);
+        await Assert.That(_photos.FileExists(In(Path.Combine("Trips-2022-Summer", "-", "IMG_3.JPG")))).IsTrue();
+        await Assert.That(_photos.FilesIn(In("_PhotoSense_Removed"))).IsEquivalentTo([In(Path.Combine("_PhotoSense_Removed", "IMG_4.JPG"))], CollectionOrdering.Matching);
+        await Assert.That((_photos.FolderExists(In("Trips")), _photos.FolderExists(In("Nowhere")), _photos.FilesIn(In("Trips")).Count)).IsEqualTo((true, false, 0));
     }
 
     [Test]
-    public async Task The_Library_Is_The_One_Folder_Offered_And_No_Other_Program_Opens_Its_Photos()
+    public async Task A_Picture_Moved_Goes_Into_The_Album_Of_Its_Folder_Made_As_It_Arrives_And_Out_Of_PhotoSenses_Others_In_One_Change()
     {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"), File(LibraryFileKind.PairedVideo, "IMG_1.MOV"));
+        _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
+        _library.Album(["Trips"], "B2");
+        Listed();
+        var butte = In(Path.Combine("Butte", "2022"));
+        _photos.MakeFolder(butte);
+        await Assert.That((_photos.FolderExists(butte), _photos.FolderExists(In("Butte")), _photos.FoldersIn(In("Butte")).Single(), _library.Changes.Count)).IsEqualTo((true, true, butte, 0));
+
+        // A Live Photo goes as one, its picture and its video together.
+        _photos.MoveAll([new FileMove(In("IMG_1.JPG"), Path.Combine(butte, "IMG_1.JPG")), new FileMove(In("IMG_1.MOV"), Path.Combine(butte, "IMG_1.MOV")), new FileMove(In(Path.Combine("Trips", "IMG_2.JPG")), Path.Combine(butte, "IMG_2.JPG"))]);
+        var change = _library.Changes.Single();
+        await Assert.That(change.Add.Select(a => $"{a.Item} {string.Join('/', a.Album)}")).IsEquivalentTo(["A1 Butte/2022", "B2 Butte/2022"], CollectionOrdering.Matching);
+        await Assert.That(change.Take.Select(a => $"{a.Item} {string.Join('/', a.Album)}")).IsEquivalentTo(["B2 Trips"], CollectionOrdering.Matching);
+        await Assert.That(_photos.FilesIn(butte).Count).IsEqualTo(3);
+        await Assert.That(_photos.Describe(Path.Combine(butte, "IMG_1.JPG"))).IsNotNull();
+
+        // Moved one at a time, the video has already gone with its picture; and back at the top, it is in no album of PhotoSense's.
+        _photos.Move(Path.Combine(butte, "IMG_1.JPG"), In("IMG_1.JPG"));
+        _photos.Move(Path.Combine(butte, "IMG_1.MOV"), In("IMG_1.MOV"));
+        await Assert.That(_library.Changes.Count).IsEqualTo(2);
+        await Assert.That((_library.Changes[1].Take.Single().Item, _library.Changes[1].Add.Count)).IsEqualTo(("A1", 0));
+        await Assert.That(Listed()).IsEquivalentTo(["IMG_1.JPG", "IMG_1.MOV"], CollectionOrdering.Matching);
+        // A move to where a picture already is changes nothing.
+        _photos.Move(In("IMG_1.JPG"), In("IMG_1.JPG"));
+        await Assert.That(_library.Changes.Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task A_Picture_Put_In_A_Folder_Of_Albums_Joins_The_Album_Of_That_Name_Beside_It_And_A_Removed_One_The_Album_Of_Removed_Pictures()
+    {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
+        _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
+        _library.Album(["Road/Trips", "2022"]);
+        Listed();
+        // The folder is shown under a name a path can hold; the album it stands for keeps the name the person gave it.
+        _photos.Move(In("IMG_1.JPG"), In(Path.Combine("Road-Trips", "IMG_1.JPG")));
+        _photos.Move(In("IMG_2.JPG"), In(Path.Combine("_PhotoSense_Removed", "Butte", "IMG_2.JPG")));
+        await Assert.That(_library.Changes.Select(c => string.Join('/', c.Add.Single().Album))).IsEquivalentTo(["Road/Trips", "PhotoSense Removed/Butte"], CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task What_Cannot_Be_Done_On_A_Phone_Is_Refused_Before_Anything_Changes()
+    {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
+        _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
+        Listed();
+        var picture = In("IMG_1.JPG");
+        await Assert.That(Assert.Throws<IOException>(() => _photos.Move(picture, In(Path.Combine("Trips", "Other.JPG"))))!.Message)
+            .IsEqualTo("IMG_1.JPG keeps its own name on the phone, so it cannot arrive as Other.JPG.");
+        await Assert.That(Assert.Throws<UnauthorizedAccessException>(() => _photos.Move(picture, In(Path.Combine("..", "Elsewhere", "IMG_1.JPG"))))!.Message).Contains("is not in the photo library.");
+        await Assert.That(Assert.Throws<UnauthorizedAccessException>(() => _photos.MakeFolder(In(Path.Combine("..", "Elsewhere"))))!.Message).Contains("is not in the photo library.");
+        await Assert.That(Assert.Throws<FileNotFoundException>(() => _photos.Move(In("IMG_9.JPG"), In(Path.Combine("Trips", "IMG_9.JPG"))))!.Message).IsEqualTo("IMG_9.JPG is no longer in the photo library.");
+        await Assert.That(Assert.Throws<IOException>(() => _photos.MoveAll([new FileMove(picture, In(Path.Combine("A", "IMG_1.JPG"))), new FileMove(picture, In(Path.Combine("B", "IMG_1.JPG")))]))!.Message)
+            .IsEqualTo("IMG_1.JPG cannot go to two albums at once.");
+        foreach (var copy in new Action[] { () => _photos.Copy(picture, In(Path.Combine("Trips", "IMG_1.JPG"))), () => _photos.DeleteCopy(picture) })
+            await Assert.That(Assert.Throws<UnauthorizedAccessException>(copy)!.Message).IsEqualTo(PhotoLibraryFileSystem.NoCopies);
+        await Assert.That(_library.Changes).IsEmpty();
+        // Nothing to make: the library itself is always there.
+        _photos.MakeFolder(Root);
+        await Assert.That(_photos.FoldersIn(Root)).IsEmpty();
+    }
+
+    [Test]
+    public async Task When_The_Person_Says_No_Nothing_Changes_And_The_Library_Is_Read_Afresh()
+    {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
+        Listed();
+        _library.Refuse = "You chose not to let PhotoSense change your photos.";
+        var reads = _library.Reads;
+        await Assert.That(Assert.Throws<IOException>(() => _photos.Move(In("IMG_1.JPG"), In(Path.Combine("Trips", "IMG_1.JPG"))))!.Message).IsEqualTo("You chose not to let PhotoSense change your photos.");
+        await Assert.That((_photos.FileExists(In("IMG_1.JPG")), _library.Reads)).IsEqualTo((true, reads + 1));
+    }
+
+    [Test]
+    public async Task Erasing_Sends_Pictures_To_The_Phones_Own_Bin_In_One_Change_A_Live_Photo_Once()
+    {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"), File(LibraryFileKind.PairedVideo, "IMG_1.MOV"));
+        _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
+        _library.Album([PhotoLibraryFileSystem.RemovedAlbum], "A1", "B2");
+        var removed = In("_PhotoSense_Removed");
+        // One gone since its folder was read has nothing left to erase.
+        _photos.EraseAll([Path.Combine(removed, "IMG_1.JPG"), Path.Combine(removed, "IMG_1.MOV"), Path.Combine(removed, "IMG_9.JPG")]);
+        await Assert.That((_library.Changes.Single().Delete.Single(), _library.RecentlyDeleted.Single())).IsEqualTo(("A1", "A1"));
+        _photos.Erase(Path.Combine(removed, "IMG_2.JPG"));
+        await Assert.That(_library.RecentlyDeleted).IsEquivalentTo(["A1", "B2"], CollectionOrdering.Matching);
+        // Nothing left of what was asked: no change at all.
+        _photos.EraseAll([Path.Combine(removed, "IMG_2.JPG")]);
+        await Assert.That(_library.Changes.Count).IsEqualTo(2);
+    }
+
+    [Test]
+    public async Task Empty_Albums_Go_With_The_Folders_They_Leave_Empty_In_One_Change_And_One_That_Holds_Anything_Stays()
+    {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
+        _library.Album(["Butte", "2022"]);
+        _library.Album(["Trips"], "A1");
+        _library.Album(["Kept", "Old"]);
+        _library.Album(["Kept", "New"]);
+        var made = In(Path.Combine("Made", "For later"));
+        _photos.MakeFolder(made);
+
+        _photos.RemoveEmptyFolders([In("Butte"), In(Path.Combine("Butte", "2022")), In("Trips"), In(Path.Combine("Kept", "Old")), In("Kept"), made, In("Made"), Root, In("Nowhere")]);
+        var change = _library.Changes.Single();
+        // Kept still holds an album after its old one goes; the folders only made for later go without a change.
+        await Assert.That(change.Drop.Select(d => string.Join('/', d))).IsEquivalentTo(["Butte/2022", "Kept/Old", "Butte"], CollectionOrdering.Matching);
+        await Assert.That((_photos.FolderExists(made), _photos.FolderExists(In("Trips")), _photos.FolderExists(In(Path.Combine("Kept", "New"))))).IsEqualTo((false, true, true));
+
+        // A folder made for pictures that became an album, and was emptied again, goes as an album.
+        var glacier = In("Glacier");
+        _photos.MakeFolder(glacier);
+        _photos.Move(In(Path.Combine("Trips", "IMG_1.JPG")), Path.Combine(glacier, "IMG_1.JPG"));
+        _photos.Move(Path.Combine(glacier, "IMG_1.JPG"), In("IMG_1.JPG"));
+        _photos.RemoveEmptyFolder(glacier);
+        await Assert.That(string.Join('/', _library.Changes[^1].Drop.Single())).IsEqualTo("Glacier");
+        // Nothing to take away: no change.
+        var changes = _library.Changes.Count;
+        _photos.RemoveEmptyFolders([In("Nowhere")]);
+        await Assert.That(_library.Changes.Count).IsEqualTo(changes);
+    }
+
+    [Test]
+    public async Task The_Library_Is_Offered_With_Its_Albums_But_Not_The_Removed_Pictures_And_No_Other_Program_Opens_Its_Photos()
+    {
+        _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
+        _library.Album(["Trips", "Glacier"], "A1");
+        _library.Album([PhotoLibraryFileSystem.RemovedAlbum]);
         var browser = new PhotoLibraryBrowser(_photos);
 
         var places = browser.Browse(" ");
         await Assert.That((places.Path, places.Parent, places.Folders.Single())).IsEqualTo(((string?)null, (string?)null, new FolderEntry("Photo Library", Root)));
-        var inside = browser.Browse(Root);
-        await Assert.That((inside.Path, inside.Parent, inside.Folders.Count)).IsEqualTo((Root, (string?)null, 0));
+        var inside = browser.Browse(Root + Path.DirectorySeparatorChar);
+        await Assert.That((inside.Path, inside.Parent, inside.Folders.Single())).IsEqualTo((Root, (string?)null, new FolderEntry("Trips", In("Trips"))));
+        var trips = browser.Browse(In("Trips"));
+        await Assert.That((trips.Parent, trips.Folders.Single().Name)).IsEqualTo((Root, "Glacier"));
         await Assert.That(Assert.Throws<DirectoryNotFoundException>(() => browser.Browse(In("Album")))!.Message).IsEqualTo($"The photo library has no folder {In("Album")}.");
 
         await Assert.That(Assert.Throws<InvalidOperationException>(() => new PhoneViewer().Open(In("IMG_1.JPG")))!.Message)

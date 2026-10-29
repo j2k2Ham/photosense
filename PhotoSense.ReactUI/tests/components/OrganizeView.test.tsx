@@ -10,7 +10,7 @@ import { deferred } from '../deferred';
 import { organizeFile as file, organizePlace as place } from '../fixtures';
 
 const api = vi.hoisted(() => ({
-  useOrganizeFiles: vi.fn(), useOrganizeBatches: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), openOrganizeFile: vi.fn(), browseFolders: vi.fn(),
+  useOrganizeFiles: vi.fn(), useOrganizeBatches: vi.fn(), useAbout: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), openOrganizeFile: vi.fn(), browseFolders: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // What has been read so far of a folder that is still being read.
@@ -38,6 +38,7 @@ beforeEach(() => {
   batches = [];
   api.useOrganizeFiles.mockImplementation((root?: string) => (root ? listings[root] ?? {} : {}));
   api.useOrganizeBatches.mockImplementation(() => ({ data: batches }));
+  api.useAbout.mockReturnValue({ data: undefined });
   soFar.mockReset();
   api.planOrganize.mockImplementation(async (destination: OrganizeDestination, ids: OrganizePlanFile[]): Promise<OrganizePlanDto> => {
     const folder = destination.direct ? destination.basePath : `${destination.basePath}\\${destination.folderName}`;
@@ -936,6 +937,25 @@ describe('moving, copying and undoing', () => {
     expect(tile('b1.JPG')).not.toHaveTextContent('In Uptown Butte');
     expect(tile('n1.JPG')).toHaveTextContent('For Uptown Butte');
     expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte3 files/);
+  });
+
+  it('only moves on a phone, which keeps each picture once, even when a copy was chosen before', async () => {
+    api.applyOrganize.mockResolvedValue(applied({ done: 1, bytes: 6_093_000, items: [{ id: 'a1', path: `${ROOT}\\Trips\\a1.JPG` }] }));
+    const { refresh } = open();
+    await userEvent.click(tile('a1.JPG'));
+    await makeFolder('Trips', 'bar');
+    await previewOf('Trips');
+    await userEvent.click(within(screen.getByRole('group', { name: 'Move or copy' })).getByRole('button', { name: 'Copy' }));
+    await userEvent.click(within(preview()).getByRole('button', { name: 'Cancel' }));
+
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } });
+    refresh();
+    await previewOf('Trips');
+    expect(screen.queryByRole('group', { name: 'Move or copy' })).not.toBeInTheDocument();
+    expect(preview()).toHaveTextContent('Each picture goes into this album and out of the other albums PhotoSense made. Your own albums are left as they are, and nothing is copied.');
+    await waitFor(() => expect(moveButton()).toHaveTextContent('Move 1 file'));
+    await userEvent.click(moveButton());
+    expect(api.applyOrganize.mock.calls[0][0]).toMatchObject({ mode: 'move', folderName: 'Trips' });
   });
 
   it('copies one of your folders to where you choose, and undoes that from the list of what was moved', async () => {

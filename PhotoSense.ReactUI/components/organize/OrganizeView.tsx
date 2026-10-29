@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
+import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
 import { formatBytes, leaf, sameFolder } from '../../lib/format';
 import {
   GALLERY_PAGE, defaultSettings, fileTag, joinPath, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
@@ -33,6 +33,8 @@ interface Own { id: string; name: string; base?: string; direct?: boolean; }
 interface Undoable { paths: string[]; assigned: Record<string, string>; added: Record<string, string>; removed: string[]; }
 /** The folder inside the root that holds what was deleted, as it does what Clean up removes. */
 const REMOVED_FOLDER = '_PhotoSense_Removed';
+/** The programs that run on a phone. */
+const PHONES = new Set(['iphone', 'android']);
 
 const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the PhotoSense server.' : e instanceof Error ? e.message : String(e));
 const without = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(Object.entries(map).filter(([k]) => !keys.includes(k)));
@@ -51,6 +53,8 @@ export function OrganizeView({ startRoot, notify }: Props) {
   const root = chosen ?? startRoot;
   const listing = useOrganizeFiles(root);
   const batches = useOrganizeBatches();
+  // A phone keeps each picture once, in one of PhotoSense's albums at a time: there it can be moved, not copied.
+  const onPhone = PHONES.has(useAbout().data?.program ?? '');
 
   const [settings, setSettings] = useState<OrganizeSettings>(defaultSettings);
   const [showMap, setShowMap] = useState(true);
@@ -369,7 +373,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
 
       {root !== undefined && (previewed || previewedOwn) && (
         <MovePreview key={`${preview!.kind}:${preview!.key}`} kind={previewed ? 'Suggested folder' : 'Your folder'} root={root} files={previewed?.files ?? previewedOwn!.files} places={places}
-          name={previewed?.name ?? previewedOwn!.name} base={ownPreviewed?.base} direct={ownPreviewed?.direct} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={mode} companions={companions} busy={busy} asking={deleting !== undefined}
+          name={previewed?.name ?? previewedOwn!.name} base={ownPreviewed?.base} direct={ownPreviewed?.direct} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={onPhone ? 'move' : mode} canCopy={!onPhone} companions={companions} busy={busy} asking={deleting !== undefined}
           placeOf={id => { const f = files.find(x => x.id === id); return f?.place == null ? undefined : `${places[f.place].town}, ${places[f.place].state}`; }}
           onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move(request, going)}
           onDelete={(file, stays) => setDeleting({ files: [file], stays })} onClose={() => setPreview(undefined)} />
