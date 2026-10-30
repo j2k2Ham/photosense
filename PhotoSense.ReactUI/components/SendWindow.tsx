@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { confirmSending, deleteSent, startSending, stopSending, useSendState } from '../lib/apiClient';
 import { ConfirmDialog } from './ConfirmDialog';
+import { Segmented } from './ModeSwitch';
 import type { ToastKind } from './Toaster';
 import { Buttons, Compare, messageOf, Named, Progress, TransferWindow, Where } from './TransferParts';
 
@@ -35,6 +36,11 @@ export function SendWindow({ files, notify, onClose }: Props) {
   const [refused, setRefused] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [asking, setAsking] = useState(false);
+  // Copy keeps the photos on the phone; Move deletes them from it once all of each is safely on the computer.
+  const [mode, setMode] = useState<'copy' | 'move'>('copy');
+  // A move deletes once, by itself; should the person say no to the phone's question, the button is there to try again.
+  const moving = useRef(false);
+  const [notMoved, setNotMoved] = useState(false);
   const { data } = useSendState();
 
   const start = useCallback(() => { startSending([...files]).then(() => setStarted(true), e => setRefused(messageOf(e))); }, [files]);
@@ -57,12 +63,17 @@ export function SendWindow({ files, notify, onClose }: Props) {
     finally { setBusy(false); }
   }
 
+  const said = useCallback((result: { deleted: number }, names: readonly string[], computer: string, moved: boolean) => {
+    const they = names.length === 1 ? 'It is' : 'They are';
+    if (result.deleted === 0) notify('There was nothing left to delete.', 'info');
+    else if (moved) notify(`Moved ${photosAndVideos(names)} to ${computer}. ${they} in Recently Deleted on this phone for 30 days.`, 'ok');
+    else notify(`Deleted ${photosAndVideos(names)} from this phone. ${they} in Recently Deleted for 30 days, and the copies on ${computer} stay.`, 'ok');
+  }, [notify]);
+
   async function remove(names: readonly string[], computer: string) {
     setBusy(true);
     try {
-      const result = await deleteSent();
-      if (result.deleted === 0) notify('There was nothing left to delete.', 'info');
-      else notify(`Deleted ${photosAndVideos(names)} from this phone. ${names.length === 1 ? 'It is' : 'They are'} in Recently Deleted for 30 days, and the copies on ${computer} stay.`, 'ok');
+      said(await deleteSent(), names, computer, false);
       setAsking(false);
     } catch (e) {
       notify(messageOf(e), 'error');
@@ -70,6 +81,28 @@ export function SendWindow({ files, notify, onClose }: Props) {
       setBusy(false);
     }
   }
+
+  const movable = mode === 'move' && state?.stage === 'sent' && state.deletable.length > 0 && !notMoved;
+  useEffect(() => {
+    if (!movable || moving.current) return;
+    moving.current = true;
+    const names = state!.deletable, computer = state!.computer!;
+    deleteSent().then(result => said(result, names, computer, true), e => {
+      notify(messageOf(e), 'error');
+      setNotMoved(true);
+    });
+  }, [movable, state, said, notify]);
+
+  const choice = (
+    <div className="flex flex-col gap-1.5">
+      <Segmented<'copy' | 'move'> label="Copy or move" size="wide" value={mode} onChange={setMode} options={[{ value: 'copy', name: 'Copy' }, { value: 'move', name: 'Move' }]} />
+      <p className="text-[13px] text-t2">
+        {mode === 'copy'
+          ? 'The photos stay on this phone as well.'
+          : 'Once all of each photo is safely on the computer, it is deleted from this phone, into Recently Deleted for 30 days. The phone asks you first.'}
+      </p>
+    </div>
+  );
 
   function body() {
     if (refused) {
@@ -93,10 +126,12 @@ export function SendWindow({ files, notify, onClose }: Props) {
           <>
             <p className="text-[15px] text-t2">Sending to <Named>{computer}</Named>. Keep PhotoSense open on this phone until it is done.</p>
             <Progress label={`Sending to ${computer}`} done={state.done} total={state.total} bytes={state.bytes} totalBytes={state.totalBytes} />
+            {choice}
             <Buttons><button type="button" onClick={close} className="pill-outline h-11 px-5 text-[15px]">Stop</button></Buttons>
           </>
         );
       case 'sent':
+        if (movable) return <p className="text-[15px] text-t2">All {state.done.toLocaleString()} {state.done === 1 ? 'file is' : 'files are'} on <Named>{computer}</Named>. Deleting them from this phone; the phone asks you first.</p>;
         return (
           <>
             <p className="text-[15px] text-t2">
@@ -141,6 +176,7 @@ export function SendWindow({ files, notify, onClose }: Props) {
             <p className="text-[13.5px] text-t2">
               {state.total.toLocaleString()} {state.total === 1 ? 'file is' : 'files are'} offered, with any Live Photo videos and edits. The phone and the computer need to be on the same Wi-Fi, or the phone plugged into the computer with a cable. Keep PhotoSense open on this phone; the screen stays on meanwhile.
             </p>
+            {choice}
             <Buttons><button type="button" onClick={close} className="pill-outline h-11 px-5 text-[15px]">Stop</button></Buttons>
           </>
         );

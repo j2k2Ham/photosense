@@ -124,7 +124,7 @@ export function ReceiveWindow({ folder: first, notify, onClose }: Props) {
               {arrived > 0 ? <>{files(arrived)} arrived in <Where>{state.folder!}</Where>.</> : <>Nothing new arrived in <Where>{state.folder!}</Where>.</>}
               {state.alreadyThere > 0 && ` ${files(state.alreadyThere)} ${state.alreadyThere === 1 ? 'was' : 'were'} there already, so ${state.alreadyThere === 1 ? 'it was' : 'they were'} not copied again.`}
             </p>
-            <p className="text-[13.5px] text-t2">On the phone, PhotoSense now offers to delete what arrived.</p>
+            <p className="text-[13.5px] text-t2">If Move was chosen on the phone, it now deletes them from itself; otherwise it offers to.</p>
             <Buttons>{back}<button type="button" onClick={close} className="pill-brand h-11 px-5 text-[15px]">Close</button></Buttons>
           </>
         );

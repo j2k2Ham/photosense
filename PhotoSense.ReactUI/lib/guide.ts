@@ -306,18 +306,19 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Sending',
         steps: [
-          'On the phone, open **Organize**, select the photos and choose **Send to computer**. Their Live Photo videos and edits go with them. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
+          'On the phone, open **Organize**, select the photos and choose **Send to computer**. Their Live Photo videos and edits go with them. Choose **Copy** to keep them on the phone as well, or **Move** to have them deleted from the phone once they are on the computer. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
           'On the computer, choose **Receive from phone** in the menu. Pick the phone, and the folder the photos go to with **Change**, then press **Receive into** that folder.',
           'The first time, the phone and the computer each show a six-digit number. If they are the same, press **They match** on both. If not, press **They don’t match**: something else may be trying to connect. After that the two know each other and do not ask again.',
           'The photos arrive. Each is checked, and only a photo that arrived whole is kept. One the very same as a file already in the folder is not copied again, and one whose name is taken there arrives under a new name: nothing on the computer is replaced.',
         ],
       },
       {
-        heading: 'Deleting them from the phone afterwards',
+        heading: 'Copy or move',
         tips: [
-          'Once they have arrived, the phone offers **Delete** them **from this phone**. It names what goes, and says the copies on the computer stay.',
-          'Only photos that are safely on the computer, with every file that belongs to them, are deleted. They go to **Recently Deleted** on the phone, where they stay for 30 days; the phone asks you first.',
-          'Close the window instead to keep them on the phone too.',
+          'With **Move**, once they have all arrived the phone deletes them from itself, and says what went where.',
+          'With **Copy**, the phone offers afterwards to **Delete** them **from this phone**, naming what goes and saying the copies on the computer stay. Close the window instead to keep them on the phone too.',
+          'Either way, only photos that are safely on the computer, with every file that belongs to them, are deleted. They go to **Recently Deleted** on the phone, where they stay for 30 days, and the phone asks you first.',
+          'Photos are copied to a computer, never onto the phone: in Organize on a phone, photos are moved between albums only.',
         ],
       },
     ],

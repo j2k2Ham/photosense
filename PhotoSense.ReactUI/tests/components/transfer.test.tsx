@@ -157,6 +157,65 @@ describe('sending from the phone', () => {
     expect(screen.queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
   });
 
+  it('offers to copy the photos to the computer or to move them there, and says what each does', async () => {
+    const { redraw } = await send();
+    const choice = () => screen.getByRole('group', { name: 'Copy or move' });
+    expect(within(choice()).getByRole('button', { name: 'Copy' })).toHaveAttribute('aria-pressed', 'true');
+    expect(dialog('Send to computer')).toHaveTextContent('The photos stay on this phone as well.');
+    await userEvent.click(within(choice()).getByRole('button', { name: 'Move' }));
+    expect(dialog('Send to computer')).toHaveTextContent('Once all of each photo is safely on the computer, it is deleted from this phone, into Recently Deleted for 30 days. The phone asks you first.');
+    // It can still be changed while the photos go.
+    sendState = sending({ stage: 'sending', computer: 'DESKTOP-1', done: 1, total: 3 });
+    redraw();
+    expect(within(choice()).getByRole('button', { name: 'Move' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(choice()).getByRole('button', { name: 'Copy' }));
+    // Copied, nothing is deleted by itself.
+    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3, deletable: ['IMG_0001.JPG'] });
+    redraw();
+    expect(api.deleteSent).not.toHaveBeenCalled();
+    expect(button('Delete 1 photo from this phone')).toBeInTheDocument();
+  });
+
+  it('moving, deletes them from the phone by itself once all of them are on the computer, once, and says what went where', async () => {
+    api.deleteSent.mockResolvedValue({ deleted: 2 });
+    const { redraw } = await send();
+    await userEvent.click(button('Move'));
+    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3, deletable: ['IMG_0001.JPG', 'IMG_0001.MOV'] });
+    redraw();
+    expect(dialog('Send to computer')).toHaveTextContent('All 3 files are on DESKTOP-1. Deleting them from this phone; the phone asks you first.');
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith('Moved 1 photo and 1 video to DESKTOP-1. They are in Recently Deleted on this phone for 30 days.', 'ok'));
+    redraw();
+    expect(api.deleteSent).toHaveBeenCalledOnce();
+    // Gone from the phone: there is nothing more to delete.
+    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3 });
+    redraw();
+    expect(dialog('Send to computer')).toHaveTextContent('3 of 3 files are on DESKTOP-1.Close');
+    expect(api.deleteSent).toHaveBeenCalledOnce();
+  });
+
+  it('moving one, names it as one; and when the phone was told no, says so and leaves the button to try again', async () => {
+    api.deleteSent.mockRejectedValueOnce(new Error('You chose not to let PhotoSense make this change to your photos.')).mockResolvedValueOnce({ deleted: 1 });
+    const { redraw } = await send(['f1']);
+    await userEvent.click(button('Move'));
+    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, deletable: ['IMG_0001.JPG'] });
+    redraw();
+    expect(dialog('Send to computer')).toHaveTextContent('All 1 file is on DESKTOP-1.');
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith('You chose not to let PhotoSense make this change to your photos.', 'error'));
+    await userEvent.click(button('Delete 1 photo from this phone'));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete 1 photo' }));
+    expect(notify).toHaveBeenLastCalledWith('Deleted 1 photo from this phone. It is in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.', 'ok');
+    expect(api.deleteSent).toHaveBeenCalledTimes(2);
+  });
+
+  it('moving what is no longer there to delete, says there was nothing left', async () => {
+    api.deleteSent.mockResolvedValue({ deleted: 0 });
+    const { redraw } = await send(['f2']);
+    await userEvent.click(button('Move'));
+    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, deletable: ['IMG_0002.JPG'] });
+    redraw();
+    await waitFor(() => expect(notify).toHaveBeenLastCalledWith('There was nothing left to delete.', 'info'));
+  });
+
   it('says why it could not offer the photos, or why sending failed, and tries again', async () => {
     api.startSending.mockRejectedValueOnce(new Error('None of those files is there to send any more.')).mockRejectedValueOnce('odd');
     render(<SendWindow files={['f1']} notify={notify} onClose={onClose} />);
@@ -272,13 +331,13 @@ describe('receiving on the computer', () => {
     receiveState = receiving({ stage: 'done', done: 3, total: 3, alreadyThere: 1 });
     redraw();
     expect(window_()).toHaveTextContent('2 files arrived in C:\\Photos. 1 file was there already, so it was not copied again.');
-    expect(window_()).toHaveTextContent('On the phone, PhotoSense now offers to delete what arrived.');
+    expect(window_()).toHaveTextContent('If Move was chosen on the phone, it now deletes them from itself; otherwise it offers to.');
     receiveState = receiving({ stage: 'done', done: 2, total: 2, alreadyThere: 2 });
     redraw();
     expect(window_()).toHaveTextContent('Nothing new arrived in C:\\Photos. 2 files were there already, so they were not copied again.');
     receiveState = receiving({ stage: 'done', done: 1, total: 1 });
     redraw();
-    expect(window_()).toHaveTextContent('1 file arrived in C:\\Photos.On the phone');
+    expect(window_()).toHaveTextContent('1 file arrived in C:\\Photos.If Move');
     await userEvent.click(button('Receive more'));
     expect(button('Receive into Photos')).toBeInTheDocument();
 
