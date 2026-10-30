@@ -1,0 +1,176 @@
+name: Android app
+
+on:
+  push:
+    branches: [ master, main, feature/mobile-and-mac ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+env:
+  PACKAGE: com.j2k2ham.photosense
+  DOTNET_SDK: '10.0.401'
+
+defaults:
+  run:
+    # A command that fails inside a pipe (a build piped to tee) fails the step.
+    shell: bash
+
+jobs:
+  emulator:
+    # Built for an emulator and checked there by the app itself: the page's own requests, made from inside its web
+    # view, on sample photos it adds to the emulator's storage first.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK }}
+
+      - name: Install the Android workload
+        run: |
+          dotnet workload install android
+          echo "::notice title=Android workload::$(dotnet workload list | grep -E '^android ' | tr -s ' ')"
+
+      - name: Build the page for the app
+        working-directory: PhotoSense.ReactUI
+        env:
+          NEXT_PUBLIC_API_BASE: /api
+        run: |
+          npm ci
+          npm run build
+
+      - name: Make the sample photos
+        run: |
+          # A picture, an exact copy of it, and another picture, as PNG files written without any tool to install.
+          mkdir -p samples
+          python3 - samples <<'EOF'
+          import struct, sys, zlib
+          def png(path, w, h, shade):
+              raw = b''.join(b'\0' + bytes(c for x in range(w) for c in ((x * 255) // w, (y * 255) // h, shade(x, y))) for y in range(h))
+              chunk = lambda kind, data: struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+              open(path, 'wb').write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b''))
+          png(sys.argv[1] + '/IMG_0001.png', 640, 480, lambda x, y: ((x // 40 + y // 40) % 2) * 200)
+          png(sys.argv[1] + '/IMG_0003.png', 640, 480, lambda x, y: (x * y) % 256)
+          EOF
+          cp samples/IMG_0001.png samples/IMG_0002.png
+          ls -l samples
+
+      - name: Get what the build needs of Android's SDK
+        run: dotnet build PhotoSense.Android/PhotoSense.Android.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+
+      - name: Build the app for the emulator
+        run: |
+          dotnet build PhotoSense.Android/PhotoSense.Android.csproj --configuration Release -r android-x64 \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:PhotoSenseSamples="$PWD/samples" 2>&1 | tee build.log
+
+      - name: Say what the build warned of
+        if: always()
+        run: |
+          # A grep that finds nothing is good news here, not a failure.
+          set +o pipefail
+          pattern=': (warning|error)( [A-Za-z]+[0-9]+)? *:'
+          grep -E "$pattern" build.log | grep -E ': warning' | sed -E 's/.*: (warning( [A-Za-z]+[0-9]+)? *: [^[]*).*/\1/' | sort | uniq -c | sort -rn | head -10 |
+            while read -r line; do echo "::warning title=Build::$line"; done
+          grep -E "$pattern" build.log | grep -E ': error' | sed -E 's/.*: (error( [A-Za-z]+[0-9]+)? *: [^[]*).*/\1/' | sort -u | head -10 |
+            while read -r line; do echo "::error title=Build::$line"; done
+
+      - name: Let the emulator run fast
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Write down what the emulator does
+        run: |
+          # The emulator's step runs one line at a time, so what it does is a script of its own.
+          cat > self-check.sh <<'EOF'
+          set -u
+          apk=$(find PhotoSense.Android/bin/Release -name '*-Signed.apk' | head -1)
+          echo "::notice title=App::${apk:-none built} ($(du -h "$apk" | cut -f1))"
+          # -g allows at once what the app asks to see: the photos and videos, and where they were taken.
+          if ! out=$(adb install -r -g "$apk" 2>&1); then
+            echo "::error title=adb install::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
+          fi
+          adb logcat -c
+          if ! out=$(adb shell am start -W -n "$PACKAGE/$PACKAGE.MainActivity" --ez selfcheck true 2>&1); then
+            echo "::error title=am start::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
+          fi
+          echo "::notice title=Started::$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-400)"
+          # The app rewrites its report after every step, and marks it finished at the end.
+          report="/sdcard/Android/data/$PACKAGE/files/self-check.json"
+          for i in $(seq 1 600); do
+            adb shell cat "$report" 2>/dev/null | grep -q '"finished":true' && break
+            # The app ending on its own leaves nothing to wait for.
+            adb shell pidof "$PACKAGE" >/dev/null 2>&1 || { [ "$i" -gt 20 ] && break; }
+            sleep 1
+          done
+          echo "::notice title=Waited::$i seconds"
+          adb shell cat "$report" > self-check.json 2>/dev/null || true
+          grep -q '"steps"' self-check.json || echo '{"passed": false, "steps": [{"name": "the app reported back", "ok": false, "error": "no self-check.json"}]}' > self-check.json
+          adb logcat -d > app.log || true
+          EOF
+
+      - name: Start an emulator and let the app check itself
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash self-check.sh
+
+      - name: Say what it found
+        run: |
+          python3 - self-check.json <<'EOF'
+          import json, sys
+          report = json.load(open(sys.argv[1]))
+          for step in report['steps']:
+              said = json.dumps(step.get('value', step.get('error')))[:400]
+              kind = 'notice' if step['ok'] else 'error'
+              print(f"::{kind} title=Self-check::{step['name']}: {'ok' if step['ok'] else 'FAILED'} in {step.get('ms', 0)} ms: {said}")
+          ended = 'passed' if report['passed'] else ('failed' if report.get('finished') else 'did not finish')
+          print(f"::notice title=Self-check::{ended}, {report.get('photos', 0)} photos scanned")
+          sys.exit(0 if report['passed'] else 1)
+          EOF
+
+      - name: What the app said
+        if: failure()
+        run: |
+          set +o pipefail
+          [ -f app.log ] || exit 0
+          # The app's own lines, each request with its answer, and anything that ended it.
+          grep -E ' PhotoSense|AndroidRuntime|FATAL|mono-rt|DOTNET' app.log | tail -40 | while read -r line; do echo "::error title=App said::${line:0:500}"; done
+          tail -150 app.log
+
+      - name: Keep the report and the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-emulator
+          path: |
+            self-check.json
+            app.log
+            build.log
+          if-no-files-found: ignore

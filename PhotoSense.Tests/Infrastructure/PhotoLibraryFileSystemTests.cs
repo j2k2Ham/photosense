@@ -259,7 +259,7 @@ public sealed class PhotoLibraryFileSystemTests
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Album(["Trips", "Glacier"], "A1");
         _library.Album([PhotoLibraryFileSystem.RemovedAlbum]);
-        var browser = new PhotoLibraryBrowser(_photos);
+        var browser = new PhotoLibraryBrowser(_photos, _photos.Root);
 
         var places = browser.Browse(" ");
         await Assert.That((places.Path, places.Parent, places.Folders.Single())).IsEqualTo(((string?)null, (string?)null, new FolderEntry("Photo Library", Root)));

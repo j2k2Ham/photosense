@@ -545,3 +545,23 @@ describe('sending photos from a phone to a computer', () => {
     expect(lastRequest()).toEqual({ url: `${API}/receive/stop`, init: { method: 'POST', headers: json } });
   });
 });
+
+describe('on Android', () => {
+  it('hands each request body over beside its request, which carries the number the app gave it', async () => {
+    const keep = vi.fn(() => 'body-7');
+    vi.stubGlobal('PhotoSenseAndroid', { keep });
+    try {
+      answering({ instanceId: 'scan-1' });
+      const api = await load();
+      await api.startScan({ primaryLocation: '/Phone', secondaryLocation: '', recursive: true });
+      expect(keep).toHaveBeenCalledExactlyOnceWith(JSON.stringify({ primaryLocation: '/Phone', secondaryLocation: '', recursive: true }));
+      expect(lastRequest().init?.headers).toMatchObject({ 'x-photosense-body': 'body-7' });
+      // A request with no body carries nothing.
+      await api.stopSending();
+      expect(keep).toHaveBeenCalledOnce();
+      expect(lastRequest().init?.headers).not.toHaveProperty('x-photosense-body');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

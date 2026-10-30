@@ -18,8 +18,13 @@ async function failure(res: Response): Promise<Error> {
   try { return new Error(JSON.parse(text).error ?? text); } catch { return new Error(text || `Request failed (${res.status})`); }
 }
 
+// Android's web view hands the app no request's body, so there the page hands each body over beside its request,
+// and the request carries the number the app gave it.
+const android = (globalThis as { PhotoSenseAndroid?: { keep(body: string): string } }).PhotoSenseAndroid;
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...init?.headers } });
+  const carried: Record<string, string> = android && typeof init?.body === 'string' ? { 'x-photosense-body': android.keep(init.body) } : {};
+  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...carried, ...init?.headers } });
   if (!res.ok) throw await failure(res);
   return res.json();
 }

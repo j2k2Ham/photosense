@@ -42,6 +42,7 @@ function fixture({ unknownLicence = false } = {}) {
   for (const project of ['PhotoSense.Server', 'PhotoSense.Desktop']) write(join(root, project, 'obj', 'project.assets.json'), assets(server));
   for (const project of ['PhotoSense.Infrastructure', 'PhotoSense.Api']) write(join(root, project, 'obj', 'project.assets.json'), assets({ 'Alpha/1.0.0': dll }));
   write(join(root, 'PhotoSense.iOS', 'PhotoSense.iOS.csproj'), '<PackageReference Include="Microsoft.Missing" Version="1.0.0" />');
+  write(join(root, 'PhotoSense.Android', 'PhotoSense.Android.csproj'), '<PackageReference Include="Microsoft.Missing" Version="1.0.0" />');
   write(join(nuget, 'alpha', '1.0.0', 'alpha.nuspec'), '<license type="expression">MIT</license><copyright>Copyright Alpha</copyright>');
   write(join(nuget, 'beta', '2.0.0', 'beta.nuspec'), '<license type="expression">Apache-2.0</license><copyright>Copyright Beta</copyright>');
   write(join(nuget, 'beta', '2.0.0', 'LICENSE.txt'), 'The Beta licence.\r\n');
@@ -106,7 +107,7 @@ describe('the notices', () => {
     const { root, nuget } = fixture();
     const said = [];
     assert.equal(main([], { root, nugetRoot: nuget, print: s => said.push(s), fail: quiet }), 0);
-    assert.deepEqual(said, [`Wrote ${join(root, 'notices', 'server.txt')}`, `Wrote ${join(root, 'notices', 'iphone.txt')}`]);
+    assert.deepEqual(said, [`Wrote ${join(root, 'notices', 'server.txt')}`, `Wrote ${join(root, 'notices', 'iphone.txt')}`, `Wrote ${join(root, 'notices', 'android.txt')}`]);
 
     const server = readFileSync(join(root, 'notices', 'server.txt'), 'utf8');
     assert.match(server, /^Third-party notices for PhotoSense for Windows and Mac\n/);
@@ -131,6 +132,11 @@ describe('the notices', () => {
     assert.match(iphone, /\n\.NET for iOS \(MIT\)\n/);
     assert.match(iphone, /\nMicrosoft\.Missing 1\.0\.0 \(MIT\)\n/);
     assert.doesNotMatch(iphone, /Beta|ASP\.NET/);
+
+    const android = readFileSync(join(root, 'notices', 'android.txt'), 'utf8');
+    assert.match(android, /^Third-party notices for PhotoSense for Android\n/);
+    assert.match(android, /\n\.NET for Android \(MIT\)\n/);
+    assert.doesNotMatch(android, /Beta|ASP\.NET|iOS/);
   });
 
   it('are found up to date by --check once written, and out of date when one is changed or missing', () => {
@@ -160,7 +166,7 @@ describe('the notices', () => {
       const { root, nuget } = fixture();
       process.env.NUGET_PACKAGES = nuget;
       assert.equal(main([], { root }), 0);
-      assert.equal(said.mock.calls.length, 2);
+      assert.equal(said.mock.calls.length, 3);
       delete process.env.NUGET_PACKAGES;
       assert.equal(main(['--check'], { root: repo }), 0);
     } finally {

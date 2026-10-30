@@ -52,6 +52,12 @@ describe('About PhotoSense', () => {
     unmount();
 
     api.useAbout.mockReturnValue({ data: { ...about, program: 'android' } });
+    const android = render(<AboutWindow onClose={vi.fn()} />);
+    expect(article()).toHaveTextContent('Version 0.1.0.76 for Android');
+    android.unmount();
+
+    // A program it does not know of is not named.
+    api.useAbout.mockReturnValue({ data: { ...about, program: 'watch' } });
     render(<AboutWindow onClose={vi.fn()} />);
     expect(screen.getByText('Version', { exact: false }).textContent).toBe('Version 0.1.0.76 ');
   });

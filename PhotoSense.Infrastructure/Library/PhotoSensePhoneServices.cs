@@ -11,8 +11,11 @@ namespace PhotoSense.Infrastructure.Library;
 
 public static class PhotoSensePhoneServices
 {
-    /// <summary>Where a phone's photo library is shown, as a folder.</summary>
+    /// <summary>Where an iPhone's photo library is shown, as a folder.</summary>
     public const string LibraryRoot = "/Photo Library";
+
+    /// <summary>Where an Android phone's storage is shown, as a folder.</summary>
+    public const string StorageRoot = "/Phone";
 
     /// <summary>
     /// PhotoSense as it runs on a phone: on the photos in its library, as far as <paramref name="access"/> lets it see, decoded the phone's own way, with what it
@@ -26,18 +29,33 @@ public static class PhotoSensePhoneServices
     public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, string name, string root = LibraryRoot, ITransferListener? listener = null)
     {
+        var photos = new PhotoLibraryFileSystem(library, root);
+        s.AddSingleton(photos);
+        return s.AddPhone(photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, name, listener);
+    }
+
+    /// <summary>PhotoSense as it runs on an Android phone: as <see cref="AddPhotoSensePhone"/>, on the photos of the phone's own storage.</summary>
+    public static IServiceCollection AddPhotoSenseAndroid(this IServiceCollection s, IMediaStore store, IPhotoAccess access, IImageAnalyzer analyzer,
+        string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, string name, string root = StorageRoot, ITransferListener? listener = null)
+    {
+        var photos = new MediaFileSystem(store, root);
+        s.AddSingleton(photos);
+        return s.AddPhone(photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, name, listener);
+    }
+
+    private static IServiceCollection AddPhone(this IServiceCollection s, IPhotoFileSystem photos, string root, IPhotoAccess access, IImageAnalyzer analyzer,
+        string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, string name, ITransferListener? listener)
+    {
         s.AddSingleton(Options.Create(new PhotoStorageOptions
         {
             DatabasePath = Path.Combine(dataFolder, "photosense.db"),
             ThumbnailPath = Path.Combine(cacheFolder, "thumbnails"),
         }));
-        var photos = new PhotoLibraryFileSystem(library, root);
         s.AddSingleton(photos);
-        s.AddSingleton<IPhotoFileSystem>(photos);
         s.AddSingleton(access);
         s.AddSingleton(analyzer);
         s.AddSingleton<ISystemViewer, PhoneViewer>();
-        s.AddSingleton<IFolderBrowser, PhotoLibraryBrowser>();
+        s.AddSingleton<IFolderBrowser>(new PhotoLibraryBrowser(photos, Path.TrimEndingDirectorySeparator(root)));
         s.AddSingleton(sp => new PhoneSending(listener ?? new TcpTransferListener(), advertiser, sp.GetRequiredService<IPairingStore>(), photos,
             sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<OrganizeLibrary>(), name));
         return s.AddPhotoSenseCore();

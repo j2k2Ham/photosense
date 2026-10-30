@@ -3,6 +3,7 @@
   "release": "minor",
   "parts": {
     "server": { "release": "minor" },
-    "iphone": { "release": "minor" }
+    "iphone": { "release": "minor" },
+    "android": { "release": "minor" }
   }
 }

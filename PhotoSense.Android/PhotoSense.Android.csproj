@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The app on an Android phone: the page, in a web view whose requests are answered inside the app, on the photos
+       of the phone's own storage. Only what talks to Android is here; everything else is shared with the computer and
+       tested there (MediaFileSystem, PhotosOnAndroidTests). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-android</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Android 11: where the media store moves photos between folders and keeps a bin. -->
+    <SupportedOSPlatformVersion>30</SupportedOSPlatformVersion>
+    <RootNamespace>PhotoSense.AndroidApp</RootNamespace>
+    <ApplicationTitle>PhotoSense</ApplicationTitle>
+    <ApplicationId>com.j2k2ham.photosense</ApplicationId>
+    <!-- Its version, and the build number Google asks to rise with every upload, come from version.json (Directory.Build.targets). -->
+    <PhotoSensePart>android</PhotoSensePart>
+    <!-- The answers are written as JSON by reflection, as on the computer, and LiteDB maps its records the same way:
+         only the framework's own assemblies are trimmed, and reflection stays on. -->
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <!-- The page built for the app; a build elsewhere, without this computer's own settings in it, can be named instead. -->
+    <PhotoSensePage Condition="'$(PhotoSensePage)' == ''">..\PhotoSense.ReactUI\out</PhotoSensePage>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />
+    <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The page, built for a program that hands it out itself: in PhotoSense.ReactUI,
+         NEXT_PUBLIC_API_BASE=/api npm run build, which leaves it in out/. -->
+    <AndroidAsset Include="$(PhotoSensePage)\**\*" Link="Assets\wwwroot\%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- The app's icon is kept once, for every program, in branding/; Android scales it for each screen. -->
+    <AndroidResource Include="..\branding\app-icon.png" Link="Resources\mipmap\appicon.png" LogicalName="mipmap\appicon.png" />
+    <!-- Photos for the self-check to add to the phone, in the copy GitHub's emulator checks only. -->
+    <AndroidAsset Include="$(PhotoSenseSamples)\*" Link="Assets\samples\%(Filename)%(Extension)" Condition="'$(PhotoSenseSamples)' != ''" />
+    <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->
+    <EmbeddedResource Include="..\notices\android.txt" LogicalName="PhotoSense.ThirdPartyNotices.txt" />
+  </ItemGroup>
+  <Target Name="RequireThePage" BeforeTargets="Build" Condition="!Exists('$(PhotoSensePage)\index.html')">
+    <Error Text="Build the page first: in PhotoSense.ReactUI, run npm ci, then npm run build with NEXT_PUBLIC_API_BASE set to /api." />
+  </Target>
+</Project>

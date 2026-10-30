@@ -14,7 +14,7 @@ const TOPICS: { id: Topic; title: string }[] = [
   { id: 'notices', title: 'Acknowledgements' },
 ];
 
-const PROGRAMS: Record<string, string> = { server: 'for Windows and Mac', iphone: 'for iPhone and iPad' };
+const PROGRAMS: Record<string, string> = { server: 'for Windows and Mac', iphone: 'for iPhone and iPad', android: 'for Android' };
 
 const link = 'font-medium text-brand underline underline-offset-2 hover:no-underline';
 

@@ -1,4 +1,4 @@
-// Writes the third-party notices each program builds in and shows under About (notices/server.txt, notices/iphone.txt):
+// Writes the third-party notices each program builds in and shows under About (notices/server.txt, iphone.txt, android.txt):
 // everything it ships that others made, with each licence in full. Run it after adding or updating a package;
 // --check fails while the notices are out of date, so that a program is never shipped with notices that are wrong.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -12,12 +12,14 @@ const DOTNET = 'Copyright (c) .NET Foundation and Contributors';
 export const PROGRAMS = {
   server: { title: 'PhotoSense for Windows and Mac', projects: ['PhotoSense.Server', 'PhotoSense.Desktop', 'PhotoSense.Infrastructure', 'PhotoSense.Api'], platform: ['dotnet', 'aspnetcore'] },
   iphone: { title: 'PhotoSense for iPhone and iPad', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], references: 'PhotoSense.iOS/PhotoSense.iOS.csproj', platform: ['dotnet', 'ios'] },
+  android: { title: 'PhotoSense for Android', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], references: 'PhotoSense.Android/PhotoSense.Android.csproj', platform: ['dotnet', 'android'] },
 };
 
 const PLATFORM = {
   dotnet: { name: '.NET', license: 'MIT', copyright: DOTNET, more: 'https://github.com/dotnet/runtime/blob/main/THIRD-PARTY-NOTICES.TXT' },
   aspnetcore: { name: 'ASP.NET Core', license: 'MIT', copyright: DOTNET, more: 'https://github.com/dotnet/aspnetcore/blob/main/THIRD-PARTY-NOTICES.txt' },
   ios: { name: '.NET for iOS', license: 'MIT', copyright: DOTNET, more: 'https://github.com/dotnet/macios/blob/main/LICENSE' },
+  android: { name: '.NET for Android', license: 'MIT', copyright: DOTNET, more: 'https://github.com/dotnet/android/blob/main/LICENSE' },
 };
 
 // Packages that name their licence without carrying its text, or carry a text that names no copyright holder.
