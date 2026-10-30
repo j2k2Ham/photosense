@@ -19,15 +19,12 @@ public sealed class PageClient(Context context) : WebViewClient
     public const string Origin = "https://" + Host + "/";
 
     private readonly Lazy<HashSet<string>> _pageFiles = new(() => Listed(context.Assets!, "wwwroot"));
-    private bool _checking;
 
     // Started with the self-check, the app makes it once the page is in.
     public override void OnPageFinished(WebView? view, string? url)
     {
         base.OnPageFinished(view, url);
-        if (!SelfCheck.Running || _checking) return;
-        _checking = true;
-        view?.EvaluateJavascript(SelfCheck.Script, null);
+        if (SelfCheck.Starting()) view?.EvaluateJavascript(SelfCheck.Script, null);
     }
 
     public override WebResourceResponse? ShouldInterceptRequest(WebView? view, IWebResourceRequest? request)

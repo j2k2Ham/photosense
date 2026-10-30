@@ -16,7 +16,15 @@ public static class SelfCheck
 {
     private static Context? _context;
 
+    private static int _started;
+
     public static bool Running { get; private set; }
+
+    /// <summary>
+    /// Whether this is the one time the check starts. Android can say a page has finished loading more than once,
+    /// and two checks side by side would each find the other's scan already running.
+    /// </summary>
+    public static bool Starting() => Running && Interlocked.Exchange(ref _started, 1) == 0;
 
     public static void Prepare(Activity activity, Intent? intent)
     {
@@ -61,6 +69,8 @@ public static class SelfCheck
 
     public const string Script = """
         (async () => {
+          if (window.photoSenseChecking) return;
+          window.photoSenseChecking = true;
           const report = { steps: [], passed: false, finished: false };
           const send = () => PhotoSenseAndroid.report(JSON.stringify(report));
           const step = async (name, run) => {

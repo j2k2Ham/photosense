@@ -42,7 +42,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 ### Now
 
 - [ ] Run the `@phone` end-to-end tests in WebKit (`cd e2e && npx playwright test --project phone`) and fix what they find.
-- [ ] Push the commits waiting locally, once Jamie says to. `6bfaa69` (Android docs), `547bf8a` (setup-java v5) and `b20f5f9` (the end-to-end suite and the light theme's `--t3`) were committed without Jamie being asked first. Pushing also starts `e2e.yml`, the first run of the end-to-end tests on Linux.
+- [x] Push the commits that were waiting (done 2026-10-30, at Jamie's word).
 - [ ] See the main CI (`ci.yml`) pass on Linux. It runs only for `main` and pull requests, so it has never run on this branch: several service tests that rely on file behaviour have only run on Windows.
 - [ ] Merge the branch, or open a pull request, when Jamie decides.
 
@@ -119,12 +119,6 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 - Heavily re-compressed copies are listed as similar shots, not duplicates, on purpose.
 - The iPhone and Android apps cannot be built on Jamie's PC without admin rights, for the missing Mono pack. The Android app builds with the workaround in CLAUDE.md, and neither has an emulator or simulator here.
 - 17 react-hooks compiler warnings are known and left.
-
-### Rules learned the hard way (also in CLAUDE.md)
-
-- Never touch Jamie's real photos (`C:\Users\jsham\Phone Pictures`, `F:\PC_backup`) when testing; work on copies.
-- Leave Jamie's running app alone; never run `next build` or a second `next dev` in `PhotoSense.ReactUI` while it runs, and keep `.env.local`'s map key out of every build made for testing.
-- Try a feature on the largest, slowest real case, and with the same start-up Jamie uses.
 
 ## For later
 
