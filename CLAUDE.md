@@ -2,6 +2,10 @@
 
 PhotoSense is a photo and video tidying tool that runs on the machine holding the photos. **Clean up** scans folders, groups exact duplicates and similar shots, keeps the best copy of each and lets the rest be removed after review. **Organize** sorts a folder's files into folders by place and date, with a preview before anything moves. The owner, Jamie, uses it on their own iPhone library (HEIC, JPEG, Live Photo MOVs, `.AAE` sidecars) on Windows. The README describes behaviour in detail; the in-app user guide (`PhotoSense.ReactUI/lib/guide.ts`) describes it for users.
 
+**What Jamie has asked for and what is left to do** are in `STEPS.md`, imported here so that every session starts from it. Keep it current: tick a step once it is done and verified, add new steps, questions and call-outs as they come up, and move a question into the step it settles once Jamie answers.
+
+@STEPS.md
+
 ## Layout
 
 | Folder | What is in it |
