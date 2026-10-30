@@ -291,7 +291,7 @@ Decoding is done with Magick.NET. iPhone HEIC files decode slowly (about a secon
 
 ## Tests & Coverage
 
-The service, the UI and the build tools are each tested to 100% of branches.
+The service, the UI and the build tools are each tested to 100% of branches, and the whole program in a browser by the end-to-end tests in `e2e/`.
 
 ### Service (.NET)
 
@@ -338,6 +338,20 @@ node --test --experimental-test-coverage --test-coverage-include="tools/*.mjs" -
 ```
 
 The tests of `tools/notices.mjs` also check that the notices in `notices/` are up to date, so they need a restore (`dotnet restore PhotoSense.sln`) and the page's packages (`npm ci` in `PhotoSense.ReactUI`) first.
+
+### End to end (Playwright)
+
+`e2e/` drives PhotoSense as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each test makes for itself in a folder of its own: scanning, Clean up, Organize, Delete permanently, the menu, Help, About, sending between a phone and a computer, and an accessibility check of every screen in both themes. Each test starts its own program on its own data, so they run side by side.
+
+```bash
+cd e2e
+npm ci
+npx playwright install chromium webkit
+npm run app     # the page and the service, built into e2e/.cache, leaving PhotoSense.ReactUI's own build and .env.local alone
+npm test
+```
+
+`e2e/README.md` says more, and how to write one. `.github/workflows/e2e.yml` runs them on GitHub.
 
 ## Quick Local Run (service + React)
 

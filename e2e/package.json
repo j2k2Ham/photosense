@@ -1,0 +1,20 @@
+{
+  "name": "photosense-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests: PhotoSense as one program, its page in a browser, on photos made for each test.",
+  "scripts": {
+    "app": "node prepare.mjs",
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.11.0",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^20.19.43",
+    "jpeg-js": "0.4.4",
+    "piexifjs": "1.0.6",
+    "typescript": "5.9.3"
+  }
+}

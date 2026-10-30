@@ -20,7 +20,8 @@
 .light {
   --bg: #f5f7f9; --s1: #fdfeff; --s2: #eef0f3; --s3: #dee2e5; --pop: #ffffff;
   --line: rgba(27, 36, 36, .11);
-  --t1: #171b1f; --t2: #50565a; --t3: #676d71;
+  /* --t3 is as light as it can be and still be read on --stage (4.5:1, WCAG AA). */
+  --t1: #171b1f; --t2: #50565a; --t3: #646a6e;
   --stage: #e8ecee;
   --brand: #007283; --on-brand: #ffffff; --sel: #d9f0f4;
   --keep: #006a42; --keep-bg: #cff6e0; --keep-line: rgba(43, 150, 103, .60);

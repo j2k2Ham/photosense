@@ -1,0 +1,5 @@
+node_modules/
+# The program the tests drive, made by npm run app.
+.cache/
+test-results/
+playwright-report/

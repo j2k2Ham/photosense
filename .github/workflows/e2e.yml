@@ -1,0 +1,63 @@
+name: End-to-end
+
+on:
+  push:
+    branches: [ master, main, feature/mobile-and-mac ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  browsers:
+    # PhotoSense as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
+    # test makes for itself (e2e/README.md).
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+          cache-dependency-path: |
+            PhotoSense.ReactUI/package.json
+            e2e/package.json
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the tests and their browsers
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium webkit
+
+      - name: Make the program the tests drive
+        working-directory: e2e
+        run: npm run app
+
+      - name: Type-check the tests
+        working-directory: e2e
+        run: npm run typecheck
+
+      - name: Run the tests
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: end-to-end-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore
