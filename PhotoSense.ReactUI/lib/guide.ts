@@ -82,6 +82,14 @@ export const GUIDE: GuideTopic[] = [
         ],
       },
       {
+        heading: 'On an Android phone',
+        text: [
+          'The phone\'s storage is the one folder, **Phone**, holding its own folders: **DCIM** (with the camera\'s **Camera**), **Pictures**, **Movies** and the rest. Android keeps photos only inside DCIM, Pictures or Movies, so a folder made in Organize goes inside one of those; organize **DCIM/Camera**, for instance, and its folders are made there.',
+          'What you delete waits in **_PhotoSense_Removed** inside the folder it was in, where **Undo** can still take it back; what you delete from the whole phone waits in **Pictures/PhotoSense Removed**. **Delete permanently** sends it to the phone\'s bin, which keeps it for 30 days. Android asks you once before each set of photos is moved or put in the bin.',
+          'A photo can be moved on the phone, not copied; to copy photos, send them to a computer.',
+        ],
+      },
+      {
         heading: 'While it runs',
         text: [
           'The screen shows how far the scan has got, how many files are done and roughly how long is left. **Show full log** shows what it is doing, line by line.',
@@ -299,7 +307,7 @@ export const GUIDE: GuideTopic[] = [
     sections: [
       {
         text: [
-          'PhotoSense on the phone sends photos straight to PhotoSense on your computer. They go over your own Wi-Fi, or through a cable plugged into the computer, never through the internet, and no one else on the network can read them.',
+          'PhotoSense on the phone sends photos straight to PhotoSense on your computer. They go over your own Wi-Fi, or from an iPhone or iPad through a cable plugged into the computer, never through the internet, and no one else on the network can read them.',
           'On Windows, sending through a cable needs Apple’s **Apple Devices** app or iTunes on the computer. Over Wi-Fi the phone and the computer need to be on the same network.',
         ],
       },

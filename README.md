@@ -435,6 +435,27 @@ Keep `photosense.key` and the `.p12` file out of the repository. In App Store Co
 
 `PhotoSense.iOS/PrivacyInfo.xcprivacy` is what Apple asks every app to declare: PhotoSense tracks no one and collects nothing, and the only "required reason" uses are the .NET runtime's own (file dates, free space, time since start). It must change if the app ever sends anything off the phone, a map included.
 
+## The Android app
+
+`PhotoSense.Android` is PhotoSense on an Android phone (Android 11 or later): the same page in a web view, with its requests answered inside the app (`PageClient`, through `InProcessApi` and `PageFiles`), as on the iPhone. The page is shown at `https://appassets.androidplatform.net/`, an address Android keeps for an app's own files. Android's web view hands the app no request's body, so there the page hands each body over first (`window.PhotoSenseAndroid.keep`) and the request carries the number it was given (`x-photosense-body`).
+
+The phone's storage is one folder, **Phone** (`/Phone`), holding its own folders as Android keeps them: DCIM, Pictures, Movies and the rest (`MediaFileSystem`, over Android's media store through `IMediaStore`).
+
+- **Folders.** Android keeps pictures and videos only inside DCIM, Pictures or Movies, so a folder of them is made inside one of those; a folder at the top of the phone's storage is refused with a message that says so.
+- **Moving** a photo changes the folder Android keeps it in, and may give it a numbered name, as on a computer. Nothing is copied onto the phone: photos are copied to a computer.
+- **Removing** puts the photo in `_PhotoSense_Removed` inside the folder being cleaned up or organized, keeping its place below it, where **Undo** takes it back. For the phone's storage as a whole, which can hold no folder of its own, that is `Pictures/PhotoSense Removed`, shown to the rest of PhotoSense as `/Phone/_PhotoSense_Removed`.
+- **Delete permanently** sends what was removed to Android's bin, which keeps it for 30 days.
+- **Android asks first.** A photo another app made (the camera's, say) is moved or put in the bin only after the person says yes to Android's own question, asked once for all the photos changed together; should one move fail, those already moved go back. Photos PhotoSense made itself it may change without asking.
+- **Sending to a computer** works over Wi-Fi, told to the network with Android's own Bonjour (`NsdAdvertiser`); the cable is Apple's alone.
+
+Only the parts that talk to Android are in `PhotoSense.Android`: the media store (`AndroidMediaStore`), the decoder (`AndroidImageAnalyzer`), what PhotoSense may see (`AndroidAccess`), the web view and its requests. Everything that decides anything is shared and tested with the rest (`MediaFileSystemTests`, and `PhotosOnAndroidTests`, which runs the phone's whole stack but Android's own code on a phone's storage held in memory).
+
+### Building it
+
+The `android` workload, a JDK and Android's SDK build it (Visual Studio installs all three). First build the page for the app, as for the iPhone: in `PhotoSense.ReactUI`, `NEXT_PUBLIC_API_BASE=/api npm run build`. A page built elsewhere can be named instead with `-p:PhotoSensePage=<folder>`; that keeps this computer's own `.env.local` out of the app. Then `dotnet build PhotoSense.Android -c Release`.
+
+The check is `.github/workflows/android.yml`: it builds the app for an emulator with three sample pictures built in (`-p:PhotoSenseSamples`), starts Android 14 on GitHub's machine, and the app checks itself (`SelfCheck`, started with the extra `selfcheck`), each step written on the run.
+
 ## VS Code Tasks
 
 Common tasks are defined in `.vscode/tasks.json`:
