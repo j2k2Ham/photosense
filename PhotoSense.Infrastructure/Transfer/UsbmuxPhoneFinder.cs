@@ -21,8 +21,10 @@ public sealed class UsbmuxPhoneFinder : IPhoneFinder
     private readonly Func<CancellationToken, Task<Stream>> _muxer;
     private readonly int _port;
 
+    /// <summary>Finds phones through this computer's own device service, to connect to the port a phone waits on.</summary>
     public UsbmuxPhoneFinder() : this(ct => OpenMuxerAsync(Muxer(OperatingSystem.IsWindows()), ct), TcpTransferListener.Port) { }
 
+    /// <summary>Finds phones through the device service given, to connect to the port given.</summary>
     /// <param name="muxer">A connection to the device service.</param>
     /// <param name="port">The port a phone waits on.</param>
     public UsbmuxPhoneFinder(Func<CancellationToken, Task<Stream>> muxer, int port)
@@ -31,6 +33,7 @@ public sealed class UsbmuxPhoneFinder : IPhoneFinder
         _port = port;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct)
     {
         XElement answer;
@@ -50,6 +53,7 @@ public sealed class UsbmuxPhoneFinder : IPhoneFinder
     private async Task<Stream> ConnectAsync(long device, CancellationToken ct)
     {
         var muxer = await _muxer(ct);
+        var handedOver = false;
         try
         {
             // The port goes in the order the network writes it.
@@ -57,30 +61,38 @@ public sealed class UsbmuxPhoneFinder : IPhoneFinder
             if (Number(Value(answer, "Number")) != 0)
                 throw new TransferException("PhotoSense is not offering photos on that phone. On the phone, select photos in Organize and choose Send to computer.");
             // From here on the connection is to the phone itself.
+            handedOver = true;
             return muxer;
         }
-        catch
+        finally
         {
-            await muxer.DisposeAsync();
-            throw;
+            // A connection that did not reach the phone is let go of here, as nothing else holds it.
+            if (!handedOver) await muxer.DisposeAsync();
         }
     }
 
     /// <summary>Where the device service listens: on Windows this computer's own port 27015, on a Mac a socket of the system's.</summary>
     public static EndPoint Muxer(bool windows) => windows ? new IPEndPoint(IPAddress.Loopback, 27015) : new UnixDomainSocketEndPoint("/var/run/usbmuxd");
 
+    /// <summary>Opens a connection to the device service.</summary>
+    /// <param name="at">Where the service listens (<see cref="Muxer"/>).</param>
+    /// <param name="ct">Stops the connecting.</param>
+    /// <exception cref="SocketException">There is no device service there.</exception>
     public static async Task<Stream> OpenMuxerAsync(EndPoint at, CancellationToken ct)
     {
         var socket = new Socket(at.AddressFamily, SocketType.Stream, at is UnixDomainSocketEndPoint ? ProtocolType.Unspecified : ProtocolType.Tcp);
+        var handedOver = false;
         try
         {
             await socket.ConnectAsync(at, ct);
-            return new NetworkStream(socket, ownsSocket: true);
+            var stream = new NetworkStream(socket, ownsSocket: true);
+            handedOver = true;
+            return stream;
         }
-        catch
+        finally
         {
-            socket.Dispose();
-            throw;
+            // Once handed over the stream owns the socket; a connection that failed lets go of it here.
+            if (!handedOver) socket.Dispose();
         }
     }
 

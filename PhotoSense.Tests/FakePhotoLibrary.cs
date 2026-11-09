@@ -35,6 +35,7 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
         return item;
     }
 
+    /// <summary>Takes a picture or video out of the library, as deleting it in Photos would.</summary>
     public void Remove(string id) => _items.RemoveAll(i => i.Id == id);
 
     /// <summary>An album PhotoSense made, as if it had made it before.</summary>
@@ -43,20 +44,24 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
     /// <summary>What is in each of PhotoSense's albums, by path.</summary>
     public Dictionary<string, string[]> InAlbums() => _albums.ToDictionary(a => string.Join('/', a.Path), a => a.Items.Order(StringComparer.Ordinal).ToArray());
 
+    /// <inheritdoc />
     public IReadOnlyList<LibraryItem> Items()
     {
         Reads++;
         return [.. _items];
     }
 
+    /// <inheritdoc />
     public Stream Open(string id, LibraryFileKind kind)
     {
         if (!_bytes.TryGetValue((id, kind), out var bytes)) throw new FileNotFoundException("Not in the library.", id);
         return OnlyFromTheStart ? new FromTheStart(bytes) : new MemoryStream(bytes, writable: false);
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<LibraryAlbum> Albums() => [.. _albums.Select(a => new LibraryAlbum([.. a.Path], [.. a.Items]))];
 
+    /// <inheritdoc />
     public void Change(LibraryChange change)
     {
         Changes.Add(change);

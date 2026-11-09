@@ -16,6 +16,7 @@ using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Server;
 
+/// <summary>What the program on a computer registers, and on what.</summary>
 public sealed class PhotoSenseServicesTests : IDisposable
 {
     private readonly ServerFixture _f = new();
@@ -23,7 +24,7 @@ public sealed class PhotoSenseServicesTests : IDisposable
     public void Dispose() => _f.Dispose();
 
     [Test]
-    public async Task Every_Service_And_Endpoint_Can_Be_Built()
+    public async Task Every_Service_And_Endpoint_Can_Be_Built(CancellationToken ct)
     {
         foreach (var type in new[]
         {

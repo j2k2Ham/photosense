@@ -10,7 +10,7 @@ namespace PhotoSense.Application.Transfer;
 /// AES-GCM: no one else on the network can read them, and anything changed or put in on the way is noticed. Each
 /// direction has its own key, and each frame its own number, so that none can be sent again or taken out unseen.
 /// </summary>
-public sealed class SecureChannel : IDisposable
+internal sealed class SecureChannel : IDisposable
 {
     private const int Tag = 16;
     private const byte Message = 0, Data = 1;
@@ -18,6 +18,10 @@ public sealed class SecureChannel : IDisposable
     private readonly AesGcm _send, _receive;
     private ulong _sent, _received;
 
+    /// <summary>A channel over a connection, with a key for each direction.</summary>
+    /// <param name="stream">The connection.</param>
+    /// <param name="sendKey">Seals what this side sends.</param>
+    /// <param name="receiveKey">Opens what the other side sends.</param>
     public SecureChannel(Stream stream, byte[] sendKey, byte[] receiveKey)
     {
         _stream = stream;
@@ -28,11 +32,16 @@ public sealed class SecureChannel : IDisposable
     /// <summary>The most of a file one frame carries.</summary>
     public const int PieceSize = 1 << 20;
 
+    /// <summary>Sends a message, sealed.</summary>
     public Task SendAsync(JsonObject message, CancellationToken ct) => SendAsync(Message, Encoding.UTF8.GetBytes(message.ToJsonString()), ct);
 
+    /// <summary>Sends a piece of a file, sealed.</summary>
     public Task SendDataAsync(ReadOnlyMemory<byte> data, CancellationToken ct) => SendAsync(Data, data, ct);
 
     /// <summary>The next message, which has to be one of those expected.</summary>
+    /// <param name="ct">Stops the waiting. It comes first only because what is expected is a list of any length.</param>
+    /// <param name="expected">What the message may be, by its "t".</param>
+    /// <exception cref="TransferException">It was something else, or was changed on the way.</exception>
     public async Task<JsonObject> ReceiveAsync(CancellationToken ct, params string[] expected)
     {
         var (kind, body) = await ReceiveSealedAsync(ct);
@@ -74,6 +83,7 @@ public sealed class SecureChannel : IDisposable
         return nonce;
     }
 
+    /// <summary>Lets go of the keys; the connection itself belongs to whoever made it.</summary>
     public void Dispose()
     {
         _send.Dispose();

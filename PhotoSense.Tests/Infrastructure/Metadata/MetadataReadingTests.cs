@@ -46,7 +46,7 @@ public class MetadataReadingTests
     // ---- pictures
 
     [Test]
-    public async Task A_Picture_With_No_Details_Records_None()
+    public async Task A_Picture_With_No_Details_Records_None(CancellationToken ct)
     {
         await AssertBare(Picture());
         // Capture settings but no capture date, and no camera named.
@@ -57,7 +57,7 @@ public class MetadataReadingTests
     }
 
     [Test]
-    public async Task Reads_A_Pictures_Capture_Time_And_Camera()
+    public async Task Reads_A_Pictures_Capture_Time_And_Camera(CancellationToken ct)
     {
         var picture = Picture(
             With<ExifSubIfdDirectory>((ExifDirectoryBase.TagDateTimeOriginal, "2024:04:07 17:35:59")),
@@ -78,7 +78,7 @@ public class MetadataReadingTests
     [Arguments("   ", 0)]
     [Arguments("64a", 0)]                    // not a number: ignored
     [Arguments("-64", 0)]
-    public async Task Sub_Seconds_Tell_Burst_Shots_Apart(string subSeconds, long ticksIntoTheSecond)
+    public async Task Sub_Seconds_Tell_Burst_Shots_Apart(string subSeconds, long ticksIntoTheSecond, CancellationToken ct)
     {
         var picture = Picture(With<ExifSubIfdDirectory>(
             (ExifDirectoryBase.TagDateTimeOriginal, "2024:04:07 17:35:59"), (ExifDirectoryBase.TagSubsecondTimeOriginal, subSeconds)));
@@ -86,7 +86,7 @@ public class MetadataReadingTests
     }
 
     [Test]
-    public async Task A_Capture_Time_That_Already_Has_Its_Fraction_Is_Not_Given_Another()
+    public async Task A_Capture_Time_That_Already_Has_Its_Fraction_Is_Not_Given_Another(CancellationToken ct)
     {
         var picture = Picture(With<ExifSubIfdDirectory>(
             (ExifDirectoryBase.TagDateTimeOriginal, Shot.AddMilliseconds(123)), (ExifDirectoryBase.TagSubsecondTimeOriginal, "648")));
@@ -99,14 +99,14 @@ public class MetadataReadingTests
     // ---- videos
 
     [Test]
-    public async Task A_Video_With_No_Details_Records_None()
+    public async Task A_Video_With_No_Details_Records_None(CancellationToken ct)
     {
         await AssertBare(Video());
         await AssertBare(Video(new QuickTimeMovieHeaderDirectory(), new QuickTimeTrackHeaderDirectory(), new QuickTimeMetadataHeaderDirectory()));
     }
 
     [Test]
-    public async Task A_Video_Has_A_Length_Only_When_It_Is_Longer_Than_Nothing()
+    public async Task A_Video_Has_A_Length_Only_When_It_Is_Longer_Than_Nothing(CancellationToken ct)
     {
         await Assert.That(Video(With<QuickTimeMovieHeaderDirectory>((QuickTimeMovieHeaderDirectory.TagDuration, TimeSpan.FromSeconds(84)))).DurationSeconds).IsEqualTo(84);
         await Assert.That(Video(With<QuickTimeMovieHeaderDirectory>((QuickTimeMovieHeaderDirectory.TagDuration, TimeSpan.Zero))).DurationSeconds).IsNull();
@@ -124,7 +124,7 @@ public class MetadataReadingTests
     }
 
     [Test]
-    public async Task A_Videos_Size_Comes_From_The_First_Track_That_Has_One()
+    public async Task A_Videos_Size_Comes_From_The_First_Track_That_Has_One(CancellationToken ct)
     {
         // Sound and data tracks come in every order; only the picture track has both a width and a height.
         var video = Video(Track(null, null), Track(0, 0), Track(1920, null), Track(null, 1080), Track(1920, 0), Track(1280, 720), Track(640, 480));
@@ -143,7 +143,7 @@ public class MetadataReadingTests
     [Arguments(270.0, 1080, 1920)]
     [Arguments(89.6, 1080, 1920)]     // as near a quarter turn as the stored numbers allow
     [Arguments(45.0, 1920, 1080)]
-    public async Task A_Video_Turned_A_Quarter_Is_Taller_Than_Wide(double? rotation, int width, int height)
+    public async Task A_Video_Turned_A_Quarter_Is_Taller_Than_Wide(double? rotation, int width, int height, CancellationToken ct)
     {
         var video = Video(Track(1920, 1080, rotation));
         await Assert.That((video.Width, video.Height)).IsEqualTo((width, height));
@@ -155,7 +155,7 @@ public class MetadataReadingTests
     [Arguments("+00.0000+078.4600/", 0.0, 78.46)]     // on the equator
     [Arguments("+51.4780+000.0000/", 51.478, 0.0)]    // on the prime meridian
     [Arguments("+35-075", 35.0, -75.0)]
-    public async Task Reads_Where_A_Video_Was_Shot(string position, double latitude, double longitude)
+    public async Task Reads_Where_A_Video_Was_Shot(string position, double latitude, double longitude, CancellationToken ct)
     {
         var video = Video(With<QuickTimeMetadataHeaderDirectory>((GpsLocation, position), (Model, "iPhone 12 Pro Max")));
         await Assert.That(Math.Round(video.Latitude!.Value, 6)).IsEqualTo(Math.Round(latitude, 6));
@@ -169,7 +169,7 @@ public class MetadataReadingTests
     [Arguments("35.2886-075.5161")]     // no sign on the latitude
     [Arguments("+35.2886")]
     [Arguments("")]
-    public async Task A_Position_That_Is_None_Or_Makes_No_Sense_Is_Left_Out(string position)
+    public async Task A_Position_That_Is_None_Or_Makes_No_Sense_Is_Left_Out(string position, CancellationToken ct)
     {
         var video = Video(With<QuickTimeMetadataHeaderDirectory>((GpsLocation, position)));
         await Assert.That(video.Latitude).IsNull();
@@ -177,7 +177,7 @@ public class MetadataReadingTests
     }
 
     [Test]
-    public async Task A_Videos_Date_Is_The_Phones_Own_Where_It_Wrote_One()
+    public async Task A_Videos_Date_Is_The_Phones_Own_Where_It_Wrote_One(CancellationToken ct)
     {
         var localNoon = new DateTime(2023, 5, 29, 12, 0, 0, DateTimeKind.Unspecified);
         var container = With<QuickTimeMovieHeaderDirectory>((QuickTimeMovieHeaderDirectory.TagCreated, new DateTime(2016, 10, 28, 14, 40, 24)));
@@ -197,7 +197,7 @@ public class MetadataReadingTests
     }
 
     [Test]
-    public async Task Otherwise_A_Videos_Date_Is_The_Containers_Unless_That_Was_Never_Set()
+    public async Task Otherwise_A_Videos_Date_Is_The_Containers_Unless_That_Was_Never_Set(CancellationToken ct)
     {
         var writtenUtc = new DateTime(2016, 10, 28, 14, 40, 24);
         var expected = DateTime.SpecifyKind(DateTime.SpecifyKind(writtenUtc, DateTimeKind.Utc).ToLocalTime(), DateTimeKind.Unspecified);
@@ -216,13 +216,13 @@ public class MetadataReadingTests
     // ---- through real files
 
     [Test]
-    public async Task Odd_Files_Are_Read_For_What_They_Have()
+    public async Task Odd_Files_Are_Read_For_What_They_Have(CancellationToken ct)
     {
         var extractor = new BasicExifMetadataExtractor();
         async Task<Photo> ReadAsync(string name, byte[] content)
         {
             var photo = new Photo { SourcePath = name, FileName = name };
-            await extractor.ExtractAsync(photo, new MemoryStream(content));
+            await extractor.ExtractAsync(photo, new MemoryStream(content), ct);
             return photo;
         }
 

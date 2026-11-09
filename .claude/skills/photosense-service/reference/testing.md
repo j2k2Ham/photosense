@@ -6,7 +6,12 @@
 - Compare collections with `IsEquivalentTo(expected, CollectionOrdering.Matching)`, or with `.Any`.
 - `Assert.ThrowsAsync<T>` and `Assert.Throws<T>` return `T?`, and accept a derived exception.
 - Tests run in parallel, even within one class. Shared static state needs `[NotInParallel("key")]`; anything that scans uses `"ScanLogQueue"`.
-- Test names are sentences of what happens: `A_Copy_Is_Removed_Into_The_Album_Of_Removed_Pictures`.
+- Test names are sentences of what happens: `A_Copy_Is_Removed_Into_The_Album_Of_Removed_Pictures`. They are the test's documentation; a test class, fixture, fake or helper has a `<summary>` (CLAUDE.md).
+- An async test takes `CancellationToken ct` last, which TUnit hands it, and passes it to every call that takes one. A helper that awaits takes one too. A test of what happens when a caller has gone away passes `new CancellationToken(canceled: true)`.
+- A test reads no clock: a time to stamp comes from `TestClock` (fixed, or moving on by a step each time it is read), and a file's time is set from its own (`File.GetLastWriteTimeUtc(path).AddMinutes(5)`).
+- A synchronous hook that has to wait (a reader held while a test looks) waits with the test's token: `hold.Wait(ct)`. A hook that needs the store mid-move reads it straight from the database (`ChangesFixture.Stored`), never through `.Result`.
+- One `HttpClient` serves every test of a class (`PhotoSenseServerTests.Client`), asking each program by its whole address.
+- A fake decoder says a picture cannot be decoded with `UnreadableImageException`, as the real ones do.
 
 ## Traps already met
 

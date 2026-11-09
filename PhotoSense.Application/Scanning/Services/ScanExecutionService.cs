@@ -7,6 +7,10 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Scanning.Services;
 
+/// <summary>
+/// Scans folders for pictures and videos: hashes each file, measures each picture, reads what each says about
+/// itself, and keeps one record per file. A file unchanged since an earlier scan is skipped.
+/// </summary>
 public class ScanExecutionService : IScanExecutionService
 {
     /// <summary>
@@ -27,7 +31,18 @@ public class ScanExecutionService : IScanExecutionService
     private readonly TimeProvider _time;
     private readonly int _parallelism;
 
+    /// <summary>Scans with the services given.</summary>
+    /// <param name="repo">Where each file's record is kept.</param>
+    /// <param name="hash">Hashes a file's bytes, to tell identical files.</param>
+    /// <param name="analyzer">Decodes and measures a picture.</param>
+    /// <param name="meta">Reads when and where a file was taken.</param>
+    /// <param name="thumbnails">Keeps each picture's preview.</param>
+    /// <param name="progress">Where how far the scan has got is kept.</param>
+    /// <param name="files">Where the photos are kept.</param>
+    /// <param name="log">Where what the scan does is written, if anywhere.</param>
+    /// <param name="parallelism">How many files are read at once; 0 for a number that suits this machine.</param>
     /// <param name="history">Where what each scan took is kept, so that the next can say how long it will be.</param>
+    /// <param name="time">The clock; the system's when none is given.</param>
     public ScanExecutionService(IPhotoRepository repo, IImageHashingService hash, IImageAnalyzer analyzer, IPhotoMetadataExtractor meta,
         IThumbnailStore thumbnails, IScanProgressStore progress, IPhotoFileSystem files, IScanLogSink? log = null, int parallelism = 0,
         IScanHistory? history = null, TimeProvider? time = null)
@@ -39,7 +54,8 @@ public class ScanExecutionService : IScanExecutionService
         _parallelism = parallelism > 0 ? parallelism : Math.Clamp(Environment.ProcessorCount - 2, 1, 8);
     }
 
-    public async Task<ScanSummary> RunAsync(ScanRequest request, string instanceId, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<ScanSummary> RunAsync(ScanRequest request, string instanceId, CancellationToken ct)
     {
         _progress.ScanStarted(instanceId);
         var startedUtc = _time.GetUtcNow().UtcDateTime;
@@ -76,7 +92,7 @@ public class ScanExecutionService : IScanExecutionService
             {
                 var seen = (await _repo.GetAllAsync(ct)).Select(p => PhotoPath.Key(p.SourcePath)).ToHashSet();
                 var unseen = primary.Concat(secondary).Count(f => !seen.Contains(PhotoPath.Key(f)));
-                _progress.Expect(instanceId, ScanEstimate.SecondsPerFileRead(await _history.RecentAsync(ct: ct)) * unseen);
+                _progress.Expect(instanceId, ScanEstimate.SecondsPerFileRead(await _history.RecentAsync(10, ct)) * unseen);
             }
 
             // Identical files have identical sizes, so a video whose size no other video shares cannot have a
@@ -181,6 +197,12 @@ public class ScanExecutionService : IScanExecutionService
             photo.Format = Path.GetExtension(file).TrimStart('.').ToUpperInvariant();
             Interlocked.Increment(ref run.Analyzed);
         }
+        else if (info.Length == 0)
+        {
+            // An empty file has no picture in it to decode; it is recorded all the same.
+            Interlocked.Increment(ref run.Unreadable);
+            _log?.Log(run.InstanceId, "Warn", $"Could not decode {file}: it is empty.");
+        }
         else try
         {
             stream.Position = 0;
@@ -194,7 +216,8 @@ public class ScanExecutionService : IScanExecutionService
             await _thumbnails.SaveAsync(photo.ContentHash!, analysis.ThumbnailJpeg, ct);
             Interlocked.Increment(ref run.Analyzed);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // A picture its decoder could not make sense of, or a preview the disk would not keep.
+        catch (Exception ex) when (ex is UnreadableImageException or IOException or UnauthorizedAccessException)
         {
             // Recorded anyway: a file that cannot be decoded can still be matched as an identical file.
             Interlocked.Increment(ref run.Unreadable);
@@ -209,10 +232,15 @@ public class ScanExecutionService : IScanExecutionService
 
     private sealed class Run(string instanceId, int total, HashSet<long> sharedVideoSizes)
     {
+        /// <summary>The scan.</summary>
         public readonly string InstanceId = instanceId;
+        /// <summary>Files the scan covers.</summary>
         public readonly int Total = total;
+        /// <summary>The sizes more than one video has: only those videos can have a copy, and are read in full.</summary>
         public readonly HashSet<long> SharedVideoSizes = sharedVideoSizes;
+        /// <summary>The records this scan found a file for; the rest are dropped at the end.</summary>
         public readonly ConcurrentDictionary<PhotoId, bool> Touched = new();
+        /// <summary>Files gone through, read and measured, skipped as unchanged, and that could not be read.</summary>
         public int Done, Analyzed, Unchanged, Unreadable;
     }
 }

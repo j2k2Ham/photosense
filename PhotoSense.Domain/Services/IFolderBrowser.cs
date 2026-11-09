@@ -1,9 +1,14 @@
 namespace PhotoSense.Domain.Services;
 
 /// <summary>A folder on the machine the service runs on.</summary>
+/// <param name="Name">What the folder is called, as shown.</param>
+/// <param name="Path">Its full path.</param>
 public sealed record FolderEntry(string Name, string Path);
 
 /// <summary>The folders inside one folder. With no <see cref="Path"/>, the places browsing starts from.</summary>
+/// <param name="Path">The folder listed; null for the places browsing starts from.</param>
+/// <param name="Parent">The folder above it; null at the top.</param>
+/// <param name="Folders">The folders inside it.</param>
 public sealed record FolderListing(string? Path, string? Parent, IReadOnlyList<FolderEntry> Folders);
 
 /// <summary>

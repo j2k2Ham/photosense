@@ -5,9 +5,12 @@ using PhotoSense.Application.Scanning;
 
 namespace PhotoSense.Api.Scanning;
 
-public class ScanLogsEndpoints
+/// <summary>The lines scans have logged, for the page to show as they come.</summary>
+internal sealed class ScanLogsEndpoints
 {
     private readonly TimeProvider _time;
+
+    /// <summary>Lines handed over at a pace measured by <paramref name="time"/>, or the system's clock when none is given.</summary>
     public ScanLogsEndpoints(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
 
     // A few requests a second at most, refilled at one a second: the page asks every second and a half.
@@ -16,8 +19,8 @@ public class ScanLogsEndpoints
     private double _tokens = Allowance;
     private DateTimeOffset? _lastRefill;
 
-    // GET /api/scan/logs?limit=: the lines logged since the page last asked, taken off the queue as they are read.
-    public async Task<ApiResponse> GetPendingAsync(ApiRequest req)
+    /// <summary>GET /api/scan/logs?limit=: the lines logged since the page last asked, taken off the queue as they are read.</summary>
+    public async Task<ApiResponse> GetPendingAsync(ApiRequest req, CancellationToken ct)
     {
         // Lines are taken off the queue as they are read, so another page asking would steal them from the UI.
         if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
@@ -25,12 +28,12 @@ public class ScanLogsEndpoints
         if (!TakeAllowance())
         {
             var tooMany = req.CreateResponse(HttpStatusCode.TooManyRequests);
-            await tooMany.WriteStringAsync("Rate limit exceeded. Try again later.");
+            await tooMany.WriteStringAsync("Rate limit exceeded. Try again later.", ct);
             return tooMany;
         }
         var drained = Drain(limit).ToList();
         var resp = req.CreateResponse(HttpStatusCode.OK);
-        await resp.WriteAsJsonAsync(new { items = drained, count = drained.Count });
+        await resp.WriteAsJsonAsync(new { items = drained, count = drained.Count }, ct);
         return resp;
     }
 

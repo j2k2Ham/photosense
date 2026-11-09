@@ -5,6 +5,7 @@ using static PhotoSense.Tests.TestPhotos;
 
 namespace PhotoSense.Tests.Application;
 
+/// <summary>Which copy of a picture is the best to keep, and why.</summary>
 public class PhotoRankingTests
 {
     private static readonly PhotoRanking KeepOriginal = new(FormatPreference.CameraOriginal);
@@ -14,7 +15,7 @@ public class PhotoRankingTests
     private static Photo Best(params Photo[] photos) => Best(KeepOriginal, photos);
 
     [Test]
-    public async Task Higher_Resolution_Wins_Over_Everything_Else()
+    public async Task Higher_Resolution_Wins_Over_Everything_Else(CancellationToken ct)
     {
         var full = Make("full.jpg", format: "JPEG", quality: 60, size: 900_000);
         var small = Make("small.png", format: "PNG", width: 1600, height: 1200, size: 5_000_000);
@@ -24,7 +25,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task The_Cameras_Own_File_Beats_A_Larger_Conversion_Of_It_When_Originals_Are_Preferred()
+    public async Task The_Cameras_Own_File_Beats_A_Larger_Conversion_Of_It_When_Originals_Are_Preferred(CancellationToken ct)
     {
         // What an iPhone import leaves behind: the HEIC it shot and a JPEG conversion padded to twice the size.
         var heic = Make("IMG_4198.HEIC", size: 3_046_000, taken: Shot);
@@ -36,7 +37,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task The_Jpeg_Is_Kept_Instead_When_Files_Must_Open_Everywhere()
+    public async Task The_Jpeg_Is_Kept_Instead_When_Files_Must_Open_Everywhere(CancellationToken ct)
     {
         var heic = Make("IMG_4198.HEIC", size: 9_000_000, taken: Shot);
         var jpeg = Make("IMG_4198.JPG", format: "JPEG", quality: 94, size: 6_093_000, taken: Shot);
@@ -51,7 +52,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task Unless_Told_Otherwise_The_Jpeg_Is_Kept()
+    public async Task Unless_Told_Otherwise_The_Jpeg_Is_Kept(CancellationToken ct)
     {
         var heic = Make("IMG_4198.HEIC", size: 3_046_000, taken: Shot);
         var jpeg = Make("IMG_4198.JPG", format: "JPEG", quality: 94, size: 6_093_000, taken: Shot);
@@ -67,7 +68,7 @@ public class PhotoRankingTests
     [Arguments("TIF")]
     [Arguments("BMP")]
     [Arguments("png")]
-    public async Task A_Lossless_Copy_Outranks_Both_Whatever_The_Preference(string lossless)
+    public async Task A_Lossless_Copy_Outranks_Both_Whatever_The_Preference(string lossless, CancellationToken ct)
     {
         var heic = Make("a.HEIC", taken: Shot);
         var jpeg = Make("a.JPG", format: "JPEG", quality: 94, taken: Shot);
@@ -79,7 +80,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task A_File_Of_Unknown_Format_Ranks_Last_Among_Equals()
+    public async Task A_File_Of_Unknown_Format_Ranks_Last_Among_Equals(CancellationToken ct)
     {
         var unknown = Make("mystery.dat", size: 9_000_000); unknown.Format = null;
         var heic = Make("a.HEIC", size: 10);
@@ -89,7 +90,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task A_Copy_With_Its_Capture_Details_Beats_One_Without()
+    public async Task A_Copy_With_Its_Capture_Details_Beats_One_Without(CancellationToken ct)
     {
         var intact = Make("a.jpg", format: "JPEG", quality: 80, taken: Shot);
         var stripped = Make("b.jpg", format: "JPEG", quality: 95, size: 2_000_000);
@@ -98,7 +99,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task Less_Compression_Then_Larger_File_Decide_Between_Equal_Formats()
+    public async Task Less_Compression_Then_Larger_File_Decide_Between_Equal_Formats(CancellationToken ct)
     {
         var fine = Make("fine.jpg", format: "JPEG", quality: 94, size: 1_000_000);
         var coarse = Make("coarse.jpg", format: "JPEG", quality: 50, size: 4_000_000);
@@ -118,7 +119,7 @@ public class PhotoRankingTests
     }
 
     [Test]
-    public async Task Equal_Copies_Fall_Back_To_Folder_Then_Plainest_Name()
+    public async Task Equal_Copies_Fall_Back_To_Folder_Then_Plainest_Name(CancellationToken ct)
     {
         var primary = Make("IMG_0001 (1).HEIC", set: PhotoSet.Primary);
         var secondary = Make("IMG_0001.HEIC", set: PhotoSet.Secondary);
@@ -141,7 +142,7 @@ public class PhotoRankingTests
     [Test]
     [Arguments(FormatPreference.CameraOriginal)]
     [Arguments(FormatPreference.WidelyCompatible)]
-    public async Task Ranking_Does_Not_Depend_On_The_Order_Photos_Arrive_In(FormatPreference preference)
+    public async Task Ranking_Does_Not_Depend_On_The_Order_Photos_Arrive_In(FormatPreference preference, CancellationToken ct)
     {
         var ranking = new PhotoRanking(preference);
         var photos = new[]

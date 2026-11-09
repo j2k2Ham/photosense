@@ -22,8 +22,10 @@ public sealed class MdnsPhoneFinder : IPhoneFinder
     private readonly bool _everyone;
     private readonly TimeSpan _listen;
 
+    /// <summary>Asks from every network this computer is on, and listens a second and a half for answers.</summary>
     public MdnsPhoneFinder() : this(Networks, new IPEndPoint(IPAddress.Parse("224.0.0.251"), 5353), TimeSpan.FromSeconds(1.5)) { }
 
+    /// <summary>Asks from the addresses given, to the address given, and listens as long as given.</summary>
     /// <param name="from">This computer's addresses to ask from, one on each network.</param>
     /// <param name="to">Where to ask: the multicast address everyone listens on.</param>
     /// <param name="listen">How long answers are waited for.</param>
@@ -36,6 +38,7 @@ public sealed class MdnsPhoneFinder : IPhoneFinder
         _listen = listen;
     }
 
+    /// <inheritdoc />
     public async Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct)
     {
         var query = Query(Service);
@@ -51,12 +54,21 @@ public sealed class MdnsPhoneFinder : IPhoneFinder
         => Networks(NetworkInterface.GetAllNetworkInterfaces().Select(n => new Network(n.OperationalStatus, n.NetworkInterfaceType, n.SupportsMulticast, () => [.. n.GetIPProperties().UnicastAddresses.Select(a => a.Address)])));
 
     /// <summary>A network this computer is on, as far as asking on it goes.</summary>
+    /// <param name="Status">Whether it is up.</param>
+    /// <param name="Type">What kind of network it is; this computer's own loopback is not asked on.</param>
+    /// <param name="Multicast">Whether it can ask everyone on it at once.</param>
+    /// <param name="Addresses">This computer's addresses on it.</param>
     public sealed record Network(OperationalStatus Status, NetworkInterfaceType Type, bool Multicast, Func<IReadOnlyList<IPAddress>> Addresses);
 
+    /// <summary>The IPv4 addresses to ask from, on those of the networks that are up and can ask everyone at once, other than loopback.</summary>
     public static IReadOnlyList<IPAddress> Networks(IEnumerable<Network> networks)
         => [.. networks.Where(n => n.Status == OperationalStatus.Up && n.Type != NetworkInterfaceType.Loopback && n.Multicast)
             .SelectMany(n => n.Addresses()).Where(a => a.AddressFamily == AddressFamily.InterNetwork)];
 
+    /// <summary>Asks once from one of this computer's addresses, and gathers the answers heard until the time is up.</summary>
+    /// <param name="from">The address to ask from.</param>
+    /// <param name="query">The question.</param>
+    /// <param name="ct">Stops the asking; what was heard by then is not wanted.</param>
     private async Task<List<(byte[] Answer, IPAddress Sender)>> AskAsync(IPAddress from, byte[] query, CancellationToken ct)
     {
         var heard = new List<(byte[], IPAddress)>();
@@ -67,16 +79,17 @@ public sealed class MdnsPhoneFinder : IPhoneFinder
             await udp.SendAsync(query, _to, ct);
             using var listening = CancellationTokenSource.CreateLinkedTokenSource(ct);
             listening.CancelAfter(_listen);
+            // Waits for answers until the time is up, which ends the waiting as a cancellation.
             while (true)
             {
                 var got = await udp.ReceiveAsync(listening.Token);
                 heard.Add((got.Buffer, got.RemoteEndPoint.Address));
             }
         }
-        // Listened for long enough; or a network that cannot be asked on.
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
-        catch (SocketException) { }
-        return heard;
+        // Listened for long enough: what was heard is all there is.
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return heard; }
+        // A network that cannot be asked on tells of no phone beyond those already heard.
+        catch (SocketException) { return heard; }
     }
 
     /// <summary>A question for the instances of a service, to be answered directly rather than to everyone.</summary>
@@ -128,15 +141,18 @@ public sealed class MdnsPhoneFinder : IPhoneFinder
     private static async Task<Stream> ConnectAsync(IPAddress address, int port, CancellationToken ct)
     {
         var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+        var handedOver = false;
         try
         {
             await socket.ConnectAsync(address, port, ct);
-            return new NetworkStream(socket, ownsSocket: true);
+            var stream = new NetworkStream(socket, ownsSocket: true);
+            handedOver = true;
+            return stream;
         }
-        catch
+        finally
         {
-            socket.Dispose();
-            throw;
+            // Once handed over the stream owns the socket; a connection that failed lets go of it here.
+            if (!handedOver) socket.Dispose();
         }
     }
 

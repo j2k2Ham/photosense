@@ -15,7 +15,9 @@ namespace PhotoSense.AndroidApp;
 /// </summary>
 public sealed class PageClient(Context context) : WebViewClient
 {
+    /// <summary>The made-up host the page is shown from, which only this app answers.</summary>
     public const string Host = "appassets.androidplatform.net";
+    /// <summary>Where the page comes from.</summary>
     public const string Origin = "https://" + Host + "/";
 
     private readonly Lazy<HashSet<string>> _pageFiles = new(() => Listed(context.Assets!, "wwwroot"));
@@ -38,7 +40,8 @@ public sealed class PageClient(Context context) : WebViewClient
             // Asked off the main thread, which waits for the answer here as a web server's caller would.
             answer = url.AbsolutePath.StartsWith("/api/", StringComparison.Ordinal) ? Ask(request, url) : PageFile(url);
         }
-        // The page is answered all the same, with what went wrong, or it would wait for an answer for ever.
+        // One of the catches of every error PhotoSense keeps (CLAUDE.md): the page is answered all the same, with what
+        // went wrong, or it would wait for an answer for ever.
         catch (Exception e)
         {
             Log.Warn("PhotoSense", $"{request.Method} {url.PathAndQuery} failed: {e}");
@@ -60,8 +63,10 @@ public sealed class PageClient(Context context) : WebViewClient
     {
         var headers = request.RequestHeaders?.Select(h => new KeyValuePair<string, string>(h.Key, h.Value)).ToList() ?? [];
         var body = BodyBridge.Take(headers.FirstOrDefault(h => h.Key.Equals(BodyBridge.Header, StringComparison.OrdinalIgnoreCase)).Value);
+        // Android asks for the answer on a thread of its own and waits for it there, with no way of saying it has given up:
+        // the request is answered in full, and its waiting is Android's own.
         PhoneApp.Ready.GetAwaiter().GetResult();
-        return PhoneApp.Router.AnswerAsync(request.Method ?? "GET", url, headers, body).GetAwaiter().GetResult();
+        return PhoneApp.Router.AnswerAsync(request.Method ?? "GET", url, headers, body, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     private InProcessAnswer PageFile(Uri url)
@@ -106,10 +111,13 @@ public sealed class PageClient(Context context) : WebViewClient
 /// </summary>
 public sealed class BodyBridge : Java.Lang.Object
 {
+    /// <summary>What the page knows the bridge by.</summary>
     public const string Name = "PhotoSenseAndroid";
+    /// <summary>The header that carries the number a body was kept under.</summary>
     public const string Header = "x-photosense-body";
     private static readonly ConcurrentDictionary<string, string> Bodies = new();
 
+    /// <summary>Keeps a body the page is about to send, and gives the number it is kept under.</summary>
     [JavascriptInterface]
     [Export("keep")]
     public string Keep(string body)
@@ -124,5 +132,6 @@ public sealed class BodyBridge : Java.Lang.Object
     [Export("report")]
     public void Report(string report) => SelfCheck.Write(report);
 
+    /// <summary>The body kept under a number, given up once taken; null for none.</summary>
     public static byte[]? Take(string? id) => id is not null && Bodies.TryRemove(id, out var body) ? Encoding.UTF8.GetBytes(body) : null;
 }

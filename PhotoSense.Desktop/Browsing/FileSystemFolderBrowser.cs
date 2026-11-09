@@ -4,15 +4,19 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Desktop.Browsing;
 
+/// <summary>The folders of the computer the service runs on, for the page to offer to scan or organize.</summary>
 public sealed class FileSystemFolderBrowser : IFolderBrowser
 {
     private readonly Func<IEnumerable<FolderEntry>> _startingPlaces;
 
+    /// <summary>Starts from the person's pictures and home folders and every disk.</summary>
     public FileSystemFolderBrowser() : this(StartingPlaces) { }
 
+    /// <summary>Starts from the places given.</summary>
     /// <param name="startingPlaces">What is offered before any folder has been opened.</param>
-    public FileSystemFolderBrowser(Func<IEnumerable<FolderEntry>> startingPlaces) => _startingPlaces = startingPlaces;
+    internal FileSystemFolderBrowser(Func<IEnumerable<FolderEntry>> startingPlaces) => _startingPlaces = startingPlaces;
 
+    /// <inheritdoc />
     public FolderListing Browse(string? path)
     {
         if (string.IsNullOrWhiteSpace(path)) return new FolderListing(null, null, _startingPlaces().ToList());
@@ -44,7 +48,7 @@ public sealed class FileSystemFolderBrowser : IFolderBrowser
            && !PhotoLibraries.IsLibrary(folder.Name);
 
     /// <summary>Where browsing starts: the user's pictures and home folders, then every disk.</summary>
-    public static IEnumerable<FolderEntry> StartingPlaces()
+    internal static IEnumerable<FolderEntry> StartingPlaces()
         => Existing([
             ("Pictures", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
             ("Home", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
@@ -54,7 +58,7 @@ public sealed class FileSystemFolderBrowser : IFolderBrowser
     /// <summary>The disks a person would look for photos on, each with the name it is offered under.</summary>
     /// <param name="drives">Every disk the system has mounted, where it is mounted, and what kind it is.</param>
     /// <param name="windows">On Windows each disk has a letter; elsewhere the system's own volumes are mounted beside the person's.</param>
-    public static IEnumerable<(string Name, string Path)> Disks(IEnumerable<(string Mount, DriveType Type)> drives, bool windows)
+    internal static IEnumerable<(string Name, string Path)> Disks(IEnumerable<(string Mount, DriveType Type)> drives, bool windows)
         => drives.Where(d => HoldsFiles(d.Type) && (windows || d.Mount == "/" || IsPluggedIn(d.Mount)))
             .Select(d => (windows ? d.Mount : d.Mount == "/" ? "Computer" : Path.GetFileName(d.Mount.TrimEnd('/')), d.Mount));
 
@@ -63,9 +67,9 @@ public sealed class FileSystemFolderBrowser : IFolderBrowser
         => new[] { "/Volumes/", "/media/", "/mnt/", "/run/media/" }.Any(at => mount.StartsWith(at, StringComparison.Ordinal));
 
     /// <summary>Of the places offered, those that are there to be opened.</summary>
-    public static IEnumerable<FolderEntry> Existing(IEnumerable<(string Name, string Path)> places)
+    internal static IEnumerable<FolderEntry> Existing(IEnumerable<(string Name, string Path)> places)
         => places.Where(p => Directory.Exists(p.Path)).Select(p => new FolderEntry(p.Name, p.Path));
 
     /// <summary>Whether a drive is one a person keeps files on, rather than a system's own bookkeeping.</summary>
-    public static bool HoldsFiles(DriveType type) => type is DriveType.Fixed or DriveType.Removable or DriveType.Network;
+    internal static bool HoldsFiles(DriveType type) => type is DriveType.Fixed or DriveType.Removable or DriveType.Network;
 }

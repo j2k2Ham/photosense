@@ -7,6 +7,7 @@ namespace PhotoSense.iOS;
 /// <summary>What the person let PhotoSense see of the photo library, and the system's own ways of letting it see more.</summary>
 public sealed class PhotoKitAccess : IPhotoAccess
 {
+    /// <summary>What the person has let PhotoSense see of the library.</summary>
     public PhotoAccess Current => PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.ReadWrite) switch
     {
         PHAuthorizationStatus.Authorized => PhotoAccess.Everything,
@@ -14,6 +15,7 @@ public sealed class PhotoKitAccess : IPhotoAccess
         _ => PhotoAccess.Nothing,
     };
 
+    /// <summary>Shows Apple's picker for choosing more photos; done once it is put away.</summary>
     public Task ChooseMoreAsync(CancellationToken ct)
     {
         var closed = new TaskCompletionSource();
@@ -26,6 +28,7 @@ public sealed class PhotoKitAccess : IPhotoAccess
         return closed.Task.WaitAsync(ct);
     }
 
+    /// <summary>Opens PhotoSense's page of the Settings app.</summary>
     public void OpenSettings() => UIApplication.SharedApplication.InvokeOnMainThread(() =>
         UIApplication.SharedApplication.OpenUrl(new NSUrl(UIApplication.OpenSettingsUrlString), new UIApplicationOpenUrlOptions(), null));
 }

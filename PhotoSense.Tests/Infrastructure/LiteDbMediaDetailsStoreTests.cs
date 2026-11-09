@@ -5,13 +5,14 @@ using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Infrastructure;
 
+/// <summary>What Organize read from files, kept for the next start.</summary>
 public class LiteDbMediaDetailsStoreTests
 {
     private static readonly string Root = Path.Combine(Path.GetTempPath(), "photosense-kept");
     private static string In(params string[] parts) => Path.Combine([Root, .. parts]);
 
     [Test]
-    public async Task Keeps_What_Was_Read_From_Each_File_And_Hands_It_Back_By_Path_Or_By_Folder()
+    public async Task Keeps_What_Was_Read_From_Each_File_And_Hands_It_Back_By_Path_Or_By_Folder(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
         var store = new LiteDbMediaDetailsStore(db);

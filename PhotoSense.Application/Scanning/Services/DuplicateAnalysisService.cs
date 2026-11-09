@@ -6,6 +6,10 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Scanning.Services;
 
+/// <summary>
+/// Finds the copies and look-alikes among the photos scans have recorded, and keeps the answer until a record
+/// changes.
+/// </summary>
 public class DuplicateAnalysisService : IDuplicateAnalysisService
 {
     private readonly IPhotoRepository _repo;
@@ -13,13 +17,17 @@ public class DuplicateAnalysisService : IDuplicateAnalysisService
     private readonly SemaphoreSlim _gate = new(1, 1);
     private (long Version, DuplicateAnalysis Analysis)? _cached;
 
+    /// <summary>Finds them among the records in <paramref name="repo"/>.</summary>
+    /// <param name="repo">What scans recorded.</param>
+    /// <param name="ranking">Which copy of a picture is the best to keep; the usual ranking when none is given.</param>
     public DuplicateAnalysisService(IPhotoRepository repo, PhotoRanking? ranking = null)
     {
         _repo = repo;
         _ranking = ranking ?? new PhotoRanking();
     }
 
-    public async Task<DuplicateAnalysis> GetAsync(CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<DuplicateAnalysis> GetAsync(CancellationToken ct)
     {
         await _gate.WaitAsync(ct);
         try
@@ -34,6 +42,12 @@ public class DuplicateAnalysisService : IDuplicateAnalysisService
         finally { _gate.Release(); }
     }
 
+    /// <summary>
+    /// Groups the photos: identical files and confirmed copies around the best of them, then look-alikes among
+    /// the photos kept. Each photo is in one group of each kind at most.
+    /// </summary>
+    /// <param name="photos">The photos to group.</param>
+    /// <param name="ranking">Which copy is the best to keep; the usual ranking when none is given.</param>
     public static DuplicateAnalysis Analyze(IReadOnlyList<Photo> photos, PhotoRanking? ranking = null)
     {
         var bestFirst = (ranking ?? new PhotoRanking()).BestFirst;
@@ -134,9 +148,12 @@ public class DuplicateAnalysisService : IDuplicateAnalysisService
         return links;
     }
 
+    // Identical files, best first: the first stands for them all when pictures are compared.
     private sealed class Unit(List<Photo> photos)
     {
+        /// <summary>The identical files, best first.</summary>
         public List<Photo> Photos { get; } = photos;
+        /// <summary>The one that stands for them all.</summary>
         public Photo Best => Photos[0];
     }
 }

@@ -15,13 +15,17 @@ public sealed record OrganizeDestination
 
     /// <summary>The folder the files go to, before any split by year.</summary>
     public string Folder { get; }
+
+    /// <summary>A file given no subfolder of its own goes into a subfolder named for the year it was taken.</summary>
     public bool YearSplit { get; }
 
+    /// <summary>A destination inside a folder that is there.</summary>
     /// <param name="basePath">The folder the new folder is made in.</param>
     /// <param name="folderName">The new folder's name; either slash makes subfolders.</param>
     /// <param name="direct">Put the files in the base folder itself, without a new folder.</param>
-    /// <exception cref="ArgumentException">The destination cannot be used; the message says why.</exception>
+    /// <param name="yearSplit">Put each file given no subfolder into one named for its year.</param>
     /// <param name="files">Where the base folder is looked for.</param>
+    /// <exception cref="ArgumentException">The destination cannot be used; the message says why.</exception>
     /// <exception cref="DirectoryNotFoundException">The base folder is not there.</exception>
     public OrganizeDestination(string? basePath, string? folderName, bool direct, bool yearSplit, IPhotoFileSystem files)
     {
@@ -54,6 +58,8 @@ public sealed record OrganizeDestination
         return names.Count > 0 ? Path.Combine([.. names]) : null;
     }
 
+    /// <summary>The folder a file goes to: its own subfolder when one is asked for, else its year's when the folder is split so.</summary>
+    /// <param name="file">The file going.</param>
     /// <param name="subfolder">The subfolder asked for this file, if one was.</param>
     /// <exception cref="ArgumentException">The subfolder cannot be used as the name of a folder.</exception>
     public string FolderFor(LibraryFile file, string? subfolder = null)
@@ -61,7 +67,7 @@ public sealed record OrganizeDestination
 }
 
 /// <summary>The rules for a file's name where it arrives, so that nothing already there is replaced.</summary>
-public static class NameRules
+internal static class NameRules
 {
     /// <summary>The first of "name (1).ext", "name (2).ext" and so on that nothing has yet.</summary>
     public static string NextFree(string fileName, Func<string, bool> taken)
@@ -77,6 +83,8 @@ public static class NameRules
     /// <summary>Matches a name and the same name with a number: "IMG_1.JPG", "IMG_1 (1).JPG".</summary>
     public static Regex Family(string fileName) => Family(fileName, PhotoPath.Comparer.Equals("a", "A"));
 
+    /// <summary>Matches a name and the same name with a number, with or without regard to case.</summary>
+    /// <param name="fileName">The name.</param>
     /// <param name="ignoreCase">Whether two names differing only in case are one name, as they are on Windows.</param>
     public static Regex Family(string fileName, bool ignoreCase)
         => new($"^{Regex.Escape(Path.GetFileNameWithoutExtension(fileName))}( \\(\\d+\\))?{Regex.Escape(Path.GetExtension(fileName))}$",
@@ -94,11 +102,12 @@ public static class NameRules
 /// The files of each folder by the item they belong to, read once for a folder however many of its files
 /// are asked about. Only a file whose item has other files can have companions.
 /// </summary>
-public sealed class SiblingIndex(IPhotoFileSystem files)
+internal sealed class SiblingIndex(IPhotoFileSystem files)
 {
     private readonly Dictionary<string, ILookup<string, string>> _items = new(PhotoPath.Comparer);
 
     /// <summary>The other files in the file's folder that carry its item's name.</summary>
+    /// <param name="path">The file.</param>
     /// <param name="stillThere">
     /// Leave out files that have gone since the folder was read: for a caller that moves files as it goes.
     /// </param>
@@ -111,13 +120,30 @@ public sealed class SiblingIndex(IPhotoFileSystem files)
     }
 }
 
+/// <summary>A file that would move, and the folder it would go to.</summary>
+/// <param name="File">The file.</param>
+/// <param name="Folder">Where it would go.</param>
 public sealed record PlannedFile(LibraryFile File, string Folder);
+
 /// <summary>A file already in the folder another is going to, under that file's name or that name with a number.</summary>
+/// <param name="File">The file already there.</param>
+/// <param name="PlaceName">Where it was taken, in words, when it says.</param>
+/// <param name="Identical">It holds the very same bytes as the file going there.</param>
 public sealed record ExistingFile(LibraryFile File, string? PlaceName, bool Identical);
+
+/// <summary>A file whose name is taken where it would go.</summary>
+/// <param name="File">The file going.</param>
+/// <param name="Existing">The files already there under its name or that name with a number, the very name first.</param>
+/// <param name="NextFree">The name it would arrive under.</param>
 public sealed record PlannedClash(LibraryFile File, IReadOnlyList<ExistingFile> Existing, string NextFree);
 
+/// <summary>Where each file would go and which names are taken there; nothing has moved.</summary>
+/// <param name="Destination">The folder the files would go to.</param>
+/// <param name="Exists">That folder is there already.</param>
+/// <param name="Items">The files that would move, each with its folder.</param>
 /// <param name="Clashes">The files whose names are taken; each lists at least the file that has the very name.</param>
 /// <param name="Taken">Every file name in each folder files are going to.</param>
+/// <param name="Companions">Live Photo videos and edit files that would be left behind unless brought along.</param>
 public sealed record OrganizePlan(
     string Destination, bool Exists, IReadOnlyList<PlannedFile> Items, IReadOnlyList<PlannedClash> Clashes,
     IReadOnlyDictionary<string, List<string>> Taken, int Companions);
@@ -130,6 +156,7 @@ public sealed class OrganizePlanner
     private readonly PlaceLookup _places;
     private readonly IPhotoFileSystem _files;
 
+    /// <summary>Plans over the files Organize knows.</summary>
     public OrganizePlanner(OrganizeLibrary library, ICompanionFileFinder companions, PlaceLookup places, IPhotoFileSystem files)
     {
         _library = library;
@@ -138,8 +165,12 @@ public sealed class OrganizePlanner
         _files = files;
     }
 
-    /// <param name="subfolders">A subfolder of the destination for each file, in the order of the files; none for a file leaves it to the destination.</param>
-    public async Task<OrganizePlan> PlanAsync(OrganizeDestination destination, IReadOnlyList<string> fileIds, IReadOnlyList<string?>? subfolders = null, CancellationToken ct = default)
+    /// <summary>Where each file would go, which names are taken there, and what would be left behind.</summary>
+    /// <param name="destination">Where the files would go.</param>
+    /// <param name="fileIds">The files, by id.</param>
+    /// <param name="subfolders">A subfolder of the destination for each file, in the order of the files; none for a file leaves it to the destination. Null for none at all.</param>
+    /// <param name="ct">Stops the planning.</param>
+    public async Task<OrganizePlan> PlanAsync(OrganizeDestination destination, IReadOnlyList<string> fileIds, IReadOnlyList<string?>? subfolders, CancellationToken ct)
     {
         // Each file is taken as the listing last saw it. Asking the disk about thousands of files again takes
         // long on a slow or busy disk, and whether a file is still there is settled when it is moved.
@@ -179,11 +210,12 @@ public sealed class OrganizePlanner
         var going = items.Select(i => i.File.Path).ToHashSet(PhotoPath.Comparer);
         var siblings = new SiblingIndex(_files);
         var withSiblings = items.Select(i => (i.File.Path, Siblings: siblings.SiblingsOf(i.File.Path))).Where(i => i.Siblings.Count > 0).ToList();
-        var companions = withSiblings.AsParallel().SelectMany(i => _companions.FindAmong(i.Path, i.Siblings)).Where(c => !going.Contains(c)).Distinct(PhotoPath.Comparer).Count();
+        var companions = withSiblings.AsParallel().WithCancellation(ct).SelectMany(i => _companions.FindAmong(i.Path, i.Siblings)).Where(c => !going.Contains(c)).Distinct(PhotoPath.Comparer).Count();
 
         return new OrganizePlan(destination.Folder, _files.FolderExists(destination.Folder), items, clashes, taken, companions);
     }
 
+    /// <summary>Whether two files hold the same bytes; false when either has gone or cannot be opened.</summary>
     private async Task<bool> SameBytesAsync(LibraryFile one, LibraryFile other, CancellationToken ct)
     {
         try { return await _library.HashAsync(one, ct) == await _library.HashAsync(other, ct); }

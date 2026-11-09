@@ -3,10 +3,11 @@ using PhotoSense.Application.Scanning; // Added namespace for InMemoryScanProgre
 
 namespace PhotoSense.Tests.Infrastructure.Scanning;
 
+/// <summary>How far each scan of this run has got.</summary>
 public class InMemoryScanProgressStoreTests
 {
     [Test]
-    public async Task Progress_Flow_Works()
+    public async Task Progress_Flow_Works(CancellationToken ct)
     {
         IScanProgressStore store = new InMemoryScanProgressStore();
         store.ScanStarted("inst1");
@@ -23,7 +24,7 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task What_Is_Said_Of_A_Scan_That_Was_Never_Started_Is_Ignored()
+    public async Task What_Is_Said_Of_A_Scan_That_Was_Never_Started_Is_Ignored(CancellationToken ct)
     {
         IScanProgressStore store = new InMemoryScanProgressStore();
         store.SetTotals("never-started", 10, 5);
@@ -38,7 +39,7 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task Carries_How_Long_The_Scan_Is_Expected_To_Take_Once_That_Is_Known()
+    public async Task Carries_How_Long_The_Scan_Is_Expected_To_Take_Once_That_Is_Known(CancellationToken ct)
     {
         IScanProgressStore store = new InMemoryScanProgressStore();
         store.ScanStarted("scan");
@@ -50,7 +51,7 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task A_Scan_Is_Marked_With_When_It_Started_And_Finished()
+    public async Task A_Scan_Is_Marked_With_When_It_Started_And_Finished(CancellationToken ct)
     {
         var clock = new TestClock();
         var store = new InMemoryScanProgressStore(clock);
@@ -63,7 +64,7 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task Latest_Default_When_None()
+    public async Task Latest_Default_When_None(CancellationToken ct)
     {
         IScanProgressStore store = new InMemoryScanProgressStore();
         var snap = store.GetLatest();

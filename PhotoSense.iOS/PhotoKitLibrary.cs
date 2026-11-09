@@ -14,6 +14,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
     // The framework's code for a change the person said no to (PHPhotosError.userCancelled).
     private const nint SaidNo = 3072;
 
+    /// <summary>Every picture and video the app has been allowed to see, oldest first.</summary>
     public IReadOnlyList<LibraryItem> Items()
     {
         using var options = new PHFetchOptions { SortDescriptors = [new NSSortDescriptor("creationDate", true)] };
@@ -31,6 +32,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         return items;
     }
 
+    /// <summary>One file of a picture or video as it was taken, fetched from iCloud first when it is kept there.</summary>
     public Stream Open(string id, LibraryFileKind kind)
     {
         var found = PHAsset.FetchAssetsUsingLocalIdentifiers([id], null);
@@ -49,6 +51,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         return new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.DeleteOnClose);
     }
 
+    /// <summary>The albums PhotoSense has made, empty ones too.</summary>
     public IReadOnlyList<LibraryAlbum> Albums()
     {
         var known = Look();
@@ -64,6 +67,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         return albums;
     }
 
+    /// <summary>Makes every change given at once, after iOS asks the person when it asks: all of them, or none.</summary>
     public void Change(LibraryChange change)
     {
         var known = Look();

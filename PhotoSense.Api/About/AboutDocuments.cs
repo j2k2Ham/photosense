@@ -4,7 +4,7 @@ namespace PhotoSense.Api.About;
 /// The privacy policy, the terms of use and the support page, as the web site has them (site/pages), with product.json's
 /// details filled in. tools/site.mjs fills them in the same way for the site.
 /// </summary>
-public static class AboutDocuments
+internal static class AboutDocuments
 {
     private static readonly Dictionary<string, string> Files = new() { ["privacy"] = "privacy-policy.md", ["terms"] = "terms-of-use.md", ["support"] = "support.md" };
 
@@ -16,7 +16,7 @@ public static class AboutDocuments
         return Fill(reader.ReadToEnd(), product);
     }
 
-    // What is not set yet says so, rather than leaving a gap in a sentence.
+    /// <summary>A document with product.json's details filled in; what is not set yet says so, rather than leaving a gap in a sentence.</summary>
     public static string Fill(string text, ProductInfo product) => text
         .Replace("{{name}}", product.Name)
         .Replace("{{publisher}}", product.Publisher)

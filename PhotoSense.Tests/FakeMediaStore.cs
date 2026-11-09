@@ -34,14 +34,17 @@ internal sealed class FakeMediaStore : IMediaStore
     /// <summary>Where each photo is now, as the store says it: "DCIM/Camera/IMG_1.JPG".</summary>
     public Dictionary<string, string> Places() => _entries.ToDictionary(e => e.Id, e => e.Folder + e.Name);
 
+    /// <inheritdoc />
     public IReadOnlyList<MediaEntry> Entries() => [.. _entries];
 
+    /// <inheritdoc />
     public Stream Open(string id)
     {
         var bytes = _bytes[id];
         return OnlyFromTheStart ? new OnlyForward(bytes) : new MemoryStream(bytes, writable: false);
     }
 
+    /// <inheritdoc />
     public void Change(MediaChange change)
     {
         Changes.Add(change);

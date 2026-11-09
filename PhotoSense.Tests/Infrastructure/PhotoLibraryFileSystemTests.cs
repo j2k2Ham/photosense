@@ -20,7 +20,7 @@ public sealed class PhotoLibraryFileSystemTests
     private List<string> Listed() => [.. _photos.FilesIn(Root).Select(f => Path.GetFileName(f)).Order(StringComparer.Ordinal)];
 
     [Test]
-    public async Task Every_Picture_And_Video_Is_A_File_In_The_One_Folder_And_A_Live_Photo_Is_Two()
+    public async Task Every_Picture_And_Video_Is_A_File_In_The_One_Folder_And_A_Live_Photo_Is_Two(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_0001.HEIC"), File(LibraryFileKind.PairedVideo, "IMG_0001.MOV"));
         _library.Add("B2", File(LibraryFileKind.Video, "IMG_0002.MOV"));
@@ -34,7 +34,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Pictures_Taken_Under_One_Name_Are_Told_Apart_By_Their_Own_Ids_And_Keep_Their_Names_When_Others_Come_And_Go()
+    public async Task Pictures_Taken_Under_One_Name_Are_Told_Apart_By_Their_Own_Ids_And_Keep_Their_Names_When_Others_Come_And_Go(CancellationToken ct)
     {
         _library.Add("1A2B3C4D-0000-4000-8000-000000000001/L0/001", File(LibraryFileKind.Photo, "IMG_0001.HEIC"), File(LibraryFileKind.PairedVideo, "IMG_0001.MOV"));
         _library.Add("9F8E7D6C-0000-4000-8000-000000000002/L0/001", File(LibraryFileKind.Photo, "img_0001.jpg"));
@@ -49,7 +49,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Ids_That_Begin_Alike_Are_Told_Apart_By_As_Much_Of_Them_As_It_Takes()
+    public async Task Ids_That_Begin_Alike_Are_Told_Apart_By_As_Much_Of_Them_As_It_Takes(CancellationToken ct)
     {
         _library.Add("ABCDEFGH-1111", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Add("ABCDEFGH-2222", File(LibraryFileKind.Photo, "IMG_1.JPG"));
@@ -61,7 +61,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task A_File_Is_Described_And_Read_As_It_Was_Taken()
+    public async Task A_File_Is_Described_And_Read_As_It_Was_Taken(CancellationToken ct)
     {
         var item = _library.Add("A1", File(LibraryFileKind.Photo, "IMG_0001.HEIC", "the picture"));
 
@@ -84,7 +84,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task The_Library_Is_Read_Again_Each_Time_Its_Folder_Is_Listed()
+    public async Task The_Library_Is_Read_Again_Each_Time_Its_Folder_Is_Listed(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_0001.HEIC"));
         await Assert.That(Listed()).HasSingleItem();
@@ -98,7 +98,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task A_Copy_Is_Known_By_Holding_What_The_Original_Begins_With()
+    public async Task A_Copy_Is_Known_By_Holding_What_The_Original_Begins_With(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG", "the whole picture"));
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG", "the whole"));
@@ -109,7 +109,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Each_Album_PhotoSense_Made_Is_A_Folder_Inside_It_With_Its_Pictures_And_The_Folders_It_Is_In_Above_It()
+    public async Task Each_Album_PhotoSense_Made_Is_A_Folder_Inside_It_With_Its_Pictures_And_The_Folders_It_Is_In_Above_It(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"), File(LibraryFileKind.PairedVideo, "IMG_2.MOV"));
@@ -132,7 +132,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task A_Picture_Moved_Goes_Into_The_Album_Of_Its_Folder_Made_As_It_Arrives_And_Out_Of_PhotoSenses_Others_In_One_Change()
+    public async Task A_Picture_Moved_Goes_Into_The_Album_Of_Its_Folder_Made_As_It_Arrives_And_Out_Of_PhotoSenses_Others_In_One_Change(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"), File(LibraryFileKind.PairedVideo, "IMG_1.MOV"));
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
@@ -162,7 +162,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task A_Picture_Put_In_A_Folder_Of_Albums_Joins_The_Album_Of_That_Name_Beside_It_And_A_Removed_One_The_Album_Of_Removed_Pictures()
+    public async Task A_Picture_Put_In_A_Folder_Of_Albums_Joins_The_Album_Of_That_Name_Beside_It_And_A_Removed_One_The_Album_Of_Removed_Pictures(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
@@ -175,7 +175,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task What_Cannot_Be_Done_On_A_Phone_Is_Refused_Before_Anything_Changes()
+    public async Task What_Cannot_Be_Done_On_A_Phone_Is_Refused_Before_Anything_Changes(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
@@ -198,7 +198,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task When_The_Person_Says_No_Nothing_Changes_And_The_Library_Is_Read_Afresh()
+    public async Task When_The_Person_Says_No_Nothing_Changes_And_The_Library_Is_Read_Afresh(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         Listed();
@@ -209,7 +209,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Erasing_Sends_Pictures_To_The_Phones_Own_Bin_In_One_Change_A_Live_Photo_Once()
+    public async Task Erasing_Sends_Pictures_To_The_Phones_Own_Bin_In_One_Change_A_Live_Photo_Once(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"), File(LibraryFileKind.PairedVideo, "IMG_1.MOV"));
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG"));
@@ -226,7 +226,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task Emptied_Albums_Stay_So_The_Phone_Never_Asks_And_Only_Folders_Made_For_Pictures_That_Never_Came_Go()
+    public async Task Emptied_Albums_Stay_So_The_Phone_Never_Asks_And_Only_Folders_Made_For_Pictures_That_Never_Came_Go(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Album(["Butte", "2022"]);
@@ -254,7 +254,7 @@ public sealed class PhotoLibraryFileSystemTests
     }
 
     [Test]
-    public async Task The_Library_Is_Offered_With_Its_Albums_But_Not_The_Removed_Pictures_And_No_Other_Program_Opens_Its_Photos()
+    public async Task The_Library_Is_Offered_With_Its_Albums_But_Not_The_Removed_Pictures_And_No_Other_Program_Opens_Its_Photos(CancellationToken ct)
     {
         _library.Add("A1", File(LibraryFileKind.Photo, "IMG_1.JPG"));
         _library.Album(["Trips", "Glacier"], "A1");

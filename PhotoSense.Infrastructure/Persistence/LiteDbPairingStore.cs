@@ -4,22 +4,29 @@ using PhotoSense.Domain.Repositories;
 namespace PhotoSense.Infrastructure.Persistence;
 
 /// <summary>The devices this one is paired with, and its own id, kept in the database with everything else.</summary>
-public sealed class LiteDbPairingStore : IPairingStore
+/// <remarks>Each method answers at once; its token is checked first, as nothing it does takes long enough to stop part way.</remarks>
+internal sealed class LiteDbPairingStore : IPairingStore
 {
     private readonly ILiteCollection<PairingDocument> _paired;
     private readonly ILiteCollection<SelfDocument> _self;
+    private readonly TimeProvider _time;
 
     /// <summary>Uses a database that other stores share; the caller disposes it.</summary>
-    public LiteDbPairingStore(LiteDatabase db)
+    /// <param name="db">The shared database.</param>
+    /// <param name="time">The clock each pairing is stamped from.</param>
+    public LiteDbPairingStore(LiteDatabase db, TimeProvider time)
     {
         LiteDbMapping.Prepare<PairingDocument>();
         LiteDbMapping.Prepare<SelfDocument>();
         _paired = db.GetCollection<PairingDocument>("paired_devices");
         _self = db.GetCollection<SelfDocument>("transfer_self");
+        _time = time;
     }
 
-    public Task<string> SelfIdAsync()
+    /// <inheritdoc />
+    public Task<string> SelfIdAsync(CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         lock (_self)
         {
             if (_self.FindById("self") is { } self) return Task.FromResult(self.DeviceId);
@@ -29,26 +36,38 @@ public sealed class LiteDbPairingStore : IPairingStore
         }
     }
 
-    public Task<PairedDevice?> GetAsync(string id)
-        => Task.FromResult(_paired.FindById(id) is { } found ? new PairedDevice(found.Id, found.Name, found.Key, found.PairedUtc) : null);
-
-    public Task SaveAsync(PairedDevice device)
+    /// <inheritdoc />
+    public Task<PairedDevice?> GetAsync(string id, CancellationToken ct)
     {
-        _paired.Upsert(new PairingDocument { Id = device.Id, Name = device.Name, Key = device.Key, PairedUtc = device.PairedUtc });
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_paired.FindById(id) is { } found ? new PairedDevice(found.Id, found.Name, found.Key) : null);
+    }
+
+    /// <inheritdoc />
+    public Task SaveAsync(PairedDevice device, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _paired.Upsert(new PairingDocument { Id = device.Id, Name = device.Name, Key = device.Key, PairedUtc = _time.GetUtcNow().UtcDateTime });
         return Task.CompletedTask;
     }
 
     private sealed class PairingDocument
     {
+        /// <summary>The other device's id.</summary>
         [BsonId] public string Id { get; set; } = string.Empty;
+        /// <summary>What the other device is called.</summary>
         public string Name { get; set; } = string.Empty;
+        /// <summary>The secret the two share.</summary>
         public byte[] Key { get; set; } = [];
+        /// <summary>When the two were paired; kept for whoever looks into the database, though nothing reads it yet.</summary>
         public DateTime PairedUtc { get; set; }
     }
 
     private sealed class SelfDocument
     {
+        /// <summary>The one record of this device: "self".</summary>
         [BsonId] public string Id { get; set; } = string.Empty;
+        /// <summary>This device's own id.</summary>
         public string DeviceId { get; set; } = string.Empty;
     }
 }

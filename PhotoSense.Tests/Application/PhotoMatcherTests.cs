@@ -4,10 +4,11 @@ using static PhotoSense.Tests.TestPhotos;
 
 namespace PhotoSense.Tests.Application;
 
+/// <summary>Telling the same shot from a look-alike and from an unrelated picture.</summary>
 public class PhotoMatcherTests
 {
     [Test]
-    public async Task Same_Instant_And_Near_Identical_Pixels_Is_The_Same_Picture()
+    public async Task Same_Instant_And_Near_Identical_Pixels_Is_The_Same_Picture(CancellationToken ct)
     {
         var original = Make("IMG_4198.HEIC", taken: Shot);
         var converted = Make("IMG_4198.JPG", taken: Shot, signature: Signature(0.13), format: "JPEG");
@@ -18,7 +19,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task Burst_Frames_Are_Only_Similar_However_Alike_They_Look()
+    public async Task Burst_Frames_Are_Only_Similar_However_Alike_They_Look(CancellationToken ct)
     {
         var first = Make("IMG_6527.JPG", taken: Shot);
         var next = Make("IMG_6528.JPG", taken: Shot.AddMilliseconds(54));
@@ -26,7 +27,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task A_Millisecond_Of_Drift_In_The_Stamp_Is_Still_The_Same_Shot()
+    public async Task A_Millisecond_Of_Drift_In_The_Stamp_Is_Still_The_Same_Shot(CancellationToken ct)
     {
         var a = Make("IMG_E8975.HEIC", taken: Shot);
         var b = Make("IMG_E8975.JPG", taken: Shot.AddMilliseconds(1));
@@ -34,7 +35,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task A_Copy_That_Lost_Its_Sub_Seconds_Matches_Within_The_Second()
+    public async Task A_Copy_That_Lost_Its_Sub_Seconds_Matches_Within_The_Second(CancellationToken ct)
     {
         var original = Make("IMG_0001.HEIC", taken: Shot);
         var copy = Make("copy.jpg", taken: Shot.AddMilliseconds(-Shot.Millisecond));
@@ -45,7 +46,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task An_Edited_Version_Is_Never_A_Duplicate_Of_Its_Original()
+    public async Task An_Edited_Version_Is_Never_A_Duplicate_Of_Its_Original(CancellationToken ct)
     {
         var original = Make("IMG_8975.HEIC", taken: Shot);
         var edited = Make("IMG_E8975.HEIC", taken: Shot);
@@ -54,7 +55,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task Two_Saves_Of_The_Same_Edit_Are_The_Same_Picture()
+    public async Task Two_Saves_Of_The_Same_Edit_Are_The_Same_Picture(CancellationToken ct)
     {
         var heic = Make("IMG_E8975.HEIC", taken: Shot);
         var jpeg = Make("IMG_E8975.JPG", taken: Shot, format: "JPEG");
@@ -64,7 +65,7 @@ public class PhotoMatcherTests
     [Test]
     [Arguments(0.1, MatchKind.SamePicture)]
     [Arguments(0.3, MatchKind.Similar)] // as close as burst frames get: not enough without a capture time
-    public async Task Without_Capture_Times_Pixels_Must_Match_More_Closely(double difference, MatchKind expected)
+    public async Task Without_Capture_Times_Pixels_Must_Match_More_Closely(double difference, MatchKind expected, CancellationToken ct)
     {
         var a = Make("a.jpg");
         var b = Make("b.jpg", signature: Signature(difference));
@@ -74,7 +75,7 @@ public class PhotoMatcherTests
     [Test]
     [Arguments(0.3, MatchKind.SamePicture)] // a resized copy that was stripped of its details when shared
     [Arguments(0.8, MatchKind.Similar)]
-    public async Task A_Copy_Stripped_Of_Its_Capture_Time_Still_Matches_Its_Original(double difference, MatchKind expected)
+    public async Task A_Copy_Stripped_Of_Its_Capture_Time_Still_Matches_Its_Original(double difference, MatchKind expected, CancellationToken ct)
     {
         var original = Make("IMG_2122.JPG", taken: Shot, width: 3396, height: 1927);
         var shared = Make("SKOZ2556.JPG", signature: Signature(difference), width: 1600, height: 908);
@@ -82,7 +83,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task Visibly_Different_Pixels_Are_Unrelated()
+    public async Task Visibly_Different_Pixels_Are_Unrelated(CancellationToken ct)
     {
         var a = Make("a.jpg", taken: Shot);
         var b = Make("b.jpg", taken: Shot, signature: Signature(PhotoMatcher.SimilarDifference + 0.5));
@@ -90,7 +91,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task Hashes_Are_Compared_Bit_By_Bit_Up_To_The_Candidate_Limit()
+    public async Task Hashes_Are_Compared_Bit_By_Bit_Up_To_The_Candidate_Limit(CancellationToken ct)
     {
         var a = Make("a.jpg", hash: 0);
         var atLimit = Make("b.jpg", hash: (1UL << PhotoMatcher.CandidateBits) - 1);
@@ -102,7 +103,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task A_Different_Shape_Is_Not_A_Copy()
+    public async Task A_Different_Shape_Is_Not_A_Copy(CancellationToken ct)
     {
         var full = Make("a.jpg", taken: Shot, width: 4032, height: 3024);
         var cropped = Make("b.jpg", taken: Shot, width: 3024, height: 3024);
@@ -112,7 +113,7 @@ public class PhotoMatcherTests
     }
 
     [Test]
-    public async Task Photos_That_Were_Not_Decoded_Cannot_Be_Compared()
+    public async Task Photos_That_Were_Not_Decoded_Cannot_Be_Compared(CancellationToken ct)
     {
         var good = Make("a.jpg");
         var noSignature = Make("b.jpg"); noSignature.Signature = null;
@@ -137,10 +138,10 @@ public class PhotoMatcherTests
     [Arguments("FFFF", false)]
     [Arguments("ZZZZZZZZZZZZZZZZ", false)]
     [Arguments(null, false)]
-    public async Task Hash_Text_Must_Be_Sixteen_Hex_Characters(string? text, bool valid)
+    public async Task Hash_Text_Must_Be_Sixteen_Hex_Characters(string? text, bool valid, CancellationToken ct)
         => await Assert.That(PhotoMatcher.TryParseHash(text, out _)).IsEqualTo(valid);
 
     [Test]
-    public async Task Signature_Difference_Is_The_Mean_Absolute_Difference()
+    public async Task Signature_Difference_Is_The_Mean_Absolute_Difference(CancellationToken ct)
         => await Assert.That(PhotoMatcher.SignatureDifference(new byte[] { 10, 20, 30, 40 }, new byte[] { 12, 17, 30, 45 })).IsEqualTo(2.5);
 }

@@ -11,33 +11,41 @@ public class DiskFileSystem : IPhotoFileSystem
     // Hidden and system files are part of a folder too, and an entry that may not be looked at is passed over.
     private static readonly EnumerationOptions Everything = new() { IgnoreInaccessible = true, AttributesToSkip = 0 };
 
+    /// <inheritdoc />
     public virtual bool FileExists(string path) => File.Exists(path);
 
+    /// <inheritdoc />
     public virtual bool FolderExists(string path) => Directory.Exists(path);
 
+    /// <inheritdoc />
     public virtual StoredFile? Describe(string path)
     {
         var info = new FileInfo(path);
         return info.Exists ? new StoredFile(info.Length, info.LastWriteTimeUtc) : null;
     }
 
+    /// <inheritdoc />
     public virtual IReadOnlyList<string> FilesIn(string folder) => Read(folder, f => Directory.EnumerateFiles(f, "*", Everything));
 
     // A link would show the same files under a second path, making each look like a copy of itself. Only links
     // are left out: a folder of files kept online (OneDrive's, for one) is a reparse point as well, and is listed.
+    /// <inheritdoc />
     public virtual IReadOnlyList<string> FoldersIn(string folder)
         => Read(folder, f => Directory.EnumerateDirectories(f, "*", Everything).Where(d => new DirectoryInfo(d).LinkTarget is null));
 
     // Anything the system marks as pointing elsewhere counts, OneDrive's files kept online among them.
+    /// <inheritdoc />
     public virtual bool IsLink(string path)
     {
         FileSystemInfo entry = Directory.Exists(path) ? new DirectoryInfo(path) : new FileInfo(path);
         return entry.Exists && entry.Attributes.HasFlag(FileAttributes.ReparsePoint);
     }
 
+    /// <inheritdoc />
     public virtual Stream OpenRead(string path)
         => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16, FileOptions.SequentialScan);
 
+    /// <inheritdoc />
     public virtual bool IsCopyOf(string copy, string original)
     {
         using var part = OpenRead(copy);
@@ -45,21 +53,28 @@ public class DiskFileSystem : IPhotoFileSystem
         return Copies.BeginsWith(whole, part);
     }
 
+    /// <inheritdoc />
     public virtual void Move(string from, string to) => File.Move(from, to, overwrite: false);
 
+    /// <inheritdoc />
     public virtual void Copy(string from, string to) => File.Copy(from, to, overwrite: false);
 
+    /// <inheritdoc />
     public virtual Stream CreateNew(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16);
 
+    /// <inheritdoc />
     public virtual void MakeFolder(string path) => Directory.CreateDirectory(path);
 
+    /// <inheritdoc />
     public virtual void RemoveEmptyFolder(string path)
     {
         if (Directory.Exists(path) && !Directory.EnumerateFileSystemEntries(path).Any()) Directory.Delete(path);
     }
 
+    /// <inheritdoc />
     public virtual void DeleteCopy(string path) => File.Delete(path);
 
+    /// <inheritdoc />
     public virtual void Erase(string path)
     {
         var file = new FileInfo(path);

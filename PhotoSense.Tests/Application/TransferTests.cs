@@ -49,7 +49,7 @@ public sealed class TransferTests : IDisposable
             .BuildServiceProvider();
         _router = _phone.GetRequiredService<PhotoSenseRoutes>().Router;
         _folder = Directory.CreateDirectory(In("Computer")).FullName;
-        _computerPairs = new LiteDbPairingStore(_computerDb);
+        _computerPairs = new LiteDbPairingStore(_computerDb, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
         _computer = Receiving(new OnThisComputer(_advertiser));
     }
 
@@ -72,6 +72,7 @@ public sealed class TransferTests : IDisposable
     /// <summary>Finds the phone the way the network would: where it said it waits.</summary>
     private sealed class OnThisComputer(FakeAdvertiser advertiser) : IPhoneFinder
     {
+        /// <inheritdoc />
         public Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct)
             => Task.FromResult<IReadOnlyList<FoundPhone>>(advertiser.Telling is { } telling
                 ? [new FoundPhone($"wifi:{telling.Id}", telling.Name, "wifi", c => Loopback.ConnectAsync(telling.Port, c))]
@@ -80,25 +81,26 @@ public sealed class TransferTests : IDisposable
 
     private sealed class Found(params FoundPhone[] phones) : IPhoneFinder
     {
+        /// <inheritdoc />
         public Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<FoundPhone>>(phones);
     }
 
     private string In(string folder) => Path.Combine(_data.FullName, folder);
 
-    private async Task<(int Status, string Text)> AskAsync(string method, string path, object? body = null)
+    private async Task<(int Status, string Text)> AskAsync(string method, string path, CancellationToken ct, object? body = null)
     {
-        var answer = await _router.AnswerAsync(method, new Uri("app://photosense/api/" + path), [new("x-photosense-client", "phone")], body is null ? null : JsonSerializer.SerializeToUtf8Bytes(body));
+        var answer = await _router.AnswerAsync(method, new Uri("app://photosense/api/" + path), [new("x-photosense-client", "phone")], body is null ? null : JsonSerializer.SerializeToUtf8Bytes(body), ct);
         return (answer.Status, Encoding.UTF8.GetString(answer.Body));
     }
 
-    private async Task<JsonElement> PhoneAsync(string method, string path, object? body = null)
+    private async Task<JsonElement> PhoneAsync(string method, string path, CancellationToken ct, object? body = null)
     {
-        var (status, text) = await AskAsync(method, path, body);
+        var (status, text) = await AskAsync(method, path, ct, body);
         await Assert.That(status / 100).IsEqualTo(2).Because(text);
         return JsonDocument.Parse(text).RootElement;
     }
 
-    private async Task<string> Stage() => (await PhoneAsync("GET", "send/state")).GetProperty("stage").GetString()!;
+    private async Task<string> StageAsync(CancellationToken ct) => (await PhoneAsync("GET", "send/state", ct)).GetProperty("stage").GetString()!;
 
     private static async Task Until(Func<Task<bool>> done, string what)
     {
@@ -110,81 +112,81 @@ public sealed class TransferTests : IDisposable
     }
 
     // A Live Photo and a picture, offered by the ids Organize knows them by.
-    private async Task<List<string>> OfferedAsync()
+    private async Task<List<string>> OfferedAsync(CancellationToken ct)
     {
         _library.Add("AAAAAAAA-1", (LibraryFileKind.Photo, "IMG_0001.JPG", MediaSamples.Picture("SENT-1")), (LibraryFileKind.PairedVideo, "IMG_0001.MOV", MediaSamples.Movie("SENT-1")));
         _library.Add("BBBBBBBB-2", (LibraryFileKind.Photo, "IMG_0002.JPG", MediaSamples.Picture("SENT-2")));
-        var listed = await PhoneAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}");
+        var listed = await PhoneAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}", ct);
         return [.. listed.GetProperty("files").EnumerateArray().Where(f => f.GetProperty("name").GetString()!.EndsWith(".JPG", StringComparison.Ordinal)).Select(f => f.GetProperty("id").GetString()!)];
     }
 
-    private async Task ReceiveAsync()
+    private async Task ReceiveAsync(CancellationToken ct)
     {
-        await Assert.That((await _computer.FindAsync()).Single().Name).IsEqualTo("Jamie's iPhone");
+        await Assert.That((await _computer.FindAsync(ct)).Single().Name).IsEqualTo("Jamie's iPhone");
         _computer.Start($"wifi:{_advertiser.Telling!.Value.Id}", _folder);
     }
 
     [Test]
-    public async Task The_First_Time_Both_Show_One_Number_Then_The_Files_Arrive_Checked_And_Can_Be_Deleted_From_The_Phone()
+    public async Task The_First_Time_Both_Show_One_Number_Then_The_Files_Arrive_Checked_And_Can_Be_Deleted_From_The_Phone(CancellationToken ct)
     {
-        var offered = await PhoneAsync("POST", "send/start", new { files = await OfferedAsync() });
+        var offered = await PhoneAsync("POST", "send/start", ct, new { files = await OfferedAsync(ct) });
         await Assert.That((offered.GetProperty("stage").GetString(), offered.GetProperty("total").GetInt32(), offered.GetProperty("phone").GetString(), _advertiser.Telling!.Value.Name))
             .IsEqualTo(("waiting", 3, "Jamie's iPhone", "Jamie's iPhone"));
-        await ReceiveAsync();
+        await ReceiveAsync(ct);
 
-        await Until(async () => await Stage() == "comparing" && _computer.State.Stage == ReceiveStage.Comparing, "comparing");
-        var asked = await PhoneAsync("GET", "send/state");
+        await Until(async () => await StageAsync(ct) == "comparing" && _computer.State.Stage == ReceiveStage.Comparing, "comparing");
+        var asked = await PhoneAsync("GET", "send/state", ct);
         await Assert.That((asked.GetProperty("code").GetString(), asked.GetProperty("computer").GetString(), _computer.State.Phone)).IsEqualTo((_computer.State.Code, "DESKTOP-1", "Jamie's iPhone"));
         await Assert.That(_computer.State.Code!).Matches(@"^\d{3} \d{3}$");
         _computer.Confirm(true);
-        await PhoneAsync("POST", "send/confirm", new { same = true });
+        await PhoneAsync("POST", "send/confirm", ct, new { same = true });
 
-        await Until(async () => _computer.State.Stage == ReceiveStage.Done && await Stage() == "sent", "done");
+        await Until(async () => _computer.State.Stage == ReceiveStage.Done && await StageAsync(ct) == "sent", "done");
         await _computer.Running;
         var received = _computer.State;
         await Assert.That((received.Done, received.Total, received.AlreadyThere, received.Folder)).IsEqualTo((3, 3, 0, _folder));
         await Assert.That(Directory.GetFiles(_folder).Select(f => new FileInfo(f).Name).Order()).IsEquivalentTo(["IMG_0001.JPG", "IMG_0001.MOV", "IMG_0002.JPG"], CollectionOrdering.Matching);
-        await Assert.That(await File.ReadAllBytesAsync(Path.Combine(_folder, "IMG_0001.MOV"))).IsEquivalentTo(MediaSamples.Movie("SENT-1"), CollectionOrdering.Matching);
-        var sent = await PhoneAsync("GET", "send/state");
+        await Assert.That(await File.ReadAllBytesAsync(Path.Combine(_folder, "IMG_0001.MOV"), ct)).IsEquivalentTo(MediaSamples.Movie("SENT-1"), CollectionOrdering.Matching);
+        var sent = await PhoneAsync("GET", "send/state", ct);
         await Assert.That((sent.GetProperty("done").GetInt32(), sent.GetProperty("deletable").GetArrayLength(), sent.GetProperty("where").GetString(), sent.GetProperty("bytes").GetInt64() == received.TotalBytes))
             .IsEqualTo((3, 2, _folder, true));
         await Assert.That(sent.GetProperty("deletable").EnumerateArray().Select(n => n.GetString()!)).IsEquivalentTo(["IMG_0001.JPG", "IMG_0002.JPG"], CollectionOrdering.Matching);
 
         // Paired now: sent again, they are found to be there already, and nothing is asked.
-        await PhoneAsync("POST", "send/start", new { files = (await PhoneAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}")).GetProperty("files").EnumerateArray().Select(f => f.GetProperty("id").GetString()).ToArray() });
-        await ReceiveAsync();
+        await PhoneAsync("POST", "send/start", ct, new { files = (await PhoneAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}", ct)).GetProperty("files").EnumerateArray().Select(f => f.GetProperty("id").GetString()).ToArray() });
+        await ReceiveAsync(ct);
         await Until(() => Task.FromResult(_computer.State.Stage is ReceiveStage.Done or ReceiveStage.Failed), "done again");
         await Assert.That((_computer.State.Stage, _computer.State.AlreadyThere, _computer.State.Code)).IsEqualTo((ReceiveStage.Done, 3, (string?)null));
         await Assert.That(Directory.GetFiles(_folder).Length).IsEqualTo(3);
 
-        var deleted = await PhoneAsync("POST", "send/delete-sent");
+        var deleted = await PhoneAsync("POST", "send/delete-sent", ct);
         await Assert.That((deleted.GetProperty("deleted").GetInt32(), _library.Changes.Single().Delete.Count)).IsEqualTo((2, 2));
         await Assert.That(_library.RecentlyDeleted).IsEquivalentTo(["AAAAAAAA-1", "BBBBBBBB-2"], CollectionOrdering.Matching);
         // Nothing left to delete: nothing is asked.
-        await Assert.That((await PhoneAsync("POST", "send/delete-sent")).GetProperty("deleted").GetInt32()).IsEqualTo(0);
+        await Assert.That((await PhoneAsync("POST", "send/delete-sent", ct)).GetProperty("deleted").GetInt32()).IsEqualTo(0);
         await Assert.That(_library.Changes.Count).IsEqualTo(1);
     }
 
     [Test]
     [Arguments(false, true, "The numbers did not match, so nothing was sent. Try again, and look that both show the same number.", "On the computer the numbers were said not to match, so nothing was sent. Try again.")]
     [Arguments(true, false, "On the phone the numbers were said not to match, so nothing was sent. Try again.", "The numbers did not match, so nothing was sent. Try again, and look that both show the same number.")]
-    public async Task Numbers_Said_Not_To_Match_On_Either_Stop_Both_And_Nothing_Is_Sent(bool computerSays, bool phoneSays, string onComputer, string onPhone)
+    public async Task Numbers_Said_Not_To_Match_On_Either_Stop_Both_And_Nothing_Is_Sent(bool computerSays, bool phoneSays, string onComputer, string onPhone, CancellationToken ct)
     {
-        await PhoneAsync("POST", "send/start", new { files = await OfferedAsync() });
-        await ReceiveAsync();
-        await Until(async () => await Stage() == "comparing" && _computer.State.Stage == ReceiveStage.Comparing, "comparing");
+        await PhoneAsync("POST", "send/start", ct, new { files = await OfferedAsync(ct) });
+        await ReceiveAsync(ct);
+        await Until(async () => await StageAsync(ct) == "comparing" && _computer.State.Stage == ReceiveStage.Comparing, "comparing");
         _computer.Confirm(computerSays);
-        await PhoneAsync("POST", "send/confirm", new { same = phoneSays });
-        await Until(async () => _computer.State.Stage == ReceiveStage.Failed && await Stage() == "failed", "failed");
-        await Assert.That((_computer.State.Problem, (await PhoneAsync("GET", "send/state")).GetProperty("problem").GetString())).IsEqualTo((onComputer, onPhone));
+        await PhoneAsync("POST", "send/confirm", ct, new { same = phoneSays });
+        await Until(async () => _computer.State.Stage == ReceiveStage.Failed && await StageAsync(ct) == "failed", "failed");
+        await Assert.That((_computer.State.Problem, (await PhoneAsync("GET", "send/state", ct)).GetProperty("problem").GetString())).IsEqualTo((onComputer, onPhone));
         await Assert.That(Directory.GetFiles(_folder)).IsEmpty();
     }
 
     [Test]
-    public async Task Stopping_Either_Side_Ends_It_Cleanly_And_A_Second_Computer_Is_Told_The_Phone_Is_Busy()
+    public async Task Stopping_Either_Side_Ends_It_Cleanly_And_A_Second_Computer_Is_Told_The_Phone_Is_Busy(CancellationToken ct)
     {
-        await PhoneAsync("POST", "send/start", new { files = await OfferedAsync() });
-        await ReceiveAsync();
+        await PhoneAsync("POST", "send/start", ct, new { files = await OfferedAsync(ct) });
+        await ReceiveAsync(ct);
         await Until(() => Task.FromResult(_computer.State.Stage == ReceiveStage.Comparing), "comparing");
         await Assert.That(Assert.Throws<InvalidOperationException>(() => _computer.Start($"wifi:{_advertiser.Telling!.Value.Id}", _folder))!.Message).IsEqualTo("Photos are already being received.");
 
@@ -198,31 +200,31 @@ public sealed class TransferTests : IDisposable
         _computer.Stop();
         await _computer.Running;
         await Assert.That((_computer.State.Stage, _computer.State.Problem)).IsEqualTo((ReceiveStage.Failed, "Receiving was stopped. What had arrived is kept."));
-        var stopped = await PhoneAsync("POST", "send/stop");
+        var stopped = await PhoneAsync("POST", "send/stop", ct);
         await Assert.That((stopped.GetProperty("stage").GetString(), _advertiser.Telling)).IsEqualTo(("idle", ((string, string, int)?)null));
-        await Assert.That((await _computer.FindAsync()).Count).IsEqualTo(0);
+        await Assert.That((await _computer.FindAsync(ct)).Count).IsEqualTo(0);
         await Assert.That(Assert.Throws<ArgumentException>(() => _computer.Start("wifi:gone", _folder))!.Message).IsEqualTo("That phone is no longer offering photos. Look for it again.");
     }
 
     [Test]
-    public async Task Only_Files_Still_There_Are_Offered_Each_Once_With_Its_Live_Photo_Video()
+    public async Task Only_Files_Still_There_Are_Offered_Each_Once_With_Its_Live_Photo_Video(CancellationToken ct)
     {
-        var offered = await OfferedAsync();
-        var once = await PhoneAsync("POST", "send/start", new { files = new[] { offered[0], offered[0], "not an id" } });
+        var offered = await OfferedAsync(ct);
+        var once = await PhoneAsync("POST", "send/start", ct, new { files = new[] { offered[0], offered[0], "not an id" } });
         await Assert.That(once.GetProperty("total").GetInt32()).IsEqualTo(2);
         // An answer that is not a yes, with nothing asked: nothing happens.
-        await Assert.That((await PhoneAsync("POST", "send/confirm", "not json")).GetProperty("stage").GetString()).IsEqualTo("waiting");
-        await PhoneAsync("POST", "send/stop");
+        await Assert.That((await PhoneAsync("POST", "send/confirm", ct, "not json")).GetProperty("stage").GetString()).IsEqualTo("waiting");
+        await PhoneAsync("POST", "send/stop", ct);
 
         _library.Remove("AAAAAAAA-1");
         _library.Remove("BBBBBBBB-2");
-        await Assert.That(await AskAsync("POST", "send/start", new { files = offered })).IsEqualTo((404, "None of those files is there to send any more."));
-        await Assert.That(await AskAsync("POST", "send/start", new { files = Array.Empty<string>() })).IsEqualTo((400, "Choose the photos to send first."));
-        await Assert.That(await AskAsync("POST", "send/start", "not json")).IsEqualTo((400, "Choose the photos to send first."));
+        await Assert.That(await AskAsync("POST", "send/start", ct, new { files = offered })).IsEqualTo((404, "None of those files is there to send any more."));
+        await Assert.That(await AskAsync("POST", "send/start", ct, new { files = Array.Empty<string>() })).IsEqualTo((400, "Choose the photos to send first."));
+        await Assert.That(await AskAsync("POST", "send/start", ct, "not json")).IsEqualTo((400, "Choose the photos to send first."));
     }
 
     [Test]
-    public async Task Only_A_Phone_Deletes_What_It_Sent()
+    public async Task Only_A_Phone_Deletes_What_It_Sent(CancellationToken ct)
     {
         var onAComputer = new PhoneSending(new TcpTransferListener(0), new FakeAdvertiser(), new MemoryPairs("computer"), new DiskFileSystem(),
             _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), "DESKTOP-1");
@@ -230,25 +232,25 @@ public sealed class TransferTests : IDisposable
     }
 
     [Test]
-    public async Task Deleting_From_The_Phone_That_The_Person_Declines_Says_So_And_Keeps_Them_Deletable()
+    public async Task Deleting_From_The_Phone_That_The_Person_Declines_Says_So_And_Keeps_Them_Deletable(CancellationToken ct)
     {
-        var (channel, _) = await SentToComputerAsync();
+        var (channel, _) = await SentToComputerAsync(ct);
         await Get(channel, "f3");
-        await Until(async () => (await PhoneAsync("GET", "send/state")).GetProperty("deletable").GetArrayLength() == 1, "one there");
+        await Until(async () => (await PhoneAsync("GET", "send/state", ct)).GetProperty("deletable").GetArrayLength() == 1, "one there");
         _library.Refuse = "You chose not to delete these photos.";
-        await Assert.That(await AskAsync("POST", "send/delete-sent")).IsEqualTo((409, "You chose not to delete these photos."));
-        await Assert.That((await PhoneAsync("GET", "send/state")).GetProperty("deletable").GetArrayLength()).IsEqualTo(1);
+        await Assert.That(await AskAsync("POST", "send/delete-sent", ct)).IsEqualTo((409, "You chose not to delete these photos."));
+        await Assert.That((await PhoneAsync("GET", "send/state", ct)).GetProperty("deletable").GetArrayLength()).IsEqualTo(1);
     }
 
     // ---- a computer of the test's own, paired with the phone already, asking what it likes
 
-    private async Task<SecureChannel> PlayComputerAsync()
+    private async Task<SecureChannel> PlayComputerAsync(CancellationToken ct)
     {
         var (phoneId, _, port) = _advertiser.Telling!.Value;
         var secret = RandomNumberGenerator.GetBytes(32);
         var pairs = new MemoryPairs("test-computer");
-        await pairs.SaveAsync(new PairedDevice(phoneId, "Jamie's iPhone", secret, DateTime.UtcNow));
-        await _phone.GetRequiredService<IPairingStore>().SaveAsync(new PairedDevice("test-computer", "Test computer", secret, DateTime.UtcNow));
+        await pairs.SaveAsync(new PairedDevice(phoneId, "Jamie's iPhone", secret), ct);
+        await _phone.GetRequiredService<IPairingStore>().SaveAsync(new PairedDevice("test-computer", "Test computer", secret), ct);
         var stream = await Loopback.ConnectAsync(port, CancellationToken.None);
         _open.Add(stream);
         var linked = await Pairing.ComputerAsync(stream, new Device("test-computer", "Test computer"), pairs, (_, _, _) => Task.FromResult(false), CancellationToken.None);
@@ -266,60 +268,60 @@ public sealed class TransferTests : IDisposable
         return check;
     }
 
-    private async Task<(SecureChannel Channel, JsonObject Offer)> SentToComputerAsync()
+    private async Task<(SecureChannel Channel, JsonObject Offer)> SentToComputerAsync(CancellationToken ct)
     {
-        await PhoneAsync("POST", "send/start", new { files = await OfferedAsync() });
-        var channel = await PlayComputerAsync();
+        await PhoneAsync("POST", "send/start", ct, new { files = await OfferedAsync(ct) });
+        var channel = await PlayComputerAsync(ct);
         await channel.SendAsync(new JsonObject { ["t"] = "offer?" }, CancellationToken.None);
         return (channel, await channel.ReceiveAsync(CancellationToken.None, "offer"));
     }
 
-    private async Task<JsonElement> SendingProblemAsync()
+    private async Task<JsonElement> SendingProblemAsync(CancellationToken ct)
     {
-        await Until(async () => await Stage() == "failed", "failed");
-        return await PhoneAsync("GET", "send/state");
+        await Until(async () => await StageAsync(ct) == "failed", "failed");
+        return await PhoneAsync("GET", "send/state", ct);
     }
 
     [Test]
-    public async Task A_File_Counts_As_On_The_Computer_Only_With_The_Phones_Own_Check_And_Folders_Not_One_Are_Not_Named()
+    public async Task A_File_Counts_As_On_The_Computer_Only_With_The_Phones_Own_Check_And_Folders_Not_One_Are_Not_Named(CancellationToken ct)
     {
-        var (channel, offer) = await SentToComputerAsync();
+        var (channel, offer) = await SentToComputerAsync(ct);
         await Assert.That(((JsonArray)offer["files"]!).Select(f => (string)f!["name"]!)).IsEquivalentTo(["IMG_0001.JPG", "IMG_0001.MOV", "IMG_0002.JPG"], CollectionOrdering.Matching);
         await Get(channel, "f1", "C:\\Photos\\A");
         await Get(channel, "f2", "C:\\Photos\\B");
-        await Until(async () => (await PhoneAsync("GET", "send/state")).GetProperty("done").GetInt32() == 2, "two there");
-        var two = await PhoneAsync("GET", "send/state");
+        await Until(async () => (await PhoneAsync("GET", "send/state", ct)).GetProperty("done").GetInt32() == 2, "two there");
+        var two = await PhoneAsync("GET", "send/state", ct);
         await Assert.That((two.GetProperty("deletable")[0].GetString(), two.GetProperty("where").ValueKind)).IsEqualTo(("IMG_0001.JPG", JsonValueKind.Null));
 
         var check = await Get(channel, "f3", where: null);
         var other = (check[0] == '0' ? "1" : "0") + check[1..];
         await channel.SendAsync(new JsonObject { ["t"] = "got", ["id"] = "f3", ["sha256"] = other, ["where"] = "C:\\Photos" }, CancellationToken.None);
-        var stopped = await SendingProblemAsync();
+        var stopped = await SendingProblemAsync(ct);
         await Assert.That((stopped.GetProperty("problem").GetString(), stopped.GetProperty("deletable").GetArrayLength()))
             .IsEqualTo(("The computer's check of a file did not match what was sent. Send it again.", 1));
     }
 
     [Test]
-    public async Task A_Computer_Asking_For_A_File_Not_Offered_Is_Stopped()
+    public async Task A_Computer_Asking_For_A_File_Not_Offered_Is_Stopped(CancellationToken ct)
     {
-        var (channel, _) = await SentToComputerAsync();
+        var (channel, _) = await SentToComputerAsync(ct);
         await channel.SendAsync(new JsonObject { ["t"] = "get", ["id"] = "f9" }, CancellationToken.None);
-        await Assert.That((await SendingProblemAsync()).GetProperty("problem").GetString()).IsEqualTo("The computer asked for a file that was not offered.");
+        await Assert.That((await SendingProblemAsync(ct)).GetProperty("problem").GetString()).IsEqualTo("The computer asked for a file that was not offered.");
     }
 
     // ---- a phone of the test's own, paired with the computer already, sending what it likes
 
-    private async Task<(PhoneReceiving Computer, SecureChannel Phone)> FromPlayedPhoneAsync(DiskFileSystem? disk = null)
+    private async Task<(PhoneReceiving Computer, SecureChannel Phone)> FromPlayedPhoneAsync(CancellationToken ct, DiskFileSystem? disk = null)
     {
-        var (near, far) = await Loopback.PairAsync();
+        var (near, far) = await Loopback.PairAsync(ct);
         _open.Add(near);
         _open.Add(far);
         var secret = RandomNumberGenerator.GetBytes(32);
         var pairs = new MemoryPairs("test-phone");
-        await pairs.SaveAsync(new PairedDevice(await _computerPairs.SelfIdAsync(), "DESKTOP-1", secret, DateTime.UtcNow));
-        await _computerPairs.SaveAsync(new PairedDevice("test-phone", "Test phone", secret, DateTime.UtcNow));
+        await pairs.SaveAsync(new PairedDevice(await _computerPairs.SelfIdAsync(ct), "DESKTOP-1", secret), ct);
+        await _computerPairs.SaveAsync(new PairedDevice("test-phone", "Test phone", secret), ct);
         var computer = Receiving(new Found(new FoundPhone("wifi:test-phone", "Test phone", "wifi", _ => Task.FromResult(near))), disk);
-        await computer.FindAsync();
+        await computer.FindAsync(ct);
         computer.Start("wifi:test-phone", _folder);
         var linked = await Pairing.PhoneAsync(far, new Device("test-phone", "Test phone"), pairs, (_, _, _) => Task.FromResult(false), CancellationToken.None);
         _open.Add(linked.Channel);
@@ -350,9 +352,9 @@ public sealed class TransferTests : IDisposable
     }
 
     [Test]
-    public async Task A_Phone_Offering_Nothing_Is_Done_At_Once()
+    public async Task A_Phone_Offering_Nothing_Is_Done_At_Once(CancellationToken ct)
     {
-        var (computer, phone) = await FromPlayedPhoneAsync();
+        var (computer, phone) = await FromPlayedPhoneAsync(ct);
         await phone.SendAsync(new JsonObject { ["t"] = "offer" }, CancellationToken.None);
         await phone.ReceiveAsync(CancellationToken.None, "done");
         await phone.SendAsync(new JsonObject { ["t"] = "bye" }, CancellationToken.None);
@@ -361,14 +363,14 @@ public sealed class TransferTests : IDisposable
     }
 
     [Test]
-    public async Task A_File_That_Arrives_Damaged_Or_Longer_Than_Said_Is_Not_Kept()
+    public async Task A_File_That_Arrives_Damaged_Or_Longer_Than_Said_Is_Not_Kept(CancellationToken ct)
     {
-        var (computer, phone) = await FromPlayedPhoneAsync();
+        var (computer, phone) = await FromPlayedPhoneAsync(ct);
         await Offer(phone, Offered("f1", "IMG_0001.JPG", 3));
         await SendFile(phone, [1, 2, 3], check: "not its check");
         await Assert.That((await Ended(computer)).Problem).IsEqualTo("A file arrived damaged, so it was not kept. Try again.");
 
-        var (longer, phone2) = await FromPlayedPhoneAsync();
+        var (longer, phone2) = await FromPlayedPhoneAsync(ct);
         await Offer(phone2, Offered("f1", "IMG_0001.JPG", 2));
         await SendFile(phone2, [1, 2, 3], said: 2);
         await Assert.That((await Ended(longer)).Problem).IsEqualTo("The phone sent more of a file than it said it would.");
@@ -379,17 +381,17 @@ public sealed class TransferTests : IDisposable
     [Arguments("\"large\"")]
     [Arguments("-1")]
     [Arguments(null)]
-    public async Task An_Offer_Without_Sizes_Is_Not_Understood(string? size)
+    public async Task An_Offer_Without_Sizes_Is_Not_Understood(string? size, CancellationToken ct)
     {
-        var (computer, phone) = await FromPlayedPhoneAsync();
+        var (computer, phone) = await FromPlayedPhoneAsync(ct);
         await Offer(phone, Offered("f1", "IMG_0001.JPG", size is null ? null : JsonNode.Parse(size)));
         await Assert.That((await Ended(computer)).Problem).IsEqualTo("The phone sent something PhotoSense does not understand.");
     }
 
     [Test]
-    public async Task A_Phone_That_Answers_With_Something_Else_Is_Not_Understood_And_Nothing_Is_Left_Behind()
+    public async Task A_Phone_That_Answers_With_Something_Else_Is_Not_Understood_And_Nothing_Is_Left_Behind(CancellationToken ct)
     {
-        var (computer, phone) = await FromPlayedPhoneAsync();
+        var (computer, phone) = await FromPlayedPhoneAsync(ct);
         await Offer(phone, Offered("f1", "IMG_0001.JPG", 3));
         await phone.ReceiveAsync(CancellationToken.None, "get");
         await phone.SendAsync(new JsonObject { ["t"] = "end" }, CancellationToken.None);
@@ -398,11 +400,11 @@ public sealed class TransferTests : IDisposable
     }
 
     [Test]
-    public async Task A_File_Of_The_Same_Name_But_Not_The_Same_Is_Kept_And_The_New_One_Arrives_Beside_It()
+    public async Task A_File_Of_The_Same_Name_But_Not_The_Same_Is_Kept_And_The_New_One_Arrives_Beside_It(CancellationToken ct)
     {
-        await File.WriteAllBytesAsync(Path.Combine(_folder, "IMG_0001.JPG"), [9, 9, 9]);
-        await File.WriteAllBytesAsync(Path.Combine(_folder, "IMG_0002.JPG"), [9]);
-        var (computer, phone) = await FromPlayedPhoneAsync();
+        await File.WriteAllBytesAsync(Path.Combine(_folder, "IMG_0001.JPG"), [9, 9, 9], ct);
+        await File.WriteAllBytesAsync(Path.Combine(_folder, "IMG_0002.JPG"), [9], ct);
+        var (computer, phone) = await FromPlayedPhoneAsync(ct);
         await Offer(phone, Offered("f1", "..\\..\\IMG_0001.JPG", 3), Offered("f2", "IMG_0002.JPG", 3));
         await SendFile(phone, [1, 2, 3]);
         await phone.ReceiveAsync(CancellationToken.None, "got");
@@ -413,7 +415,7 @@ public sealed class TransferTests : IDisposable
         var ended = await Ended(computer);
         await Assert.That((ended.Stage, ended.Done, ended.AlreadyThere)).IsEqualTo((ReceiveStage.Done, 2, 0));
         await Assert.That(Directory.GetFiles(_folder).Length).IsEqualTo(4);
-        await Assert.That(await File.ReadAllBytesAsync(Path.Combine(_folder, "IMG_0001.JPG"))).IsEquivalentTo(new byte[] { 9, 9, 9 }, CollectionOrdering.Matching);
+        await Assert.That(await File.ReadAllBytesAsync(Path.Combine(_folder, "IMG_0001.JPG"), ct)).IsEquivalentTo(new byte[] { 9, 9, 9 }, CollectionOrdering.Matching);
     }
 
     private sealed class Forbidding : DiskFileSystem
@@ -422,14 +424,14 @@ public sealed class TransferTests : IDisposable
     }
 
     [Test]
-    public async Task A_Folder_That_Will_Not_Take_Files_Says_What_The_Computer_Said()
+    public async Task A_Folder_That_Will_Not_Take_Files_Says_What_The_Computer_Said(CancellationToken ct)
     {
-        var (computer, phone) = await FromPlayedPhoneAsync(new FailingDisk().Fail("create", _ => true, "The disk is full."));
+        var (computer, phone) = await FromPlayedPhoneAsync(ct, new FailingDisk().Fail("create", _ => true, "The disk is full."));
         await Offer(phone, Offered("f1", "IMG_0001.JPG", 3));
         await SendFile(phone, [1, 2, 3], whole: false);
         await Assert.That((await Ended(computer)).Problem).IsEqualTo("Receiving stopped: The disk is full.");
 
-        var (forbidden, phone2) = await FromPlayedPhoneAsync(new Forbidding());
+        var (forbidden, phone2) = await FromPlayedPhoneAsync(ct, new Forbidding());
         await Offer(phone2, Offered("f1", "IMG_0001.JPG", 3));
         await SendFile(phone2, [1, 2, 3], whole: false);
         await Assert.That((await Ended(forbidden)).Problem).IsEqualTo("Receiving stopped: Access to the folder is denied.");
@@ -444,24 +446,24 @@ public sealed class TransferTests : IDisposable
     [Arguments(" ..hidden. ", "hidden")]
     [Arguments("...", "photo")]
     [Arguments("", "photo")]
-    public async Task A_Name_From_The_Phone_Becomes_A_Plain_Name_In_The_Folder(string said, string kept)
+    public async Task A_Name_From_The_Phone_Becomes_A_Plain_Name_In_The_Folder(string said, string kept, CancellationToken ct)
         => await Assert.That(PhoneReceiving.Plain(said)).IsEqualTo(kept);
 
     // ---- what the computer's page asks
 
     [Test]
-    public async Task The_Computer_Says_Plainly_What_Is_Wrong_With_What_It_Is_Asked()
+    public async Task The_Computer_Says_Plainly_What_Is_Wrong_With_What_It_Is_Asked(CancellationToken ct)
     {
         var endpoints = new TransferEndpoints(receiving: _computer);
-        await Assert.That((await endpoints.PhonesAsync(Http.Get("phones").FromClient())).Json().GetProperty("phones").GetArrayLength()).IsEqualTo(0);
-        await Assert.That((await endpoints.ReceivingAsync(Http.Get("receive/state"))).Json().GetProperty("stage").GetString()).IsEqualTo("idle");
+        await Assert.That((await endpoints.PhonesAsync(Http.Get("phones").FromClient(), ct)).Json().GetProperty("phones").GetArrayLength()).IsEqualTo(0);
+        await Assert.That((await endpoints.ReceivingAsync(Http.Get("receive/state"), ct)).Json().GetProperty("stage").GetString()).IsEqualTo("idle");
         // An answer when nothing is asked: nothing happens.
-        await endpoints.ConfirmReceivingAsync(Http.Post("receive/confirm", "{\"same\": true}").FromClient());
-        await endpoints.ConfirmReceivingAsync(Http.Post("receive/confirm", "not json").FromClient());
+        await endpoints.ConfirmReceivingAsync(Http.Post("receive/confirm", "{\"same\": true}").FromClient(), ct);
+        await endpoints.ConfirmReceivingAsync(Http.Post("receive/confirm", "not json").FromClient(), ct);
 
         async Task<(int, string)> Start(string body)
         {
-            var answer = await endpoints.StartReceivingAsync(Http.Post("receive/start", body).FromClient());
+            var answer = await endpoints.StartReceivingAsync(Http.Post("receive/start", body).FromClient(), ct);
             return ((int)answer.StatusCode, answer.Text());
         }
         const string choose = "Choose the phone, and the folder the photos go to.";
@@ -472,20 +474,20 @@ public sealed class TransferTests : IDisposable
         await Assert.That(await Start("{\"phone\": \"wifi:x\", \"folder\": \"Photos\"}")).IsEqualTo((400, choose));
         await Assert.That(await Start($"{{\"phone\": \"wifi:x\", \"folder\": {folder}}}")).IsEqualTo((404, "That phone is no longer offering photos. Look for it again."));
 
-        await PhoneAsync("POST", "send/start", new { files = await OfferedAsync() });
-        var phones = (await endpoints.PhonesAsync(Http.Get("phones").FromClient())).Json().GetProperty("phones");
+        await PhoneAsync("POST", "send/start", ct, new { files = await OfferedAsync(ct) });
+        var phones = (await endpoints.PhonesAsync(Http.Get("phones").FromClient(), ct)).Json().GetProperty("phones");
         var key = phones[0].GetProperty("key").GetString()!;
         await Assert.That((phones[0].GetProperty("name").GetString(), phones[0].GetProperty("via").GetString())).IsEqualTo(("Jamie's iPhone", "wifi"));
         var missing = Path.Combine(_folder, "Not there");
         await Assert.That(await Start($"{{\"phone\": \"{key}\", \"folder\": {JsonSerializer.Serialize(missing)}}}")).IsEqualTo((404, $"Folder not found: {missing}"));
 
-        var started = await endpoints.StartReceivingAsync(Http.Post("receive/start", $"{{\"phone\": \"{key}\", \"folder\": {folder}}}").FromClient());
+        var started = await endpoints.StartReceivingAsync(Http.Post("receive/start", $"{{\"phone\": \"{key}\", \"folder\": {folder}}}").FromClient(), ct);
         await Assert.That(started.Json().GetProperty("stage").GetString()).IsEqualTo("connecting");
         await Assert.That(await Start($"{{\"phone\": \"{key}\", \"folder\": {folder}}}")).IsEqualTo((409, "Photos are already being received."));
         await Until(() => Task.FromResult(_computer.State.Stage == ReceiveStage.Comparing), "comparing");
-        await endpoints.ConfirmReceivingAsync(Http.Post("receive/confirm", "{\"same\": false}").FromClient());
+        await endpoints.ConfirmReceivingAsync(Http.Post("receive/confirm", "{\"same\": false}").FromClient(), ct);
         await _computer.Running;
-        var stopped = (await endpoints.StopReceivingAsync(Http.Post("receive/stop").FromClient())).Json();
+        var stopped = (await endpoints.StopReceivingAsync(Http.Post("receive/stop").FromClient(), ct)).Json();
         await Assert.That((stopped.GetProperty("stage").GetString(), stopped.GetProperty("problem").GetString()))
             .IsEqualTo(("failed", "The numbers did not match, so nothing was sent. Try again, and look that both show the same number."));
     }

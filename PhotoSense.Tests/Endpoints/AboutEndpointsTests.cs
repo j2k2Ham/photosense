@@ -8,6 +8,7 @@ using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Endpoints;
 
+/// <summary>What the About window shows, and the documents it opens.</summary>
 public class AboutEndpointsTests
 {
     private static readonly ProductInfo Product = new("PhotoSense", "Jamie Hamman", "© 2026 Jamie Hamman", "help@photosense.example", "https://photosense.example",
@@ -18,9 +19,9 @@ public class AboutEndpointsTests
     private static ProductInfo Read(string json) => ProductInfo.Read(new MemoryStream(Encoding.UTF8.GetBytes(json)));
 
     [Test]
-    public async Task Says_Who_Makes_PhotoSense_How_To_Reach_Them_And_Which_Program_And_Version_Is_Answering()
+    public async Task Says_Who_Makes_PhotoSense_How_To_Reach_Them_And_Which_Program_And_Version_Is_Answering(CancellationToken ct)
     {
-        var json = (await new AboutEndpoints(Product, Program).GetAsync(Http.Get("about"))).Json();
+        var json = (await new AboutEndpoints(Product, Program).GetAsync(Http.Get("about"), ct)).Json();
 
         await Assert.That(json.GetProperty("name").GetString()).IsEqualTo("PhotoSense");
         await Assert.That(json.GetProperty("version").GetString()).IsEqualTo("1.2.0.57");
@@ -38,9 +39,9 @@ public class AboutEndpointsTests
     [Arguments("privacy", "# Privacy Policy")]
     [Arguments("terms", "# Terms of Use")]
     [Arguments("support", "# Support")]
-    public async Task Gives_Each_Document_As_The_Web_Site_Has_It_With_The_Products_Details_Filled_In(string document, string title)
+    public async Task Gives_Each_Document_As_The_Web_Site_Has_It_With_The_Products_Details_Filled_In(string document, string title, CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get($"about/{document}"), document);
+        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get($"about/{document}"), document, ct);
         var text = response.Text();
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
@@ -51,7 +52,7 @@ public class AboutEndpointsTests
     }
 
     [Test]
-    public async Task Names_The_Maker_And_The_Law_That_Applies_In_The_Terms_And_Says_So_Where_Something_Is_Not_Set_Yet()
+    public async Task Names_The_Maker_And_The_Law_That_Applies_In_The_Terms_And_Says_So_Where_Something_Is_Not_Set_Yet(CancellationToken ct)
     {
         var terms = AboutDocuments.Text("terms", Product)!;
         await Assert.That(terms).Contains("between you and Jamie Hamman");
@@ -64,34 +65,34 @@ public class AboutEndpointsTests
     }
 
     [Test]
-    public async Task Gives_The_Programs_Own_Third_Party_Notices_As_Plain_Text()
+    public async Task Gives_The_Programs_Own_Third_Party_Notices_As_Plain_Text(CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get("about/notices"), "notices");
+        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get("about/notices"), "notices", ct);
 
         await Assert.That(response.Header("Content-Type")).IsEqualTo("text/plain; charset=utf-8");
         await Assert.That(response.Text()).IsEqualTo("LiteDB 5.0.21 (MIT)");
     }
 
     [Test]
-    public async Task Gives_PhotoSenses_Icon_As_It_Is_Kept_In_Branding()
+    public async Task Gives_PhotoSenses_Icon_As_It_Is_Kept_In_Branding(CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).IconAsync(Http.Get("about/icon"));
+        var response = await new AboutEndpoints(Product, Program).IconAsync(Http.Get("about/icon"), ct);
 
         await Assert.That(response.Header("Content-Type")).IsEqualTo("image/png");
-        await Assert.That(response.Bytes()).IsEquivalentTo(await File.ReadAllBytesAsync(Path.Combine(Repository.Root, "branding", "app-icon.png")), CollectionOrdering.Matching);
+        await Assert.That(response.Bytes()).IsEquivalentTo(await File.ReadAllBytesAsync(Path.Combine(Repository.Root, "branding", "app-icon.png"), ct), CollectionOrdering.Matching);
     }
 
     [Test]
-    public async Task Says_Which_Documents_There_Are_When_Asked_For_One_That_Is_Not()
+    public async Task Says_Which_Documents_There_Are_When_Asked_For_One_That_Is_Not(CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get("about/cookies"), "cookies");
+        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get("about/cookies"), "cookies", ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
         await Assert.That(response.Text()).IsEqualTo("There is no document called cookies. There are privacy, terms, support and notices.");
     }
 
     [Test]
-    public async Task Reads_Product_Json_Taking_A_Blank_Or_Missing_Value_As_Not_Set_Yet()
+    public async Task Reads_Product_Json_Taking_A_Blank_Or_Missing_Value_As_Not_Set_Yet(CancellationToken ct)
     {
         var product = Read("""{ "name": "PhotoSense", "publisher": " Jamie Hamman ", "copyright": "© 2026 Jamie Hamman", "supportEmail": "  ", "website": "https://photosense.example" }""");
 
@@ -101,7 +102,7 @@ public class AboutEndpointsTests
     }
 
     [Test]
-    public async Task Builds_In_The_Product_Json_At_The_Root_Of_The_Repository()
+    public async Task Builds_In_The_Product_Json_At_The_Root_Of_The_Repository(CancellationToken ct)
     {
         await Assert.That(ProductInfo.Bundled.Name).IsEqualTo("PhotoSense");
         await Assert.That(ProductInfo.Bundled.Publisher).IsEqualTo("Jamie Hamman");
@@ -110,7 +111,7 @@ public class AboutEndpointsTests
     }
 
     [Test]
-    public async Task On_A_Computer_It_Is_The_Server_With_Its_Version_And_The_Notices_Built_Into_It()
+    public async Task On_A_Computer_It_Is_The_Server_With_Its_Version_And_The_Notices_Built_Into_It(CancellationToken ct)
     {
         var program = ProgramInfo.From(typeof(PhotoSenseServer).Assembly, "server");
 
@@ -124,7 +125,7 @@ public class AboutEndpointsTests
     }
 
     [Test]
-    public async Task A_Program_Built_Without_A_Version_Or_Notices_Gives_Its_Assembly_Version_And_Says_What_Is_Missing()
+    public async Task A_Program_Built_Without_A_Version_Or_Notices_Gives_Its_Assembly_Version_And_Says_What_Is_Missing(CancellationToken ct)
     {
         var bare = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("Bare") { Version = new Version(3, 4, 5, 6) }, AssemblyBuilderAccess.Run);
         await Assert.That(ProgramInfo.From(bare, "android").Version).IsEqualTo("3.4.5.6");

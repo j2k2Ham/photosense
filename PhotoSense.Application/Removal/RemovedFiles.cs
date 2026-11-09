@@ -1,3 +1,4 @@
+using PhotoSense.Application.Changes;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
@@ -7,10 +8,16 @@ using PhotoSense.Domain.ValueObjects;
 namespace PhotoSense.Application.Removal;
 
 /// <summary>A folder that holds removed files, with how much is in it.</summary>
+/// <param name="Path">The folder's full path.</param>
+/// <param name="Files">How many files it holds, in every folder inside it.</param>
+/// <param name="Bytes">How much they take up.</param>
 public sealed record HeldFolder(string Path, int Files, long Bytes);
 
 /// <summary>What erasing did.</summary>
+/// <param name="Erased">Files erased for good.</param>
+/// <param name="Bytes">How much they took up.</param>
 /// <param name="Skipped">Files that could not be erased and are still there.</param>
+/// <param name="Problems">Why each of those could not be, naming the file where there is one to name.</param>
 public sealed record EraseResult(int Erased, long Bytes, int Skipped, IReadOnlyList<string> Problems);
 
 /// <summary>
@@ -24,6 +31,7 @@ public sealed class RemovedFiles
     private readonly IAuditRepository _audit;
     private readonly IPhotoFileSystem _files;
 
+    /// <summary>The removed files where the photos are kept, with the records of what scans and changes did.</summary>
     public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files)
     {
         _repo = repo;
@@ -36,7 +44,7 @@ public sealed class RemovedFiles
     /// Every folder of removed files that holds something: those inside the folders given and inside every
     /// folder a scan on record covered, wherever in them they are, and those Organize put files in.
     /// </summary>
-    public async Task<IReadOnlyList<HeldFolder>> FindAsync(IEnumerable<string?> roots, CancellationToken ct = default)
+    public async Task<IReadOnlyList<HeldFolder>> FindAsync(IEnumerable<string?> roots, CancellationToken ct)
     {
         var held = new SortedDictionary<string, string>(StringComparer.Ordinal);
         void Add(string folder) => held.TryAdd(PhotoPath.Key(folder), folder);
@@ -56,14 +64,20 @@ public sealed class RemovedFiles
     /// Erases everything in the folders given, and the folders with it. This cannot be taken back. A file
     /// that cannot be erased is left, with the folders it is in.
     /// </summary>
+    /// <param name="folders">The folders of removed files to empty.</param>
+    /// <param name="ct">
+    /// Stops it before anything is erased. Once erasing has begun it is finished and recorded: stopped part way, a
+    /// removal whose files had all gone would still be offered to be undone.
+    /// </param>
     /// <exception cref="ArgumentException">One of them is not a folder of removed files; nothing is erased then.</exception>
-    public async Task<EraseResult> EraseAsync(IEnumerable<string?> folders, CancellationToken ct = default)
+    public async Task<EraseResult> EraseAsync(IEnumerable<string?> folders, CancellationToken ct)
     {
         var asked = folders.ToList();
         // Only the folders PhotoSense itself puts removed files in are ever emptied, whatever is asked.
         foreach (var folder in asked)
             if (string.IsNullOrWhiteSpace(folder) || !Path.IsPathFullyQualified(folder) || !IsHeld(Path.TrimEndingDirectorySeparator(folder)))
                 throw new ArgumentException($"Not a folder of removed files: {folder}");
+        ct.ThrowIfCancellationRequested();
 
         var problems = new List<string>();
         int erased = 0, skipped = 0, emptied = 0;
@@ -75,7 +89,6 @@ public sealed class RemovedFiles
             emptied++;
             var inside = Throughout(path);
             var files = FilesIn(inside).ToList();
-            var deepestFirst = inside.OrderByDescending(d => d.Length).ToList();
             if (_files is IPhotoChangesTogether together)
             {
                 // One question for the whole folder, which is answered for every file in it.
@@ -90,39 +103,36 @@ public sealed class RemovedFiles
                     skipped += files.Count;
                     problems.Add(ex.Message);
                 }
-                try { together.RemoveEmptyFolders(deepestFirst); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* they stay */ }
-                continue;
             }
-            foreach (var (file, size) in files)
+            else
             {
-                try
+                foreach (var (file, size) in files)
                 {
-                    _files.Erase(file);
-                    erased++;
-                    bytes += size;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    skipped++;
-                    problems.Add($"{Path.GetFileName(file)}: {ex.Message}");
+                    try
+                    {
+                        _files.Erase(file);
+                        erased++;
+                        bytes += size;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        skipped++;
+                        problems.Add($"{Path.GetFileName(file)}: {ex.Message}");
+                    }
                 }
             }
             // The folders go too, deepest first. One that still holds something stays.
-            foreach (var folder in deepestFirst)
-            {
-                try { _files.RemoveEmptyFolder(folder); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* stays */ }
-            }
+            EmptyFolders.TakeAway(_files, inside);
         }
 
         // A removal whose files are all gone can no longer be undone, and is no longer offered to be.
-        foreach (var batch in await RemovalsAsync(ct))
-            if (!batch.Items.Exists(i => _files.FileExists(i.To))) await _batches.MarkUndoneAsync(batch.Id, ct);
-        await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files erased from {emptied} folders, {skipped} left" }, ct);
+        foreach (var batch in await RemovalsAsync(CancellationToken.None))
+            if (!batch.Items.Exists(i => _files.FileExists(i.To))) await _batches.MarkUndoneAsync(batch.Id, CancellationToken.None);
+        await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files erased from {emptied} folders, {skipped} left" }, CancellationToken.None);
         return new EraseResult(erased, bytes, skipped, problems);
     }
 
+    /// <summary>The removals on record, undone or not.</summary>
     private async Task<IEnumerable<OrganizeBatch>> RemovalsAsync(CancellationToken ct) => (await _batches.RecentAsync(int.MaxValue, ct)).Where(b => b.Removed);
 
     private bool IsFolder(string? path) => !string.IsNullOrWhiteSpace(path) && Path.IsPathFullyQualified(path) && _files.FolderExists(path);

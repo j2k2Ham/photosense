@@ -5,7 +5,8 @@ using PhotoSense.Domain.Repositories;
 namespace PhotoSense.Infrastructure.Persistence;
 
 /// <summary>Kept apart from the photo records: clearing the results does not forget how long scans take.</summary>
-public sealed class LiteDbScanHistory : IScanHistory
+/// <remarks>Each method answers at once; its token is checked first, as nothing it does takes long enough to stop part way.</remarks>
+internal sealed class LiteDbScanHistory : IScanHistory
 {
     private readonly ILiteCollection<ScanRecord> _col;
 
@@ -17,9 +18,18 @@ public sealed class LiteDbScanHistory : IScanHistory
         _col.EnsureIndex(x => x.StartedUtc);
     }
 
-    public Task AddAsync(ScanRecord scan, CancellationToken ct = default)
-    { _col.Insert(scan); return Task.CompletedTask; }
+    /// <inheritdoc />
+    public Task AddAsync(ScanRecord scan, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _col.Insert(scan);
+        return Task.CompletedTask;
+    }
 
-    public Task<IReadOnlyList<ScanRecord>> RecentAsync(int take = 10, CancellationToken ct = default)
-        => Task.FromResult<IReadOnlyList<ScanRecord>>(_col.Query().OrderByDescending(x => x.StartedUtc).Limit(take).ToList());
+    /// <inheritdoc />
+    public Task<IReadOnlyList<ScanRecord>> RecentAsync(int take, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<ScanRecord>>(_col.Query().OrderByDescending(x => x.StartedUtc).Limit(take).ToList());
+    }
 }

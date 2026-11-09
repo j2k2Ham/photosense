@@ -6,16 +6,17 @@ using PhotoSense.Tests.Application;
 
 namespace PhotoSense.Tests.Server;
 
+/// <summary>Putting back, at start-up, the changes a stop cut short.</summary>
 public sealed class PutBackUnfinishedChangesTests
 {
     [Test]
-    public async Task At_Start_The_Changes_A_Stop_Cut_Short_Are_Put_Back_And_Said_In_The_Log()
+    public async Task At_Start_The_Changes_A_Stop_Cut_Short_Are_Put_Back_And_Said_In_The_Log(CancellationToken ct)
     {
         using var f = new ChangesFixture();
         f.Put("There/IMG_1.JPG");
         var batch = f.Change(moves: [(f.In("IMG_1.JPG"), f.In("There", "IMG_1.JPG"))]);
         batch.State = ChangeState.Started;
-        await f.Batches.SaveAsync(batch);
+        await f.Batches.SaveAsync(batch, ct);
         var log = new Mock<IScanLogSink>();
         var start = new PutBackUnfinishedChanges(f.Changes, log.Object);
 

@@ -79,10 +79,30 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
    - Try new features on the largest, slowest real case, such as the 48,000-file external disk.
    - When Jamie reports odd behaviour, reproduce it, or read a copy of the database first (copy `photosense.db` while the service is stopped), before changing code. Say plainly what was and was not verified.
 9. **Ask before guessing on product decisions that change what gets deleted.** Make a reasonable choice when the request is clear enough, and name any unconfirmed decision in the summary.
+10. **No anti-patterns unless there is no better way, and then only with Jamie's say-so** (Jamie, 2026-11-09).
+    - Not used: blocking on a task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), `async void`, `new HttpClient()` per call, `DateTime.Now`/`UtcNow` where a `TimeProvider` can be given, an empty `catch`, a catch of every exception, a bare `catch { …; throw; }` (use a `finally` that lets go of what was not handed over).
+    - When one seems the best solution, ask Jamie before writing it, saying why nothing else works, and record the answer here.
+    - Accepted by Jamie on 2026-11-09:
+      - `catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)`: a filter naming the types, which the detector misreads as a catch of everything.
+      - Catches of every error at the edges where nothing else would catch it, each saying so: `InProcessApi.AnswerAsync` and the phones' `PageSchemeHandler` and `PageClient` (the page would wait for ever), and `ScanRunner` (a scan in the background would stop unseen).
+      - One catch of every error around MetadataExtractor, in `MetadataFiles.TryRead`: it throws undocumented errors on damaged files, and one damaged file must not stop a scan of thousands. Each picture decoder instead turns its own errors into `UnreadableImageException`.
+    - Known and not yet decided: Android's `PageClient.Ask` blocks on the answer, as `ShouldInterceptRequest` must answer synchronously.
+11. **Every async method takes a `CancellationToken`, last, and uses it** (Jamie, 2026-11-09).
+    - The token is required, not `= default`, so that no caller can forget it; a test method takes the one TUnit gives it. CA2016 (pass it on) and CA1068 (last) are warnings, so errors in CI.
+    - Using it means passing it to every call that takes one and checking it in long loops. A method that answers at once from memory or LiteDB checks it first (`ct.ThrowIfCancellationRequested()`).
+    - Where work must not stop part way, `CancellationToken.None` is passed on purpose, with a comment saying why: once a change's files have moved it is finished and written down (`FileChanges`), erasing once begun is finished and recorded (`RemovedFiles`), a folder's reading is shared by everyone asking (`OrganizeLibrary`), what was done is recorded whatever happens (the audit after a change).
+    - Endpoints take the token the router hands them (`ApiRequest.Aborted`).
 
 ## How things are written here
 
-- **Comments** say *why*, in plain English, usually one line. They never say what the code does or narrate a change. Names describe what the user would recognise.
+- **XML documentation** (Jamie, 2026-11-09):
+  - Every public or internal class, record, struct, interface, enum, delegate, method, property, field, constant and event has a `<summary>`, in the plain English of the rest of the code, saying what it is for; a positional record documents each parameter with `<param>`. A member that implements an interface or overrides one says `<inheritdoc />` when that says it all.
+  - A private method has one when its purpose or intent is not plain from its name and body.
+  - The compiler checks what other projects can see (CS1591, with `GenerateDocumentationFile` in `Directory.Build.props`); internal and private members are kept documented by hand.
+  - In `PhotoSense.Tests`, test methods are exempt, as their names are sentences; every test class, fixture, fake and helper is documented.
+  - The rule is about C#. The page's TypeScript is not covered by it.
+- **Comments** say *why*, in plain English, usually one line. They never say what the code does or narrate a change. A line that does something easy to misread gets one. Names describe what the user would recognise.
+- **Public is for what other projects use.** Anything else is `internal`; `PhotoSense.Tests` (and Moq's `DynamicProxyGenAssembly2`) see it through `InternalsVisibleTo`.
 - **UI text:**
   - Name what the person sees, in short plain sentences, without jargon or apologies.
   - Buttons say exactly what happens ("Delete 3 files"), and the message after says what happened.

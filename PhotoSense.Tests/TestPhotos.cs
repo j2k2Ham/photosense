@@ -5,9 +5,12 @@ namespace PhotoSense.Tests;
 /// <summary>Builders for photo records and signatures used across tests.</summary>
 internal static class TestPhotos
 {
+    /// <summary>The bytes of a picture's signature.</summary>
     public const int SignatureLength = 32 * 32 * 3;
+    /// <summary>When the photos made here were taken, to the millisecond.</summary>
     public static readonly DateTime Shot = new(2024, 4, 7, 17, 35, 59, 648, DateTimeKind.Unspecified);
 
+    /// <summary>A photo record with what a test needs said, the rest left plain.</summary>
     public static Photo Make(
         string name = "IMG_0001.HEIC",
         string? folder = null,

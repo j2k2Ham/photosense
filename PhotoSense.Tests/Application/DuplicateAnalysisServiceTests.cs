@@ -9,6 +9,7 @@ using static PhotoSense.Tests.TestPhotos;
 
 namespace PhotoSense.Tests.Application;
 
+/// <summary>Grouping the photos scans recorded into copies and look-alikes, around the best of each.</summary>
 public class DuplicateAnalysisServiceTests
 {
     private static readonly PhotoRanking KeepJpeg = new(FormatPreference.WidelyCompatible);
@@ -17,7 +18,7 @@ public class DuplicateAnalysisServiceTests
     private const ulong PictureA = 0x0000000000000000, PictureB = 0xFFFFFFFF00000000, PictureC = 0x00000000FFFFFFFF;
 
     [Test]
-    public async Task Pictures_With_The_Same_Hash_But_Another_Shape_Are_Not_Grouped()
+    public async Task Pictures_With_The_Same_Hash_But_Another_Shape_Are_Not_Grouped(CancellationToken ct)
     {
         // Close enough by hash to be compared, and then told apart: one is upright, the other on its side.
         var analysis = DuplicateAnalysisService.Analyze([Make("landscape.jpg"), Make("portrait.jpg", width: 3024, height: 4032)]);
@@ -26,7 +27,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task A_Lone_Photo_Is_Not_A_Duplicate_Of_Anything()
+    public async Task A_Lone_Photo_Is_Not_A_Duplicate_Of_Anything(CancellationToken ct)
     {
         var analysis = DuplicateAnalysisService.Analyze([Make("only.jpg")]);
         await Assert.That(analysis.Duplicates).IsEmpty();
@@ -34,7 +35,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Identical_Files_Form_A_Group_Around_The_Plainest_Copy()
+    public async Task Identical_Files_Form_A_Group_Around_The_Plainest_Copy(CancellationToken ct)
     {
         var copy = Make("IMG_2736a.JPG", contentHash: "SAME", size: 500);
         var plain = Make("IMG_2736.JPG", contentHash: "same", size: 500);
@@ -49,7 +50,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task The_Other_Format_And_An_Identical_Twin_Join_The_Kept_Jpeg()
+    public async Task The_Other_Format_And_An_Identical_Twin_Join_The_Kept_Jpeg(CancellationToken ct)
     {
         var heic = Make("IMG_4198.HEIC", taken: Shot, size: 3_000);
         var jpeg = Make("IMG_4198.JPG", contentHash: "J", taken: Shot, format: "JPEG", quality: 94, size: 6_000, signature: Signature(0.1));
@@ -62,7 +63,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task When_Originals_Are_Preferred_The_Camera_Original_Is_Kept_And_Its_Conversions_Go()
+    public async Task When_Originals_Are_Preferred_The_Camera_Original_Is_Kept_And_Its_Conversions_Go(CancellationToken ct)
     {
         var heic = Make("IMG_4198.HEIC", taken: Shot, size: 3_000);
         var jpeg = Make("IMG_4198.JPG", contentHash: "J", taken: Shot, format: "JPEG", quality: 94, size: 6_000, signature: Signature(0.1));
@@ -75,7 +76,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Burst_Frames_Are_Offered_For_Review_Not_Removal()
+    public async Task Burst_Frames_Are_Offered_For_Review_Not_Removal(CancellationToken ct)
     {
         var first = Make("IMG_6527.JPG", taken: Shot, format: "JPEG");
         var second = Make("IMG_6528.JPG", taken: Shot.AddMilliseconds(54), format: "JPEG");
@@ -89,7 +90,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task A_Photo_Already_Set_To_Go_With_Its_Original_Is_Not_Offered_As_A_Look_Alike()
+    public async Task A_Photo_Already_Set_To_Go_With_Its_Original_Is_Not_Offered_As_A_Look_Alike(CancellationToken ct)
     {
         var heic = Make("IMG_0001.HEIC", taken: Shot);
         var jpeg = Make("IMG_0001.JPG", taken: Shot, format: "JPEG");
@@ -102,7 +103,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Every_Member_Was_Compared_With_The_Keeper_Itself()
+    public async Task Every_Member_Was_Compared_With_The_Keeper_Itself(CancellationToken ct)
     {
         // b matches both a and c, but a and c are too far apart to match each other.
         // Chaining through b would remove c on the strength of a photo that is itself being removed.
@@ -117,7 +118,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task A_Copy_Marked_Keep_Stays_In_The_Group_But_Is_Not_Removable()
+    public async Task A_Copy_Marked_Keep_Stays_In_The_Group_But_Is_Not_Removable(CancellationToken ct)
     {
         var keeper = Make("IMG_0001.JPG", taken: Shot, format: "JPEG", quality: 95);
         var keptCopy = Make("IMG_0001 resaved.JPG", taken: Shot, format: "JPEG", quality: 80, size: 700, kept: true);
@@ -130,7 +131,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Groups_Freeing_The_Most_Space_Come_First_And_Unhashed_Photos_Are_Ignored()
+    public async Task Groups_Freeing_The_Most_Space_Come_First_And_Unhashed_Photos_Are_Ignored(CancellationToken ct)
     {
         var smallA = Make("a1.jpg", contentHash: "A", hash: PictureA, size: 10);
         var smallB = Make("a2.jpg", contentHash: "A", hash: PictureA, size: 10);
@@ -143,7 +144,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Undecodable_Files_Are_Still_Matched_When_Identical()
+    public async Task Undecodable_Files_Are_Still_Matched_When_Identical(CancellationToken ct)
     {
         var a = Make("broken.heic", contentHash: "X"); a.Signature = null; a.PerceptualHash = null;
         var b = Make("broken (1).heic", contentHash: "X"); b.Signature = null; b.PerceptualHash = null;
@@ -153,7 +154,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Identical_Videos_Form_A_Group_And_Unread_Ones_Are_Left_Out()
+    public async Task Identical_Videos_Form_A_Group_And_Unread_Ones_Are_Left_Out(CancellationToken ct)
     {
         var first = Video("clip.MOV", folder: "a", contentHash: "V");
         var second = Video("clip.MOV", folder: "b", contentHash: "V");
@@ -166,7 +167,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task A_Live_Photos_Video_Travels_With_Its_Picture_And_Is_Not_Matched_On_Its_Own()
+    public async Task A_Live_Photos_Video_Travels_With_Its_Picture_And_Is_Not_Matched_On_Its_Own(CancellationToken ct)
     {
         // One Live Photo imported twice: once as HEIC, once converted to JPEG, each with the same video.
         var heic = Make("IMG_1.HEIC", folder: "a", taken: Shot); heic.LivePhotoId = "LIVE-1";
@@ -184,7 +185,7 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task A_Video_Without_Its_Picture_Beside_It_Is_Matched_Like_Any_Other_File()
+    public async Task A_Video_Without_Its_Picture_Beside_It_Is_Matched_Like_Any_Other_File(CancellationToken ct)
     {
         var picture = Make("IMG_1.HEIC", folder: "a", taken: Shot); picture.LivePhotoId = "LIVE-1";
         var itsVideo = Video("IMG_1.MOV", folder: "a", contentHash: "M", livePhotoId: "LIVE-1");
@@ -206,36 +207,36 @@ public class DuplicateAnalysisServiceTests
     }
 
     [Test]
-    public async Task Analysis_Is_Reused_Until_The_Photos_Change()
+    public async Task Analysis_Is_Reused_Until_The_Photos_Change(CancellationToken ct)
     {
         var repo = new InMemoryPhotoRepository();
-        await repo.AddOrUpdateAsync(Make("a.jpg", contentHash: "A"));
-        await repo.AddOrUpdateAsync(Make("b.jpg", contentHash: "A"));
+        await repo.AddOrUpdateAsync(Make("a.jpg", contentHash: "A"), ct);
+        await repo.AddOrUpdateAsync(Make("b.jpg", contentHash: "A"), ct);
         var service = new DuplicateAnalysisService(repo, KeepJpeg);
 
-        var first = await service.GetAsync();
+        var first = await service.GetAsync(ct);
         await Assert.That(first.Duplicates).HasSingleItem();
-        await Assert.That(await service.GetAsync()).IsSameReferenceAs(first);
+        await Assert.That(await service.GetAsync(ct)).IsSameReferenceAs(first);
 
-        await repo.DeleteAsync(first.Duplicates[0].Members[0].Photo.Id);
-        var afterChange = await service.GetAsync();
+        await repo.DeleteAsync(first.Duplicates[0].Members[0].Photo.Id, ct);
+        var afterChange = await service.GetAsync(ct);
         await Assert.That(afterChange).IsNotSameReferenceAs(first);
         await Assert.That(afterChange.Duplicates).IsEmpty();
     }
 
     [Test]
-    public async Task Reads_The_Photos_Once_Per_Version()
+    public async Task Reads_The_Photos_Once_Per_Version(CancellationToken ct)
     {
         var repo = new Mock<IPhotoRepository>();
         repo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<Photo>());
         var service = new DuplicateAnalysisService(repo.Object);
-        await service.GetAsync();
-        await service.GetAsync();
+        await service.GetAsync(ct);
+        await service.GetAsync(ct);
         repo.Verify(r => r.GetAllAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task Live_Photo_Halves_Recorded_By_Name_Alone_Are_Still_Paired()
+    public async Task Live_Photo_Halves_Recorded_By_Name_Alone_Are_Still_Paired(CancellationToken ct)
     {
         // A scan always records full paths; a record without one must still not stop an analysis.
         var picture = new Photo { SourcePath = "IMG_1.HEIC", FileName = "IMG_1.HEIC", ContentHash = "P", LivePhotoId = "LIVE-1" };

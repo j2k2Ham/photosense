@@ -26,7 +26,7 @@ public class LandmarkTests
     private static GeoNamesPlaceResolver Places() => new(() => new StringReader(TownList), () => new StringReader(LandmarkList));
 
     [Test]
-    public async Task Gives_The_Town_With_Where_It_Is_And_The_Nearest_Landmark_In_Reach()
+    public async Task Gives_The_Town_With_Where_It_Is_And_The_Nearest_Landmark_In_Reach(CancellationToken ct)
     {
         var places = Places();
         var atTown = places.Locate(10.99, 20.99)!;
@@ -39,7 +39,7 @@ public class LandmarkTests
     }
 
     [Test]
-    public async Task Names_No_Landmark_Out_Of_Reach_Of_Any_And_None_Without_A_Town()
+    public async Task Names_No_Landmark_Out_Of_Reach_Of_Any_And_None_Without_A_Town(CancellationToken ct)
     {
         var places = Places();
         var outside = places.Locate(11.05, 20.99)!;
@@ -51,7 +51,7 @@ public class LandmarkTests
     }
 
     [Test]
-    public async Task Finds_Landmarks_Across_The_Date_Line_And_Where_Degrees_Of_Longitude_Are_Short()
+    public async Task Finds_Landmarks_Across_The_Date_Line_And_Where_Degrees_Of_Longitude_Are_Short(CancellationToken ct)
     {
         var places = Places();
         var east = places.Locate(-17.0, 179.9995)!;
@@ -65,11 +65,11 @@ public class LandmarkTests
     [Arguments(46.8703, -113.9956, "Caras Park")]
     [Arguments(35.2505, -75.5288, "Cape Hatteras Lighthouse")]
     [Arguments(-33.8568, 151.2153, "Sydney Opera House")]
-    public async Task The_Bundled_List_Knows_Sights_And_Parks(double latitude, double longitude, string landmark)
+    public async Task The_Bundled_List_Knows_Sights_And_Parks(double latitude, double longitude, string landmark, CancellationToken ct)
         => await Assert.That(Bundled.Locate(latitude, longitude)!.Landmark).IsEqualTo(landmark);
 
     [Test]
-    public async Task The_Bundled_List_Names_Only_The_Town_Where_No_Landmark_Is_At_Hand()
+    public async Task The_Bundled_List_Names_Only_The_Town_Where_No_Landmark_Is_At_Hand(CancellationToken ct)
     {
         // The middle of Anaconda, Montana: shops and houses.
         var home = Bundled.Locate(46.1283, -112.9423)!;
@@ -78,7 +78,7 @@ public class LandmarkTests
     }
 
     [Test]
-    public async Task A_Build_That_Left_The_Landmark_List_Out_Says_So()
+    public async Task A_Build_That_Left_The_Landmark_List_Out_Says_So(CancellationToken ct)
     {
         var error = Assert.ThrowsExactly<InvalidOperationException>(() => GeoNamesPlaceResolver.OpenBundledList(typeof(LandmarkTests).Assembly, GeoNamesPlaceResolver.Landmarks));
         await Assert.That(error.Message).Contains("landmarks.tsv.gz");
@@ -116,7 +116,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     }
 
     [Test]
-    public async Task Reads_A_Pictures_Date_And_Size()
+    public async Task Reads_A_Pictures_Date_And_Size(CancellationToken ct)
     {
         var details = _reader.Read(Put("IMG_1.JPG", Jpeg(64, 48)));
         await Assert.That((details.TakenOn, details.Width, details.Height, details.DurationSeconds, details.Latitude, details.Longitude))
@@ -124,7 +124,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     }
 
     [Test]
-    public async Task Gives_The_Size_As_The_Picture_Is_Shown_When_The_Camera_Was_Held_Upright()
+    public async Task Gives_The_Size_As_The_Picture_Is_Shown_When_The_Camera_Was_Held_Upright(CancellationToken ct)
     {
         var upright = _reader.Read(Put("IMG_2.JPG", Jpeg(64, 48, orientation: 6)));
         await Assert.That((upright.Width, upright.Height)).IsEqualTo((48, 64));
@@ -133,7 +133,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     }
 
     [Test]
-    public async Task Reads_A_Videos_Date_Place_Size_And_Playing_Time()
+    public async Task Reads_A_Videos_Date_Place_Size_And_Playing_Time(CancellationToken ct)
     {
         var details = _reader.Read(Put("IMG_4.MOV", MediaSamples.Movie()));
         await Assert.That((details.TakenOn, details.Width, details.Height, details.DurationSeconds)).IsEqualTo((new DateTime(2023, 5, 29, 11, 4, 45), 1920, 1080, 84.0));
@@ -145,7 +145,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     }
 
     [Test]
-    public async Task A_File_That_Says_Nothing_Or_Cannot_Be_Read_Has_No_Details()
+    public async Task A_File_That_Says_Nothing_Or_Cannot_Be_Read_Has_No_Details(CancellationToken ct)
     {
         var undated = _reader.Read(Put("plain.JPG", Jpeg(40, 30, dated: false)));
         await Assert.That((undated.TakenOn, undated.Width, undated.Height)).IsEqualTo((null, 40, 30));
@@ -157,7 +157,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     }
 
     [Test]
-    public async Task Passes_Over_A_Record_Of_The_Size_That_Is_Not_A_Size()
+    public async Task Passes_Over_A_Record_Of_The_Size_That_Is_Not_A_Size(CancellationToken ct)
     {
         static MetadataExtractor.Formats.Exif.ExifIfd0Directory Sized(object? width, object? height)
         {
@@ -174,39 +174,40 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     }
 }
 
+/// <summary>The changes kept so that they can be undone, newest first.</summary>
 public class LiteDbOrganizeBatchStoreTests
 {
     [Test]
-    public async Task Keeps_What_A_Move_Did_Until_It_Is_Undone()
+    public async Task Keeps_What_A_Move_Did_Until_It_Is_Undone(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
         var store = new LiteDbOrganizeBatchStore(db);
-        await Assert.That(await store.RecentAsync()).IsEmpty();
+        await Assert.That(await store.RecentAsync(20, ct)).IsEmpty();
 
         var first = new OrganizeBatch { Label = "Anaconda", Files = 2, Bytes = 9, UtcTicks = new DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Utc).Ticks,
             Items = [new OrganizeBatchItem { From = "a", To = "b", SizeBytes = 4, ModifiedUtcTicks = 7, Companion = true }], CreatedFolders = ["x"] };
         var second = new OrganizeBatch { Label = "2023", Copy = true, UtcTicks = first.UtcTicks + 1 };
         var third = new OrganizeBatch { Label = "Trips", UtcTicks = first.UtcTicks + 2 };
-        foreach (var batch in new[] { first, second, third }) await store.SaveAsync(batch);
+        foreach (var batch in new[] { first, second, third }) await store.SaveAsync(batch, ct);
 
-        await Assert.That((await store.RecentAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "2023", "Anaconda" }, CollectionOrdering.Matching);
-        await Assert.That((await store.RecentAsync(take: 1)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips" }, CollectionOrdering.Matching);
+        await Assert.That((await store.RecentAsync(20, ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "2023", "Anaconda" }, CollectionOrdering.Matching);
+        await Assert.That((await store.RecentAsync(take: 1, ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips" }, CollectionOrdering.Matching);
 
-        var kept = (await store.GetAsync(first.Id))!;
+        var kept = (await store.GetAsync(first.Id, ct))!;
         var item = kept.Items.Single();
         await Assert.That((kept.Label, kept.Copy, kept.Files, kept.Bytes, kept.UtcTicks, kept.Undone, kept.CreatedFolders.Single())).IsEqualTo(("Anaconda", false, 2, 9L, first.UtcTicks, false, "x"));
         await Assert.That((item.From, item.To, item.SizeBytes, item.ModifiedUtcTicks, item.Companion)).IsEqualTo(("a", "b", 4L, 7L, true));
-        await Assert.That(await store.GetAsync(Guid.NewGuid())).IsNull();
+        await Assert.That(await store.GetAsync(Guid.NewGuid(), ct)).IsNull();
 
         // Undone, it is no longer offered, though it is still on record; undoing what is not there changes nothing.
-        await store.MarkUndoneAsync(second.Id);
-        await store.MarkUndoneAsync(Guid.NewGuid());
-        await Assert.That((await new LiteDbOrganizeBatchStore(db).RecentAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "Anaconda" }, CollectionOrdering.Matching);
-        await Assert.That((await store.GetAsync(second.Id))!.Undone).IsTrue();
+        await store.MarkUndoneAsync(second.Id, ct);
+        await store.MarkUndoneAsync(Guid.NewGuid(), ct);
+        await Assert.That((await new LiteDbOrganizeBatchStore(db).RecentAsync(20, ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "Anaconda" }, CollectionOrdering.Matching);
+        await Assert.That((await store.GetAsync(second.Id, ct))!.Undone).IsTrue();
     }
 
     [Test]
-    public async Task A_Change_Written_Before_Changes_Had_A_State_Reads_As_Carried_Out()
+    public async Task A_Change_Written_Before_Changes_Had_A_State_Reads_As_Carried_Out(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
         var store = new LiteDbOrganizeBatchStore(db);
@@ -217,33 +218,33 @@ public class LiteDbOrganizeBatchStoreTests
             ["_id"] = id, ["UtcTicks"] = 1L, ["Label"] = "Anaconda", ["Files"] = 1, ["Undone"] = false, ["Items"] = new BsonArray(), ["CreatedFolders"] = new BsonArray()
         });
 
-        await Assert.That((await store.GetAsync(id))!.State).IsEqualTo(ChangeState.Done);
-        await Assert.That((await store.RecentAsync()).Single().Id).IsEqualTo(id);
-        await Assert.That(await store.UnfinishedAsync()).IsEmpty();
+        await Assert.That((await store.GetAsync(id, ct))!.State).IsEqualTo(ChangeState.Done);
+        await Assert.That((await store.RecentAsync(20, ct)).Single().Id).IsEqualTo(id);
+        await Assert.That(await store.UnfinishedAsync(ct)).IsEmpty();
     }
 
     [Test]
-    public async Task Changes_Under_Way_Are_Not_Offered_To_Undo_And_Are_Found_At_The_Next_Start_Oldest_First()
+    public async Task Changes_Under_Way_Are_Not_Offered_To_Undo_And_Are_Found_At_The_Next_Start_Oldest_First(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
         var store = new LiteDbOrganizeBatchStore(db);
         var done = new OrganizeBatch { Label = "done", UtcTicks = 3 };
         var undoing = new OrganizeBatch { Label = "undoing", UtcTicks = 2, State = ChangeState.Undoing };
         var started = new OrganizeBatch { Label = "started", UtcTicks = 1, State = ChangeState.Started };
-        foreach (var batch in new[] { done, undoing, started }) await store.SaveAsync(batch);
+        foreach (var batch in new[] { done, undoing, started }) await store.SaveAsync(batch, ct);
 
-        await Assert.That((await store.RecentAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "done" }, CollectionOrdering.Matching);
-        await Assert.That((await store.UnfinishedAsync()).Select(b => b.Label)).IsEquivalentTo(new[] { "started", "undoing" }, CollectionOrdering.Matching);
+        await Assert.That((await store.RecentAsync(20, ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "done" }, CollectionOrdering.Matching);
+        await Assert.That((await store.UnfinishedAsync(ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "started", "undoing" }, CollectionOrdering.Matching);
 
         // Written down again once it has moved on.
         started.State = ChangeState.Done;
-        await store.SaveAsync(started);
-        await Assert.That((await store.UnfinishedAsync()).Single().Label).IsEqualTo("undoing");
-        await Assert.That((await store.RecentAsync()).Count).IsEqualTo(2);
+        await store.SaveAsync(started, ct);
+        await Assert.That((await store.UnfinishedAsync(ct)).Single().Label).IsEqualTo("undoing");
+        await Assert.That((await store.RecentAsync(20, ct)).Count).IsEqualTo(2);
     }
 
     [Test]
-    public async Task The_Records_Kept_For_A_Removal_Come_Back_As_They_Were()
+    public async Task The_Records_Kept_For_A_Removal_Come_Back_As_They_Were(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
         var store = new LiteDbOrganizeBatchStore(db);
@@ -255,16 +256,16 @@ public class LiteDbOrganizeBatchStoreTests
         };
         photo.AddCategory("Trips");
 
-        await store.KeepRecordsAsync(batch, [photo]);
+        await store.KeepRecordsAsync(batch, [photo], ct);
         // Kept twice, it is still kept once.
-        await store.KeepRecordsAsync(batch, [photo]);
-        await store.KeepRecordsAsync(Guid.NewGuid(), [new Photo { SourcePath = "C:/a/IMG_2.HEIC", FileName = "IMG_2.HEIC" }]);
+        await store.KeepRecordsAsync(batch, [photo], ct);
+        await store.KeepRecordsAsync(Guid.NewGuid(), [new Photo { SourcePath = "C:/a/IMG_2.HEIC", FileName = "IMG_2.HEIC" }], ct);
 
-        var kept = (await store.RecordsAsync(batch)).Single();
+        var kept = (await store.RecordsAsync(batch, ct)).Single();
         await Assert.That((kept.Id, kept.SourcePath, kept.FileSizeBytes, kept.FileModifiedUtc, kept.ContentHash, kept.TakenOn, kept.IsKept)).IsEqualTo((photo.Id, photo.SourcePath, 9L, photo.FileModifiedUtc, "AB", photo.TakenOn, true));
         await Assert.That(kept.Set).IsEqualTo(PhotoSet.Secondary);
         await Assert.That(kept.Signature!).IsEquivalentTo(new byte[] { 1, 2, 3 }, CollectionOrdering.Matching);
         await Assert.That(kept.Categories.Single()).IsEqualTo("Trips");
-        await Assert.That(await store.RecordsAsync(Guid.NewGuid())).IsEmpty();
+        await Assert.That(await store.RecordsAsync(Guid.NewGuid(), ct)).IsEmpty();
     }
 }

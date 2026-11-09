@@ -3,6 +3,7 @@ using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Desktop.Imaging;
 
+/// <summary>Decodes pictures with Magick.NET on a computer, HEIC among them, and measures them the way every decoder does.</summary>
 public sealed class MagickImageAnalyzer : IImageAnalyzer
 {
     static MagickImageAnalyzer()
@@ -11,17 +12,29 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
         ResourceLimits.Thread = 1;
     }
 
-    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct = default)
-        => Task.Run(() => Analyze(imageStream), ct);
+    /// <inheritdoc />
+    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct)
+        => Task.Run(() => Decoded(() => Analyze(imageStream)), ct);
 
-    public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct = default)
-        => Task.Run(() =>
+    /// <inheritdoc />
+    public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct)
+        => Task.Run(() => Decoded(() =>
         {
             using var image = Load(imageStream, maxEdge);
-            ToStandardColors(image);
+            _ = ToStandardColors(image);
             if (image.Width > maxEdge || image.Height > maxEdge) image.Resize(new MagickGeometry((uint)maxEdge, (uint)maxEdge));
             return ToJpeg(image, 88);
-        }, ct);
+        }), ct);
+
+    /// <summary>
+    /// Decodes with Magick, turning the errors of its decoder into the one PhotoSense knows a picture it cannot decode by,
+    /// with Magick's own words for why.
+    /// </summary>
+    private static T Decoded<T>(Func<T> decode)
+    {
+        try { return decode(); }
+        catch (MagickException ex) { throw new UnreadableImageException(ex.Message, ex); }
+    }
 
     private static ImageAnalysis Analyze(Stream imageStream)
     {
@@ -34,7 +47,7 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
 
         image.AutoOrient();
         if (image.Width > ImageFingerprint.WorkEdge || image.Height > ImageFingerprint.WorkEdge) image.Scale(new MagickGeometry(ImageFingerprint.WorkEdge, ImageFingerprint.WorkEdge));
-        ToStandardColors(image);
+        _ = ToStandardColors(image);
 
         using var thumbnail = image.Clone();
         if (thumbnail.Width > ImageFingerprint.ThumbnailEdge || thumbnail.Height > ImageFingerprint.ThumbnailEdge) thumbnail.Resize(new MagickGeometry(ImageFingerprint.ThumbnailEdge, ImageFingerprint.ThumbnailEdge));
@@ -47,10 +60,13 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
     }
 
     /// <summary>The pixels read from an image; the decoder hands back none for an image it could not unpack.</summary>
-    public static byte[] Required(byte[]? pixels) => pixels ?? throw new InvalidOperationException("Image has no pixel data");
+    /// <exception cref="UnreadableImageException">There are none.</exception>
+    internal static byte[] Required(byte[]? pixels) => pixels ?? throw new UnreadableImageException("Image has no pixel data");
 
     private static MagickImage Load(Stream imageStream, int neededEdge)
     {
+        // An empty file is a transfer that never finished; Magick would refuse it as a mistake of the caller's.
+        if (imageStream.Length == 0) throw new UnreadableImageException("The file is empty.");
         imageStream.Position = 0;
         var settings = new MagickReadSettings { FrameIndex = 0, FrameCount = 1 };
         // Lets the JPEG decoder skip detail it would only throw away. It picks the nearest reduction it
@@ -59,13 +75,23 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
         return new MagickImage(imageStream, settings);
     }
 
-    // Phones tag pictures with a wide-gamut profile; without conversion the same picture saved
-    // with and without the profile would compare as different colours.
-    private static void ToStandardColors(IMagickImage<byte> image)
+    /// <summary>
+    /// Converts the picture's colours to standard ones (sRGB). Phones tag pictures with a wide-gamut profile; without
+    /// conversion the same picture saved with and without the profile would compare as different colours.
+    /// </summary>
+    /// <returns>Whether they were converted; false when the picture has no profile, or one that cannot be used, and the pixels are kept as they are.</returns>
+    private static bool ToStandardColors(IMagickImage<byte> image)
     {
-        if (image.GetColorProfile() is null) return;
-        try { image.TransformColorSpace(ColorProfiles.SRGB); }
-        catch (MagickException) { /* unusable profile: keep the pixels as they are */ }
+        if (image.GetColorProfile() is null) return false;
+        try
+        {
+            image.TransformColorSpace(ColorProfiles.SRGB);
+            return true;
+        }
+        catch (MagickException)
+        {
+            return false;
+        }
     }
 
     private static byte[] ToJpeg(IMagickImage<byte> image, uint quality)

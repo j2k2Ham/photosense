@@ -19,8 +19,10 @@ public static class PhoneApp
 
     private static Task? _ready;
 
+    /// <summary>The app's services, once it has started.</summary>
     public static IServiceProvider Services => Built.Value;
 
+    /// <summary>The service's addresses, which answer the page's requests.</summary>
     public static ApiRouter Router => Services.GetRequiredService<PhotoSenseRoutes>().Router;
 
     /// <summary>Where the app keeps what it records, which the phone backs up with it.</summary>
@@ -29,10 +31,12 @@ public static class PhoneApp
     /// <summary>Done once a change that a stop of the app cut short has been put back; nothing is answered before.</summary>
     public static Task Ready => _ready ?? Task.CompletedTask;
 
+    /// <summary>Puts back, off the main thread, the changes a stop of the app cut short.</summary>
     public static void PutBackUnfinishedChanges() => _ready = Task.Run(async () =>
     {
         var log = Services.GetRequiredService<IScanLogSink>();
-        foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync()) log.Log("audit", "Warning", sentence);
+        // Putting back runs once, at start, until it is done: nothing stops it part way.
+        foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync(CancellationToken.None)) log.Log("audit", "Warning", sentence);
     });
 
     private static string Folder(NSSearchPathDirectory which) => NSFileManager.DefaultManager.GetUrls(which, NSSearchPathDomain.User)[0].Path!;

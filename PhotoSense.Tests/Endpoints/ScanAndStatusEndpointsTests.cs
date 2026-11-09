@@ -14,6 +14,7 @@ using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Endpoints;
 
+/// <summary>A scan's status, progress and groups, and forgetting what scans recorded.</summary>
 public sealed class ScanAndStatusEndpointsTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-scanapi-");
@@ -31,59 +32,59 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task Clearing_Forgets_Every_Record_And_Preview_And_Says_How_Many()
+    public async Task Clearing_Forgets_Every_Record_And_Preview_And_Says_How_Many(CancellationToken ct)
     {
         var (reset, repo, thumbnails) = Resetter();
-        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
-        await repo.AddOrUpdateAsync(TestPhotos.Make("b.jpg"));
-        await thumbnails.SaveAsync("AB12", [1]);
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"), ct);
+        await repo.AddOrUpdateAsync(TestPhotos.Make("b.jpg"), ct);
+        await thumbnails.SaveAsync("AB12", [1], ct);
         // A scan that has finished does not stand in the way.
         _progress.ScanStarted("earlier");
         _progress.ScanCompleted("earlier");
 
-        var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient());
+        var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient(), ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(response.Json().GetProperty("forgotten").GetInt32()).IsEqualTo(2);
-        await Assert.That(await repo.GetAllAsync()).IsEmpty();
+        await Assert.That(await repo.GetAllAsync(ct)).IsEmpty();
         await Assert.That(thumbnails.Saved).IsEmpty();
 
         // With nothing left there is nothing to forget, and that is no error.
-        await Assert.That((await reset.ResetAsync(Http.Post("scan/reset").FromClient())).Json().GetProperty("forgotten").GetInt32()).IsEqualTo(0);
+        await Assert.That((await reset.ResetAsync(Http.Post("scan/reset").FromClient(), ct)).Json().GetProperty("forgotten").GetInt32()).IsEqualTo(0);
     }
 
     [Test]
-    public async Task Results_Cannot_Be_Cleared_From_Under_A_Running_Scan()
+    public async Task Results_Cannot_Be_Cleared_From_Under_A_Running_Scan(CancellationToken ct)
     {
         var (reset, repo, thumbnails) = Resetter();
-        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
-        await thumbnails.SaveAsync("AB12", [1]);
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"), ct);
+        await thumbnails.SaveAsync("AB12", [1], ct);
         _progress.ScanStarted("running");
 
-        var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient());
+        var response = await reset.ResetAsync(Http.Post("scan/reset").FromClient(), ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
         await Assert.That(response.Json().GetProperty("error").GetString()).Contains("A scan is running");
-        await Assert.That(await repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(await repo.GetAllAsync(ct)).HasSingleItem();
         await Assert.That(thumbnails.Saved).HasSingleItem();
     }
 
     [Test]
-    public async Task Only_The_UI_May_Clear_The_Results()
+    public async Task Only_The_UI_May_Clear_The_Results(CancellationToken ct)
     {
         var (reset, repo, _) = Resetter();
-        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"), ct);
 
-        var response = await reset.ResetAsync(Http.Post("scan/reset"));
+        var response = await reset.ResetAsync(Http.Post("scan/reset"), ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That(await repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(await repo.GetAllAsync(ct)).HasSingleItem();
     }
 
     // ---- progress and status
 
     [Test]
-    public async Task Progress_Is_Reported_For_A_Scan_That_Was_Started_And_Not_For_An_Unknown_One()
+    public async Task Progress_Is_Reported_For_A_Scan_That_Was_Started_And_Not_For_An_Unknown_One(CancellationToken ct)
     {
         _progress.ScanStarted("scan-1");
         _progress.SetTotals("scan-1", 4, 2);
@@ -91,7 +92,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         _progress.IncrementProcessed("scan-1", primary: false);
         var function = new ScanProgressEndpoints(_progress);
 
-        var json = (await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json();
+        var json = (await function.GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json();
         await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(),
             json.GetProperty("primaryProcessed").GetInt32(), json.GetProperty("secondaryTotal").GetInt32(), json.GetProperty("secondaryProcessed").GetInt32())).IsEqualTo(("scan-1", 4, 1, 2, 1));
         await Assert.That(json.GetProperty("primaryPercent").GetDouble()).IsEqualTo(25);
@@ -101,16 +102,16 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
 
         // Going by earlier scans, less the moment that has passed since it started.
         _progress.Expect("scan-1", 780);
-        var left = (await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json().GetProperty("secondsLeft").GetDouble();
+        var left = (await function.GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json().GetProperty("secondsLeft").GetDouble();
         await Assert.That(left).IsGreaterThanOrEqualTo(720).And.IsLessThanOrEqualTo(780);
         _progress.ScanCompleted("scan-1");
-        await Assert.That((await function.Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json().GetProperty("secondsLeft").GetDouble()).IsEqualTo(0);
+        await Assert.That((await function.GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json().GetProperty("secondsLeft").GetDouble()).IsEqualTo(0);
 
-        await Assert.That((await function.Get(Http.Get("scan/progress/other"), "other")).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        await Assert.That((await function.GetAsync(Http.Get("scan/progress/other"), "other", ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     [Test]
-    public async Task The_Time_Left_Counts_Down_From_What_Earlier_Scans_Took()
+    public async Task The_Time_Left_Counts_Down_From_What_Earlier_Scans_Took(CancellationToken ct)
     {
         var clock = new TestClock();
         var progress = new InMemoryScanProgressStore(clock);
@@ -118,21 +119,21 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         progress.Expect("scan-1", 780);
         clock.Now += TimeSpan.FromMinutes(1);
 
-        var json = (await new ScanProgressEndpoints(progress, clock).Get(Http.Get("scan/progress/scan-1"), "scan-1")).Json();
+        var json = (await new ScanProgressEndpoints(progress, clock).GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json();
 
         await Assert.That(json.GetProperty("secondsLeft").GetDouble()).IsEqualTo(720);
     }
 
     [Test]
-    public async Task Status_Describes_The_Latest_Scan_And_Counts_The_Photos()
+    public async Task Status_Describes_The_Latest_Scan_And_Counts_The_Photos(CancellationToken ct)
     {
         var repo = new InMemoryPhotoRepository();
-        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"));
+        await repo.AddOrUpdateAsync(TestPhotos.Make("a.jpg"), ct);
         _progress.ScanStarted("scan-1");
         _progress.SetTotals("scan-1", 2, 0);
         _progress.ScanCompleted("scan-1");
 
-        var json = (await new ScanStatusEndpoints(repo, _progress).GetStatus(Http.Get("scan/status"))).Json();
+        var json = (await new ScanStatusEndpoints(repo, _progress).GetStatusAsync(Http.Get("scan/status"), ct)).Json();
 
         await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(), json.GetProperty("totalPhotos").GetInt32())).IsEqualTo(("scan-1", 2, 1));
         await Assert.That(json.GetProperty("completed").ValueKind).IsNotEqualTo(System.Text.Json.JsonValueKind.Null);
@@ -141,10 +142,10 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     [Test]
     [Arguments(null, null, false, false)]
     [Arguments("C:/photos", "D:/backup", true, true)]
-    public async Task Health_Says_Which_Folders_Are_Configured(string? primary, string? secondary, bool hasPrimary, bool hasSecondary)
+    public async Task Health_Says_Which_Folders_Are_Configured(string? primary, string? secondary, bool hasPrimary, bool hasSecondary, CancellationToken ct)
     {
         var options = Options.Create(new PhotoStorageOptions { PrimaryPath = primary ?? "", SecondaryPath = secondary ?? "" });
-        var json = (await new HealthEndpoints(options).GetAsync(Http.Get("health"))).Json();
+        var json = (await new HealthEndpoints(options).GetAsync(Http.Get("health"), ct)).Json();
         await Assert.That((json.GetProperty("status").GetString(), json.GetProperty("storagePrimaryConfigured").GetBoolean(), json.GetProperty("storageSecondaryConfigured").GetBoolean())).IsEqualTo(("ok", hasPrimary, hasSecondary));
     }
 
@@ -156,30 +157,30 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     [Arguments("scan/groups?mode=other&hideKept=false&page=0&pageSize=0", false, null, false, 1, 1)]
     [Arguments("scan/groups?page=-4&pageSize=5000", false, null, false, 1, 200)]
     [Arguments("scan/groups?page=x&pageSize=y", false, null, false, 1, 50)]
-    public async Task The_Groups_Query_Is_Read_With_Sensible_Limits(string url, bool similar, string? text, bool hideKept, int page, int pageSize)
+    public async Task The_Groups_Query_Is_Read_With_Sensible_Limits(string url, bool similar, string? text, bool hideKept, int page, int pageSize, CancellationToken ct)
     {
         var analysis = new Mock<IDuplicateAnalysisService>();
         analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis([], []));
         var function = new DuplicateGroupsEndpoints(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
 
-        var json = (await function.GetDuplicateGroups(Http.Get(url).FromClient())).Json();
+        var json = (await function.GetDuplicateGroupsAsync(Http.Get(url).FromClient(), ct)).Json();
 
         await Assert.That((json.GetProperty("mode").GetString(), json.GetProperty("page").GetInt32(), json.GetProperty("pageSize").GetInt32())).IsEqualTo((similar ? "similar" : "duplicates", page, pageSize));
         _ = (text, hideKept); // both only filter, and there is nothing here to filter
     }
 
     [Test]
-    public async Task Groups_Nobody_Is_Waiting_For_Any_More_Are_Given_Up()
+    public async Task Groups_Nobody_Is_Waiting_For_Any_More_Are_Given_Up(CancellationToken ct)
     {
         var analysis = new Mock<IDuplicateAnalysisService>();
         analysis.Setup(a => a.GetAsync(It.Is<CancellationToken>(t => t.IsCancellationRequested))).ThrowsAsync(new OperationCanceledException());
         var function = new DuplicateGroupsEndpoints(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => function.GetDuplicateGroups(Http.Abandoned("scan/groups").FromClient()));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => function.GetDuplicateGroupsAsync(Http.Get("scan/groups").FromClient(), new CancellationToken(canceled: true)));
     }
 
     [Test]
-    public async Task A_Photo_Is_Described_With_A_Place_Only_When_It_Has_A_Position()
+    public async Task A_Photo_Is_Described_With_A_Place_Only_When_It_Has_A_Position(CancellationToken ct)
     {
         var places = new Mock<IPlaceNameResolver>();
         places.Setup(p => p.Describe(35.2, -80.8)).Returns("Charlotte, North Carolina, US");

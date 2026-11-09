@@ -18,6 +18,7 @@ public static class SelfCheck
 
     private static int _started;
 
+    /// <summary>The app was started to check itself.</summary>
     public static bool Running { get; private set; }
 
     /// <summary>
@@ -26,6 +27,7 @@ public static class SelfCheck
     /// </summary>
     public static bool Starting() => Running && Interlocked.Exchange(ref _started, 1) == 0;
 
+    /// <summary>Readies the check, when the app was started for one: the photos it works on, put on the phone.</summary>
     public static void Prepare(Activity activity, Intent? intent)
     {
         Running = intent?.GetBooleanExtra("selfcheck", false) == true;
@@ -60,6 +62,7 @@ public static class SelfCheck
     }
 
     // Written after every step, so that a check cut short still says how far it got.
+    /// <summary>Keeps the check's report, after every step, so that a check cut short still says how far it got.</summary>
     public static void Write(string report)
     {
         if (_context?.GetExternalFilesDir(null) is not { } folder) return;
@@ -67,6 +70,7 @@ public static class SelfCheck
         Log.Info("PhotoSense", $"self-check: {report[^Math.Min(300, report.Length)..]}");
     }
 
+    /// <summary>The check itself, run in the page.</summary>
     public const string Script = """
         (async () => {
           if (window.photoSenseChecking) return;

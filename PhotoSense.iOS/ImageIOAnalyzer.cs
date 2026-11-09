@@ -11,9 +11,11 @@ namespace PhotoSense.iOS;
 /// </summary>
 public sealed class ImageIOAnalyzer : IImageAnalyzer
 {
-    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct = default) => Task.Run(() => Analyze(imageStream), ct);
+    /// <inheritdoc />
+    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct) => Task.Run(() => Analyze(imageStream), ct);
 
-    public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct = default) => Task.Run(() =>
+    /// <inheritdoc />
+    public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct) => Task.Run(() =>
     {
         using var source = Source(imageStream);
         using var image = Upright(source, maxEdge);
@@ -39,13 +41,13 @@ public sealed class ImageIOAnalyzer : IImageAnalyzer
         imageStream.Position = 0;
         var bytes = new byte[imageStream.Length];
         imageStream.ReadExactly(bytes);
-        return CGImageSource.FromData(NSData.FromArray(bytes)) ?? throw new InvalidOperationException("The picture could not be read.");
+        return CGImageSource.FromData(NSData.FromArray(bytes)) ?? throw new UnreadableImageException("The picture could not be read.");
     }
 
     // Turned the right way up and no larger than asked, and decoded no larger either, which is what makes it quick.
     private static CGImage Upright(CGImageSource source, int maxEdge)
         => source.CreateThumbnail(0, new CGImageThumbnailOptions { CreateThumbnailFromImageAlways = true, CreateThumbnailWithTransform = true, MaxPixelSize = maxEdge })
-           ?? throw new InvalidOperationException("The picture could not be decoded.");
+           ?? throw new UnreadableImageException("The picture could not be decoded.");
 
     // Stretched to a square on purpose, as on a computer: aspect ratio is checked separately. Drawn in standard
     // colours, so a picture saved with and without a wide-gamut profile compares as one.
@@ -72,10 +74,10 @@ public sealed class ImageIOAnalyzer : IImageAnalyzer
     private static byte[] Jpeg(CGImage image, float quality)
     {
         using var data = new NSMutableData();
-        using (var destination = CGImageDestination.Create(data, "public.jpeg", 1) ?? throw new InvalidOperationException("A JPEG could not be made."))
+        using (var destination = CGImageDestination.Create(data, "public.jpeg", 1) ?? throw new UnreadableImageException("A JPEG could not be made."))
         {
             destination.AddImage(image, new CGImageDestinationOptions { LossyCompressionQuality = quality });
-            if (!destination.Close()) throw new InvalidOperationException("The JPEG could not be written.");
+            if (!destination.Close()) throw new UnreadableImageException("The JPEG could not be written.");
         }
         return data.ToArray();
     }

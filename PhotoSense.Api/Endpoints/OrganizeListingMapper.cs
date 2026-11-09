@@ -12,15 +12,17 @@ namespace PhotoSense.Api.Endpoints;
 /// the places themselves listed once. A place is a landmark where the picture was taken at one, and
 /// otherwise the nearest town.
 /// </summary>
-public sealed class OrganizeListingMapper
+internal sealed class OrganizeListingMapper
 {
     /// <summary>The most files handed over in one answer about a folder that is still being read.</summary>
     public const int BatchSize = 4000;
     private const string PlacesNote = "places";
     private readonly PlaceLookup _places;
 
+    /// <summary>Names places through <paramref name="places"/>.</summary>
     public OrganizeListingMapper(PlaceLookup places) => _places = places;
 
+    /// <summary>A time as the clock on the wall showed it, with no zone: "2024-06-01T14:05:00".</summary>
     public static string Wall(DateTime clock) => clock.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
 
     /// <summary>The whole listing of a folder, once it has been read.</summary>
@@ -69,6 +71,7 @@ public sealed class OrganizeListingMapper
         private readonly List<OrganizePlaceDto> _places = [];
         private readonly Dictionary<(string, string, string, string?), int> _numbers = [];
 
+        /// <summary>The number of the place a match is at, given the next one when it is new; null when there is no match.</summary>
         public int? NumberOf(PlaceMatch? match)
         {
             if (match is null) return null;
@@ -86,6 +89,7 @@ public sealed class OrganizeListingMapper
             }
         }
 
+        /// <summary>The places from a number on, for a page that has the ones before.</summary>
         public List<OrganizePlaceDto> From(int first)
         {
             lock (_places) return _places.Skip(Math.Max(0, first)).ToList();

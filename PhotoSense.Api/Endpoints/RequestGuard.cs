@@ -2,15 +2,19 @@ using System.Net.Http.Headers;
 
 namespace PhotoSense.Api.Endpoints;
 
-public static class RequestGuard
+/// <summary>Tells requests from PhotoSense's own page from those any other web page could make a browser send.</summary>
+internal static class RequestGuard
 {
+    /// <summary>The header only the page sends, which no other web page can make a browser add.</summary>
     public const string ClientHeader = "x-photosense-client";
+    /// <summary>The header that carries the key the service was started with, when it was started with one.</summary>
     public const string ApiKeyHeader = "x-api-key";
 
     /// <summary>Whether a request may change, move or remove photos, given the key this service was started with.</summary>
     public static bool Allows(HttpHeaders headers) => Allows(headers, Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY"));
 
     /// <summary>Whether a request may change, move or remove photos.</summary>
+    /// <param name="headers">The headers sent.</param>
     /// <param name="configuredKey">The API key the server was started with, if any.</param>
     public static bool Allows(HttpHeaders headers, string? configuredKey)
     {

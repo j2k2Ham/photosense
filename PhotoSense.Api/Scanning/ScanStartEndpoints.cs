@@ -9,18 +9,21 @@ using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Api.Scanning;
 
-public class ScanStartEndpoints
+/// <summary>Starts a scan, which runs on in the background.</summary>
+internal sealed class ScanStartEndpoints
 {
     private readonly IOptions<PhotoStorageOptions> _options;
     private readonly ScanRunner _runner;
     private readonly IPhotoFileSystem _files;
+
+    /// <summary>Starts scans through <paramref name="runner"/>, of the folders asked for or, failing that, those set in <paramref name="options"/>.</summary>
     public ScanStartEndpoints(IOptions<PhotoStorageOptions> options, ScanRunner runner, IPhotoFileSystem files) { _options = options; _runner = runner; _files = files; }
 
-    // POST /api/scan/start
-    public async Task<ApiResponse> StartAsync(ApiRequest req)
+    /// <summary>POST /api/scan/start: starts a scan of the folders asked for, and says what it is known by.</summary>
+    public async Task<ApiResponse> StartAsync(ApiRequest req, CancellationToken ct)
     {
         if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
-        var body = await new StreamReader(req.Body).ReadToEndAsync();
+        var body = await new StreamReader(req.Body).ReadToEndAsync(ct);
         var request = ParseBody(body, _options.Value);
 
         // Paths are resolved on this machine, so say so when one is not there instead of scanning nothing.
@@ -29,38 +32,36 @@ public class ScanStartEndpoints
         if (string.IsNullOrWhiteSpace(request.PrimaryPath) || missing is not null)
         {
             var bad = req.CreateResponse(HttpStatusCode.BadRequest);
-            await bad.WriteAsJsonAsync(new { error = missing is null ? "A folder to scan is required." : $"Folder not found on the server: {missing}" });
+            await bad.WriteAsJsonAsync(new { error = missing is null ? "A folder to scan is required." : $"Folder not found on the server: {missing}" }, ct);
             return bad;
         }
 
         if (_runner.Start(request) is not { } instanceId)
         {
             var busy = req.CreateResponse(HttpStatusCode.Conflict);
-            await busy.WriteAsJsonAsync(new { error = "A scan is already running. Wait for it to finish." });
+            await busy.WriteAsJsonAsync(new { error = "A scan is already running. Wait for it to finish." }, ct);
             return busy;
         }
         var response = req.CreateResponse(HttpStatusCode.Accepted);
-        await response.WriteAsJsonAsync(new { instanceId });
+        await response.WriteAsJsonAsync(new { instanceId }, ct);
         return response;
     }
 
+    /// <summary>What a request asks to scan; what it leaves out, or a body that is not JSON at all, means the folders set in <paramref name="defaults"/>.</summary>
+    /// <param name="body">The request's body.</param>
+    /// <param name="defaults">The folders to scan when none is named.</param>
     public static ScanRequest ParseBody(string body, PhotoStorageOptions defaults)
     {
         string? primary = null, secondary = null;
         bool recursive = true, startOver = false;
-        try
+        using var doc = ApiRequest.FromJson<JsonDocument>(body, JsonSerializerOptions.Default);
+        if (doc?.RootElement is { ValueKind: JsonValueKind.Object } root)
         {
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            if (root.ValueKind == JsonValueKind.Object)
-            {
-                primary = Text(root, "primaryLocation") ?? Text(root, "primary");
-                secondary = Text(root, "secondaryLocation") ?? Text(root, "secondary");
-                if (root.TryGetProperty("recursive", out var r) && r.ValueKind is JsonValueKind.True or JsonValueKind.False) recursive = r.GetBoolean();
-                startOver = root.TryGetProperty("startOver", out var s) && s.ValueKind == JsonValueKind.True;
-            }
+            primary = Text(root, "primaryLocation") ?? Text(root, "primary");
+            secondary = Text(root, "secondaryLocation") ?? Text(root, "secondary");
+            if (root.TryGetProperty("recursive", out var r) && r.ValueKind is JsonValueKind.True or JsonValueKind.False) recursive = r.GetBoolean();
+            startOver = root.TryGetProperty("startOver", out var s) && s.ValueKind == JsonValueKind.True;
         }
-        catch (JsonException) { /* no usable body: scan the configured folders */ }
 
         return new ScanRequest(
             string.IsNullOrWhiteSpace(primary) ? defaults.PrimaryPath : primary.Trim(),

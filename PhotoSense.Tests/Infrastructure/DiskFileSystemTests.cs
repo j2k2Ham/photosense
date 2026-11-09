@@ -26,7 +26,7 @@ public sealed class DiskFileSystemTests : IDisposable
     // ---- looking
 
     [Test]
-    public async Task Tells_What_Is_There_And_Describes_A_File_By_Its_Size_And_When_It_Last_Changed()
+    public async Task Tells_What_Is_There_And_Describes_A_File_By_Its_Size_And_When_It_Last_Changed(CancellationToken ct)
     {
         var file = Put("IMG_1.JPG", "four");
         var when = new DateTime(2024, 5, 6, 7, 8, 9, DateTimeKind.Utc);
@@ -38,7 +38,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task Lists_The_Files_And_Folders_Directly_Inside_A_Folder_Hidden_Ones_Too()
+    public async Task Lists_The_Files_And_Folders_Directly_Inside_A_Folder_Hidden_Ones_Too(CancellationToken ct)
     {
         Put("IMG_1.JPG");
         var hidden = Put(".IMG_1.AAE");
@@ -54,7 +54,7 @@ public sealed class DiskFileSystemTests : IDisposable
     [Test]
     [Arguments("not there")]
     [Arguments("")]
-    public async Task A_Folder_That_Is_Not_There_Holds_Nothing(string name)
+    public async Task A_Folder_That_Is_Not_There_Holds_Nothing(string name, CancellationToken ct)
     {
         // An empty name is the folder of a bare file name, which is no folder at all.
         var folder = name.Length > 0 ? In(name) : name;
@@ -62,7 +62,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task A_Link_To_A_Folder_Elsewhere_Is_Known_For_One_And_Never_Listed()
+    public async Task A_Link_To_A_Folder_Elsewhere_Is_Known_For_One_And_Never_Listed(CancellationToken ct)
     {
         var file = Put("Real/IMG_1.JPG");
         Directory.CreateDirectory(In("Phone"));
@@ -73,7 +73,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task A_Link_To_A_File_Is_Known_For_One_And_Listed_Like_Any_Other_File()
+    public async Task A_Link_To_A_File_Is_Known_For_One_And_Listed_Like_Any_Other_File(CancellationToken ct)
     {
         var file = Put("Real/IMG_1.JPG");
         var link = In("Real", "IMG_1 link.JPG");
@@ -85,7 +85,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task A_Folder_That_May_Not_Be_Looked_Into_Holds_Nothing()
+    public async Task A_Folder_That_May_Not_Be_Looked_Into_Holds_Nothing(CancellationToken ct)
     {
         Put("Private/IMG_1.JPG");
         using var denied = TestFiles.DenyAccess(In("Private"));
@@ -96,7 +96,7 @@ public sealed class DiskFileSystemTests : IDisposable
     // ---- reading
 
     [Test]
-    public async Task A_File_Being_Read_Can_Still_Be_Moved_And_Is_Read_From_Any_Point()
+    public async Task A_File_Being_Read_Can_Still_Be_Moved_And_Is_Read_From_Any_Point(CancellationToken ct)
     {
         var file = Put("clip.MOV", "0123456789");
         await using var reading = _disk.OpenRead(file);
@@ -108,7 +108,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task A_File_Is_A_Copy_Of_Another_When_It_Holds_What_The_Other_Begins_With()
+    public async Task A_File_Is_A_Copy_Of_Another_When_It_Holds_What_The_Other_Begins_With(CancellationToken ct)
     {
         var bytes = new byte[200_000];
         new Random(7).NextBytes(bytes);
@@ -132,7 +132,7 @@ public sealed class DiskFileSystemTests : IDisposable
     // ---- changing
 
     [Test]
-    public async Task Moves_And_Copies_Never_Replace_A_File()
+    public async Task Moves_And_Copies_Never_Replace_A_File(CancellationToken ct)
     {
         var picture = Put("IMG_1.JPG", "mine");
         var there = Put("There/IMG_1.JPG", "someone else's");
@@ -147,7 +147,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task Makes_Folders_And_Takes_One_Away_Only_When_It_Is_Empty()
+    public async Task Makes_Folders_And_Takes_One_Away_Only_When_It_Is_Empty(CancellationToken ct)
     {
         _disk.MakeFolder(In("2024", "May"));
         Directory.CreateDirectory(In("empty"));
@@ -161,7 +161,7 @@ public sealed class DiskFileSystemTests : IDisposable
     }
 
     [Test]
-    public async Task Deletes_A_Copy_And_Erases_A_File_Even_When_It_Is_Marked_Read_Only()
+    public async Task Deletes_A_Copy_And_Erases_A_File_Even_When_It_Is_Marked_Read_Only(CancellationToken ct)
     {
         var copy = Put("copy.JPG");
         var plain = Put("IMG_1.JPG");

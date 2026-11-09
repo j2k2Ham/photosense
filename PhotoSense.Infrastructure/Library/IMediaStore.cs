@@ -4,6 +4,9 @@ namespace PhotoSense.Infrastructure.Library;
 /// <param name="Id">The store's own id for it.</param>
 /// <param name="Folder">Where it is on the phone's storage, as the store says it: <c>DCIM/Camera/</c>.</param>
 /// <param name="Name">Its file's name there.</param>
+/// <param name="Length">Its size.</param>
+/// <param name="ModifiedUtc">When it last changed.</param>
+/// <param name="IsVideo">It is a video rather than a picture.</param>
 public sealed record MediaEntry(string Id, string Folder, string Name, long Length, DateTime ModifiedUtc, bool IsVideo);
 
 /// <summary>Changes to an Android phone's pictures and videos, made together.</summary>
@@ -15,6 +18,7 @@ public sealed class MediaChange
     /// <summary>Pictures and videos for the phone's bin, which keeps them for 30 days.</summary>
     public List<string> Trash { get; } = [];
 
+    /// <summary>There is nothing to change.</summary>
     public bool IsEmpty => Move.Count == 0 && Trash.Count == 0;
 }
 
@@ -25,6 +29,7 @@ public sealed class MediaChange
 /// </summary>
 public interface IMediaStore
 {
+    /// <summary>Every picture and video the app has been allowed to see.</summary>
     IReadOnlyList<MediaEntry> Entries();
 
     /// <summary>The file as it is, place it was taken included, to read from any point.</summary>

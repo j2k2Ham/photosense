@@ -3,6 +3,7 @@ using PhotoSense.Domain.Configuration;
 
 namespace PhotoSense.Tests.Application;
 
+/// <summary>Which files under a folder a scan takes in.</summary>
 public sealed class PhotoFileEnumeratorTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-enum-");
@@ -19,7 +20,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     private List<string> Names(bool recursive) => PhotoFileEnumerator.Enumerate(TestFiles.Disk, _root.FullName, recursive).Select(f => Path.GetFileName(f)!).OrderBy(x => x, StringComparer.Ordinal).ToList();
 
     [Test]
-    public async Task Finds_Pictures_And_Videos_And_Nothing_Else()
+    public async Task Finds_Pictures_And_Videos_And_Nothing_Else(CancellationToken ct)
     {
         var media = new[] { "a.jpg", "b.JPEG", "c.png", "d.gif", "e.bmp", "f.tiff", "g.tif", "h.webp", "i.HEIC", "j.heif", "k.MOV", "l.mp4", "m.m4v", "n.3gp" };
         foreach (var f in media.Concat(["o.txt", "p.aae", "q.raw", "noextension"])) Touch(f);
@@ -27,7 +28,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     }
 
     [Test]
-    public async Task Looks_In_Subfolders_Only_When_Asked()
+    public async Task Looks_In_Subfolders_Only_When_Asked(CancellationToken ct)
     {
         Touch("a.jpg");
         Touch("nested", "deeper", "b.png");
@@ -36,7 +37,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     }
 
     [Test]
-    public async Task Never_Looks_In_The_Folder_Removed_Files_Are_Held_In()
+    public async Task Never_Looks_In_The_Folder_Removed_Files_Are_Held_In(CancellationToken ct)
     {
         Touch("a.jpg");
         Touch(PhotoStorageOptions.RemovedFolderName, "a (1).jpg");
@@ -45,7 +46,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     }
 
     [Test]
-    public async Task Does_Not_Follow_A_Link_To_Another_Folder()
+    public async Task Does_Not_Follow_A_Link_To_Another_Folder(CancellationToken ct)
     {
         Touch("real", "a.jpg");
         try { Directory.CreateSymbolicLink(Path.Combine(_root.FullName, "link"), Path.Combine(_root.FullName, "real")); }
@@ -57,18 +58,18 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     [Arguments("nonexistent_root_123")]
     [Arguments("")]
     [Arguments(" ")]
-    public async Task A_Folder_That_Is_Not_There_Has_No_Files(string root)
+    public async Task A_Folder_That_Is_Not_There_Has_No_Files(string root, CancellationToken ct)
         => await Assert.That(PhotoFileEnumerator.Enumerate(TestFiles.Disk, root, true)).IsEmpty();
 
     [Test]
     [Arguments("IMG_1.HEIC", true)]
     [Arguments("clip.MOV", true)]
     [Arguments("IMG_1.AAE", false)]
-    public async Task Knows_Which_Files_It_Scans(string name, bool supported)
+    public async Task Knows_Which_Files_It_Scans(string name, bool supported, CancellationToken ct)
         => await Assert.That(PhotoFileEnumerator.IsSupported(name)).IsEqualTo(supported);
 
     [Test]
-    public async Task A_Folder_That_Goes_Away_While_Being_Listed_Is_Passed_Over()
+    public async Task A_Folder_That_Goes_Away_While_Being_Listed_Is_Passed_Over(CancellationToken ct)
     {
         Touch("first", "a.jpg");
         Touch("second", "b.jpg");
@@ -81,7 +82,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     }
 
     [Test]
-    public async Task A_Folder_That_May_Not_Be_Read_Is_Passed_Over()
+    public async Task A_Folder_That_May_Not_Be_Read_Is_Passed_Over(CancellationToken ct)
     {
         Touch("a.jpg");
         Touch("private", "b.jpg");
@@ -92,7 +93,7 @@ public sealed class PhotoFileEnumeratorTests : IDisposable
     }
 
     [Test]
-    public async Task Never_Looks_Inside_A_Photo_Programs_Own_Library()
+    public async Task Never_Looks_Inside_A_Photo_Programs_Own_Library(CancellationToken ct)
     {
         Touch("a.jpg");
         Touch("Photos Library.photoslibrary", "originals", "0", "b.heic");

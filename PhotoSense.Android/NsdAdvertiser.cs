@@ -15,6 +15,7 @@ public sealed class NsdAdvertiser(Context context) : ITransferAdvertiser
     private readonly object _lock = new();
     private Registered? _registered;
 
+    /// <summary>Tells the network the phone offers photos on a port, under its id and name.</summary>
     public void Start(string id, string name, int port)
     {
         Stop();
@@ -27,24 +28,41 @@ public sealed class NsdAdvertiser(Context context) : ITransferAdvertiser
         MainActivity.KeepScreenOn(true);
     }
 
+    /// <summary>Stops telling the network; nothing changes when it was not telling it.</summary>
     public void Stop()
     {
         Registered? registered;
         lock (_lock) (registered, _registered) = (_registered, null);
         if (registered is null) return;
-        try { Manager.UnregisterService(registered); }
-        // Never registered after all: there is nothing to take back.
-        catch (Java.Lang.IllegalArgumentException) { }
+        _ = TryUnregister(registered);
         MainActivity.KeepScreenOn(false);
+    }
+
+    /// <summary>Whether the network was told to forget the phone; false when it was never registered after all, and there is nothing to take back.</summary>
+    private bool TryUnregister(Registered registered)
+    {
+        try
+        {
+            Manager.UnregisterService(registered);
+            return true;
+        }
+        catch (Java.Lang.IllegalArgumentException)
+        {
+            return false;
+        }
     }
 
     private NsdManager Manager => (NsdManager)context.GetSystemService(Context.NsdService)!;
 
     private sealed class Registered : Java.Lang.Object, NsdManager.IRegistrationListener
     {
+        /// <summary>Notes that the network now knows of the phone.</summary>
         public void OnServiceRegistered(NsdServiceInfo? serviceInfo) => Log.Info("PhotoSense", $"offering photos as {serviceInfo?.ServiceName}");
+        /// <summary>Notes that the network could not be told.</summary>
         public void OnRegistrationFailed(NsdServiceInfo? serviceInfo, NsdFailure errorCode) => Log.Warn("PhotoSense", $"could not offer photos on the network: {errorCode}");
+        /// <summary>Notes that the network has forgotten the phone.</summary>
         public void OnServiceUnregistered(NsdServiceInfo? serviceInfo) { }
+        /// <summary>Notes that the network could not be told to forget the phone.</summary>
         public void OnUnregistrationFailed(NsdServiceInfo? serviceInfo, NsdFailure errorCode) { }
     }
 }

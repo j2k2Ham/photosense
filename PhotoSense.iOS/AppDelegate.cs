@@ -1,5 +1,6 @@
 namespace PhotoSense.iOS;
 
+/// <summary>The app as iOS starts it: the scene that shows the page.</summary>
 [Register("AppDelegate")]
 public class AppDelegate : UIApplicationDelegate
 {
@@ -15,12 +16,15 @@ public class AppDelegate : UIApplicationDelegate
         => new("Default Configuration", connectingSceneSession.Role);
 }
 
+/// <summary>The scene the page is shown in.</summary>
 [Register("SceneDelegate")]
 public class SceneDelegate : UIResponder, IUIWindowSceneDelegate
 {
+    /// <summary>The window the page is shown in.</summary>
     [Export("window")]
     public UIWindow? Window { get; set; }
 
+    /// <summary>Shows the page, once the scene is there to show it in.</summary>
     [Export("scene:willConnectToSession:options:")]
     public void WillConnect(UIScene scene, UISceneSession session, UISceneConnectionOptions connectionOptions)
     {

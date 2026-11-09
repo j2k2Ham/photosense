@@ -9,6 +9,7 @@ using PhotoSense.Infrastructure.Transfer;
 
 namespace PhotoSense.Infrastructure.Library;
 
+/// <summary>The services PhotoSense runs on a phone, for the phone apps to add to theirs.</summary>
 public static class PhotoSensePhoneServices
 {
     /// <summary>Where an iPhone's photo library is shown, as a folder.</summary>
@@ -22,6 +23,12 @@ public static class PhotoSensePhoneServices
     /// records kept in <paramref name="dataFolder"/> and its previews in <paramref name="cacheFolder"/>, which the
     /// phone may empty when it runs short of space.
     /// </summary>
+    /// <param name="s">The services to add to.</param>
+    /// <param name="library">The phone's photo library.</param>
+    /// <param name="access">What the person has let PhotoSense see.</param>
+    /// <param name="analyzer">Decodes pictures the phone's own way.</param>
+    /// <param name="dataFolder">Where what PhotoSense records is kept.</param>
+    /// <param name="cacheFolder">Where previews are kept; the phone may empty it.</param>
     /// <param name="advertiser">Tells computers on the network that the phone is offering photos.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
@@ -35,6 +42,16 @@ public static class PhotoSensePhoneServices
     }
 
     /// <summary>PhotoSense as it runs on an Android phone: as <see cref="AddPhotoSensePhone"/>, on the photos of the phone's own storage.</summary>
+    /// <param name="s">The services to add to.</param>
+    /// <param name="store">The phone's media store.</param>
+    /// <param name="access">What the person has let PhotoSense see.</param>
+    /// <param name="analyzer">Decodes pictures the phone's own way.</param>
+    /// <param name="dataFolder">Where what PhotoSense records is kept.</param>
+    /// <param name="cacheFolder">Where previews are kept; the phone may empty it.</param>
+    /// <param name="advertiser">Tells computers on the network that the phone is offering photos.</param>
+    /// <param name="name">What the phone is called, as a computer shows it.</param>
+    /// <param name="root">Where the storage is shown; tests give a folder of their own.</param>
+    /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSenseAndroid(this IServiceCollection s, IMediaStore store, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, string name, string root = StorageRoot, ITransferListener? listener = null)
     {

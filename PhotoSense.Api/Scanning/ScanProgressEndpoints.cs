@@ -5,16 +5,17 @@ using PhotoSense.Api.Http;
 
 namespace PhotoSense.Api.Scanning;
 
-public class ScanProgressEndpoints
+/// <summary>How far one scan has got, with how long it has left.</summary>
+internal sealed class ScanProgressEndpoints
 {
     private readonly IScanProgressStore _progress;
     private readonly TimeProvider _time;
+
+    /// <summary>Progress from <paramref name="progress"/>, timed by <paramref name="time"/> or the system's clock when none is given.</summary>
     public ScanProgressEndpoints(IScanProgressStore progress, TimeProvider? time = null) { _progress = progress; _time = time ?? TimeProvider.System; }
 
-    // GET /api/scan/progress/{instanceId}
-    public async Task<ApiResponse> Get(
-        ApiRequest req,
-        string instanceId)
+    /// <summary>GET /api/scan/progress/{instanceId}: how far the scan has got; 404 for a scan this run has not heard of.</summary>
+    public async Task<ApiResponse> GetAsync(ApiRequest req, string instanceId, CancellationToken ct)
     {
         var snap = _progress.Get(instanceId);
         var resp = req.CreateResponse(HttpStatusCode.OK);
@@ -39,7 +40,7 @@ public class ScanProgressEndpoints
             // Null until there is something to go by: this scan's own pace, or what earlier scans took.
             secondsLeft = ScanEstimate.SecondsLeft(snap, _time.GetUtcNow().UtcDateTime)
         };
-        await resp.WriteAsJsonAsync(payload);
+        await resp.WriteAsJsonAsync(payload, ct);
         return resp;
     }
 }

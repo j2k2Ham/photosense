@@ -3,6 +3,7 @@ namespace PhotoSense.Tests;
 /// <summary>The repository the tests were built from, for a test that checks a file kept in it.</summary>
 internal static class Repository
 {
+    /// <summary>The folder that holds PhotoSense.sln.</summary>
     public static string Root { get; } = Find(AppContext.BaseDirectory);
 
     private static string Find(string from)

@@ -5,18 +5,22 @@ namespace PhotoSense.Api.Http;
 /// segments and named ones: "photos/{id:guid}/image", "organize/undo/{batchId}". Routes are tried in the
 /// order they were added, so a literal address is added before one with a part that could match it.
 /// </summary>
+/// <remarks>What answers is given the request, the values of the named segments, and the request's token, which is cancelled when whoever asked has gone away.</remarks>
 public sealed class ApiRouter
 {
     private const string Prefix = "/api/";
-    private readonly List<(string Method, Segment[] Segments, Func<ApiRequest, IReadOnlyDictionary<string, string>, Task<ApiResponse>> Answer)> _routes = [];
+    private readonly List<(string Method, Segment[] Segments, Func<ApiRequest, IReadOnlyDictionary<string, string>, CancellationToken, Task<ApiResponse>> Answer)> _routes = [];
 
     private sealed record Segment(string Text, bool IsValue, bool IsGuid);
 
-    public ApiRouter Get(string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, Task<ApiResponse>> answer) => Add("GET", template, answer);
-    public ApiRouter Post(string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, Task<ApiResponse>> answer) => Add("POST", template, answer);
-    public ApiRouter Delete(string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, Task<ApiResponse>> answer) => Add("DELETE", template, answer);
+    /// <summary>Adds an address that answers GET.</summary>
+    public ApiRouter Get(string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, CancellationToken, Task<ApiResponse>> answer) => Add("GET", template, answer);
+    /// <summary>Adds an address that answers POST.</summary>
+    public ApiRouter Post(string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, CancellationToken, Task<ApiResponse>> answer) => Add("POST", template, answer);
+    /// <summary>Adds an address that answers DELETE.</summary>
+    public ApiRouter Delete(string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, CancellationToken, Task<ApiResponse>> answer) => Add("DELETE", template, answer);
 
-    private ApiRouter Add(string method, string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, Task<ApiResponse>> answer)
+    private ApiRouter Add(string method, string template, Func<ApiRequest, IReadOnlyDictionary<string, string>, CancellationToken, Task<ApiResponse>> answer)
     {
         var segments = template.Split('/').Select(s => s.StartsWith('{')
             ? new Segment(s.Trim('{', '}').Split(':')[0], IsValue: true, IsGuid: s.Contains(":guid"))
@@ -33,7 +37,7 @@ public sealed class ApiRouter
         var parts = path[Prefix.Length..].TrimEnd('/').Split('/');
         foreach (var (method, segments, answer) in _routes)
             if (string.Equals(method, request.Method, StringComparison.OrdinalIgnoreCase) && Match(segments, parts) is { } values)
-                return answer(request, values);
+                return answer(request, values, request.Aborted);
         return null;
     }
 

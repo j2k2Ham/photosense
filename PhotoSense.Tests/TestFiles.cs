@@ -7,12 +7,17 @@ namespace PhotoSense.Tests;
 /// <summary>Stand-ins and file-system helpers shared by tests.</summary>
 internal sealed class InMemoryThumbnailStore : IThumbnailStore
 {
+    /// <summary>The previews kept, by hash.</summary>
     public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Saved { get; } = new();
-    public Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default) { Saved[contentHash] = jpeg; return Task.CompletedTask; }
-    public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
-    public Task ClearAsync(CancellationToken ct = default) { Saved.Clear(); return Task.CompletedTask; }
+    /// <inheritdoc />
+    public Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct) { Saved[contentHash] = jpeg; return Task.CompletedTask; }
+    /// <inheritdoc />
+    public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
+    /// <inheritdoc />
+    public Task ClearAsync(CancellationToken ct) { Saved.Clear(); return Task.CompletedTask; }
 }
 
+/// <summary>File-system helpers shared by tests.</summary>
 internal static class TestFiles
 {
     /// <summary>The computer's own disks, as the service has them.</summary>
@@ -66,9 +71,11 @@ internal static class TestFiles
         return Environment.UserName == "root" ? null : UnixDenial.Apply(path);
     }
 
+    /// <summary>Takes away the right to read a folder on Linux and macOS, and gives it back.</summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     private static class UnixDenial
     {
+        /// <summary>Takes the right away; disposing the result gives it back.</summary>
         public static IDisposable Apply(string path)
         {
             var before = File.GetUnixFileMode(path);
@@ -84,9 +91,11 @@ internal static class TestFiles
         public void Dispose() => undo();
     }
 
+    /// <summary>Takes away the right to read a folder on Windows, and gives it back.</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static class WindowsDenial
     {
+        /// <summary>Takes the right away; disposing the result gives it back.</summary>
         public static IDisposable Apply(string path)
         {
             var user = WindowsIdentity.GetCurrent().User!;

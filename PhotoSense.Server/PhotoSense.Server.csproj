@@ -19,4 +19,9 @@
     <!-- Shown under About: what this program ships that others made (node tools/notices.mjs writes it). -->
     <EmbeddedResource Include="..\notices\server.txt" LogicalName="PhotoSense.ThirdPartyNotices.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- What is only used inside this project is internal; the tests reach it, and Moq makes its stand-ins of it. -->
+    <InternalsVisibleTo Include="PhotoSense.Tests" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
 </Project>

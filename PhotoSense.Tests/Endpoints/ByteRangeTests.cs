@@ -2,6 +2,7 @@ using PhotoSense.Api.Endpoints;
 
 namespace PhotoSense.Tests.Endpoints;
 
+/// <summary>The piece of a video a player asks for, cut to what one answer carries.</summary>
 public class ByteRangeTests
 {
     private const long FileLength = 1000;
@@ -20,7 +21,7 @@ public class ByteRangeTests
     [Arguments("bytes=-5000", 0, 999)]        // more than there is: all of it
     [Arguments("BYTES=10-19", 10, 19)]
     [Arguments("  bytes= 10 - 19 ", 10, 19)]
-    public async Task Reads_The_Part_Of_The_File_A_Player_Asked_For(string? header, long start, long end)
+    public async Task Reads_The_Part_Of_The_File_A_Player_Asked_For(string? header, long start, long end, CancellationToken ct)
     {
         var range = ByteRange.Parse(header, FileLength);
         await Assert.That(range).IsEqualTo(new ByteRange(start, end));
@@ -40,17 +41,17 @@ public class ByteRangeTests
     [Arguments("bytes=10")]           // no dash
     [Arguments("bytes=0-1,5-9")]      // several ranges at once
     [Arguments("items=0-10")]         // not a byte range
-    public async Task Refuses_What_It_Cannot_Serve(string header)
+    public async Task Refuses_What_It_Cannot_Serve(string header, CancellationToken ct)
         => await Assert.That(ByteRange.Parse(header, FileLength)).IsNull();
 
     [Test]
     [Arguments(0)]
     [Arguments(-1)]
-    public async Task An_Empty_File_Has_No_Part_To_Send(long length)
+    public async Task An_Empty_File_Has_No_Part_To_Send(long length, CancellationToken ct)
         => await Assert.That(ByteRange.Parse(null, length)).IsNull();
 
     [Test]
-    public async Task One_Response_Never_Carries_More_Than_The_Limit()
+    public async Task One_Response_Never_Carries_More_Than_The_Limit(CancellationToken ct)
     {
         const long big = 400L * 1024 * 1024;
         await Assert.That(ByteRange.Parse(null, big)).IsEqualTo(new ByteRange(0, ByteRange.MaxLength - 1));
@@ -60,6 +61,6 @@ public class ByteRangeTests
     }
 
     [Test]
-    public async Task Says_Which_Part_Of_How_Much_It_Is_Sending()
+    public async Task Says_Which_Part_Of_How_Much_It_Is_Sending(CancellationToken ct)
         => await Assert.That(new ByteRange(200, 299).ContentRange(FileLength)).IsEqualTo("bytes 200-299/1000");
 }

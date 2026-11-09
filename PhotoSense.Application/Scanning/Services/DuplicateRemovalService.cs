@@ -20,23 +20,34 @@ public class DuplicateRemovalService : IDuplicateRemovalService
     private readonly ICompanionFileFinder _companions;
     private readonly FileChanges _changes;
     private readonly IPhotoFileSystem _files;
+    private readonly TimeProvider _time;
 
-    public DuplicateRemovalService(IDuplicateAnalysisService analysis, IPhotoRepository repo, ICompanionFileFinder companions, FileChanges changes, IPhotoFileSystem files)
+    /// <summary>Removes the photos of the groups <paramref name="analysis"/> finds.</summary>
+    /// <param name="analysis">Finds the groups.</param>
+    /// <param name="repo">What scans recorded.</param>
+    /// <param name="companions">Finds the sidecars and Live Photo videos that go with a file.</param>
+    /// <param name="changes">Carries out each removal as one change that can be undone.</param>
+    /// <param name="files">Where the photos are kept.</param>
+    /// <param name="time">When each removal is started, which orders the list of changes that can be undone.</param>
+    public DuplicateRemovalService(IDuplicateAnalysisService analysis, IPhotoRepository repo, ICompanionFileFinder companions, FileChanges changes, IPhotoFileSystem files, TimeProvider time)
     {
         _analysis = analysis;
         _repo = repo;
         _companions = companions;
         _changes = changes;
         _files = files;
+        _time = time;
     }
 
-    public Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey = null, bool similar = false, CancellationToken ct = default)
+    /// <inheritdoc />
+    public Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey, bool similar, CancellationToken ct)
         => RemoveFromAsync(groupKey is null ? null : [groupKey], similar, ct);
 
-    public Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar = false, CancellationToken ct = default)
+    /// <inheritdoc />
+    public Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar, CancellationToken ct)
         => RemoveFromAsync(groupKeys, similar, ct);
 
-    // With no groups named: every duplicate group, and no group of similar shots at all.
+    /// <summary>Removes the copies, or look-alikes, of the groups named; with no groups named, every duplicate group, and no group of similar shots at all.</summary>
     private async Task<BulkRemovalResult> RemoveFromAsync(IReadOnlyCollection<string>? groupKeys, bool similar, CancellationToken ct)
     {
         var analysis = await _analysis.GetAsync(ct);
@@ -84,7 +95,8 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         return new BulkRemovalResult(removed.Count, removed.Sum(p => p.FileSizeBytes), skipped, problems, removal.Companions.Count, removal.BatchId);
     }
 
-    public async Task<RemovalResult> RemoveAsync(PhotoId id, bool deleteFile, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<RemovalResult> RemoveAsync(PhotoId id, bool deleteFile, CancellationToken ct)
     {
         if (await _repo.GetAsync(id, ct) is not { } photo) return new RemovalResult(RemovalOutcome.NotFound);
         // A record whose file is already gone is only forgotten: there is nothing left to be the last copy of.
@@ -111,7 +123,8 @@ public class DuplicateRemovalService : IDuplicateRemovalService
     /// <summary>The files one request takes, worked out in full before any of them moves.</summary>
     private sealed class Removal(DuplicateRemovalService service)
     {
-        private readonly OrganizeBatch _batch = new() { Removed = true };
+        // Stamped with the moment the request is worked out: the newest change is listed first.
+        private readonly OrganizeBatch _batch = new() { UtcTicks = service._time.GetUtcNow().UtcTicks, Removed = true };
         private readonly Dictionary<OrganizeBatchItem, (Photo Photo, Photo? Stays)> _of = [];
         private readonly HashSet<string> _going = new(PhotoPath.Comparer);
         private readonly HashSet<string> _taken = new(PhotoPath.Comparer);
@@ -124,9 +137,11 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         public IEnumerable<Photo> Removed => _batch.Items.Where(i => !i.Companion).Select(i => _of[i].Photo);
         /// <summary>Photos that turned out, once moved, to have taken the file kept with them, and were put straight back.</summary>
         public IReadOnlyList<Photo> LetGo => _left.Where(i => !i.Companion).Select(i => _of[i].Photo).ToList();
+        /// <summary>The sidecars and Live Photo videos going with the photos.</summary>
         public IReadOnlyList<OrganizeBatchItem> Companions => _batch.Items.Where(i => i.Companion).ToList();
         /// <summary>Photos asked for that were to go.</summary>
         public int Asked => _batch.Items.Count(i => !i.Companion) + _missing.Count;
+        /// <summary>What to undo the removal by; absent when no file is to move.</summary>
         public Guid? BatchId => _batch.Items.Count > 0 ? _batch.Id : null;
         /// <summary>Where the photo of a request for one is held now.</summary>
         public string HeldAt => _batch.Items.First(i => !i.Companion).To;
@@ -134,6 +149,8 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         /// <summary>A photo stays while its file is there as it was scanned and this request is not taking it.</summary>
         public bool Stays(Photo photo) => ScannedFile.IsIntact(photo, service._files) && !_going.Contains(photo.SourcePath);
 
+        /// <summary>Adds a photo to the request, with what goes along with it, unless it is to be left.</summary>
+        /// <param name="photo">The photo.</param>
         /// <param name="copyOf">The files it is a copy of, when it is being removed as one: it goes only while one of them stays.</param>
         /// <returns>Removed when it is to go, or why it is not.</returns>
         public RemovalOutcome Add(Photo photo, IReadOnlyList<Photo>? copyOf)
@@ -166,6 +183,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
             return item;
         }
 
+        /// <summary>Moves every file of the request, as one change, and forgets the photos whose files had already gone.</summary>
         public async Task<ChangeResult> CarryOutAsync(CancellationToken ct)
         {
             if (_batch.Items.Count > 0)
@@ -178,6 +196,8 @@ public class DuplicateRemovalService : IDuplicateRemovalService
                 var done = await service._changes.CarryOutAsync(_batch, item => _of[item].Stays is not { } stays || service._files.FileExists(stays.SourcePath), ct);
                 if (!done.Done) return done;
                 _left = done.Left.ToList();
+                // The files have gone: forgetting the records of those already gone is finished too.
+                ct = CancellationToken.None;
             }
             foreach (var photo in _missing) await service._repo.DeleteAsync(photo.Id, ct);
             return new ChangeResult(true, null, _left);

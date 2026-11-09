@@ -19,6 +19,7 @@ using PhotoSense.Infrastructure.Thumbnails;
 
 namespace PhotoSense.Infrastructure;
 
+/// <summary>The services PhotoSense runs on every host, for each host to add to its own.</summary>
 public static class PhotoSenseCoreServices
 {
     /// <summary>
@@ -27,9 +28,10 @@ public static class PhotoSenseCoreServices
     /// pictures are decoded (<see cref="IImageAnalyzer"/>), how a file is opened elsewhere (<see cref="ISystemViewer"/>)
     /// and the folders offered to scan (<see cref="IFolderBrowser"/>).
     /// </summary>
+    /// <param name="s">The services to add to.</param>
     public static IServiceCollection AddPhotoSenseCore(this IServiceCollection s)
     {
-        // Services that take an optional clock are given the real one; tests give their own.
+        // Every service that stamps a time takes it from here; tests give their own clock.
         s.AddSingleton(TimeProvider.System);
         s.AddSingleton<LiteDatabase>(sp =>
         {
@@ -39,10 +41,10 @@ public static class PhotoSenseCoreServices
         });
         // Every store shares the one database connection.
         s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
-        s.AddSingleton<IAuditRepository>(sp => new LiteDbAuditRepository(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IAuditRepository>(sp => new LiteDbAuditRepository(sp.GetRequiredService<LiteDatabase>(), sp.GetRequiredService<TimeProvider>()));
         s.AddSingleton<IScanHistory>(sp => new LiteDbScanHistory(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IOrganizeBatchStore>(sp => new LiteDbOrganizeBatchStore(sp.GetRequiredService<LiteDatabase>()));
-        s.AddSingleton<IPairingStore>(sp => new LiteDbPairingStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IPairingStore>(sp => new LiteDbPairingStore(sp.GetRequiredService<LiteDatabase>(), sp.GetRequiredService<TimeProvider>()));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IThumbnailStore>(sp =>
             new FileSystemThumbnailStore(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()));
@@ -73,7 +75,8 @@ public static class PhotoSenseCoreServices
         s.AddSingleton<IScanExecutionService>(sp => new ScanExecutionService(
             sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IImageHashingService>(), sp.GetRequiredService<IImageAnalyzer>(),
             sp.GetRequiredService<IPhotoMetadataExtractor>(), sp.GetRequiredService<IThumbnailStore>(), sp.GetRequiredService<IScanProgressStore>(),
-            sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<IScanLogSink>(), history: sp.GetRequiredService<IScanHistory>()));
+            sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<IScanLogSink>(), history: sp.GetRequiredService<IScanHistory>(),
+            time: sp.GetRequiredService<TimeProvider>()));
         return s;
     }
 }

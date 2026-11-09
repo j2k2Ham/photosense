@@ -10,9 +10,11 @@ namespace PhotoSense.AndroidApp;
 /// </summary>
 public sealed class AndroidImageAnalyzer : IImageAnalyzer
 {
-    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct = default) => Task.Run(() => Analyze(imageStream), ct);
+    /// <inheritdoc />
+    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct) => Task.Run(() => Analyze(imageStream), ct);
 
-    public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct = default) => Task.Run(() =>
+    /// <inheritdoc />
+    public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct) => Task.Run(() =>
     {
         using var image = Decode(Bytes(imageStream), maxEdge, out _, out _);
         return Jpeg(image, 88);
@@ -39,16 +41,22 @@ public sealed class AndroidImageAnalyzer : IImageAnalyzer
     private static Bitmap Decode(byte[] bytes, int maxEdge, out Size size, out string? type)
     {
         var told = new Told(maxEdge);
-        var bitmap = ImageDecoder.DecodeBitmap(ImageDecoder.CreateSource(Java.Nio.ByteBuffer.Wrap(bytes)), told) ?? throw new InvalidOperationException("The picture could not be decoded.");
+        Bitmap? bitmap;
+        try { bitmap = ImageDecoder.DecodeBitmap(ImageDecoder.CreateSource(Java.Nio.ByteBuffer.Wrap(bytes)), told); }
+        // Android's own word for a picture it cannot decode, for any reason; the rest of PhotoSense knows it by one of its own.
+        catch (Java.IO.IOException e) { throw new UnreadableImageException(e.Message ?? "The picture could not be decoded.", e); }
         (size, type) = (told.Size, told.Type);
-        return bitmap;
+        return bitmap ?? throw new UnreadableImageException("The picture could not be decoded.");
     }
 
     private sealed class Told(int maxEdge) : Java.Lang.Object, ImageDecoder.IOnHeaderDecodedListener
     {
+        /// <summary>The picture's size, as its header says.</summary>
         public Size Size { get; private set; } = new(0, 0);
+        /// <summary>The picture's type, as its header says.</summary>
         public string? Type { get; private set; }
 
+        /// <summary>Asks for the picture at the size wanted, in standard colours, with its pixels in memory.</summary>
         public void OnHeaderDecoded(ImageDecoder decoder, ImageDecoder.ImageInfo info, ImageDecoder.Source source)
         {
             Size = info.Size;
@@ -80,7 +88,7 @@ public sealed class AndroidImageAnalyzer : IImageAnalyzer
     private static byte[] Jpeg(Bitmap image, int quality)
     {
         using var output = new MemoryStream();
-        if (!image.Compress(Bitmap.CompressFormat.Jpeg!, quality, output)) throw new InvalidOperationException("The JPEG could not be written.");
+        if (!image.Compress(Bitmap.CompressFormat.Jpeg!, quality, output)) throw new UnreadableImageException("The JPEG could not be written.");
         return output.ToArray();
     }
 

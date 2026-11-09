@@ -15,7 +15,7 @@ public sealed class TransferLinkTests
     // ---- the phone waiting
 
     [Test]
-    public async Task The_Phone_Waits_On_Its_Own_Port_Or_Another_When_That_One_Is_Taken()
+    public async Task The_Phone_Waits_On_Its_Own_Port_Or_Another_When_That_One_Is_Taken(CancellationToken ct)
     {
         var taken = new TcpListener(IPAddress.Any, 0);
         taken.Start();
@@ -37,7 +37,33 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task Each_Computer_Is_Served_What_Goes_Wrong_With_One_Leaves_The_Next_And_Stopping_Ends_Those_Still_Open()
+    public async Task A_Computer_Served_To_The_End_Is_Let_Go_Of_And_The_Next_Is_Served_Too(CancellationToken ct)
+    {
+        var listener = new TcpTransferListener(0);
+        var served = 0;
+        var port = listener.Start(async (stream, token) =>
+        {
+            Interlocked.Increment(ref served);
+            await stream.WriteAsync("ok"u8.ToArray(), token);
+        });
+        try
+        {
+            for (var i = 0; i < 2; i++)
+            {
+                await using var computer = await Loopback.ConnectAsync(port, ct);
+                var said = new byte[2];
+                await computer.ReadExactlyAsync(said, ct);
+                await Assert.That(Encoding.ASCII.GetString(said)).IsEqualTo("ok");
+                // Once served, the connection is closed from the phone's end.
+                await Assert.That(await computer.ReadAsync(new byte[1], ct)).IsEqualTo(0);
+            }
+            await Assert.That(served).IsEqualTo(2);
+        }
+        finally { listener.Stop(); }
+    }
+
+    [Test]
+    public async Task Each_Computer_Is_Served_What_Goes_Wrong_With_One_Leaves_The_Next_And_Stopping_Ends_Those_Still_Open(CancellationToken ct)
     {
         var listener = new TcpTransferListener(0);
         listener.Stop();
@@ -52,7 +78,8 @@ public sealed class TransferLinkTests
             await stream.WriteAsync("hi"u8.ToArray(), ct);
             holding.SetResult();
             try { await stream.ReadExactlyAsync(new byte[1], ct); }
-            catch (Exception ex)
+            // Stopping ends the connection one of these ways.
+            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
             {
                 ended.SetResult(ex);
                 throw;
@@ -63,15 +90,15 @@ public sealed class TransferLinkTests
             for (var i = 0; i < failures.Length; i++)
             {
                 await using var failing = await Loopback.ConnectAsync(port, CancellationToken.None);
-                await Assert.That(await failing.ReadAsync(new byte[1])).IsEqualTo(0);
+                await Assert.That(await failing.ReadAsync(new byte[1], ct)).IsEqualTo(0);
             }
             await using var open = await Loopback.ConnectAsync(port, CancellationToken.None);
             var greeting = new byte[2];
-            await open.ReadExactlyAsync(greeting);
+            await open.ReadExactlyAsync(greeting, ct);
             await Assert.That(Encoding.ASCII.GetString(greeting)).IsEqualTo("hi");
             await holding.Task;
             listener.Stop();
-            await Assert.That(await ended.Task.WaitAsync(TimeSpan.FromSeconds(10))).IsNotNull();
+            await Assert.That(await ended.Task.WaitAsync(TimeSpan.FromSeconds(10), ct)).IsNotNull();
         }
         finally { listener.Stop(); }
     }
@@ -97,14 +124,17 @@ public sealed class TransferLinkTests
         private int _records;
         private readonly int _questions;
 
+        /// <summary>An answer with room for the questions it repeats.</summary>
         public Answer(int questions = 0)
         {
             _questions = questions;
             _bytes.AddRange(new byte[12]);
         }
 
+        /// <summary>Where the next byte goes.</summary>
         public int At => _bytes.Count;
 
+        /// <summary>Repeats a question for a name.</summary>
         public Answer Question(byte[] name)
         {
             _bytes.AddRange([.. name, 0, 12, 0, 1]);
@@ -122,6 +152,7 @@ public sealed class TransferLinkTests
             return begins;
         }
 
+        /// <summary>The answer, with its counts filled in.</summary>
         public byte[] Bytes()
         {
             var bytes = _bytes.ToArray();
@@ -151,14 +182,14 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task An_iPhone_Answering_Is_Found_By_Its_Id_And_Name_Where_It_Said_It_Waits()
+    public async Task An_iPhone_Answering_Is_Found_By_Its_Id_And_Name_Where_It_Said_It_Waits(CancellationToken ct)
     {
         var found = MdnsPhoneFinder.Read(IPhoneAnswer(47615), IPAddress.Parse("192.168.1.99")).Single();
         await Assert.That((found.Key, found.Name, found.Via)).IsEqualTo(("wifi:phone-1", "Jamie's iPhone", "wifi"));
     }
 
     [Test]
-    public async Task An_Answer_That_Tells_Less_Is_Read_For_What_It_Tells()
+    public async Task An_Answer_That_Tells_Less_Is_Read_For_What_It_Tells(CancellationToken ct)
     {
         var answer = new Answer(questions: 1).Question(Name("_photosense", "_tcp", "local"));
         // Another service, an instance with no place to wait, one with too little of one, and one with all but the rest.
@@ -176,7 +207,7 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task What_Is_Not_DNS_Tells_Of_No_Phone()
+    public async Task What_Is_Not_DNS_Tells_Of_No_Phone(CancellationToken ct)
     {
         await Assert.That(MdnsPhoneFinder.Read([1, 2, 3], IPAddress.Loopback)).IsEmpty();
         // A name that points at itself never ends.
@@ -191,14 +222,14 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task The_Question_Asks_For_The_Service_To_Be_Answered_Directly()
+    public async Task The_Question_Asks_For_The_Service_To_Be_Answered_Directly(CancellationToken ct)
     {
         byte[] expected = [0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, .. Name("_photosense", "_tcp", "local"), 0, 12, 0x80, 1];
         await Assert.That(MdnsPhoneFinder.Query(MdnsPhoneFinder.Service)).IsEquivalentTo(expected, CollectionOrdering.Matching);
     }
 
     [Test]
-    public async Task Phones_Answering_On_The_Network_Are_Found_Once_Each_And_Can_Be_Connected_To()
+    public async Task Phones_Answering_On_The_Network_Are_Found_Once_Each_And_Can_Be_Connected_To(CancellationToken ct)
     {
         var waiting = new TcpListener(IPAddress.Loopback, 0);
         waiting.Start();
@@ -213,7 +244,7 @@ public sealed class TransferLinkTests
             // Answered twice, as phones do: it is still one phone.
             await responder.SendAsync(answer, question.RemoteEndPoint);
             await responder.SendAsync(answer, question.RemoteEndPoint);
-        });
+        }, ct);
         try
         {
             var finder = new MdnsPhoneFinder(() => [IPAddress.Loopback, IPAddress.Parse("203.0.113.7")], (IPEndPoint)responder.Client.LocalEndPoint!, TimeSpan.FromMilliseconds(500));
@@ -221,12 +252,12 @@ public sealed class TransferLinkTests
             await Assert.That(await asked.Task).IsEquivalentTo(MdnsPhoneFinder.Query(MdnsPhoneFinder.Service), CollectionOrdering.Matching);
             await Assert.That(found.Name).IsEqualTo("Jamie's iPhone");
 
-            var accepting = waiting.AcceptTcpClientAsync();
+            var accepting = waiting.AcceptTcpClientAsync(ct);
             await using (var stream = await found.Connect(CancellationToken.None))
-                await stream.WriteAsync("hi"u8.ToArray());
+                await stream.WriteAsync("hi"u8.ToArray(), ct);
             using var phone = await accepting;
             var said = new byte[2];
-            await phone.GetStream().ReadExactlyAsync(said);
+            await phone.GetStream().ReadExactlyAsync(said, ct);
             await Assert.That(Encoding.ASCII.GetString(said)).IsEqualTo("hi");
         }
         finally { waiting.Stop(); }
@@ -237,7 +268,7 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task Asking_Everyone_Waits_Only_So_Long_And_Stops_When_The_Page_Goes()
+    public async Task Asking_Everyone_Waits_Only_So_Long_And_Stops_When_The_Page_Goes(CancellationToken ct)
     {
         var everyone = new MdnsPhoneFinder(() => [IPAddress.Loopback], new IPEndPoint(IPAddress.Parse("224.0.0.251"), 5353), TimeSpan.FromMilliseconds(200));
         await Assert.That((await everyone.FindAsync(CancellationToken.None)).All(p => p.Via == "wifi")).IsTrue();
@@ -247,7 +278,7 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task It_Asks_From_The_Networks_That_Are_Up_Other_Than_Itself_That_Take_Multicast()
+    public async Task It_Asks_From_The_Networks_That_Are_Up_Other_Than_Itself_That_Take_Multicast(CancellationToken ct)
     {
         var home = IPAddress.Parse("192.168.1.10");
         IReadOnlyList<IPAddress> Addresses() => [home, IPAddress.Parse("fe80::1")];
@@ -286,7 +317,7 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task Phones_On_A_Cable_Are_Found_Through_Apples_Device_Service_And_Others_Are_Not()
+    public async Task Phones_On_A_Cable_Are_Found_Through_Apples_Device_Service_And_Others_Are_Not(CancellationToken ct)
     {
         var list = new ScriptedStream(Reply(Dict("<key>DeviceList</key><array>" + Device("3", "USB") + Device("4", "Network") + Device("x", "USB") + Device("5", null)
             + "<dict><key>DeviceID</key><integer>6</integer></dict></array>")));
@@ -304,7 +335,7 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task Connecting_Asks_For_The_Phones_Port_And_Is_Then_The_Phone_Itself()
+    public async Task Connecting_Asks_For_The_Phones_Port_And_Is_Then_The_Phone_Itself(CancellationToken ct)
     {
         var connect = new ScriptedStream([.. Reply(Dict("<key>MessageType</key><string>Result</string><key>Number</key><integer>0</integer>")), .. "phone"u8]);
         var found = (await Muxer(new ScriptedStream(Reply(Dict("<key>DeviceList</key>" + Device("3", "USB")))), connect).FindAsync(CancellationToken.None)).Single();
@@ -314,14 +345,14 @@ public sealed class TransferLinkTests
         // The port goes in the order the network writes it.
         await Assert.That(said).Contains($"<key>DeviceID</key><integer>3</integer><key>PortNumber</key><integer>{BinaryPrimitives.ReverseEndianness((ushort)47615)}</integer>");
         var first = new byte[5];
-        await stream.ReadExactlyAsync(first);
+        await stream.ReadExactlyAsync(first, ct);
         await Assert.That(Encoding.ASCII.GetString(first)).IsEqualTo("phone");
     }
 
     [Test]
     [Arguments("<key>Number</key><integer>3</integer>")]
     [Arguments("<key>MessageType</key><string>Result</string>")]
-    public async Task A_Phone_Not_Offering_Photos_Says_What_To_Do(string answer)
+    public async Task A_Phone_Not_Offering_Photos_Says_What_To_Do(string answer, CancellationToken ct)
     {
         var connect = new ScriptedStream(Reply(Dict(answer)));
         var found = (await Muxer(new ScriptedStream(Reply(Dict("<key>DeviceList</key>" + Device("3", "USB")))), connect).FindAsync(CancellationToken.None)).Single();
@@ -330,6 +361,7 @@ public sealed class TransferLinkTests
         await Assert.That(connect.Disposed).IsTrue();
     }
 
+    /// <summary>Device services that are not there, or answer with what is not a list of devices.</summary>
     public static IEnumerable<Func<Func<CancellationToken, Task<Stream>>>> DeviceServicesThatDoNotAnswer()
     {
         yield return () => _ => throw new SocketException((int)SocketError.ConnectionRefused);
@@ -343,11 +375,11 @@ public sealed class TransferLinkTests
 
     [Test]
     [MethodDataSource(nameof(DeviceServicesThatDoNotAnswer))]
-    public async Task No_Device_Service_Or_One_That_Does_Not_Answer_Finds_No_Phone(Func<CancellationToken, Task<Stream>> muxer)
-        => await Assert.That(await new UsbmuxPhoneFinder(muxer, 47615).FindAsync(CancellationToken.None)).IsEmpty();
+    public async Task No_Device_Service_Or_One_That_Does_Not_Answer_Finds_No_Phone(Func<CancellationToken, Task<Stream>> muxer, CancellationToken ct)
+        => await Assert.That(await new UsbmuxPhoneFinder(muxer, 47615).FindAsync(ct)).IsEmpty();
 
     [Test]
-    public async Task The_Device_Service_Is_Where_Apple_Puts_It_On_Each_System()
+    public async Task The_Device_Service_Is_Where_Apple_Puts_It_On_Each_System(CancellationToken ct)
     {
         await Assert.That(UsbmuxPhoneFinder.Muxer(windows: true)).IsEqualTo(new IPEndPoint(IPAddress.Loopback, 27015));
         await Assert.That(UsbmuxPhoneFinder.Muxer(windows: false).ToString()).IsEqualTo("/var/run/usbmuxd");
@@ -368,7 +400,7 @@ public sealed class TransferLinkTests
     }
 
     [Test]
-    public async Task Every_Way_Of_Finding_Phones_Is_Asked_At_Once()
+    public async Task Every_Way_Of_Finding_Phones_Is_Asked_At_Once(CancellationToken ct)
     {
         var wifi = new FoundPhone("wifi:1", "Phone", "wifi", _ => Task.FromResult<Stream>(new MemoryStream()));
         var usb = new FoundPhone("usb:3", "iPhone or iPad on the cable", "usb", _ => Task.FromResult<Stream>(new MemoryStream()));
@@ -378,6 +410,7 @@ public sealed class TransferLinkTests
 
     private sealed class Finding(params FoundPhone[] phones) : IPhoneFinder
     {
+        /// <inheritdoc />
         public Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct) => Task.FromResult<IReadOnlyList<FoundPhone>>(phones);
     }
 }

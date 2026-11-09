@@ -1,11 +1,20 @@
 namespace PhotoSense.Domain.Services;
 
 /// <summary>How much the person has let PhotoSense see, where the system asks them (a phone's photo library).</summary>
-public enum PhotoAccess { Everything, Selected, Nothing }
+public enum PhotoAccess
+{
+    /// <summary>Every photo, as on a computer.</summary>
+    Everything,
+    /// <summary>Only the photos the person chose.</summary>
+    Selected,
+    /// <summary>None: the person said no, or has not been asked yet.</summary>
+    Nothing
+}
 
 /// <summary>What the person has let PhotoSense see, and the system's own ways of changing that.</summary>
 public interface IPhotoAccess
 {
+    /// <summary>What PhotoSense may see now.</summary>
     PhotoAccess Current { get; }
 
     /// <summary>Shows the system's picker for choosing more photos for PhotoSense to see; done once it is put away.</summary>

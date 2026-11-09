@@ -21,8 +21,10 @@ public sealed class AndroidAccess : IPhotoAccess
         }
     }
 
+    /// <summary>Asks again for the photos PhotoSense may see; done once Android's question is put away.</summary>
     public Task ChooseMoreAsync(CancellationToken ct) => MainActivity.AskForPhotosAgain().WaitAsync(ct);
 
+    /// <summary>Opens PhotoSense's page of Android's settings.</summary>
     public void OpenSettings()
     {
         var context = global::Android.App.Application.Context;

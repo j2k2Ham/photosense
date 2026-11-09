@@ -7,6 +7,7 @@ using PhotoSense.Tests.Server;
 
 namespace PhotoSense.Tests.Endpoints;
 
+/// <summary>Which address answers a request, and with what values.</summary>
 public sealed class ApiRouterTests
 {
     // A router whose every route answers with its own name and the values it was given.
@@ -15,7 +16,7 @@ public sealed class ApiRouterTests
         var router = new ApiRouter();
         foreach (var (method, template) in routes)
         {
-            Task<ApiResponse> Answer(ApiRequest request, IReadOnlyDictionary<string, string> values)
+            Task<ApiResponse> Answer(ApiRequest request, IReadOnlyDictionary<string, string> values, CancellationToken ct)
             {
                 var response = request.CreateResponse();
                 response.Headers.Add("X-Route", $"{method} {template}");
@@ -36,7 +37,7 @@ public sealed class ApiRouterTests
     }
 
     [Test]
-    public async Task An_Address_Goes_To_The_First_Route_That_Fits_It()
+    public async Task An_Address_Goes_To_The_First_Route_That_Fits_It(CancellationToken ct)
     {
         var router = Router(("GET", "scan/logs"), ("GET", "scan/progress/latest"), ("GET", "scan/progress/{instanceId}"),
             ("GET", "photos/{id:guid}"), ("DELETE", "photos/{id:guid}"), ("POST", "organize/undo/{batchId}"));
@@ -61,7 +62,7 @@ public sealed class ApiRouterTests
     [Arguments("GET", "/api/nothing")]
     [Arguments("GET", "/elsewhere/scan/logs")]            // not below /api at all
     [Arguments("GET", "/api")]
-    public async Task An_Address_No_Route_Fits_Is_Answered_By_None(string method, string path)
+    public async Task An_Address_No_Route_Fits_Is_Answered_By_None(string method, string path, CancellationToken ct)
     {
         var router = Router(("GET", "scan/logs"), ("GET", "photos/{id:guid}"), ("POST", "organize/undo/{batchId}"),
             ("GET", "organize/files/{id}/thumbnail"));
@@ -69,27 +70,27 @@ public sealed class ApiRouterTests
     }
 
     [Test]
-    public async Task An_Answer_Says_What_It_Holds_Unless_Told_Otherwise()
+    public async Task An_Answer_Says_What_It_Holds_Unless_Told_Otherwise(CancellationToken ct)
     {
         var text = new ApiResponse();
-        await text.WriteStringAsync("Folder not found");
+        await text.WriteStringAsync("Folder not found", ct);
         var json = new ApiResponse();
-        await json.WriteAsJsonAsync(new List<object> { new { Page = 1 }, new { instanceId = "a" } });
+        await json.WriteAsJsonAsync(new List<object> { new { Page = 1 }, new { instanceId = "a" } }, ct);
         var stream = new ApiResponse();
         stream.Headers.Add("Content-Type", "text/event-stream");
-        await stream.WriteStringAsync("event: end\n");
-        await stream.WriteAsJsonAsync(1);
+        await stream.WriteStringAsync("event: end\n", ct);
+        await stream.WriteAsJsonAsync(1, ct);
 
         await Assert.That((text.Headers.GetValues("Content-Type").Single(), Encoding.UTF8.GetString(((MemoryStream)text.Body).ToArray()))).IsEqualTo(("text/plain; charset=utf-8", "Folder not found"));
         // Each object keeps its own fields, under the names they were given.
         await Assert.That((json.Headers.GetValues("Content-Type").Single(), Encoding.UTF8.GetString(((MemoryStream)json.Body).ToArray()))).IsEqualTo(("application/json; charset=utf-8", """[{"Page":1},{"instanceId":"a"}]"""));
         await Assert.That(stream.Headers.GetValues("Content-Type").Single()).IsEqualTo("text/event-stream");
         // A request made with no body has an empty one.
-        await Assert.That(await new StreamReader(new ApiRequest("GET", new Uri("http://localhost/api/health")).Body).ReadToEndAsync()).IsEqualTo(string.Empty);
+        await Assert.That(await new StreamReader(new ApiRequest("GET", new Uri("http://localhost/api/health")).Body).ReadToEndAsync(ct)).IsEqualTo(string.Empty);
     }
 
     [Test]
-    public async Task Every_Address_Of_The_Service_Reaches_Its_Endpoint()
+    public async Task Every_Address_Of_The_Service_Reaches_Its_Endpoint(CancellationToken ct)
     {
         using var f = new ServerFixture();
         var router = f.Services.GetRequiredService<PhotoSenseRoutes>().Router;

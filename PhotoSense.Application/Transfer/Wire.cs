@@ -5,17 +5,19 @@ using System.Text.Json.Nodes;
 namespace PhotoSense.Application.Transfer;
 
 /// <summary>Why sending photos between a phone and a computer stopped, in words for the person.</summary>
+/// <param name="message">What happened and what to do, for the person.</param>
 public sealed class TransferException(string message) : IOException(message);
 
 /// <summary>
 /// What a phone and a computer say to each other: frames, each its length in four bytes and then that many bytes.
 /// Until the two have agreed on keys a frame holds a message in JSON; after, everything is sealed (<see cref="SecureChannel"/>).
 /// </summary>
-public static class Wire
+internal static class Wire
 {
     /// <summary>The largest frame either side takes: a piece of a file and what seals it.</summary>
     public const int LargestFrame = (1 << 20) + 64;
 
+    /// <summary>Writes one frame: its length, then its bytes.</summary>
     public static async Task WriteFrameAsync(Stream stream, ReadOnlyMemory<byte> payload, CancellationToken ct)
     {
         var length = new byte[4];
@@ -25,6 +27,8 @@ public static class Wire
         await stream.FlushAsync(ct);
     }
 
+    /// <summary>Reads one frame.</summary>
+    /// <exception cref="TransferException">The other device stopped answering, or sent a frame too large to be one.</exception>
     public static async Task<byte[]> ReadFrameAsync(Stream stream, CancellationToken ct)
     {
         try

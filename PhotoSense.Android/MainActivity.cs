@@ -85,11 +85,13 @@ public sealed class MainActivity : Activity
 
     private sealed class Answered(Action<bool> then) : Java.Lang.Object, IValueCallback
     {
+        /// <summary>Takes what the page answered.</summary>
         public void OnReceiveValue(Java.Lang.Object? value) => then(value?.ToString() == "true");
     }
 
     private sealed class BackCallback(Action back) : Java.Lang.Object, IOnBackInvokedCallback
     {
+        /// <summary>Goes back in the page, or leaves the app when there is nowhere to go back to.</summary>
         public void OnBackInvoked() => back();
     }
 
@@ -138,6 +140,7 @@ public sealed class MainActivity : Activity
 
     private sealed class BetweenBars : Java.Lang.Object, View.IOnApplyWindowInsetsListener
     {
+        /// <summary>Keeps the page clear of the phone's bars.</summary>
         public WindowInsets OnApplyWindowInsets(View view, WindowInsets insets)
         {
             var bars = insets.GetInsets(WindowInsets.Type.SystemBars() | WindowInsets.Type.DisplayCutout());

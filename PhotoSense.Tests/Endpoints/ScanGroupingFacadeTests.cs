@@ -9,6 +9,7 @@ using static PhotoSense.Tests.TestPhotos;
 
 namespace PhotoSense.Tests.Endpoints;
 
+/// <summary>Pages of the groups a scan found, as the Clean up screens show them.</summary>
 public class ScanGroupingFacadeTests
 {
     private static DuplicateGroup Group(string name, int copies, MatchKind match = MatchKind.Identical, bool allKept = false)
@@ -30,7 +31,7 @@ public class ScanGroupingFacadeTests
     }
 
     [Test]
-    public async Task Describes_A_Group_With_Its_Keeper_Members_And_Why_The_Keeper_Was_Preferred()
+    public async Task Describes_A_Group_With_Its_Keeper_Members_And_Why_The_Keeper_Was_Preferred(CancellationToken ct)
     {
         var group = new DuplicateGroup(
             Make("IMG_4198.HEIC", folder: Path.Combine("photos", "2024"), taken: Shot, size: 3_000),
@@ -56,7 +57,7 @@ public class ScanGroupingFacadeTests
     }
 
     [Test]
-    public async Task Pages_Through_Groups_While_Totals_Cover_Every_Duplicate()
+    public async Task Pages_Through_Groups_While_Totals_Cover_Every_Duplicate(CancellationToken ct)
     {
         var facade = Facade(Enumerable.Range(0, 5).Select(i => Group($"IMG_{i}", copies: 2)).ToList());
 
@@ -69,7 +70,7 @@ public class ScanGroupingFacadeTests
     }
 
     [Test]
-    public async Task Search_Matches_File_Names_And_Folders_Of_Keeper_Or_Copies()
+    public async Task Search_Matches_File_Names_And_Folders_Of_Keeper_Or_Copies(CancellationToken ct)
     {
         var facade = Facade([Group("IMG_1", 1), Group("DSC_2", 1)]);
         await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).Items.Single().Keeper.FileName).IsEqualTo("DSC_2.HEIC");
@@ -81,7 +82,7 @@ public class ScanGroupingFacadeTests
     }
 
     [Test]
-    public async Task Reviewed_Groups_Can_Be_Hidden()
+    public async Task Reviewed_Groups_Can_Be_Hidden(CancellationToken ct)
     {
         var facade = Facade([Group("IMG_1", 2, allKept: true), Group("IMG_2", 1)]);
         await Assert.That((await facade.BuildAsync(false, null, hideKept: false, 1, 10, default)).Total).IsEqualTo(2);
@@ -91,7 +92,7 @@ public class ScanGroupingFacadeTests
     }
 
     [Test]
-    public async Task Similar_Groups_Are_Listed_Separately_And_Never_Counted_As_Removable()
+    public async Task Similar_Groups_Are_Listed_Separately_And_Never_Counted_As_Removable(CancellationToken ct)
     {
         var facade = Facade([Group("IMG_1", 1)], similar: [Group("IMG_9", 3, MatchKind.Similar)]);
         var page = await facade.BuildAsync(similar: true, null, false, 1, 10, default);

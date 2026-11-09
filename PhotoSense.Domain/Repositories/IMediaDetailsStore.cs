@@ -3,6 +3,10 @@ using PhotoSense.Domain.Services;
 namespace PhotoSense.Domain.Repositories;
 
 /// <summary>What was read from a file, with the size and time that say whether the file is still the one that was read.</summary>
+/// <param name="Path">The file's full path.</param>
+/// <param name="SizeBytes">The file's size when it was read.</param>
+/// <param name="ModifiedUtc">When the file had last changed when it was read.</param>
+/// <param name="Details">What was read from it.</param>
 public sealed record StoredMediaDetails(string Path, long SizeBytes, DateTime ModifiedUtc, MediaDetails Details);
 
 /// <summary>

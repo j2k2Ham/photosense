@@ -1,0 +1,7 @@
+<Project>
+  <!-- Every public type and member carries XML documentation (CLAUDE.md, "How things are written here"): with the
+       file generated, the compiler reports each one missing as CS1591, and CI builds with warnings as errors. -->
+  <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

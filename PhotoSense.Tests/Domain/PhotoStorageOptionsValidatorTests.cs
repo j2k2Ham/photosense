@@ -4,10 +4,11 @@ using PhotoSense.Domain.Configuration;
 
 namespace PhotoSense.Tests.Domain;
 
+/// <summary>Refusing settings that would keep the service's data where it could be lost.</summary>
 public class PhotoStorageOptionsValidatorTests
 {
     [Test]
-    public async Task Validate_Success_When_Valid()
+    public async Task Validate_Success_When_Valid(CancellationToken ct)
     {
         var validator = new PhotoStorageOptionsValidator();
         var result = validator.Validate(null, new PhotoStorageOptions{ DatabasePath="ok.db" });
@@ -15,7 +16,7 @@ public class PhotoStorageOptionsValidatorTests
     }
 
     [Test]
-    public async Task Validate_Fails_When_DatabasePath_Missing()
+    public async Task Validate_Fails_When_DatabasePath_Missing(CancellationToken ct)
     {
         var validator = new PhotoStorageOptionsValidator();
         var result = validator.Validate(null, new PhotoStorageOptions{ DatabasePath="" });
@@ -23,7 +24,7 @@ public class PhotoStorageOptionsValidatorTests
     }
 
     [Test]
-    public async Task Data_Inside_The_Folder_The_Service_Runs_From_Is_Refused()
+    public async Task Data_Inside_The_Folder_The_Service_Runs_From_Is_Refused(CancellationToken ct)
     {
         // That folder is replaced whenever the program is built or published again, and the data would go with it.
         var program = Path.Combine(Path.GetTempPath(), "photosense-app", "bin");
@@ -51,7 +52,7 @@ public class PhotoStorageOptionsValidatorTests
     [Arguments("CameraOriginal", FormatPreference.CameraOriginal)]
     [Arguments("WidelyCompatible", FormatPreference.WidelyCompatible)]
     [Arguments("cameraoriginal", FormatPreference.CameraOriginal)]
-    public async Task The_Format_To_Keep_Is_Read_From_The_Settings(string? setting, FormatPreference expected)
+    public async Task The_Format_To_Keep_Is_Read_From_The_Settings(string? setting, FormatPreference expected, CancellationToken ct)
     {
         // As the service reads it: an environment variable PhotoStorage__KeepFormat arrives under this key.
         // A variable that is not set is simply not there. (A key that is there with no value is another matter:

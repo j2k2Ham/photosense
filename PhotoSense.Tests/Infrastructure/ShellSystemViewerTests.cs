@@ -5,7 +5,8 @@ using PhotoSense.Desktop.Viewing;
 
 namespace PhotoSense.Tests.Infrastructure;
 
-public sealed class ShellSystemViewerTests : IDisposable
+/// <summary>Handing a file to the system to open, as double-clicking it would.</summary>
+internal sealed class ShellSystemViewerTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-viewer-");
     private readonly List<ProcessStartInfo> _started = [];
@@ -24,7 +25,7 @@ public sealed class ShellSystemViewerTests : IDisposable
         => new(desktop, start ?? (info => { _started.Add(info); return null; }));
 
     [Test]
-    public async Task On_Windows_The_File_Itself_Is_Handed_To_The_Shell()
+    public async Task On_Windows_The_File_Itself_Is_Handed_To_The_Shell(CancellationToken ct)
     {
         var path = File_("IMG_1.HEIC");
         Viewer(DesktopSystem.Windows).Open(path);
@@ -36,7 +37,7 @@ public sealed class ShellSystemViewerTests : IDisposable
     [Test]
     [Arguments(DesktopSystem.MacOS, "open")]
     [Arguments(DesktopSystem.Linux, "xdg-open")]
-    public async Task Elsewhere_The_Desktops_Opener_Is_Run_With_The_Path_As_One_Argument(DesktopSystem desktop, string opener)
+    public async Task Elsewhere_The_Desktops_Opener_Is_Run_With_The_Path_As_One_Argument(DesktopSystem desktop, string opener, CancellationToken ct)
     {
         // A name a shell would mangle: it must arrive whole.
         var path = File_("clip; rm -rf $HOME 'x'.mov");
@@ -47,7 +48,7 @@ public sealed class ShellSystemViewerTests : IDisposable
     }
 
     [Test]
-    public async Task A_Relative_Path_Is_Opened_By_Its_Full_Path()
+    public async Task A_Relative_Path_Is_Opened_By_Its_Full_Path(CancellationToken ct)
     {
         var path = File_("IMG_2.JPG");
         var relative = Path.GetRelativePath(Directory.GetCurrentDirectory(), path);
@@ -57,7 +58,7 @@ public sealed class ShellSystemViewerTests : IDisposable
     }
 
     [Test]
-    public async Task A_File_That_Is_Gone_Is_Not_Handed_To_Anything()
+    public async Task A_File_That_Is_Gone_Is_Not_Handed_To_Anything(CancellationToken ct)
     {
         var missing = Path.Combine(_root.FullName, "gone.jpg");
         var error = Assert.ThrowsExactly<FileNotFoundException>(() => Viewer(DesktopSystem.Windows).Open(missing));
@@ -66,7 +67,7 @@ public sealed class ShellSystemViewerTests : IDisposable
     }
 
     [Test]
-    public async Task The_Handle_Used_To_Start_The_Viewer_Is_Released()
+    public async Task The_Handle_Used_To_Start_The_Viewer_Is_Released(CancellationToken ct)
     {
         var handle = new Handle();
         Viewer(DesktopSystem.Windows, _ => handle).Open(File_("IMG_3.JPG"));
@@ -77,7 +78,7 @@ public sealed class ShellSystemViewerTests : IDisposable
     [Arguments(typeof(Win32Exception))]            // no application is registered for the type
     [Arguments(typeof(InvalidOperationException))]
     [Arguments(typeof(PlatformNotSupportedException))]
-    public async Task A_Viewer_That_Cannot_Be_Started_Is_Reported_By_File_Name(Type failure)
+    public async Task A_Viewer_That_Cannot_Be_Started_Is_Reported_By_File_Name(Type failure, CancellationToken ct)
     {
         var path = File_("IMG_4.HEIC");
         var viewer = Viewer(DesktopSystem.Windows, _ => throw (Exception)Activator.CreateInstance(failure)!);
@@ -94,7 +95,7 @@ public sealed class ShellSystemViewerTests : IDisposable
     }
 
     [Test]
-    public async Task Knows_The_Desktop_It_Is_Running_On()
+    public async Task Knows_The_Desktop_It_Is_Running_On(CancellationToken ct)
     {
         var expected = OperatingSystem.IsWindows() ? DesktopSystem.Windows : OperatingSystem.IsMacOS() ? DesktopSystem.MacOS : DesktopSystem.Linux;
         await Assert.That(ShellSystemViewer.CurrentDesktop()).IsEqualTo(expected);
@@ -104,7 +105,7 @@ public sealed class ShellSystemViewerTests : IDisposable
 
 
     [Test]
-    public async Task Tells_The_Desktops_Apart()
+    public async Task Tells_The_Desktops_Apart(CancellationToken ct)
     {
         await Assert.That(ShellSystemViewer.DesktopOf(os => os == OSPlatform.Windows)).IsEqualTo(DesktopSystem.Windows);
         await Assert.That(ShellSystemViewer.DesktopOf(os => os == OSPlatform.OSX)).IsEqualTo(DesktopSystem.MacOS);
@@ -114,6 +115,7 @@ public sealed class ShellSystemViewerTests : IDisposable
 
     private sealed class Handle : IDisposable
     {
+        /// <summary>The handle was let go of.</summary>
         public bool Disposed { get; private set; }
         public void Dispose() => Disposed = true;
     }

@@ -26,32 +26,37 @@ public sealed class PairingTests
     // Each side as it runs on its own device: what fails there ends that device's connection.
     private static async Task<T> Ending<T>(Stream stream, Task<T> side)
     {
-        try { return await side; }
-        catch
+        var ended = true;
+        try
         {
-            await stream.DisposeAsync();
-            throw;
+            var linked = await side;
+            ended = false;
+            return linked;
+        }
+        finally
+        {
+            if (ended) await stream.DisposeAsync();
         }
     }
 
-    private async Task<(Linked Phone, Linked Computer)> PairAsync(Func<string, Device, CancellationToken, Task<bool>> phoneAsks, Func<string, Device, CancellationToken, Task<bool>> computerAsks)
+    private async Task<(Linked Phone, Linked Computer)> PairAsync(Func<string, Device, CancellationToken, Task<bool>> phoneAsks, Func<string, Device, CancellationToken, Task<bool>> computerAsks, CancellationToken ct)
     {
-        var (near, far) = await Loopback.PairAsync();
-        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, phoneAsks, CancellationToken.None));
-        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, computerAsks, CancellationToken.None));
+        var (near, far) = await Loopback.PairAsync(ct);
+        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, phoneAsks, ct));
+        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, computerAsks, ct));
         return (await phone, await computer);
     }
 
-    private async Task PairedBeforeAsync(byte[] phoneKeeps, byte[] computerKeeps)
+    private async Task PairedBeforeAsync(byte[] phoneKeeps, byte[] computerKeeps, CancellationToken ct)
     {
-        await _phonePairs.SaveAsync(new PairedDevice(Computer.Id, Computer.Name, phoneKeeps, DateTime.UtcNow));
-        await _computerPairs.SaveAsync(new PairedDevice(Phone.Id, Phone.Name, computerKeeps, DateTime.UtcNow));
+        await _phonePairs.SaveAsync(new PairedDevice(Computer.Id, Computer.Name, phoneKeeps), ct);
+        await _computerPairs.SaveAsync(new PairedDevice(Phone.Id, Phone.Name, computerKeeps), ct);
     }
 
     [Test]
-    public async Task The_First_Time_Both_Show_One_Number_Each_Keeps_The_Other_And_Then_Only_They_Understand_Each_Other()
+    public async Task The_First_Time_Both_Show_One_Number_Each_Keeps_The_Other_And_Then_Only_They_Understand_Each_Other(CancellationToken ct)
     {
-        var (phone, computer) = await PairAsync(Answering("phone"), Answering("computer"));
+        var (phone, computer) = await PairAsync(Answering("phone"), Answering("computer"), ct);
 
         await Assert.That(_shown.Select(s => s.Who).Order()).IsEquivalentTo(["computer", "phone"], CollectionOrdering.Matching);
         await Assert.That(_shown.Select(s => s.Code).Distinct().Single()).Matches(@"^\d{3} \d{3}$");
@@ -69,37 +74,37 @@ public sealed class PairingTests
     }
 
     [Test]
-    public async Task Paired_Once_They_Prove_It_To_Each_Other_Without_Asking()
+    public async Task Paired_Once_They_Prove_It_To_Each_Other_Without_Asking(CancellationToken ct)
     {
         var secret = RandomNumberGenerator.GetBytes(32);
-        await PairedBeforeAsync(secret, secret);
-        var (phone, computer) = await PairAsync(NeverAsked, NeverAsked);
+        await PairedBeforeAsync(secret, secret, ct);
+        var (phone, computer) = await PairAsync(NeverAsked, NeverAsked, ct);
         await Assert.That((phone.Paired, computer.Paired, phone.Other.Name, computer.Other.Name)).IsEqualTo((false, false, "DESKTOP-1", "Jamie's iPhone"));
     }
 
     [Test]
-    public async Task A_Computer_That_Lost_Its_Pairing_Has_Both_Asked_Again()
+    public async Task A_Computer_That_Lost_Its_Pairing_Has_Both_Asked_Again(CancellationToken ct)
     {
-        await _phonePairs.SaveAsync(new PairedDevice(Computer.Id, Computer.Name, RandomNumberGenerator.GetBytes(32), DateTime.UtcNow));
-        var (phone, computer) = await PairAsync(Answering("phone"), Answering("computer"));
+        await _phonePairs.SaveAsync(new PairedDevice(Computer.Id, Computer.Name, RandomNumberGenerator.GetBytes(32)), ct);
+        var (phone, computer) = await PairAsync(Answering("phone"), Answering("computer"), ct);
         await Assert.That((_shown.Count, _shown[0].Code == _shown[1].Code, phone.Paired, computer.Paired)).IsEqualTo((2, true, true, true));
         await Assert.That(_phonePairs.Paired.Single().Key).IsEquivalentTo(_computerPairs.Paired.Single().Key, CollectionOrdering.Matching);
     }
 
     [Test]
-    public async Task A_Phone_That_Lost_Its_Pairing_Has_Both_Asked_Again()
+    public async Task A_Phone_That_Lost_Its_Pairing_Has_Both_Asked_Again(CancellationToken ct)
     {
-        await _computerPairs.SaveAsync(new PairedDevice(Phone.Id, Phone.Name, RandomNumberGenerator.GetBytes(32), DateTime.UtcNow));
-        var (phone, computer) = await PairAsync(Answering("phone"), Answering("computer"));
+        await _computerPairs.SaveAsync(new PairedDevice(Phone.Id, Phone.Name, RandomNumberGenerator.GetBytes(32)), ct);
+        var (phone, computer) = await PairAsync(Answering("phone"), Answering("computer"), ct);
         await Assert.That((_shown.Count, phone.Paired, computer.Paired)).IsEqualTo((2, true, true));
         await Assert.That(_phonePairs.Paired.Single().Key).IsEquivalentTo(_computerPairs.Paired.Single().Key, CollectionOrdering.Matching);
     }
 
     [Test]
-    public async Task Pairings_That_Do_Not_Agree_Are_Found_Out_And_Nothing_Goes_Further()
+    public async Task Pairings_That_Do_Not_Agree_Are_Found_Out_And_Nothing_Goes_Further(CancellationToken ct)
     {
-        await PairedBeforeAsync(RandomNumberGenerator.GetBytes(32), RandomNumberGenerator.GetBytes(32));
-        var (near, far) = await Loopback.PairAsync();
+        await PairedBeforeAsync(RandomNumberGenerator.GetBytes(32), RandomNumberGenerator.GetBytes(32), ct);
+        var (near, far) = await Loopback.PairAsync(ct);
         var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, NeverAsked, CancellationToken.None));
         var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, NeverAsked, CancellationToken.None));
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => phone))!.Message).IsEqualTo("DESKTOP-1 is not the computer this phone was paired with. Pair them again.");
@@ -107,14 +112,14 @@ public sealed class PairingTests
     }
 
     [Test]
-    public async Task Numbers_Said_Not_To_Match_On_The_Phone_First_Stop_Both()
+    public async Task Numbers_Said_Not_To_Match_On_The_Phone_First_Stop_Both(CancellationToken ct)
     {
-        var (near, far) = await Loopback.PairAsync();
+        var (near, far) = await Loopback.PairAsync(ct);
         var computerAnswer = new TaskCompletionSource<bool>();
         var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, Answering("phone", same: false), CancellationToken.None));
         var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, (_, _, _) => computerAnswer.Task, CancellationToken.None));
         // The phone said no while the computer still asks; the computer says yes after.
-        await Task.Delay(100);
+        await Task.Delay(100, ct);
         computerAnswer.SetResult(true);
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => phone))!.Message).StartsWith("The numbers did not match");
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => computer))!.Message).IsEqualTo("On the phone the numbers were said not to match, so nothing was sent. Try again.");
@@ -152,53 +157,53 @@ public sealed class PairingTests
         }
     }
 
-    private async Task<(Task Phone, Task<Linked> Computer)> WithPhoneAsync(Func<Stream, Task> phone)
+    private async Task<(Task Phone, Task<Linked> Computer)> WithPhoneAsync(Func<Stream, Task> phone, CancellationToken ct)
     {
-        var (near, far) = await Loopback.PairAsync();
+        var (near, far) = await Loopback.PairAsync(ct);
         return (phone(near), Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, Answering("computer"), CancellationToken.None)));
     }
 
     [Test]
     [Arguments(null)]
     [Arguments("yes")]
-    public async Task A_Phone_That_Does_Not_Say_Whether_It_Knows_The_Computer_Is_Paired_Afresh(string? known)
+    public async Task A_Phone_That_Does_Not_Say_Whether_It_Knows_The_Computer_Is_Paired_Afresh(string? known, CancellationToken ct)
     {
-        await _computerPairs.SaveAsync(new PairedDevice("someone", "Someone's phone", RandomNumberGenerator.GetBytes(32), DateTime.UtcNow));
-        var (phone, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, known is null ? null : JsonValue.Create(known)));
+        await _computerPairs.SaveAsync(new PairedDevice("someone", "Someone's phone", RandomNumberGenerator.GetBytes(32)), ct);
+        var (phone, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, known is null ? null : JsonValue.Create(known)), ct);
         await phone;
         await Assert.That(((await computer).Paired, _shown.Count)).IsEqualTo((true, 1));
     }
 
     [Test]
-    public async Task A_Phone_Whose_Key_Is_Not_The_One_It_Promised_Is_Stopped()
+    public async Task A_Phone_Whose_Key_Is_Not_The_One_It_Promised_Is_Stopped(CancellationToken ct)
     {
-        var (_, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, false, keepsPromise: false));
+        var (_, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, false, keepsPromise: false), ct);
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => computer))!.Message).IsEqualTo("The phone's answer did not match what it promised, so PhotoSense stopped. Try again.");
         await Assert.That(_shown).IsEmpty();
     }
 
     [Test]
-    public async Task A_Phone_That_Cannot_Prove_The_Pairing_Is_Stopped()
+    public async Task A_Phone_That_Cannot_Prove_The_Pairing_Is_Stopped(CancellationToken ct)
     {
-        await _computerPairs.SaveAsync(new PairedDevice("someone", "Someone's phone", RandomNumberGenerator.GetBytes(32), DateTime.UtcNow));
-        var (_, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, true, proves: true));
+        await _computerPairs.SaveAsync(new PairedDevice("someone", "Someone's phone", RandomNumberGenerator.GetBytes(32)), ct);
+        var (_, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, true, proves: true), ct);
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => computer))!.Message).IsEqualTo("Someone's phone is not the phone this computer was paired with. Pair them again.");
     }
 
     [Test]
     [Arguments("{\"t\": \"confirm\", \"same\": \"yes\"}")]
     [Arguments("{\"t\": \"confirm\"}")]
-    public async Task A_Phone_Whose_Answer_Is_Not_Yes_Is_Taken_To_Say_No(string answer)
+    public async Task A_Phone_Whose_Answer_Is_Not_Yes_Is_Taken_To_Say_No(string answer, CancellationToken ct)
     {
-        var (_, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, false, answer: answer));
+        var (_, computer) = await WithPhoneAsync(s => PlayPhoneAsync(s, false, answer: answer), ct);
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => computer))!.Message).IsEqualTo("On the phone the numbers were said not to match, so nothing was sent. Try again.");
         await Assert.That(_computerPairs.Paired).IsEmpty();
     }
 
     [Test]
-    public async Task A_Computer_Whose_Key_Is_Not_A_Key_Is_Stopped()
+    public async Task A_Computer_Whose_Key_Is_Not_A_Key_Is_Stopped(CancellationToken ct)
     {
-        var (near, far) = await Loopback.PairAsync();
+        var (near, far) = await Loopback.PairAsync(ct);
         var phone = Pairing.PhoneAsync(near, Phone, _phonePairs, NeverAsked, CancellationToken.None);
         await Wire.ReceiveAsync(far, "phone", CancellationToken.None);
         await Wire.SendAsync(far, new JsonObject { ["t"] = "hello", ["id"] = "someone", ["name"] = "Someone's computer", ["key"] = Base64([1, 2, 3]) }, CancellationToken.None);
@@ -208,7 +213,7 @@ public sealed class PairingTests
     }
 
     [Test]
-    public async Task The_Number_Is_Six_Digits_From_What_Was_Said_And_The_Same_Each_Time()
+    public async Task The_Number_Is_Six_Digits_From_What_Was_Said_And_The_Same_Each_Time(CancellationToken ct)
     {
         var said = SHA256.HashData("everything said"u8);
         await Assert.That(Pairing.Code(said)).IsEqualTo(Pairing.Code([.. said]));
@@ -223,14 +228,14 @@ public sealed class PairingTests
     [Test]
     [Arguments(new byte[] { 0xFF, 0xFF, 0xFF, 0xFF })]
     [Arguments(new byte[] { 0x7F, 0, 0, 0 })]
-    public async Task A_Frame_Of_No_Size_Or_Too_Large_Is_Not_Understood(byte[] length)
+    public async Task A_Frame_Of_No_Size_Or_Too_Large_Is_Not_Understood(byte[] length, CancellationToken ct)
     {
         var thrown = await Assert.ThrowsAsync<TransferException>(() => Wire.ReadFrameAsync(new MemoryStream(Frame(length)), CancellationToken.None));
         await Assert.That(thrown!.Message).IsEqualTo("The other device sent something PhotoSense does not understand.");
     }
 
     [Test]
-    public async Task A_Frame_Cut_Short_Says_The_Other_Device_Stopped_Answering()
+    public async Task A_Frame_Cut_Short_Says_The_Other_Device_Stopped_Answering(CancellationToken ct)
     {
         var thrown = await Assert.ThrowsAsync<TransferException>(() => Wire.ReadFrameAsync(new MemoryStream(Frame([0, 0, 0, 9], 1, 2)), CancellationToken.None));
         await Assert.That(thrown!.Message).IsEqualTo("The other device stopped answering.");
@@ -245,14 +250,14 @@ public sealed class PairingTests
     [Arguments("{\"t\": \"busy\"}", "The phone is already sending to another computer.")]
     [Arguments("{\"t\": \"stop\", \"why\": \"The phone was locked.\"}", "The phone was locked.")]
     [Arguments("{\"t\": \"stop\"}", "The other device stopped.")]
-    public async Task A_Message_Not_Expected_Says_Why(string message, string why)
+    public async Task A_Message_Not_Expected_Says_Why(string message, string why, CancellationToken ct)
     {
         var thrown = Assert.Throws<TransferException>(() => Wire.Expect(Encoding.UTF8.GetBytes(message), "hello"));
         await Assert.That(thrown!.Message).IsEqualTo(why);
     }
 
     [Test]
-    public async Task Fields_Missing_Or_Not_In_Base_64_Are_Not_Understood()
+    public async Task Fields_Missing_Or_Not_In_Base_64_Are_Not_Understood(CancellationToken ct)
     {
         var message = Wire.Expect("{\"t\": \"hello\", \"key\": \"not base 64!\"}"u8.ToArray(), "hello");
         await Assert.That(Assert.Throws<TransferException>(() => Wire.Text(message, "name"))!.Message).IsEqualTo("The other device sent something PhotoSense does not understand.");
@@ -269,7 +274,7 @@ public sealed class PairingTests
     }
 
     [Test]
-    public async Task A_Piece_Of_A_File_Where_A_Message_Was_Expected_And_The_Other_Way_Round_Is_Not_Understood()
+    public async Task A_Piece_Of_A_File_Where_A_Message_Was_Expected_And_The_Other_Way_Round_Is_Not_Understood(CancellationToken ct)
     {
         var (sending, receiving, line) = Channels();
         await sending.SendDataAsync(new byte[] { 1 }, CancellationToken.None);
@@ -280,14 +285,14 @@ public sealed class PairingTests
     }
 
     [Test]
-    public async Task A_Frame_Too_Short_To_Be_Sealed_Is_Not_Understood()
+    public async Task A_Frame_Too_Short_To_Be_Sealed_Is_Not_Understood(CancellationToken ct)
     {
         using var receiving = new SecureChannel(new MemoryStream(Frame([0, 0, 0, 3], 1, 2, 3)), new byte[32], new byte[32]);
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => receiving.ReceiveDataAsync(CancellationToken.None)))!.Message).IsEqualTo("The other device sent something PhotoSense does not understand.");
     }
 
     [Test]
-    public async Task Anything_Changed_Or_Sent_Again_On_The_Way_Is_Noticed()
+    public async Task Anything_Changed_Or_Sent_Again_On_The_Way_Is_Noticed(CancellationToken ct)
     {
         var (sending, receiving, line) = Channels();
         await sending.SendDataAsync(new byte[] { 1, 2, 3 }, CancellationToken.None);

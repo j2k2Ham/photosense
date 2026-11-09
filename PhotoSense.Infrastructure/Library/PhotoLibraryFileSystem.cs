@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+internal sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -34,6 +34,8 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
 
     private sealed record Seen(Dictionary<string, Shown> Files, HashSet<string> Folders, Dictionary<string, IReadOnlyList<string>> Albums, ILookup<string, string> FoldersOf);
 
+    /// <summary>The phone's photo library as <paramref name="library"/> gives it, shown as folders below <paramref name="root"/>.</summary>
+    /// <param name="library">The phone's photo library.</param>
     /// <param name="root">The path the library is shown at, as a folder.</param>
     public PhotoLibraryFileSystem(IPhotoLibrary library, string root)
     {
@@ -44,17 +46,21 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
     /// <summary>The path of the folder the library is shown as.</summary>
     public string Root { get; }
 
+    /// <inheritdoc />
     public bool FileExists(string path) => Find(path) is not null;
 
+    /// <inheritdoc />
     public bool FolderExists(string path)
     {
         var folder = Path.TrimEndingDirectorySeparator(path);
         return Same(folder, Root) || Look().Folders.Contains(folder) || _made.Contains(folder);
     }
 
+    /// <inheritdoc />
     public StoredFile? Describe(string path) => Find(path) is { } found ? new StoredFile(found.File.Length, found.Item.ModifiedUtc) : null;
 
     // The library is read again each time its folder is listed, so that a scan sees what is in it now.
+    /// <inheritdoc />
     public IReadOnlyList<string> FilesIn(string folder)
     {
         var at = Path.TrimEndingDirectorySeparator(folder);
@@ -62,14 +68,17 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         return [.. seen.Files.Where(f => Same(f.Value.Folder, at)).Select(f => f.Key)];
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<string> FoldersIn(string folder)
     {
         var at = Path.TrimEndingDirectorySeparator(folder);
         return [.. Look().Folders.Concat(_made).Where(f => Same(Path.GetDirectoryName(f)!, at)).Distinct(PhotoPath.Comparer).Order(StringComparer.Ordinal)];
     }
 
+    /// <inheritdoc />
     public bool IsLink(string path) => false;
 
+    /// <inheritdoc />
     public Stream OpenRead(string path)
     {
         var found = Find(path) ?? throw new FileNotFoundException("The picture is no longer in the photo library.", path);
@@ -82,6 +91,7 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         return whole;
     }
 
+    /// <inheritdoc />
     public bool IsCopyOf(string copy, string original)
     {
         using var part = OpenRead(copy);
@@ -89,24 +99,31 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         return Copies.BeginsWith(whole, part);
     }
 
+    /// <inheritdoc />
     public void Move(string from, string to) => MoveAll([new FileMove(from, to)]);
 
+    /// <inheritdoc />
     public void Copy(string from, string to) => throw new UnauthorizedAccessException(NoCopies);
 
     /// <summary>Photos arrive on a computer from a phone, not on the phone.</summary>
     public Stream CreateNew(string path) => throw new UnauthorizedAccessException("PhotoSense does not put new files in a phone's photo library.");
 
+    /// <inheritdoc />
     public void MakeFolder(string path)
     {
         for (var at = Inside(path); !Same(at, Root); at = Path.GetDirectoryName(at)!) _made.Add(at);
     }
 
+    /// <inheritdoc />
     public void RemoveEmptyFolder(string path) => RemoveEmptyFolders([path]);
 
+    /// <inheritdoc />
     public void DeleteCopy(string path) => throw new UnauthorizedAccessException(NoCopies);
 
+    /// <inheritdoc />
     public void Erase(string path) => EraseAll([path]);
 
+    /// <inheritdoc />
     public void MoveAll(IReadOnlyList<FileMove> moves)
     {
         var seen = Look();
@@ -137,6 +154,7 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         Apply(change);
     }
 
+    /// <inheritdoc />
     public void EraseAll(IReadOnlyList<string> paths)
     {
         var seen = Look();

@@ -1,5 +1,6 @@
 namespace PhotoSense.Infrastructure.Files;
 
+/// <summary>Compares the bytes of two files, to tell a copy from what it was copied from.</summary>
 internal static class Copies
 {
     /// <summary>Whether <paramref name="whole"/> begins with everything <paramref name="part"/> holds.</summary>

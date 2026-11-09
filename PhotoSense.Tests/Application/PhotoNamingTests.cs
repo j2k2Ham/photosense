@@ -3,6 +3,7 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests.Application;
 
+/// <summary>How iOS names the files of one item.</summary>
 public class PhotoNamingTests
 {
     [Test]
@@ -19,7 +20,7 @@ public class PhotoNamingTests
     [Arguments("DSC_0132.JPG", "DSC_0132")]
     [Arguments("IMG_12345.JPG", "IMG_12345")]
     [Arguments("holiday.png", "HOLIDAY")]
-    public async Task Every_File_Of_One_Item_Shares_Its_Name(string fileName, string item)
+    public async Task Every_File_Of_One_Item_Shares_Its_Name(string fileName, string item, CancellationToken ct)
         => await Assert.That(PhotoNaming.ItemOf(Path.Combine("some", "folder", fileName))).IsEqualTo(item);
 
     [Test]
@@ -32,14 +33,14 @@ public class PhotoNamingTests
     [Arguments("AROP4792.JPG", false)]
     [Arguments("DSC_0132.JPG", false)]
     [Arguments("IMG_E89751.HEIC", false)]
-    public async Task Recognises_The_Name_iOS_Gives_An_Edited_Picture(string fileName, bool edited)
+    public async Task Recognises_The_Name_iOS_Gives_An_Edited_Picture(string fileName, bool edited, CancellationToken ct)
         => await Assert.That(PhotoNaming.IsEditedRender(fileName)).IsEqualTo(edited);
 
     [Test]
     [Arguments("IMG_1234.AAE", true)]
     [Arguments("IMG_O1234.aae", true)]
     [Arguments("IMG_1234.HEIC", false)]
-    public async Task Knows_A_Sidecar(string fileName, bool sidecar)
+    public async Task Knows_A_Sidecar(string fileName, bool sidecar, CancellationToken ct)
         => await Assert.That(PhotoNaming.IsSidecar(fileName)).IsEqualTo(sidecar);
 
     [Test]
@@ -49,7 +50,7 @@ public class PhotoNamingTests
     [Arguments("a.mp4", false, true)]
     [Arguments("a.aae", false, false)]
     [Arguments("a", false, false)]
-    public async Task Tells_Pictures_From_Videos_By_Extension(string fileName, bool image, bool video)
+    public async Task Tells_Pictures_From_Videos_By_Extension(string fileName, bool image, bool video, CancellationToken ct)
     {
         await Assert.That((MediaFiles.IsImage(fileName), MediaFiles.IsVideo(fileName), MediaFiles.IsScanned(fileName))).IsEqualTo((image, video, image || video));
     }

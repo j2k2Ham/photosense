@@ -9,13 +9,17 @@ internal sealed class MemoryPairs(string self) : IPairingStore
 {
     private readonly Dictionary<string, PairedDevice> _paired = [];
 
+    /// <summary>The pairings kept.</summary>
     public IReadOnlyCollection<PairedDevice> Paired => _paired.Values;
 
-    public Task<string> SelfIdAsync() => Task.FromResult(self);
+    /// <inheritdoc />
+    public Task<string> SelfIdAsync(CancellationToken ct) => Task.FromResult(self);
 
-    public Task<PairedDevice?> GetAsync(string id) => Task.FromResult(_paired.GetValueOrDefault(id));
+    /// <inheritdoc />
+    public Task<PairedDevice?> GetAsync(string id, CancellationToken ct) => Task.FromResult(_paired.GetValueOrDefault(id));
 
-    public Task SaveAsync(PairedDevice device)
+    /// <inheritdoc />
+    public Task SaveAsync(PairedDevice device, CancellationToken ct)
     {
         _paired[device.Id] = device;
         return Task.CompletedTask;
@@ -25,19 +29,21 @@ internal sealed class MemoryPairs(string self) : IPairingStore
 /// <summary>Two ends of one connection over this computer's own network.</summary>
 internal static class Loopback
 {
-    public static async Task<(Stream Near, Stream Far)> PairAsync()
+    /// <summary>Two ends of one connection over this computer's own network.</summary>
+    public static async Task<(Stream Near, Stream Far)> PairAsync(CancellationToken ct)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         try
         {
-            var accepting = listener.AcceptTcpClientAsync();
-            var near = await ConnectAsync(((IPEndPoint)listener.LocalEndpoint).Port, CancellationToken.None);
+            var accepting = listener.AcceptTcpClientAsync(ct);
+            var near = await ConnectAsync(((IPEndPoint)listener.LocalEndpoint).Port, ct);
             return (near, (await accepting).GetStream());
         }
         finally { listener.Stop(); }
     }
 
+    /// <summary>A connection to a port of this computer.</summary>
     public static async Task<Stream> ConnectAsync(int port, CancellationToken ct)
     {
         var client = new TcpClient();
@@ -51,7 +57,9 @@ internal sealed class ScriptedStream(byte[] answers) : Stream
 {
     private readonly MemoryStream _answers = new(answers);
 
+    /// <summary>What was said to it.</summary>
     public MemoryStream Written { get; } = new();
+    /// <summary>It was let go of.</summary>
     public bool Disposed { get; private set; }
 
     public override bool CanRead => true;

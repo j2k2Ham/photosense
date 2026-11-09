@@ -2,6 +2,7 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests.Domain;
 
+/// <summary>Telling a photo program's own library, which PhotoSense never touches.</summary>
 public class PhotoLibrariesTests
 {
     [Test]
@@ -15,7 +16,7 @@ public class PhotoLibrariesTests
     [Arguments("Phone Pictures", false)]
     [Arguments("photoslibrary", false)]
     [Arguments("Photos Library", false)]
-    public async Task A_Photo_Programs_Library_Is_Known_By_Its_Name(string folder, bool library)
+    public async Task A_Photo_Programs_Library_Is_Known_By_Its_Name(string folder, bool library, CancellationToken ct)
         => await Assert.That(PhotoLibraries.IsLibrary(folder)).IsEqualTo(library);
 
     [Test]
@@ -24,6 +25,6 @@ public class PhotoLibrariesTests
     [Arguments("C:\\Users\\jamie\\Pictures\\iPhoto Library\\Masters", true)]
     [Arguments("/Users/jamie/Pictures/Trips", false)]
     [Arguments("C:\\Users\\jamie\\Phone Pictures", false)]
-    public async Task A_Path_Is_In_A_Library_When_Any_Folder_On_The_Way_Is_One(string path, bool inside)
+    public async Task A_Path_Is_In_A_Library_When_Any_Folder_On_The_Way_Is_One(string path, bool inside, CancellationToken ct)
         => await Assert.That(PhotoLibraries.IsInLibrary(path)).IsEqualTo(inside);
 }

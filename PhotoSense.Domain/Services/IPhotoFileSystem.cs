@@ -1,6 +1,8 @@
 namespace PhotoSense.Domain.Services;
 
 /// <summary>What is known of a file without opening it: how big it is, and when it last changed.</summary>
+/// <param name="Length">The file's size in bytes.</param>
+/// <param name="ModifiedUtc">When it last changed.</param>
 public sealed record StoredFile(long Length, DateTime ModifiedUtc);
 
 /// <summary>
@@ -8,10 +10,16 @@ public sealed record StoredFile(long Length, DateTime ModifiedUtc);
 /// photo library shown the same way, its albums as folders. Everything that lists, reads or changes someone's
 /// photos does it through here, so that the rules about them hold wherever the photos are.
 /// </summary>
+/// <remarks>
+/// A change that cannot be made throws an <see cref="IOException"/>, or an <see cref="UnauthorizedAccessException"/>
+/// when it may not be made: a file the system will not let go of, or a change a phone refuses. Callers treat the two alike.
+/// </remarks>
 public interface IPhotoFileSystem
 {
+    /// <summary>Whether there is a file at the path.</summary>
     bool FileExists(string path);
 
+    /// <summary>Whether there is a folder at the path.</summary>
     bool FolderExists(string path);
 
     /// <summary>The file's size and when it last changed; null when there is no file there.</summary>
@@ -48,6 +56,7 @@ public interface IPhotoFileSystem
     /// <summary>A new file to write, as one arriving from a phone. It never replaces one: should a file stand at <paramref name="path"/>, it fails.</summary>
     Stream CreateNew(string path);
 
+    /// <summary>Makes a folder, and the folders above it that are not there yet; one already there is left as it is.</summary>
     void MakeFolder(string path);
 
     /// <summary>Takes away a folder that is empty; one that holds anything stays.</summary>
@@ -61,6 +70,8 @@ public interface IPhotoFileSystem
 }
 
 /// <summary>A file to be moved, and where to.</summary>
+/// <param name="From">Where the file is.</param>
+/// <param name="To">Where it is to go.</param>
 public sealed record FileMove(string From, string To);
 
 /// <summary>

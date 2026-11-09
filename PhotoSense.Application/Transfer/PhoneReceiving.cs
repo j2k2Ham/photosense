@@ -8,11 +8,33 @@ using PhotoSense.Domain.ValueObjects;
 namespace PhotoSense.Application.Transfer;
 
 /// <summary>Where receiving photos from a phone has got to.</summary>
-public enum ReceiveStage { Idle, Connecting, Comparing, Receiving, Done, Failed }
+public enum ReceiveStage
+{
+    /// <summary>Not receiving.</summary>
+    Idle,
+    /// <summary>Connecting to the phone.</summary>
+    Connecting,
+    /// <summary>Waiting for the person to say whether the numbers on the two match.</summary>
+    Comparing,
+    /// <summary>Files are arriving.</summary>
+    Receiving,
+    /// <summary>Every file offered has arrived.</summary>
+    Done,
+    /// <summary>It stopped before every file had arrived; <see cref="ReceiveState.Problem"/> says why.</summary>
+    Failed
+}
 
+/// <summary>How receiving from a phone stands.</summary>
+/// <param name="Stage">Where it has got to.</param>
 /// <param name="Code">The number to compare with the phone's, while it is being compared.</param>
+/// <param name="Phone">The phone's name, once known.</param>
 /// <param name="Done">Files that have arrived, those already there among them.</param>
+/// <param name="Total">Files the phone offered.</param>
+/// <param name="Bytes">Bytes that have arrived.</param>
+/// <param name="TotalBytes">Bytes the phone offered.</param>
 /// <param name="AlreadyThere">Files of which the very same file was in the folder already, so that nothing was written.</param>
+/// <param name="Folder">The folder the files go to.</param>
+/// <param name="Problem">Why it stopped, when it failed.</param>
 public sealed record ReceiveState(ReceiveStage Stage, string? Code, string? Phone, int Done, int Total, long Bytes, long TotalBytes, int AlreadyThere, string? Folder, string? Problem);
 
 /// <summary>
@@ -37,6 +59,11 @@ public sealed class PhoneReceiving
     private CancellationTokenSource? _stop;
     private TaskCompletionSource<bool>? _answer;
 
+    /// <summary>Receives from the phones <paramref name="finder"/> finds, into folders of <paramref name="files"/>.</summary>
+    /// <param name="finder">Finds the phones offering photos.</param>
+    /// <param name="pairs">The devices this computer has been paired with.</param>
+    /// <param name="files">Where the photos are kept.</param>
+    /// <param name="changes">Gives each arriving file a name nothing has yet.</param>
     /// <param name="name">What this computer is called, as the phone shows it.</param>
     public PhoneReceiving(IPhoneFinder finder, IPairingStore pairs, IPhotoFileSystem files, FileChanges changes, string name)
     {
@@ -47,6 +74,7 @@ public sealed class PhoneReceiving
         _name = name;
     }
 
+    /// <summary>How receiving stands now.</summary>
     public ReceiveState State
     {
         get { lock (_lock) return _state; }
@@ -56,7 +84,7 @@ public sealed class PhoneReceiving
     public Task Running { get; private set; } = Task.CompletedTask;
 
     /// <summary>The phones offering photos now.</summary>
-    public async Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct)
     {
         var found = await _finder.FindAsync(ct);
         lock (_lock) _found = found;
@@ -106,7 +134,7 @@ public sealed class PhoneReceiving
         try
         {
             await using var stream = await phone.Connect(ct);
-            var linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(), _name), _pairs, AskAsync, ct);
+            var linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ct);
             using var channel = linked.Channel;
             await channel.SendAsync(new JsonObject { ["t"] = "offer?" }, ct);
             var offer = await channel.ReceiveAsync(ct, "offer");
@@ -119,7 +147,7 @@ public sealed class PhoneReceiving
                 arriving = Path.Combine(folder, $".{name}.{Guid.NewGuid():N}{Arriving}");
                 var check = await ReceiveFileAsync(channel, id, arriving, ct);
                 var wanted = Path.Combine(folder, name);
-                var already = _files.Describe(wanted) is { } there && there.Length == _files.Describe(arriving)!.Length && HashOf(wanted) == check;
+                var already = _files.Describe(wanted) is { } there && there.Length == _files.Describe(arriving)!.Length && await HashOfAsync(wanted, ct) == check;
                 if (already) _files.DeleteCopy(arriving);
                 else _files.Move(arriving, _changes.FreePlace(wanted, taken));
                 arriving = null;
@@ -164,10 +192,10 @@ public sealed class PhoneReceiving
         return check;
     }
 
-    private string HashOf(string path)
+    private async Task<string> HashOfAsync(string path, CancellationToken ct)
     {
-        using var read = _files.OpenRead(path);
-        return Convert.ToHexStringLower(SHA256.HashData(read));
+        await using var read = _files.OpenRead(path);
+        return Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
     }
 
     private static long Size(JsonObject message)

@@ -6,11 +6,13 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Changes;
 
+/// <summary>What carrying out a change came to.</summary>
 /// <param name="Done">The change was carried out in full. When it was not, none of it was.</param>
 /// <param name="Problem">Why it was not, naming the file.</param>
 /// <param name="Left">Files it let go of after all, as it was told to, and put straight back.</param>
 public sealed record ChangeResult(bool Done, string? Problem, IReadOnlyList<OrganizeBatchItem> Left);
 
+/// <summary>What undoing a change came to.</summary>
 /// <param name="Found">There was such a change, carried out and not undone.</param>
 /// <param name="Done">The undo was carried out in full. When it was not, none of it was.</param>
 /// <param name="Copies">The change was a copy, so undoing it deleted copies rather than moving files back.</param>
@@ -19,6 +21,7 @@ public sealed record ChangeResult(bool Done, string? Problem, IReadOnlyList<Orga
 /// deleted. When the undo was not carried out, the files it was to put back, all of which are where they were.
 /// </param>
 /// <param name="Left">Why each file that could not be put back was left.</param>
+/// <param name="Problem">Why the undo was not carried out, naming the file; null when it was.</param>
 public sealed record UndoResult(bool Found, bool Done, bool Copies, IReadOnlyList<OrganizeBatchItem> Back, IReadOnlyList<string> Left, string? Problem);
 
 /// <summary>
@@ -27,6 +30,11 @@ public sealed record UndoResult(bool Found, bool Done, bool Copies, IReadOnlyLis
 /// all, and so does undoing it. A change that a stop of the service cut short is put back as it was before
 /// it began, the next time the service starts.
 /// </summary>
+/// <remarks>
+/// A token stops a change, or an undo, only before any file has moved. From then on the change is finished and
+/// written down whatever happens, with <see cref="CancellationToken.None"/>: stopped part way, the files would have
+/// moved while the record still said the change had not happened, and the next start would put them back.
+/// </remarks>
 public sealed class FileChanges
 {
     private readonly IOrganizeBatchStore _batches;
@@ -36,6 +44,7 @@ public sealed class FileChanges
     // One change at a time: two at once could each find a name free and both take it.
     private readonly SemaphoreSlim _one = new(1, 1);
 
+    /// <summary>Changes made where the photos are kept, written down in the store of changes.</summary>
     public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, IPhotoFileSystem files)
     {
         _batches = batches;
@@ -45,6 +54,7 @@ public sealed class FileChanges
     }
 
     /// <summary>A place a file can go to without replacing anything: the one asked for, or that name with a number.</summary>
+    /// <param name="path">The place asked for.</param>
     /// <param name="taken">Places already given out to other files of the same change; this one is added.</param>
     public string FreePlace(string path, ISet<string> taken)
     {
@@ -67,20 +77,22 @@ public sealed class FileChanges
     /// for them listed. What scans recorded follows the files: a moved file's record moves with it, and a
     /// removed file's record goes, kept for an undo to bring back.
     /// </summary>
+    /// <param name="batch">The change, with every file's place worked out.</param>
     /// <param name="keep">
     /// Asked about each file other than a companion once it has gone. When it says no, the file is put
-    /// straight back, its companions stay where they are, and the change goes on without them.
+    /// straight back, its companions stay where they are, and the change goes on without them. Null keeps every file.
     /// </param>
+    /// <param name="ct">Stops the change while files are moving; every file that had gone is then put back.</param>
     /// <exception cref="OperationCanceledException">Cancelled; every file that had gone is back.</exception>
-    public async Task<ChangeResult> CarryOutAsync(OrganizeBatch batch, Func<OrganizeBatchItem, bool>? keep = null, CancellationToken ct = default)
+    public async Task<ChangeResult> CarryOutAsync(OrganizeBatch batch, Func<OrganizeBatchItem, bool>? keep, CancellationToken ct)
     {
         await _one.WaitAsync(ct);
         try
         {
-            var records = batch.Removed ? await RecordsAtAsync(batch.Items.Select(i => i.From)) : [];
-            if (records.Count > 0) await _batches.KeepRecordsAsync(batch.Id, records);
+            var records = batch.Removed ? await RecordsAtAsync(batch.Items.Select(i => i.From), ct) : [];
+            if (records.Count > 0) await _batches.KeepRecordsAsync(batch.Id, records, ct);
             batch.State = ChangeState.Started;
-            await _batches.SaveAsync(batch);
+            await _batches.SaveAsync(batch, ct);
 
             var made = new List<string>();
             var done = new List<OrganizeBatchItem>();
@@ -134,20 +146,22 @@ public sealed class FileChanges
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OperationCanceledException)
             {
-                var stuck = await PutBackAsync(batch, done, made);
+                // Putting back is finished whatever happens, a cancelled change above all.
+                var stuck = await PutBackAsync(batch, done, made, CancellationToken.None);
                 if (ex is OperationCanceledException) throw;
                 return new ChangeResult(false, stuck ?? Problem(batch, at, folder, ex), []);
             }
 
+            // Every file has gone: the change is finished and written down whatever happens (see the remarks above).
             batch.Items.RemoveAll(left.Contains);
-            if (batch.Items.Count > 0) await RecordsFollowAsync(batch, records);
-            else TidyAway(made);
+            if (batch.Items.Count > 0) await RecordsFollowAsync(batch, records, CancellationToken.None);
+            else EmptyFolders.TakeAway(_files, made);
             batch.Files = batch.Items.Count(i => !i.Companion);
             batch.Bytes = batch.Items.Where(i => !i.Companion).Sum(i => i.SizeBytes);
             batch.State = ChangeState.Done;
             // A change that let go of every file changed nothing, and there is nothing to undo.
             batch.Undone = batch.Items.Count == 0;
-            await _batches.SaveAsync(batch);
+            await _batches.SaveAsync(batch, CancellationToken.None);
             return new ChangeResult(true, null, left);
         }
         finally
@@ -161,12 +175,14 @@ public sealed class FileChanges
     /// another file has taken the name since; a copy is deleted while it is still as it was written and what
     /// it was copied from is still there. Files no longer where the change put them are left, and said so.
     /// </summary>
-    public async Task<UndoResult> UndoAsync(Guid id, CancellationToken ct = default)
+    /// <param name="id">The change to undo.</param>
+    /// <param name="ct">Stops the undo before any file moves; once one has, the undo is finished.</param>
+    public async Task<UndoResult> UndoAsync(Guid id, CancellationToken ct)
     {
         await _one.WaitAsync(ct);
         try
         {
-            if (await _batches.GetAsync(id) is not { Undone: false, State: ChangeState.Done } batch) return new UndoResult(false, false, false, [], [], null);
+            if (await _batches.GetAsync(id, ct) is not { Undone: false, State: ChangeState.Done } batch) return new UndoResult(false, false, false, [], [], null);
 
             var left = new List<string>();
             var going = new List<OrganizeBatchItem>();
@@ -193,7 +209,7 @@ public sealed class FileChanges
             if (going.Count > 0)
             {
                 batch.State = ChangeState.Undoing;
-                await _batches.SaveAsync(batch);
+                await _batches.SaveAsync(batch, ct);
                 var made = new List<string>();
                 var moved = new List<OrganizeBatchItem>();
                 OrganizeBatchItem? at = null;
@@ -224,20 +240,21 @@ public sealed class FileChanges
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    var stuck = await PutBackUndoAsync(batch, moved, made);
+                    var stuck = await PutBackUndoAsync(batch, moved, made, CancellationToken.None);
                     return new UndoResult(true, false, batch.Copy, going, [], stuck ?? UndoProblem(batch, at, folder, ex));
                 }
-                await RecordsGoBackAsync(batch, going);
+                // The files are back: the undo is finished and written down whatever happens.
+                await RecordsGoBackAsync(batch, going, CancellationToken.None);
             }
 
             batch.State = ChangeState.Done;
             batch.Undone = true;
-            await _batches.SaveAsync(batch);
+            await _batches.SaveAsync(batch, CancellationToken.None);
             if (batch.Copy)
                 foreach (var item in going.ToList())
                     if (DeleteSetAside(item) is { } why) { left.Add(why); going.Remove(item); }
             // The folders that were made for the files go again, where the undo has left them empty.
-            TidyAway(batch.CreatedFolders);
+            EmptyFolders.TakeAway(_files, batch.CreatedFolders);
             return new UndoResult(true, true, batch.Copy, going, left, null);
         }
         finally
@@ -247,21 +264,22 @@ public sealed class FileChanges
     }
 
     /// <summary>Puts back, as they were before they began, the changes and undos that a stop of the service cut short.</summary>
+    /// <param name="ct">Stops between files; what is left is put back at the next start, as putting back can be done again.</param>
     /// <returns>A sentence for each, saying what became of it.</returns>
-    public async Task<IReadOnlyList<string>> RecoverAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<string>> RecoverAsync(CancellationToken ct)
     {
         await _one.WaitAsync(ct);
         try
         {
             var said = new List<string>();
-            foreach (var batch in await _batches.UnfinishedAsync())
+            foreach (var batch in await _batches.UnfinishedAsync(ct))
             {
                 var what = batch.Removed ? $"Deleting files from {batch.Label}" : batch.Copy ? $"Copying files to {batch.Label}" : $"Moving files to {batch.Label}";
                 var undoing = batch.State == ChangeState.Undoing;
                 string sentence;
                 try
                 {
-                    if (undoing) await RecoverUndoAsync(batch); else await RecoverChangeAsync(batch);
+                    if (undoing) await RecoverUndoAsync(batch, ct); else await RecoverChangeAsync(batch, ct);
                     sentence = undoing ? $"Undoing \"{what}\" was cut short when PhotoSense stopped. Every file is where it was before the undo."
                         : batch.Copy ? $"{what} was cut short when PhotoSense stopped. The copies it had made so far were deleted."
                         : $"{what} was cut short when PhotoSense stopped. Every file is back where it was.";
@@ -271,7 +289,7 @@ public sealed class FileChanges
                     sentence = $"{what} was cut short when PhotoSense stopped, and could not all be put back yet: {Sentence(ex.Message)} PhotoSense tries again each time it starts.";
                 }
                 said.Add(sentence);
-                await _audit.AddAsync(new AuditEntry { Action = "ChangeRecovered", PhotoId = batch.Id.ToString(), Details = sentence });
+                await _audit.AddAsync(new AuditEntry { Action = "ChangeRecovered", PhotoId = batch.Id.ToString(), Details = sentence }, ct);
             }
             return said;
         }
@@ -311,8 +329,9 @@ public sealed class FileChanges
         else _files.Move(item.To, item.From);
     }
 
-    // Puts back what a change that failed part of the way had done. Returns why it could not, if it could not.
-    private async Task<string?> PutBackAsync(OrganizeBatch batch, List<OrganizeBatchItem> done, List<string> made)
+    /// <summary>Puts back what a change that failed part of the way had done.</summary>
+    /// <returns>Why it could not, if it could not; the change is then left as begun, to be put back at the next start.</returns>
+    private async Task<string?> PutBackAsync(OrganizeBatch batch, List<OrganizeBatchItem> done, List<string> made, CancellationToken ct)
     {
         string? stuck = null;
         if (Together(batch) is { } together && done.Count > 0)
@@ -336,14 +355,16 @@ public sealed class FileChanges
         }
         // Left as begun, the change is put back once more at the next start.
         if (stuck is not null) return stuck;
-        TidyAway(made);
+        EmptyFolders.TakeAway(_files, made);
         batch.State = ChangeState.Done;
         batch.Undone = true;
-        await _batches.SaveAsync(batch);
+        await _batches.SaveAsync(batch, ct);
         return null;
     }
 
-    private async Task<string?> PutBackUndoAsync(OrganizeBatch batch, List<OrganizeBatchItem> moved, List<string> made)
+    /// <summary>Returns the files an undo that failed part of the way had moved to where the undo found them.</summary>
+    /// <returns>Why it could not, if it could not; the undo is then left as begun, to be finished at the next start.</returns>
+    private async Task<string?> PutBackUndoAsync(OrganizeBatch batch, List<OrganizeBatchItem> moved, List<string> made, CancellationToken ct)
     {
         string? stuck = null;
         foreach (var item in Enumerable.Reverse(moved))
@@ -355,16 +376,18 @@ public sealed class FileChanges
             }
         }
         if (stuck is not null) return stuck;
-        TidyAway(made);
+        EmptyFolders.TakeAway(_files, made);
         EndUndo(batch);
-        await _batches.SaveAsync(batch);
+        await _batches.SaveAsync(batch, ct);
         return null;
     }
 
-    private async Task RecoverChangeAsync(OrganizeBatch batch)
+    /// <summary>Puts every file of a change cut short back where it was, and its records with it.</summary>
+    private async Task RecoverChangeAsync(OrganizeBatch batch, CancellationToken ct)
     {
         foreach (var item in Enumerable.Reverse(batch.Items))
         {
+            ct.ThrowIfCancellationRequested();
             if (!_files.FileExists(item.To)) continue;
             if (!_files.FileExists(item.From))
             {
@@ -377,25 +400,27 @@ public sealed class FileChanges
         }
         if (batch.Removed)
         {
-            foreach (var record in await _batches.RecordsAsync(batch.Id))
-                if (await _repo.GetAsync(record.Id) is null) await _repo.AddOrUpdateAsync(record);
+            foreach (var record in await _batches.RecordsAsync(batch.Id, ct))
+                if (await _repo.GetAsync(record.Id, ct) is null) await _repo.AddOrUpdateAsync(record, ct);
         }
         else if (!batch.Copy)
         {
             foreach (var item in batch.Items)
-                if (await _repo.GetByPathAsync(item.To) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.From));
+                if (await _repo.GetByPathAsync(item.To, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.From), ct);
         }
-        TidyAway(batch.CreatedFolders);
+        EmptyFolders.TakeAway(_files, batch.CreatedFolders);
         batch.State = ChangeState.Done;
         batch.Undone = true;
-        await _batches.SaveAsync(batch);
+        await _batches.SaveAsync(batch, ct);
     }
 
-    private async Task RecoverUndoAsync(OrganizeBatch batch)
+    /// <summary>Returns every file of an undo cut short to where the undo found it, and its records with it.</summary>
+    private async Task RecoverUndoAsync(OrganizeBatch batch, CancellationToken ct)
     {
         var going = batch.Items.Where(i => i.Back is not null).ToList();
         foreach (var item in going)
         {
+            ct.ThrowIfCancellationRequested();
             if (!_files.FileExists(item.Back!)) continue;
             if (!_files.FileExists(item.To)) _files.Move(item.Back!, item.To);
             // An undo to another disk that had copied the file back and not yet taken it away.
@@ -404,58 +429,62 @@ public sealed class FileChanges
         if (batch.Removed)
         {
             var removed = batch.Items.Select(i => PhotoPath.Key(i.From)).ToHashSet();
-            foreach (var record in (await _batches.RecordsAsync(batch.Id)).Where(r => removed.Contains(PhotoPath.Key(r.SourcePath))))
-                await _repo.DeleteAsync(record.Id);
+            foreach (var record in (await _batches.RecordsAsync(batch.Id, ct)).Where(r => removed.Contains(PhotoPath.Key(r.SourcePath))))
+                await _repo.DeleteAsync(record.Id, ct);
         }
         else if (!batch.Copy)
         {
             foreach (var item in going)
-                if (await _repo.GetByPathAsync(item.Back!) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.To));
+                if (await _repo.GetByPathAsync(item.Back!, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.To), ct);
         }
-        TidyAway(batch.UndoFolders);
+        EmptyFolders.TakeAway(_files, batch.UndoFolders);
         EndUndo(batch);
-        await _batches.SaveAsync(batch);
+        await _batches.SaveAsync(batch, ct);
     }
 
-    private async Task<List<Photo>> RecordsAtAsync(IEnumerable<string> paths)
+    /// <summary>What scans recorded of the files at these paths, for those they recorded.</summary>
+    private async Task<List<Photo>> RecordsAtAsync(IEnumerable<string> paths, CancellationToken ct)
     {
         var records = new List<Photo>();
         foreach (var path in paths)
-            if (await _repo.GetByPathAsync(path) is { } record) records.Add(record);
+            if (await _repo.GetByPathAsync(path, ct) is { } record) records.Add(record);
         return records;
     }
 
-    private async Task RecordsFollowAsync(OrganizeBatch batch, List<Photo> records)
+    /// <summary>Makes what scans recorded follow the files of a change that went: moved with them, or gone with them.</summary>
+    private async Task RecordsFollowAsync(OrganizeBatch batch, List<Photo> records, CancellationToken ct)
     {
         if (batch.Copy) return;
         if (batch.Removed)
         {
             // A removed file is no longer one of the scanned pictures: the Clean up screens must not go on listing it.
             var going = batch.Items.Select(i => PhotoPath.Key(i.From)).ToHashSet();
-            foreach (var record in records.Where(r => going.Contains(PhotoPath.Key(r.SourcePath)))) await _repo.DeleteAsync(record.Id);
+            foreach (var record in records.Where(r => going.Contains(PhotoPath.Key(r.SourcePath)))) await _repo.DeleteAsync(record.Id, ct);
             return;
         }
         // A scan's record of the file follows it, so that the Clean up screens still find it.
         foreach (var item in batch.Items)
-            if (await _repo.GetByPathAsync(item.From) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.To));
+            if (await _repo.GetByPathAsync(item.From, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.To), ct);
     }
 
-    private async Task RecordsGoBackAsync(OrganizeBatch batch, List<OrganizeBatchItem> going)
+    /// <summary>Makes what scans recorded follow the files an undo put back: brought back for a removal, moved back for a move.</summary>
+    private async Task RecordsGoBackAsync(OrganizeBatch batch, List<OrganizeBatchItem> going, CancellationToken ct)
     {
         if (batch.Copy) return;
         if (batch.Removed)
         {
-            var records = (await _batches.RecordsAsync(batch.Id)).ToDictionary(r => PhotoPath.Key(r.SourcePath));
+            var records = (await _batches.RecordsAsync(batch.Id, ct)).ToDictionary(r => PhotoPath.Key(r.SourcePath));
             foreach (var item in going)
                 if (records.GetValueOrDefault(PhotoPath.Key(item.From)) is { } record)
-                    await _repo.AddOrUpdateAsync(PhotoPath.Comparer.Equals(item.Back, item.From) ? record : record.MovedTo(item.Back!));
+                    await _repo.AddOrUpdateAsync(PhotoPath.Comparer.Equals(item.Back, item.From) ? record : record.MovedTo(item.Back!), ct);
             return;
         }
         foreach (var item in going)
-            if (await _repo.GetByPathAsync(item.To) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.Back!));
+            if (await _repo.GetByPathAsync(item.To, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.Back!), ct);
     }
 
-    // A copy set aside by an undo is deleted once the undo is through. Returns why it was left, if it was.
+    /// <summary>Deletes a copy an undo set aside, once the undo is through.</summary>
+    /// <returns>Why it was left, naming the hidden name it is under when it could not go back to its own; null when it went.</returns>
     private string? DeleteSetAside(OrganizeBatchItem item)
     {
         try
@@ -465,8 +494,23 @@ public sealed class FileChanges
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            try { _files.Move(item.Back!, item.To); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* left under the hidden name */ }
-            return $"{Path.GetFileName(item.To)} could not be deleted, so the copy was left: {Sentence(ex.Message)}";
+            // Back under its own name, where the person will find it; failing that, the hidden name it is under is said.
+            var under = TryMove(item.Back!, item.To) ? "" : $" as {Path.GetFileName(item.Back)}";
+            return $"{Path.GetFileName(item.To)} could not be deleted, so the copy was left{under}: {Sentence(ex.Message)}";
+        }
+    }
+
+    /// <summary>Whether a file could be moved; false when the system would not move it.</summary>
+    private bool TryMove(string from, string to)
+    {
+        try
+        {
+            _files.Move(from, to);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 
@@ -475,23 +519,6 @@ public sealed class FileChanges
         foreach (var item in batch.Items) item.Back = null;
         batch.UndoFolders.Clear();
         batch.State = ChangeState.Done;
-    }
-
-    // Folders a change made go again where it leaves them empty; one that will not go is no loss.
-    private void TidyAway(IEnumerable<string> folders)
-    {
-        var deepestFirst = folders.OrderByDescending(f => f.Length).ToList();
-        if (_files is IPhotoChangesTogether together)
-        {
-            try { together.RemoveEmptyFolders(deepestFirst); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* they stay */ }
-            return;
-        }
-        foreach (var folder in deepestFirst)
-        {
-            try { _files.RemoveEmptyFolder(folder); }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* stays */ }
-        }
     }
 
     // With no one file to blame, the files are spoken of together: they were handed over as one.

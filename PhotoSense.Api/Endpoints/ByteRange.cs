@@ -7,17 +7,23 @@ namespace PhotoSense.Api.Endpoints;
 /// one response may carry. A response is held in memory before it is sent, so a video is served a piece
 /// at a time; the player asks for the next piece itself.
 /// </summary>
-public readonly record struct ByteRange(long Start, long End)
+/// <param name="Start">The first byte sent.</param>
+/// <param name="End">The last byte sent.</param>
+internal readonly record struct ByteRange(long Start, long End)
 {
     /// <summary>Largest piece sent in one response.</summary>
     public const int MaxLength = 4 * 1024 * 1024;
 
+    /// <summary>How many bytes are sent.</summary>
     public long Length => End - Start + 1;
 
     /// <summary>
     /// Null when the request cannot be satisfied (it starts beyond the end of the file, or is not a byte
     /// range this server understands). A missing header means "from the beginning".
     /// </summary>
+    /// <param name="header">The Range header as sent; null or blank for none.</param>
+    /// <param name="fileLength">The file's size.</param>
+    /// <param name="maxLength">The most one response carries.</param>
     public static ByteRange? Parse(string? header, long fileLength, int maxLength = MaxLength)
     {
         if (fileLength <= 0) return null;
@@ -54,5 +60,6 @@ public readonly record struct ByteRange(long Start, long End)
     private static bool TryNumber(string text, out long value)
         => long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out value);
 
+    /// <summary>The Content-Range header that says which piece of the file this is.</summary>
     public string ContentRange(long fileLength) => $"bytes {Start}-{End}/{fileLength}";
 }

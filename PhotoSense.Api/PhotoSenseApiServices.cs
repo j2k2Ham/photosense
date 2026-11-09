@@ -6,9 +6,11 @@ using PhotoSense.Api.Scanning;
 
 namespace PhotoSense.Api;
 
+/// <summary>The endpoints, for every host to add to its services.</summary>
 public static class PhotoSenseApiServices
 {
     /// <summary>The endpoints, the addresses that reach them, and what runs scans in the background.</summary>
+    /// <param name="s">The services to add to.</param>
     public static IServiceCollection AddPhotoSenseApi(this IServiceCollection s)
     {
         s.AddSingleton<PhotoDtoMapper>();
@@ -31,7 +33,13 @@ public static class PhotoSenseApiServices
         s.AddSingleton<RemovedEndpoints>();
         // A phone sends and a computer receives: each program has the one half.
         s.AddSingleton(sp => new TransferEndpoints(sp.GetService<PhoneSending>(), sp.GetService<PhoneReceiving>()));
-        s.AddSingleton<PhotoSenseRoutes>();
+        // Made here: the endpoints it is given are this project's own.
+        s.AddSingleton(sp => new PhotoSenseRoutes(
+            sp.GetRequiredService<HealthEndpoints>(), sp.GetRequiredService<AboutEndpoints>(), sp.GetRequiredService<FoldersEndpoints>(),
+            sp.GetRequiredService<PhotosEndpoints>(), sp.GetRequiredService<DuplicateGroupsEndpoints>(), sp.GetRequiredService<ScanStatusEndpoints>(),
+            sp.GetRequiredService<ScanStartEndpoints>(), sp.GetRequiredService<ScanResetEndpoints>(), sp.GetRequiredService<ScanProgressEndpoints>(),
+            sp.GetRequiredService<ScanLogsEndpoints>(), sp.GetRequiredService<OrganizeEndpoints>(), sp.GetRequiredService<LibraryEndpoints>(),
+            sp.GetRequiredService<RemovedEndpoints>(), sp.GetRequiredService<TransferEndpoints>()));
         return s;
     }
 }

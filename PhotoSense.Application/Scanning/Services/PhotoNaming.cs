@@ -28,5 +28,6 @@ public static class PhotoNaming
         return match.Success && match.Groups[2].Value.Equals("E", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Whether the file is a record of edits (.AAE), which goes wherever its picture goes.</summary>
     public static bool IsSidecar(string fileName) => Path.GetExtension(fileName).Equals(".aae", StringComparison.OrdinalIgnoreCase);
 }

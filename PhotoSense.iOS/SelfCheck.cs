@@ -9,8 +9,10 @@ namespace PhotoSense.iOS;
 /// </summary>
 public static class SelfCheck
 {
+    /// <summary>The app was started to check itself.</summary>
     public static bool Running { get; } = Environment.GetEnvironmentVariable("PHOTOSENSE_SELF_CHECK") == "1";
 
+    /// <summary>Puts the check into the web view, when the app was started to check itself.</summary>
     public static void AddTo(WKWebViewConfiguration config)
     {
         if (!Running) return;
@@ -21,6 +23,7 @@ public static class SelfCheck
     private sealed class Report : NSObject, IWKScriptMessageHandler
     {
         // Written after every step, so that a check cut short still says how far it got.
+        /// <summary>Takes the check's report from the page, after every step.</summary>
         [Export("userContentController:didReceiveScriptMessage:")]
         public void DidReceiveScriptMessage(WKUserContentController userContentController, WKScriptMessage message)
         {

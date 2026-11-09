@@ -16,8 +16,10 @@ public static class PhoneApp
     private static ServiceProvider? _built;
     private static Task? _ready;
 
+    /// <summary>The app's services, once it has started.</summary>
     public static IServiceProvider Services => _built ?? throw new InvalidOperationException("The app has not started.");
 
+    /// <summary>The service's addresses, which answer the page's requests.</summary>
     public static ApiRouter Router => Services.GetRequiredService<PhotoSenseRoutes>().Router;
 
     /// <summary>Done once a change that a stop of the app cut short has been put back; nothing is answered before.</summary>
@@ -26,6 +28,7 @@ public static class PhoneApp
     /// <summary>Where the app keeps what it records, which the phone backs up with it.</summary>
     public static string DataFolder(Context context) => context.FilesDir!.AbsolutePath;
 
+    /// <summary>Builds the app's services, once, and starts putting back what a stop cut short.</summary>
     public static void Start(Context context)
     {
         if (_built is not null) return;
@@ -38,7 +41,8 @@ public static class PhoneApp
         _ready = Task.Run(async () =>
         {
             var log = Services.GetRequiredService<IScanLogSink>();
-            foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync()) log.Log("audit", "Warning", sentence);
+            // Putting back runs once, at start, until it is done: nothing stops it part way.
+            foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync(CancellationToken.None)) log.Log("audit", "Warning", sentence);
         });
     }
 }

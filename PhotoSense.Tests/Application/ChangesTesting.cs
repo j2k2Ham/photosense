@@ -24,6 +24,8 @@ internal sealed class FailingDisk : DiskFileSystem
     /// Makes an operation ("move", "copy", "make", "remove folder", "delete", "erase" or "read") fail for the paths
     /// it matches; a move or copy is matched by the file it takes.
     /// </summary>
+    /// <param name="operation">Which operation fails.</param>
+    /// <param name="when">Which paths it fails for.</param>
     /// <param name="reason">What the disk says; a sentence naming the operation and the file when not given.</param>
     public FailingDisk Fail(string operation, Func<string, bool> when, string? reason = null)
     {
@@ -31,8 +33,10 @@ internal sealed class FailingDisk : DiskFileSystem
         return this;
     }
 
+    /// <summary>Makes an operation fail for one path.</summary>
     public FailingDisk Fail(string operation, string path) => Fail(operation, p => PhotoPath.Comparer.Equals(p, path));
 
+    /// <summary>Lets every operation succeed again.</summary>
     public void Heal() => _failing.Clear();
 
     private void Check(string operation, string path)
@@ -96,11 +100,20 @@ internal sealed class ChangesFixture : IDisposable
 {
     private readonly LiteDatabase _db = new(new MemoryStream());
 
+    /// <summary>The test's own folder, deleted when it ends.</summary>
     public DirectoryInfo Root { get; } = Directory.CreateTempSubdirectory("photosense-changes-");
+    /// <summary>Scans' records, in memory.</summary>
     public InMemoryPhotoRepository Repo { get; } = new();
+    /// <summary>The changes, kept in a database in memory.</summary>
     public LiteDbOrganizeBatchStore Batches { get; }
+
+    /// <summary>What the store holds of a change at this moment, read straight from the database: for a hook that runs in the middle of a move, where nothing can be awaited.</summary>
+    public OrganizeBatch? Stored(Guid id) => _db.GetCollection<OrganizeBatch>("organize_batches").FindById(id);
+    /// <summary>The disk, which fails as the test says.</summary>
     public FailingDisk Disk { get; } = new();
+    /// <summary>What was recorded as done.</summary>
     public List<AuditEntry> Audited { get; } = [];
+    /// <summary>The changes under test.</summary>
     public FileChanges Changes { get; }
 
     public ChangesFixture()
@@ -111,6 +124,7 @@ internal sealed class ChangesFixture : IDisposable
         Changes = new FileChanges(Batches, Repo, audit.Object, Disk);
     }
 
+    /// <summary>A path in the test's folder.</summary>
     public string In(params string[] parts) => Path.Combine([Root.FullName, .. parts]);
 
     /// <summary>Writes a file below the root.</summary>
@@ -123,18 +137,18 @@ internal sealed class ChangesFixture : IDisposable
     }
 
     /// <summary>A scan's record of a file, matching the file as it is now.</summary>
-    public async Task<Photo> RecordAsync(string path)
+    public async Task<Photo> RecordAsync(string path, CancellationToken ct)
     {
         var info = new FileInfo(path);
         var photo = new Photo { SourcePath = path, FileName = info.Name, FileSizeBytes = info.Length, FileModifiedUtc = info.LastWriteTimeUtc, ScanRoot = Root.FullName, ContentHash = info.Name };
-        await Repo.AddOrUpdateAsync(photo);
+        await Repo.AddOrUpdateAsync(photo, ct);
         return photo;
     }
 
     /// <summary>A change of one file to each place given, from each file given, with the folders it needs listed.</summary>
     public OrganizeBatch Change(bool copy = false, bool removed = false, params (string From, string To)[] moves)
     {
-        var batch = new OrganizeBatch { Label = "There", Copy = copy, Removed = removed };
+        var batch = new OrganizeBatch { UtcTicks = TestClock.Day.UtcTicks, Label = "There", Copy = copy, Removed = removed };
         foreach (var (from, to) in moves)
         {
             Changes.NeedFolder(batch.CreatedFolders, Path.GetDirectoryName(to)!);
@@ -143,6 +157,7 @@ internal sealed class ChangesFixture : IDisposable
         return batch;
     }
 
+    /// <summary>The names of the files in a folder of the test's, hidden ones too, in order.</summary>
     public List<string> Files(params string[] folder)
         => Directory.Exists(In(folder)) ? Directory.EnumerateFiles(In(folder)).Select(f => Path.GetFileName(f)!).Order(StringComparer.Ordinal).ToList() : [];
 

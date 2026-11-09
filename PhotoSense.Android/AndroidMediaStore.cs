@@ -19,6 +19,7 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
 
     private ContentResolver Resolver => context.ContentResolver!;
 
+    /// <summary>Every picture and video the app has been allowed to see.</summary>
     public IReadOnlyList<MediaEntry> Entries() => [.. Read(Images, video: false), .. Read(Videos, video: true)];
 
     private IEnumerable<MediaEntry> Read(AndroidUri collection, bool video)
@@ -38,16 +39,25 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
         return ContentUris.WithAppendedId(kind == "video" ? Videos : Images, number);
     }
 
+    /// <summary>
+    /// The file as it was taken, place and all, which Android hands out only to an app allowed to see where photos were
+    /// taken; for any other app, the file as Android gives it.
+    /// </summary>
+    private static Android.Net.Uri WithItsPlace(Android.Net.Uri uri)
+    {
+        try { return MediaStore.SetRequireOriginal(uri)!; }
+        catch (Java.Lang.UnsupportedOperationException) { return uri; }
+    }
+
+    /// <inheritdoc />
     public Stream Open(string id)
     {
-        var uri = UriOf(id);
-        // The file as it was taken, place and all, which Android hands out only to an app allowed to see where photos were taken.
-        try { uri = MediaStore.SetRequireOriginal(uri)!; }
-        catch (Java.Lang.UnsupportedOperationException) { }
+        var uri = WithItsPlace(UriOf(id));
         var file = Resolver.OpenFileDescriptor(uri, "r") ?? throw new FileNotFoundException("The photo is no longer on the phone.");
         return new FileStream(new SafeFileHandle(file.DetachFd(), ownsHandle: true), FileAccess.Read);
     }
 
+    /// <summary>Makes the changes, after Android asks the person once for the moves and once for the bin: all of them, or none.</summary>
     public void Change(MediaChange change)
     {
         if (change.Move.Count > 0) Move(change.Move);

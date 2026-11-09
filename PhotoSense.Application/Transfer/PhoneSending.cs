@@ -8,12 +8,33 @@ using PhotoSense.Domain.ValueObjects;
 namespace PhotoSense.Application.Transfer;
 
 /// <summary>Where sending photos from this phone has got to.</summary>
-public enum SendStage { Idle, Waiting, Comparing, Sending, Sent, Failed }
+public enum SendStage
+{
+    /// <summary>Not offering photos.</summary>
+    Idle,
+    /// <summary>Offering photos, waiting for a computer to connect.</summary>
+    Waiting,
+    /// <summary>Waiting for the person to say whether the numbers on the two match.</summary>
+    Comparing,
+    /// <summary>The computer is taking the files.</summary>
+    Sending,
+    /// <summary>The computer has taken what it wanted.</summary>
+    Sent,
+    /// <summary>It stopped before the computer was through; <see cref="SendState.Problem"/> says why.</summary>
+    Failed
+}
 
+/// <summary>How sending from this phone stands.</summary>
+/// <param name="Stage">Where it has got to.</param>
 /// <param name="Code">The number to compare with the computer's, while it is being compared.</param>
+/// <param name="Computer">The computer's name, once known.</param>
 /// <param name="Done">Files the computer has said are safely there.</param>
+/// <param name="Total">Files offered.</param>
+/// <param name="Bytes">Bytes sent.</param>
+/// <param name="TotalBytes">Bytes offered.</param>
 /// <param name="Deletable">The names of the pictures and videos every file of which is safely on the computer, and that can be deleted from the phone.</param>
 /// <param name="Where">The folder on the computer the files went to, when they all went to one.</param>
+/// <param name="Problem">Why it stopped, when it failed.</param>
 public sealed record SendState(SendStage Stage, string? Code, string? Computer, int Done, int Total, long Bytes, long TotalBytes, IReadOnlyList<string> Deletable, string? Where, string? Problem);
 
 /// <summary>
@@ -43,6 +64,13 @@ public sealed class PhoneSending
     // A file offered, and the picture or video it goes with: a Live Photo's video goes with its picture.
     private sealed record Offered(string Id, string Path, long Size, DateTime ModifiedUtc, int Unit);
 
+    /// <summary>Offers the files Organize knows, through the listener and advertiser given.</summary>
+    /// <param name="listener">Waits for a computer to connect.</param>
+    /// <param name="advertiser">Tells the network that the phone is offering photos.</param>
+    /// <param name="pairs">The devices this phone has been paired with.</param>
+    /// <param name="files">Where the photos are kept.</param>
+    /// <param name="companions">Finds the Live Photo videos and edit files that go with a picture.</param>
+    /// <param name="library">The files Organize knows, by id.</param>
     /// <param name="name">What this phone is called, as the computer shows it.</param>
     public PhoneSending(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, IPhotoFileSystem files, ICompanionFileFinder companions, OrganizeLibrary library, string name)
     {
@@ -58,6 +86,7 @@ public sealed class PhoneSending
     /// <summary>What this phone is called, as the computer shows it.</summary>
     public string Name => _name;
 
+    /// <summary>How sending stands now, with what can be deleted from the phone.</summary>
     public SendState State
     {
         // Each by its picture, or the video that is all there is of it.
@@ -65,8 +94,10 @@ public sealed class PhoneSending
     }
 
     /// <summary>Offers the files Organize knows by these ids, with their Live Photo videos and edit files, until stopped.</summary>
+    /// <param name="fileIds">The files, by the ids Organize gave them.</param>
+    /// <param name="ct">Stops the gathering of the files; once offered, they are offered until stopped.</param>
     /// <exception cref="ArgumentException">None of them is there to send.</exception>
-    public async Task<SendState> StartAsync(IReadOnlyList<string> fileIds, CancellationToken ct = default)
+    public async Task<SendState> StartAsync(IReadOnlyList<string> fileIds, CancellationToken ct)
     {
         var offer = new List<Offered>();
         var siblings = new SiblingIndex(_files);
@@ -92,7 +123,7 @@ public sealed class PhoneSending
             _offering = true;
         }
         var port = _listener.Start(ServeAsync);
-        _advertiser.Start(await _pairs.SelfIdAsync(), _name, port);
+        _advertiser.Start(await _pairs.SelfIdAsync(ct), _name, port);
         return State;
     }
 
@@ -164,7 +195,7 @@ public sealed class PhoneSending
         }
         try
         {
-            var linked = await Pairing.PhoneAsync(stream, new Device(await _pairs.SelfIdAsync(), _name), _pairs, AskAsync, ct);
+            var linked = await Pairing.PhoneAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ct);
             using var channel = linked.Channel;
             Set(s => s with { Stage = SendStage.Sending, Code = null, Computer = linked.Other.Name, Problem = null });
             while (await AnswerAsync(channel, ct)) { }

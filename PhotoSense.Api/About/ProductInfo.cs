@@ -3,9 +3,19 @@ using System.Text.Json;
 namespace PhotoSense.Api.About;
 
 /// <summary>Who makes PhotoSense and how to reach them: product.json, at the root of the repository, built in.</summary>
-public sealed record ProductInfo(string Name, string Publisher, string Copyright, string? SupportEmail, string? Website,
+/// <param name="Name">What the product is called.</param>
+/// <param name="Publisher">Who makes it.</param>
+/// <param name="Copyright">The copyright line.</param>
+/// <param name="SupportEmail">Where to write for help; null until set.</param>
+/// <param name="Website">The product's web site; null until set.</param>
+/// <param name="PrivacyPolicyUrl">Where the privacy policy is published; null until set.</param>
+/// <param name="TermsUrl">Where the terms of use are published; null until set.</param>
+/// <param name="SupportUrl">Where the support page is published; null until set.</param>
+/// <param name="GoverningLaw">The place whose law the terms are under; null until set.</param>
+internal sealed record ProductInfo(string Name, string Publisher, string Copyright, string? SupportEmail, string? Website,
     string? PrivacyPolicyUrl, string? TermsUrl, string? SupportUrl, string? GoverningLaw)
 {
+    /// <summary>product.json as it was built into this program.</summary>
     public static ProductInfo Bundled { get; } = Read(Bundle.Open("product.json"));
 
     /// <summary>product.json; a value left blank there is not set yet.</summary>
@@ -21,8 +31,10 @@ public sealed record ProductInfo(string Name, string Publisher, string Copyright
 }
 
 /// <summary>The files built into this assembly from the root of the repository (see PhotoSense.Api.csproj).</summary>
-public static class Bundle
+internal static class Bundle
 {
+    /// <summary>A file built in, by its name in the repository's root folder.</summary>
+    /// <exception cref="InvalidOperationException">The build left it out.</exception>
     public static Stream Open(string name) =>
         typeof(Bundle).Assembly.GetManifestResourceStream($"PhotoSense.About.{name}") ?? throw new InvalidOperationException($"{name} was not built into PhotoSense.");
 }

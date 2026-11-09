@@ -20,7 +20,7 @@ public sealed class MediaFileSystemTests
     private static List<string> Names(IEnumerable<string> paths) => [.. paths.Select(p => Path.GetFileName(p)!).Order(StringComparer.Ordinal)];
 
     [Test]
-    public async Task Each_Photo_Is_A_File_In_The_Folder_It_Is_In_On_The_Phone()
+    public async Task Each_Photo_Is_A_File_In_The_Folder_It_Is_In_On_The_Phone(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes());
         _store.Add("2", "DCIM/Camera/", "VID_0002.mp4", Bytes(), video: true);
@@ -37,7 +37,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task A_Photo_Is_Read_From_Any_Point_Even_When_The_Phone_Hands_It_Out_Only_From_The_Start()
+    public async Task A_Photo_Is_Read_From_Any_Point_Even_When_The_Phone_Hands_It_Out_Only_From_The_Start(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes("the whole picture"));
         _store.Add("2", "DCIM/Camera/", "IMG_0002.jpg", Bytes("the whole"));
@@ -53,7 +53,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task Photos_Move_Between_Folders_And_Names_In_One_Change_And_Never_Replace_One()
+    public async Task Photos_Move_Between_Folders_And_Names_In_One_Change_And_Never_Replace_One(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes());
         _store.Add("2", "DCIM/Camera/", "IMG_0002.jpg", Bytes());
@@ -80,7 +80,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task Photos_Go_Only_Inside_DCIM_Pictures_Or_Movies_And_Never_Outside_The_Phone()
+    public async Task Photos_Go_Only_Inside_DCIM_Pictures_Or_Movies_And_Never_Outside_The_Phone(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes());
         var photo = In("DCIM", "Camera", "IMG_0001.jpg");
@@ -101,7 +101,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task What_Is_Removed_From_The_Whole_Phone_Waits_In_Pictures_And_Is_Shown_In_The_Removed_Folder_Of_The_Phone()
+    public async Task What_Is_Removed_From_The_Whole_Phone_Waits_In_Pictures_And_Is_Shown_In_The_Removed_Folder_Of_The_Phone(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes());
         _store.Add("2", "DCIM/Camera/", "IMG_0002.jpg", Bytes());
@@ -130,7 +130,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task Folders_Made_For_Photos_That_Never_Came_Are_Forgotten_And_Those_That_Hold_Any_Stay()
+    public async Task Folders_Made_For_Photos_That_Never_Came_Are_Forgotten_And_Those_That_Hold_Any_Stay(CancellationToken ct)
     {
         _store.Add("1", "Pictures/Kept/", "IMG_1.jpg", Bytes());
         _phone.MakeFolder(In("Pictures", "Made", "Later"));
@@ -142,7 +142,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task A_Change_The_Person_Declines_Changes_Nothing_And_The_Phone_Is_Read_Afresh()
+    public async Task A_Change_The_Person_Declines_Changes_Nothing_And_The_Phone_Is_Read_Afresh(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes());
         _store.Refuse = "You chose not to let PhotoSense change these photos.";
@@ -155,7 +155,7 @@ public sealed class MediaFileSystemTests
     }
 
     [Test]
-    public async Task The_Folder_Browser_Offers_The_Phone_And_Its_Folders_But_Not_What_Was_Removed()
+    public async Task The_Folder_Browser_Offers_The_Phone_And_Its_Folders_But_Not_What_Was_Removed(CancellationToken ct)
     {
         _store.Add("1", "DCIM/Camera/", "IMG_0001.jpg", Bytes());
         _store.Add("2", "Pictures/PhotoSense Removed/DCIM/", "IMG_0002.jpg", Bytes());

@@ -11,11 +11,14 @@ using D = PhotoSense.Contracts.Duplicates; // alias for shared duplicate group D
 namespace PhotoSense.Api.Scanning;
 
 /// <summary>Turns a photo record into what the UI shows, including the name of the place it was taken.</summary>
-public sealed class PhotoDtoMapper
+internal sealed class PhotoDtoMapper
 {
     private readonly IPlaceNameResolver _places;
+
+    /// <summary>Names places through <paramref name="places"/>.</summary>
     public PhotoDtoMapper(IPlaceNameResolver places) => _places = places;
 
+    /// <summary>The photo as the page shows it.</summary>
     public D.PhotoItemDto Map(Photo p) => new()
     {
         Id = p.Id.Value,
@@ -38,15 +41,23 @@ public sealed class PhotoDtoMapper
     };
 }
 
-public sealed class ScanGroupingFacade
+/// <summary>A page of the groups a scan found, as the Clean up screens show them.</summary>
+internal sealed class ScanGroupingFacade
 {
     private readonly IDuplicateAnalysisService _analysis;
     private readonly PhotoDtoMapper _mapper;
     private readonly PhotoRanking _ranking;
+
+    /// <summary>Pages of the groups <paramref name="analysis"/> finds, each saying why its keeper was chosen.</summary>
     public ScanGroupingFacade(IDuplicateAnalysisService analysis, PhotoDtoMapper mapper, PhotoRanking ranking) { _analysis = analysis; _mapper = mapper; _ranking = ranking; }
 
+    /// <summary>One page of the groups.</summary>
     /// <param name="similar">False for duplicates (safe to remove in bulk), true for look-alikes (review only).</param>
+    /// <param name="q">Only groups with a file whose path holds this text; null or blank for every group.</param>
     /// <param name="hideKept">Leave out groups in which every member has been marked to keep.</param>
+    /// <param name="page">Which page, from 1.</param>
+    /// <param name="pageSize">How many groups a page holds.</param>
+    /// <param name="ct">Stops the work.</param>
     public async Task<D.DuplicateGroupsPageDto> BuildAsync(bool similar, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
     {
         var analysis = await _analysis.GetAsync(ct);
@@ -85,14 +96,16 @@ public sealed class ScanGroupingFacade
     };
 }
 
-public class DuplicateGroupsEndpoints
+/// <summary>The groups a scan found, a page at a time.</summary>
+internal sealed class DuplicateGroupsEndpoints
 {
     private readonly ScanGroupingFacade _facade;
+
+    /// <summary>Pages made by <paramref name="facade"/>.</summary>
     public DuplicateGroupsEndpoints(ScanGroupingFacade facade) => _facade = facade;
 
-    // GET /api/scan/groups
-    public async Task<ApiResponse> GetDuplicateGroups(
-        ApiRequest req)
+    /// <summary>GET /api/scan/groups?mode=&amp;page=&amp;pageSize=&amp;q=&amp;hideKept=: one page of duplicate or look-alike groups.</summary>
+    public async Task<ApiResponse> GetDuplicateGroupsAsync(ApiRequest req, CancellationToken ct)
     {
         if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
         var q = System.Web.HttpUtility.ParseQueryString(req.Url.Query);
@@ -101,9 +114,9 @@ public class DuplicateGroupsEndpoints
         int pageSize = int.TryParse(q.Get("pageSize"), out var ps) ? Math.Clamp(ps, 1, 200) : 50;
         var text = q.Get("q");
         var hideKept = q.Get("hideKept") == "true";
-        var payload = await _facade.BuildAsync(similar, text, hideKept, page, pageSize, req.Aborted);
+        var payload = await _facade.BuildAsync(similar, text, hideKept, page, pageSize, ct);
         var resp = req.CreateResponse(HttpStatusCode.OK);
-        await resp.WriteAsJsonAsync(payload);
+        await resp.WriteAsJsonAsync(payload, ct);
         return resp;
     }
 }

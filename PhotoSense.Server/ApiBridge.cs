@@ -5,12 +5,15 @@ using PhotoSense.Api.Http;
 namespace PhotoSense.Server;
 
 /// <summary>Hands a request below /api to the service's addresses, and sends back what they answer.</summary>
-public static class ApiBridge
+internal static class ApiBridge
 {
-    public static async Task HandleAsync(HttpContext context)
+    /// <summary>Answers one request below /api.</summary>
+    /// <param name="context">The request, and where its answer goes.</param>
+    /// <param name="ct">The request's own token: it stops the answering when whoever asked goes away.</param>
+    public static async Task HandleAsync(HttpContext context, CancellationToken ct)
     {
         var request = context.Request;
-        var asked = new ApiRequest(request.Method, new Uri(request.GetEncodedUrl()), request.Body, context.RequestAborted);
+        var asked = new ApiRequest(request.Method, new Uri(request.GetEncodedUrl()), request.Body, ct);
         foreach (var (name, values) in request.Headers) asked.Headers.TryAddWithoutValidation(name, (IEnumerable<string?>)values);
 
         if (context.RequestServices.GetRequiredService<PhotoSenseRoutes>().Router.Answer(asked) is not { } answering)
@@ -26,6 +29,6 @@ public static class ApiBridge
         if (answer.Body.Length == 0) return;
         response.ContentLength = answer.Body.Length;
         answer.Body.Position = 0;
-        await answer.Body.CopyToAsync(response.Body, context.RequestAborted);
+        await answer.Body.CopyToAsync(response.Body, ct);
     }
 }

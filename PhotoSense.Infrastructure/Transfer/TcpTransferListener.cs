@@ -9,7 +9,8 @@ namespace PhotoSense.Infrastructure.Transfer;
 /// it knows, so the phone waits on <see cref="Port"/>; should another app have it, on any free port, which the network
 /// is told of all the same.
 /// </summary>
-public sealed class TcpTransferListener(int port = TcpTransferListener.Port) : ITransferListener
+/// <param name="port">The port to wait on when it is free.</param>
+internal sealed class TcpTransferListener(int port = TcpTransferListener.Port) : ITransferListener
 {
     /// <summary>The port a phone waits on, where a computer looks for it through a cable.</summary>
     public const int Port = 47615;
@@ -18,6 +19,7 @@ public sealed class TcpTransferListener(int port = TcpTransferListener.Port) : I
     private CancellationTokenSource? _stop;
     private readonly List<TcpClient> _open = [];
 
+    /// <inheritdoc />
     public int Start(Func<Stream, CancellationToken, Task> serve)
     {
         Stop();
@@ -28,6 +30,7 @@ public sealed class TcpTransferListener(int port = TcpTransferListener.Port) : I
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
+    /// <inheritdoc />
     public void Stop()
     {
         _stop?.Cancel();
@@ -68,19 +71,32 @@ public sealed class TcpTransferListener(int port = TcpTransferListener.Port) : I
         }
     }
 
+    /// <summary>Serves one connection, and lets go of it however it ends.</summary>
     private async Task ServeAsync(TcpClient client, Func<Stream, CancellationToken, Task> serve, CancellationToken ct)
+    {
+        try { _ = await ServedAsync(client, serve, ct); }
+        finally
+        {
+            lock (_open) _open.Remove(client);
+            client.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Whether a connection was served to its end. One that broke off is that connection's own: serve says why, and
+    /// the next is waited for.
+    /// </summary>
+    private static async Task<bool> ServedAsync(TcpClient client, Func<Stream, CancellationToken, Task> serve, CancellationToken ct)
     {
         try
         {
             await using var stream = client.GetStream();
             await serve(stream, ct);
         }
-        // What went wrong on one connection is that connection's own: serve says it, and the next is waited for.
-        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or InvalidOperationException) { }
-        finally
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
         {
-            lock (_open) _open.Remove(client);
-            client.Dispose();
+            return false;
         }
+        return true;
     }
 }

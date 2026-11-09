@@ -4,6 +4,7 @@ using PhotoSense.Desktop.Browsing;
 
 namespace PhotoSense.Tests.Infrastructure;
 
+/// <summary>The folders of the computer, offered to choose.</summary>
 public sealed class FileSystemFolderBrowserTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-browse-");
@@ -19,7 +20,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task Lists_The_Folders_Inside_A_Folder_By_Name_With_Their_Full_Paths()
+    public async Task Lists_The_Folders_Inside_A_Folder_By_Name_With_Their_Full_Paths(CancellationToken ct)
     {
         var phone = Folder("Phone Pictures");
         var backup = Folder("backup");
@@ -35,7 +36,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task A_Path_Is_Listed_Under_Its_Full_Spelling_However_It_Was_Asked_For()
+    public async Task A_Path_Is_Listed_Under_Its_Full_Spelling_However_It_Was_Asked_For(CancellationToken ct)
     {
         Folder("Albums", "2024");
         var roundabout = Path.Combine(_root.FullName, "Albums", "..", "Albums") + Path.DirectorySeparatorChar;
@@ -47,7 +48,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task Leaves_Out_Hidden_Folders_And_The_Folder_Removed_Files_Are_Held_In()
+    public async Task Leaves_Out_Hidden_Folders_And_The_Folder_Removed_Files_Are_Held_In(CancellationToken ct)
     {
         Folder("Albums");
         Folder(PhotoStorageOptions.RemovedFolderName);
@@ -62,7 +63,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task The_Top_Of_A_Disk_Has_No_Folder_Above_It()
+    public async Task The_Top_Of_A_Disk_Has_No_Folder_Above_It(CancellationToken ct)
     {
         var top = Path.GetPathRoot(_root.FullName)!;
         var listing = _browser.Browse(top);
@@ -72,7 +73,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task A_Folder_That_May_Not_Be_Looked_Into_Is_Shown_As_Empty()
+    public async Task A_Folder_That_May_Not_Be_Looked_Into_Is_Shown_As_Empty(CancellationToken ct)
     {
         var locked = Folder("private");
         Folder("private", "inside");
@@ -86,7 +87,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task A_Folder_That_Is_Not_There_Is_Reported()
+    public async Task A_Folder_That_Is_Not_There_Is_Reported(CancellationToken ct)
     {
         var missing = Path.Combine(_root.FullName, "no-such-folder");
         var error = Assert.ThrowsExactly<DirectoryNotFoundException>(() => _browser.Browse(missing));
@@ -102,7 +103,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     [Arguments(null)]
     [Arguments("")]
     [Arguments("   ")]
-    public async Task With_No_Folder_Named_It_Offers_The_Places_To_Start_From(string? path)
+    public async Task With_No_Folder_Named_It_Offers_The_Places_To_Start_From(string? path, CancellationToken ct)
     {
         var places = new[] { new FolderEntry("Pictures", Folder("Pictures")), new FolderEntry("C:\\", _root.FullName) };
         var listing = new FileSystemFolderBrowser(() => places).Browse(path);
@@ -113,7 +114,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task On_This_Machine_The_Starting_Places_All_Exist_And_Include_The_Home_Folder()
+    public async Task On_This_Machine_The_Starting_Places_All_Exist_And_Include_The_Home_Folder(CancellationToken ct)
     {
         var places = _browser.Browse(null).Folders;
 
@@ -124,7 +125,7 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task Only_Places_That_Are_There_Are_Offered()
+    public async Task Only_Places_That_Are_There_Are_Offered(CancellationToken ct)
     {
         var there = Folder("Pictures");
         var offered = FileSystemFolderBrowser.Existing([("Pictures", there), ("Gone", Path.Combine(_root.FullName, "gone")), ("Unset", string.Empty)]);
@@ -139,11 +140,11 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     [Arguments(DriveType.Ram, false)]           // on Linux, the system's own bookkeeping
     [Arguments(DriveType.NoRootDirectory, false)]
     [Arguments(DriveType.Unknown, false)]
-    public async Task Only_Drives_That_People_Keep_Files_On_Are_Offered(DriveType type, bool offered)
+    public async Task Only_Drives_That_People_Keep_Files_On_Are_Offered(DriveType type, bool offered, CancellationToken ct)
         => await Assert.That(FileSystemFolderBrowser.HoldsFiles(type)).IsEqualTo(offered);
 
     [Test]
-    public async Task A_Photo_Programs_Own_Library_Is_Not_Offered()
+    public async Task A_Photo_Programs_Own_Library_Is_Not_Offered(CancellationToken ct)
     {
         Folder("Albums");
         Folder("Photos Library.photoslibrary", "originals");
@@ -153,14 +154,14 @@ public sealed class FileSystemFolderBrowserTests : IDisposable
     }
 
     [Test]
-    public async Task On_Windows_Every_Disk_With_A_Letter_Is_Offered_Under_It()
+    public async Task On_Windows_Every_Disk_With_A_Letter_Is_Offered_Under_It(CancellationToken ct)
     {
         var disks = FileSystemFolderBrowser.Disks([("C:\\", DriveType.Fixed), ("D:\\", DriveType.CDRom), ("F:\\", DriveType.Removable)], windows: true);
         await Assert.That(disks).IsEquivalentTo(new[] { ("C:\\", "C:\\"), ("F:\\", "F:\\") }, CollectionOrdering.Matching);
     }
 
     [Test]
-    public async Task On_A_Mac_The_Whole_Disk_And_The_Disks_Plugged_In_Or_Shared_Are_Offered_And_Not_The_Systems_Own_Volumes()
+    public async Task On_A_Mac_The_Whole_Disk_And_The_Disks_Plugged_In_Or_Shared_Are_Offered_And_Not_The_Systems_Own_Volumes(CancellationToken ct)
     {
         var disks = FileSystemFolderBrowser.Disks(
         [

@@ -8,7 +8,7 @@ namespace PhotoSense.Application.Scanning.Services;
 /// Decides whether two photos that are not identical files are the same shot, merely alike, or unrelated.
 /// A perceptual hash only nominates a pair; the pair is then checked directly.
 /// </summary>
-public static class PhotoMatcher
+internal static class PhotoMatcher
 {
     // The limits below were measured on a 5,578-photo iPhone library (2,782 HEIC, 2,736 JPEG):
     //   - 255 pairs known to be one shot saved twice (HEIC original + JPEG conversion) differed by
@@ -35,15 +35,21 @@ public static class PhotoMatcher
     /// </summary>
     public const double UnconfirmedSameDifference = 0.2;
 
+    /// <summary>How two photos compared.</summary>
+    /// <param name="Kind">The same shot, or only alike.</param>
+    /// <param name="HashDistance">Bits by which their perceptual hashes differ.</param>
+    /// <param name="Difference">Average difference between their signatures, in grey levels.</param>
     public sealed record Verdict(MatchKind Kind, int HashDistance, double Difference);
 
+    /// <summary>Bits by which two perceptual hashes differ (0-64).</summary>
     public static int HashDistance(ulong a, ulong b) => BitOperations.PopCount(a ^ b);
 
+    /// <summary>Reads a perceptual hash written as 16 hex characters; false for anything else.</summary>
     public static bool TryParseHash(string? hex, out ulong hash)
         => ulong.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out hash)
            && hex!.Length == 16;
 
-    /// <summary>Null when the two photos are unrelated or cannot be compared.</summary>
+    /// <summary>How two photos compare; null when they are unrelated or cannot be compared.</summary>
     public static Verdict? Compare(Photo a, Photo b)
     {
         if (a.Signature is null || b.Signature is null || a.Signature.Length != b.Signature.Length) return null;

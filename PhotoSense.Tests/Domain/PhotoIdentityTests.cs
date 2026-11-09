@@ -9,10 +9,11 @@ using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Domain;
 
+/// <summary>A photo's identity: its record follows its file, one record to a file.</summary>
 public class PhotoIdentityTests
 {
     [Test]
-    public async Task Two_Spellings_Of_One_Path_Have_The_Same_Key()
+    public async Task Two_Spellings_Of_One_Path_Have_The_Same_Key(CancellationToken ct)
     {
         var path = Path.Combine(Path.GetTempPath(), "album", "IMG_1.jpg");
         var roundabout = Path.Combine(Path.GetTempPath(), "album", "..", "album", "IMG_1.jpg");
@@ -24,30 +25,30 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task Saving_A_Second_Record_For_A_Path_Replaces_The_First()
+    public async Task Saving_A_Second_Record_For_A_Path_Replaces_The_First(CancellationToken ct)
     {
         var repo = new InMemoryPhotoRepository();
         var path = Path.Combine(Path.GetTempPath(), "IMG_1.jpg");
         var first = new Photo { SourcePath = path, FileName = "IMG_1.jpg", ContentHash = "A" };
         var second = new Photo { SourcePath = path, FileName = "IMG_1.jpg", ContentHash = "B" };
-        await repo.AddOrUpdateAsync(first);
+        await repo.AddOrUpdateAsync(first, ct);
         var afterFirst = repo.Version;
-        await repo.AddOrUpdateAsync(second);
+        await repo.AddOrUpdateAsync(second, ct);
 
-        await Assert.That((await repo.GetAllAsync()).Single().Id).IsEqualTo(second.Id);
-        await Assert.That((await repo.GetByPathAsync(path))!.Id).IsEqualTo(second.Id);
-        await Assert.That(await repo.GetByPathAsync(path + ".other")).IsNull();
+        await Assert.That((await repo.GetAllAsync(ct)).Single().Id).IsEqualTo(second.Id);
+        await Assert.That((await repo.GetByPathAsync(path, ct))!.Id).IsEqualTo(second.Id);
+        await Assert.That(await repo.GetByPathAsync(path + ".other", ct)).IsNull();
         await Assert.That(repo.Version > afterFirst).IsTrue();
-        await repo.DeleteAsync(second.Id);
+        await repo.DeleteAsync(second.Id, ct);
         await Assert.That(repo.Version > afterFirst + 1).IsTrue();
     }
 
     [Test]
-    public async Task A_Moved_Photo_Is_The_Same_Photo_At_A_New_Path()
+    public async Task A_Moved_Photo_Is_The_Same_Photo_At_A_New_Path(CancellationToken ct)
     {
         var photo = new Photo
         {
-            SourcePath = Path.Combine("a", "IMG_1.HEIC"), FileName = "IMG_1.HEIC", FileSizeBytes = 9, FileModifiedUtc = DateTime.UtcNow, ScanRoot = "a",
+            SourcePath = Path.Combine("a", "IMG_1.HEIC"), FileName = "IMG_1.HEIC", FileSizeBytes = 9, FileModifiedUtc = TestClock.Day.UtcDateTime, ScanRoot = "a",
             ContentHash = "H", PerceptualHash = "00000000000000FF", Signature = [1], Width = 4, Height = 3, Format = "HEIC", EncodedQuality = 90,
             TakenOn = TestPhotos.Shot, CameraModel = "iPhone", Latitude = 1, Longitude = 2, Set = PhotoSet.Secondary, IsKept = true
         };
@@ -63,7 +64,7 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task Thumbnails_Default_To_A_Folder_Beside_The_Database()
+    public async Task Thumbnails_Default_To_A_Folder_Beside_The_Database(CancellationToken ct)
     {
         var beside = new PhotoStorageOptions { DatabasePath = Path.Combine(Path.GetTempPath(), "data", "photosense.db") };
         await Assert.That(beside.ResolveThumbnailPath()).IsEqualTo(Path.Combine(Path.GetTempPath(), "data", "photosense-thumbnails"));
@@ -75,7 +76,7 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task Data_Is_Kept_In_The_Users_Own_Folder_And_Never_Where_The_Service_Runs_From()
+    public async Task Data_Is_Kept_In_The_Users_Own_Folder_And_Never_Where_The_Service_Runs_From(CancellationToken ct)
     {
         // The program's folder is replaced whenever it is built or published again, and data kept there would go with it.
         var defaults = new PhotoStorageOptions();
@@ -95,7 +96,7 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task An_Account_With_No_Folder_Of_Its_Own_Keeps_Its_Data_With_The_Temporary_Files()
+    public async Task An_Account_With_No_Folder_Of_Its_Own_Keeps_Its_Data_With_The_Temporary_Files(CancellationToken ct)
     {
         await Assert.That(PhotoStorageOptions.DataFolderIn(string.Empty)).IsEqualTo(Path.Combine(Path.GetTempPath(), "PhotoSense"));
         var home = Path.Combine(Path.GetTempPath(), "someone", "AppData");
@@ -103,7 +104,7 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task A_Group_Counts_Only_What_A_Removal_Would_Take()
+    public async Task A_Group_Counts_Only_What_A_Removal_Would_Take(CancellationToken ct)
     {
         var keeper = TestPhotos.Make("keeper.heic", size: 10);
         var group = new DuplicateGroup(keeper,
@@ -117,14 +118,14 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task Only_A_Completed_Removal_Counts_As_Success()
+    public async Task Only_A_Completed_Removal_Counts_As_Success(CancellationToken ct)
     {
         await Assert.That(new RemovalResult(RemovalOutcome.Removed, "held").Succeeded).IsTrue();
         foreach (var o in new[] { RemovalOutcome.NotFound, RemovalOutcome.Changed, RemovalOutcome.Failed, RemovalOutcome.LastCopy }) await Assert.That(new RemovalResult(o).Succeeded).IsFalse();
     }
 
     [Test]
-    public async Task Case_Matters_In_A_Path_Only_Where_The_File_System_Says_So()
+    public async Task Case_Matters_In_A_Path_Only_Where_The_File_System_Says_So(CancellationToken ct)
     {
         await Assert.That(PhotoPath.IgnoresCase(os => os == OSPlatform.Windows)).IsTrue();
         await Assert.That(PhotoPath.IgnoresCase(os => os == OSPlatform.OSX)).IsTrue();
@@ -139,7 +140,7 @@ public class PhotoIdentityTests
     }
 
     [Test]
-    public async Task A_Database_Path_With_No_Folder_Puts_Thumbnails_In_The_Data_Folder()
+    public async Task A_Database_Path_With_No_Folder_Puts_Thumbnails_In_The_Data_Folder(CancellationToken ct)
     {
         var top = Path.GetPathRoot(Path.GetTempPath())!;
         await Assert.That(new PhotoStorageOptions { DatabasePath = top }.ResolveThumbnailPath()).IsEqualTo(Path.Combine(PhotoStorageOptions.DefaultDataFolder, "photosense-thumbnails"));

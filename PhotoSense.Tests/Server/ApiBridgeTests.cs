@@ -5,6 +5,7 @@ using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Server;
 
+/// <summary>Handing a web request to the service's addresses, and sending back their answer.</summary>
 public sealed class ApiBridgeTests : IDisposable
 {
     private readonly ServerFixture _f = new();
@@ -12,7 +13,7 @@ public sealed class ApiBridgeTests : IDisposable
     public void Dispose() => _f.Dispose();
 
     // A request as Kestrel hands it on, with somewhere to write the answer.
-    private async Task<HttpContext> SendAsync(string method, string pathAndQuery, string? body = null, params (string Name, string Value)[] headers)
+    private async Task<HttpContext> SendAsync(string method, string pathAndQuery, CancellationToken ct, string? body = null, params (string Name, string Value)[] headers)
     {
         var context = new DefaultHttpContext { RequestServices = _f.Services };
         var query = pathAndQuery.IndexOf('?');
@@ -24,16 +25,16 @@ public sealed class ApiBridgeTests : IDisposable
         context.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes(body ?? string.Empty));
         foreach (var (name, value) in headers) context.Request.Headers[name] = value;
         context.Response.Body = new MemoryStream();
-        await ApiBridge.HandleAsync(context);
+        await ApiBridge.HandleAsync(context, ct);
         return context;
     }
 
     private static string Body(HttpContext context) => Encoding.UTF8.GetString(((MemoryStream)context.Response.Body).ToArray());
 
     [Test]
-    public async Task An_Address_Below_Api_Is_Answered_With_The_Endpoints_Status_Headers_And_Body()
+    public async Task An_Address_Below_Api_Is_Answered_With_The_Endpoints_Status_Headers_And_Body(CancellationToken ct)
     {
-        var answered = await SendAsync("GET", "/api/health?ignored=1");
+        var answered = await SendAsync("GET", "/api/health?ignored=1", ct);
 
         await Assert.That(answered.Response.StatusCode).IsEqualTo(200);
         await Assert.That(answered.Response.ContentType).IsEqualTo("application/json; charset=utf-8");
@@ -42,10 +43,10 @@ public sealed class ApiBridgeTests : IDisposable
     }
 
     [Test]
-    public async Task The_Headers_And_The_Body_Of_A_Request_Reach_The_Endpoint()
+    public async Task The_Headers_And_The_Body_Of_A_Request_Reach_The_Endpoint(CancellationToken ct)
     {
-        var fromThePage = await SendAsync("POST", "/api/scan/start", "{}", ("x-photosense-client", "web"));
-        var fromElsewhere = await SendAsync("POST", "/api/scan/start", "{}");
+        var fromThePage = await SendAsync("POST", "/api/scan/start", ct, "{}", ("x-photosense-client", "web"));
+        var fromElsewhere = await SendAsync("POST", "/api/scan/start", ct, "{}");
 
         await Assert.That(fromThePage.Response.StatusCode).IsEqualTo(400);
         await Assert.That(JsonDocument.Parse(Body(fromThePage)).RootElement.GetProperty("error").GetString()).IsEqualTo("A folder to scan is required.");
@@ -57,6 +58,6 @@ public sealed class ApiBridgeTests : IDisposable
     [Arguments("GET", "/api/nothing-here")]
     [Arguments("POST", "/api/health")]
     [Arguments("GET", "/api/photos/not-a-guid/image")]
-    public async Task An_Address_Nobody_Answers_Is_Not_Found(string method, string path)
-        => await Assert.That((await SendAsync(method, path)).Response.StatusCode).IsEqualTo(404);
+    public async Task An_Address_Nobody_Answers_Is_Not_Found(string method, string path, CancellationToken ct)
+        => await Assert.That((await SendAsync(method, path, ct)).Response.StatusCode).IsEqualTo(404);
 }

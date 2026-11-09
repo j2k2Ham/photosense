@@ -14,9 +14,12 @@ using PhotoSense.Domain.Repositories;
 
 namespace PhotoSense.Server;
 
-public static class PhotoSenseServices
+/// <summary>The services PhotoSense runs on a computer.</summary>
+internal static class PhotoSenseServices
 {
     /// <summary>PhotoSense as it runs on a computer, with its settings read from <paramref name="cfg"/>.</summary>
+    /// <param name="s">The services to add to.</param>
+    /// <param name="cfg">The program's settings.</param>
     public static IServiceCollection AddPhotoSenseComputer(this IServiceCollection s, IConfiguration cfg)
     {
         s.Configure<PhotoStorageOptions>(cfg.GetSection("PhotoStorage"));

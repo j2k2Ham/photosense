@@ -9,6 +9,7 @@ using PhotoSense.Tests.Application;
 
 namespace PhotoSense.Tests.Endpoints;
 
+/// <summary>Organize's addresses: listing a folder, planning, moving, removing, undoing and showing files.</summary>
 public sealed class OrganizeEndpointsTests : IDisposable
 {
     private readonly OrganizeFixture _f = new();
@@ -28,16 +29,16 @@ public sealed class OrganizeEndpointsTests : IDisposable
     // ---- only the UI itself is answered
 
     [Test]
-    public async Task Requests_About_Someones_Files_Are_Refused_Without_The_Client_Header()
+    public async Task Requests_About_Someones_Files_Are_Refused_Without_The_Client_Header(CancellationToken ct)
     {
-        var id = await _f.IdAsync(_f.Put("IMG_1.JPG"));
-        await Assert.That((await _api.FilesAsync(Http.Get($"organize/files?root={_f.Root.FullName}"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.PlanAsync(Http.Post("organize/plan", "{}"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.ApplyAsync(Http.Post("organize/apply", "{}"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.RemoveAsync(Http.Post("organize/remove", Body(new { root = _f.Root.FullName, files = new[] { new { id } } })))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.UndoAsync(Http.Post("organize/undo/x"), "x")).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.BatchesAsync(Http.Get("organize/batches"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That((await _api.OpenAsync(Http.Post("organize/files/x/open"), id)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        var id = await _f.IdAsync(_f.Put("IMG_1.JPG"), ct);
+        await Assert.That((await _api.FilesAsync(Http.Get($"organize/files?root={_f.Root.FullName}"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.PlanAsync(Http.Post("organize/plan", "{}"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.ApplyAsync(Http.Post("organize/apply", "{}"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.RemoveAsync(Http.Post("organize/remove", Body(new { root = _f.Root.FullName, files = new[] { new { id } } })), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.UndoAsync(Http.Post("organize/undo/x"), "x", ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.BatchesAsync(Http.Get("organize/batches"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.OpenAsync(Http.Post("organize/files/x/open"), id, ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         _viewer.VerifyNoOtherCalls();
         await Assert.That(_f.Files()).IsEquivalentTo(new[] { "IMG_1.JPG" }, CollectionOrdering.Matching);
     }
@@ -45,7 +46,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
     // ---- listing
 
     [Test]
-    public async Task Lists_A_Folders_Files_With_When_And_Where_Each_Was_Taken()
+    public async Task Lists_A_Folders_Files_With_When_And_Where_Each_Was_Taken(CancellationToken ct)
     {
         _f.Put("IMG_1.JPG", year: 2021);
         _f.Put("2023/IMG_2.HEIC", year: 2023);
@@ -59,7 +60,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
             .Returns(new PlaceMatch("Butte", "Montana", "US", 46.0038, -112.5348, "Uptown Butte", 46.0138, -112.5362));
         _f.Resolver.Setup(r => r.Locate(18.5, -68.4)).Returns(new PlaceMatch("Punta Cana", "", "DO", 18.58, -68.4));
 
-        var response = await _api.FilesAsync(Files(_f.Root.FullName));
+        var response = await _api.FilesAsync(Files(_f.Root.FullName), ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         var listing = response.Json();
@@ -82,7 +83,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task Marks_The_Video_Half_Of_A_Live_Photo_Only_Beside_Its_Own_Picture()
+    public async Task Marks_The_Video_Half_Of_A_Live_Photo_Only_Beside_Its_Own_Picture(CancellationToken ct)
     {
         foreach (var name in new[] { "IMG_1.HEIC", "IMG_1.MOV", "IMG_2.MOV", "IMG_3.MOV", "IMG_4.JPG", "Trip/IMG_1.MOV" }) _f.Put(name);
         MediaDetails Live(string? id) => new(null, 0, 0, null, null, null, id);
@@ -92,7 +93,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
         _f.Reader.Says["IMG_3.MOV"] = Live(null);
         _f.Reader.Says["IMG_4.JPG"] = Live(null);
 
-        var files = (await _api.FilesAsync(Files(_f.Root.FullName))).Json().GetProperty("files").EnumerateArray()
+        var files = (await _api.FilesAsync(Files(_f.Root.FullName), ct)).Json().GetProperty("files").EnumerateArray()
             .ToDictionary(f => Path.Combine(Path.GetRelativePath(_f.Root.FullName, f.GetProperty("folder").GetString()!), f.GetProperty("name").GetString()!), f => f.GetProperty("livePhoto").GetBoolean());
 
         // Trip\IMG_1.MOV carries the identifier and the name, but its picture is in another folder.
@@ -101,46 +102,46 @@ public sealed class OrganizeEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task Says_When_Everything_Was_Already_On_Record_From_A_Scan()
+    public async Task Says_When_Everything_Was_Already_On_Record_From_A_Scan(CancellationToken ct)
     {
-        await _f.ScannedAsync(_f.Put("IMG_1.JPG"));
-        await Assert.That((await _api.FilesAsync(Files(_f.Root.FullName))).Json().GetProperty("fromScan").GetBoolean()).IsTrue();
+        await _f.ScannedAsync(_f.Put("IMG_1.JPG"), ct);
+        await Assert.That((await _api.FilesAsync(Files(_f.Root.FullName), ct)).Json().GetProperty("fromScan").GetBoolean()).IsTrue();
     }
 
     [Test]
-    public async Task A_Folder_That_Cannot_Be_Listed_Is_Said_Not_To_Be_Found()
+    public async Task A_Folder_That_Cannot_Be_Listed_Is_Said_Not_To_Be_Found(CancellationToken ct)
     {
         foreach (var root in new[] { _f.In("nowhere"), null, "bad\0path" })
         {
-            var response = await _api.FilesAsync(Files(root));
+            var response = await _api.FilesAsync(Files(root), ct);
             await Assert.That((response.StatusCode, response.Text())).IsEqualTo((HttpStatusCode.NotFound, $"Folder not found: {root ?? string.Empty}"));
         }
         // No folder named at all.
-        var unnamed = await _api.FilesAsync(Http.Get("organize/files").FromClient());
+        var unnamed = await _api.FilesAsync(Http.Get("organize/files").FromClient(), ct);
         await Assert.That((unnamed.StatusCode, unnamed.Text())).IsEqualTo((HttpStatusCode.NotFound, "Folder not found: "));
     }
 
     [Test]
-    public async Task Says_How_Far_The_Reading_Of_A_Folder_Has_Got()
+    public async Task Says_How_Far_The_Reading_Of_A_Folder_Has_Got(CancellationToken ct)
     {
         for (var i = 1; i <= 4; i++) _f.Put($"IMG_{i}.JPG");
         async Task<(bool, int, int)> Progress(string query)
         {
-            var response = await _api.ProgressAsync(Http.Get($"organize/progress{query}").FromClient());
+            var response = await _api.ProgressAsync(Http.Get($"organize/progress{query}").FromClient(), ct);
             await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
             return (response.Json().GetProperty("reading").GetBoolean(), response.Json().GetProperty("total").GetInt32(), response.Json().GetProperty("done").GetInt32());
         }
         var root = $"?root={Uri.EscapeDataString(_f.Root.FullName)}";
-        await Assert.That((await _api.ProgressAsync(Http.Get($"organize/progress{root}"))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _api.ProgressAsync(Http.Get($"organize/progress{root}"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         // Not being read, no folder named, and something that is no path at all: nothing is in progress.
         foreach (var query in new[] { root, "", "?root=%20", $"?root={Uri.EscapeDataString("bad\0path")}" })
             await Assert.That(await Progress(query)).IsEqualTo((false, 0, 0));
 
         using var hold = new ManualResetEventSlim();
         using var begun = new SemaphoreSlim(0);
-        _f.Reader.OnRead = _ => { begun.Release(); hold.Wait(); };
-        var listing = _api.FilesAsync(Files(_f.Root.FullName));
-        await begun.WaitAsync();
+        _f.Reader.OnRead = _ => { begun.Release(); hold.Wait(ct); };
+        var listing = _api.FilesAsync(Files(_f.Root.FullName), ct);
+        await begun.WaitAsync(ct);
         await Assert.That(await Progress(root)).IsEqualTo((true, 4, 0));
         hold.Set();
         await listing;
@@ -148,18 +149,18 @@ public sealed class OrganizeEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task A_Page_That_Goes_Away_Stops_Waiting_But_The_Reading_Goes_On_For_Whoever_Asks_Next()
+    public async Task A_Page_That_Goes_Away_Stops_Waiting_But_The_Reading_Goes_On_For_Whoever_Asks_Next(CancellationToken ct)
     {
         _f.Put("IMG_1.JPG");
         _f.Put("IMG_2.JPG");
         using var hold = new ManualResetEventSlim();
         using var begun = new SemaphoreSlim(0);
         var reads = 0;
-        _f.Reader.OnRead = _ => { Interlocked.Increment(ref reads); begun.Release(); hold.Wait(); };
-        var waiting = _api.FilesAsync(Files(_f.Root.FullName));
-        await begun.WaitAsync();
+        _f.Reader.OnRead = _ => { Interlocked.Increment(ref reads); begun.Release(); hold.Wait(ct); };
+        var waiting = _api.FilesAsync(Files(_f.Root.FullName), ct);
+        await begun.WaitAsync(ct);
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => _api.FilesAsync(Http.Abandoned($"organize/files?root={Uri.EscapeDataString(_f.Root.FullName)}").FromClient()));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => _api.FilesAsync(Http.Get($"organize/files?root={Uri.EscapeDataString(_f.Root.FullName)}").FromClient(), new CancellationToken(canceled: true)));
         await Assert.That(_f.Library.ProgressOf(_f.Root.FullName)).IsNotNull();
 
         hold.Set();
@@ -168,7 +169,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task Hands_Over_The_Files_Read_So_Far_To_A_Page_That_Says_What_It_Already_Has()
+    public async Task Hands_Over_The_Files_Read_So_Far_To_A_Page_That_Says_What_It_Already_Has(CancellationToken ct)
     {
         foreach (var name in new[] { "IMG_1.JPG", "IMG_2.JPG", "IMG_3.JPG", "IMG_4.JPG" }) _f.Put(name);
         _f.Reader.Says["IMG_1.JPG"] = new MediaDetails(new DateTime(2023, 6, 9, 14, 3, 22), 64, 48, null, 46.0, -112.5);
@@ -178,7 +179,7 @@ public sealed class OrganizeEndpointsTests : IDisposable
         _f.Resolver.Setup(r => r.Locate(18.5, -68.4)).Returns(new PlaceMatch("Punta Cana", "", "DO", 18.58, -68.4));
         var root = Uri.EscapeDataString(_f.Root.FullName);
         async Task<System.Text.Json.JsonElement> Progress(string more = "")
-            => (await _api.ProgressAsync(Http.Get($"organize/progress?root={root}{more}").FromClient())).Json();
+            => (await _api.ProgressAsync(Http.Get($"organize/progress?root={root}{more}").FromClient(), ct)).Json();
         static List<string> Names(System.Text.Json.JsonElement answer) => answer.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("name").GetString()!).ToList();
 
         // Not being read: nothing to hand over.
@@ -188,9 +189,9 @@ public sealed class OrganizeEndpointsTests : IDisposable
 
         // Three of the four are read; the reading then waits on the last.
         using var hold = new ManualResetEventSlim();
-        _f.Reader.OnRead = path => { if (path.EndsWith("IMG_4.JPG", StringComparison.Ordinal)) hold.Wait(); };
-        var listing = _api.FilesAsync(Files(_f.Root.FullName));
-        for (var tries = 0; (_f.Library.ProgressOf(_f.Root.FullName)?.Done ?? 0) < 3 && tries < 500; tries++) await Task.Delay(10);
+        _f.Reader.OnRead = path => { if (path.EndsWith("IMG_4.JPG", StringComparison.Ordinal)) hold.Wait(ct); };
+        var listing = _api.FilesAsync(Files(_f.Root.FullName), ct);
+        for (var tries = 0; (_f.Library.ProgressOf(_f.Root.FullName)?.Done ?? 0) < 3 && tries < 500; tries++) await Task.Delay(10, ct);
 
         var first = await Progress();
         await Assert.That((first.GetProperty("reading").GetBoolean(), first.GetProperty("total").GetInt32(), first.GetProperty("done").GetInt32(), first.GetProperty("from").GetInt32(), first.GetProperty("more").GetBoolean()))
@@ -225,16 +226,16 @@ public sealed class OrganizeEndpointsTests : IDisposable
     // ---- planning
 
     [Test]
-    public async Task Plans_A_Move_Naming_The_Files_Whose_Names_Are_Taken()
+    public async Task Plans_A_Move_Naming_The_Files_Whose_Names_Are_Taken(CancellationToken ct)
     {
         var moving = _f.Put("IMG_6435.JPG", "same");
         var other = _f.Put("IMG_7.JPG", year: 2021);
         _f.Put("Anaconda/IMG_6435.JPG", "same", year: 2019);
         _f.Reader.Says["IMG_6435.JPG"] = new MediaDetails(null, 3024, 4032, null, 46.1283, -112.9423);
         _f.Resolver.Setup(r => r.Describe(46.1283, -112.9423)).Returns("Anaconda, Montana, US");
-        var ids = new[] { await _f.IdAsync(moving), await _f.IdAsync(other) };
+        var ids = new[] { await _f.IdAsync(moving, ct), await _f.IdAsync(other, ct) };
 
-        var response = await _api.PlanAsync(Http.Post("organize/plan", Body(new { basePath = _f.Root.FullName, folderName = "Anaconda", files = ids.Select(id => new { id }) })).FromClient());
+        var response = await _api.PlanAsync(Http.Post("organize/plan", Body(new { basePath = _f.Root.FullName, folderName = "Anaconda", files = ids.Select(id => new { id }) })).FromClient(), ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         var plan = response.Json();
@@ -248,16 +249,16 @@ public sealed class OrganizeEndpointsTests : IDisposable
         await Assert.That((there.GetProperty("name").GetString(), there.GetProperty("sizeBytes").GetInt64(), there.GetProperty("date").GetString(), there.GetProperty("width").GetInt32(), there.GetProperty("height").GetInt32(),
                 there.GetProperty("isVideo").GetBoolean(), there.GetProperty("placeName").GetString(), there.GetProperty("identical").GetBoolean()))
             .IsEqualTo(("IMG_6435.JPG", 4L, "2019-01-01T12:00:00", 3024, 4032, false, "Anaconda, Montana, US", true));
-        await Assert.That((await _f.Library.FindAsync(there.GetProperty("id").GetString()!))!.Path).IsEqualTo(_f.In("Anaconda", "IMG_6435.JPG"));
+        await Assert.That((await _f.Library.FindAsync(there.GetProperty("id").GetString()!, ct))!.Path).IsEqualTo(_f.In("Anaconda", "IMG_6435.JPG"));
     }
 
     [Test]
-    public async Task A_Request_That_Cannot_Be_Carried_Out_Says_Why()
+    public async Task A_Request_That_Cannot_Be_Carried_Out_Says_Why(CancellationToken ct)
     {
         async Task<(HttpStatusCode, string)> Ask(string body)
         {
-            var plan = await _api.PlanAsync(Http.Post("organize/plan", body).FromClient());
-            var apply = await _api.ApplyAsync(Http.Post("organize/apply", body).FromClient());
+            var plan = await _api.PlanAsync(Http.Post("organize/plan", body).FromClient(), ct);
+            var apply = await _api.ApplyAsync(Http.Post("organize/apply", body).FromClient(), ct);
             await Assert.That((apply.StatusCode, apply.Text())).IsEqualTo((plan.StatusCode, plan.Text()));
             return (plan.StatusCode, plan.Text());
         }
@@ -273,50 +274,50 @@ public sealed class OrganizeEndpointsTests : IDisposable
     }
 
     [Test]
-    public async Task Plans_And_Moves_Each_File_Into_The_Subfolder_Asked_For_It()
+    public async Task Plans_And_Moves_Each_File_Into_The_Subfolder_Asked_For_It(CancellationToken ct)
     {
         var a = _f.Put("IMG_1.JPG", year: 2022);
         var b = _f.Put("IMG_2.JPG", year: 2023);
-        var ids = new[] { await _f.IdAsync(a), await _f.IdAsync(b) };
+        var ids = new[] { await _f.IdAsync(a, ct), await _f.IdAsync(b, ct) };
         var request = new { basePath = _f.Root.FullName, folderName = "2022", mode = "move", label = "2022", files = new object[] { new { id = ids[0], subfolder = "Myrtle Beach" }, new { id = ids[1] } } };
 
-        var plan = (await _api.PlanAsync(Http.Post("organize/plan", Body(request)).FromClient())).Json();
+        var plan = (await _api.PlanAsync(Http.Post("organize/plan", Body(request)).FromClient(), ct)).Json();
         await Assert.That(plan.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("folder").GetString()!)).IsEquivalentTo(new[] { _f.In("2022", "Myrtle Beach"), _f.In("2022") }, CollectionOrdering.Matching);
-        var applied = (await _api.ApplyAsync(Http.Post("organize/apply", Body(request)).FromClient())).Json();
+        var applied = (await _api.ApplyAsync(Http.Post("organize/apply", Body(request)).FromClient(), ct)).Json();
         await Assert.That(applied.GetProperty("done").GetInt32()).IsEqualTo(2);
         await Assert.That((_f.Files("2022", "Myrtle Beach").Single(), _f.Files("2022").Single())).IsEqualTo(("IMG_1.JPG", "IMG_2.JPG"));
     }
 
     [Test]
-    public async Task Removes_Files_Into_The_Holding_Folder_Lists_That_And_Undoes_It()
+    public async Task Removes_Files_Into_The_Holding_Folder_Lists_That_And_Undoes_It(CancellationToken ct)
     {
         var a = _f.Put("IMG_1.JPG", "aaaa");
         var b = _f.Put("Camera Roll/IMG_2.JPG", "bb");
-        var ids = new[] { await _f.IdAsync(a), await _f.IdAsync(b) };
+        var ids = new[] { await _f.IdAsync(a, ct), await _f.IdAsync(b, ct) };
 
-        var removed = (await _api.RemoveAsync(Http.Post("organize/remove", Body(new { root = _f.Root.FullName, files = new object[] { new { id = ids[0] }, new { id = ids[1] }, new { id = (string?)null } } })).FromClient())).Json();
+        var removed = (await _api.RemoveAsync(Http.Post("organize/remove", Body(new { root = _f.Root.FullName, files = new object[] { new { id = ids[0] }, new { id = ids[1] }, new { id = (string?)null } } })).FromClient(), ct)).Json();
 
         await Assert.That((removed.GetProperty("done").GetInt32(), removed.GetProperty("bytes").GetInt64(), removed.GetProperty("companions").GetInt32(), removed.GetProperty("skipped").GetInt32())).IsEqualTo((2, 6L, 0, 1));
         await Assert.That(removed.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("path").GetString()!))
             .IsEquivalentTo(new[] { _f.In("_PhotoSense_Removed", "IMG_1.JPG"), _f.In("_PhotoSense_Removed", "Camera Roll", "IMG_2.JPG") }, CollectionOrdering.Matching);
         await Assert.That(File.Exists(a) || File.Exists(b)).IsFalse();
         var batchId = removed.GetProperty("batchId").GetString()!;
-        var batch = (await _api.BatchesAsync(Http.Get("organize/batches").FromClient())).Json().EnumerateArray().Single();
+        var batch = (await _api.BatchesAsync(Http.Get("organize/batches").FromClient(), ct)).Json().EnumerateArray().Single();
         await Assert.That((batch.GetProperty("id").GetString(), batch.GetProperty("label").GetString(), batch.GetProperty("mode").GetString(), batch.GetProperty("count").GetInt32())).IsEqualTo((batchId, _f.Root.FullName, "remove", 2));
 
-        var undone = (await _api.UndoAsync(Http.Post($"organize/undo/{batchId}").FromClient(), batchId)).Json();
+        var undone = (await _api.UndoAsync(Http.Post($"organize/undo/{batchId}").FromClient(), batchId, ct)).Json();
         await Assert.That((undone.GetProperty("restored").GetInt32(), File.Exists(a), File.Exists(b))).IsEqualTo((2, true, true));
     }
 
     [Test]
-    public async Task A_Removal_That_Cannot_Be_Carried_Out_Says_Why()
+    public async Task A_Removal_That_Cannot_Be_Carried_Out_Says_Why(CancellationToken ct)
     {
         async Task<(HttpStatusCode, string)> Ask(string body)
         {
-            var answer = await _api.RemoveAsync(Http.Post("organize/remove", body).FromClient());
+            var answer = await _api.RemoveAsync(Http.Post("organize/remove", body).FromClient(), ct);
             return (answer.StatusCode, answer.Text());
         }
-        var id = await _f.IdAsync(_f.Put("IMG_1.JPG"));
+        var id = await _f.IdAsync(_f.Put("IMG_1.JPG"), ct);
 
         await Assert.That(await Ask("not json")).IsEqualTo((HttpStatusCode.BadRequest, "The request could not be read."));
         await Assert.That(await Ask("null")).IsEqualTo((HttpStatusCode.BadRequest, "The request could not be read."));
@@ -330,14 +331,14 @@ public sealed class OrganizeEndpointsTests : IDisposable
     // ---- moving, copying and undoing
 
     [Test]
-    public async Task Moves_Files_Then_Lists_The_Move_And_Undoes_It()
+    public async Task Moves_Files_Then_Lists_The_Move_And_Undoes_It(CancellationToken ct)
     {
         var a = _f.Put("IMG_1.JPG", "aaaa", year: 2022);
         var b = _f.Put("IMG_2.JPG", "bb", year: 2023);
-        var ids = new[] { await _f.IdAsync(a), await _f.IdAsync(b) };
+        var ids = new[] { await _f.IdAsync(a, ct), await _f.IdAsync(b, ct) };
         var request = new { basePath = _f.Root.FullName, folderName = "Trips\\Glacier", yearSplit = true, mode = "move", companions = true, label = " Trips\\Glacier ", files = new object[] { new { id = ids[0], name = "First.JPG" }, new { id = ids[1] } } };
 
-        var applied = (await _api.ApplyAsync(Http.Post("organize/apply", Body(request)).FromClient())).Json();
+        var applied = (await _api.ApplyAsync(Http.Post("organize/apply", Body(request)).FromClient(), ct)).Json();
 
         await Assert.That((applied.GetProperty("done").GetInt32(), applied.GetProperty("bytes").GetInt64(), applied.GetProperty("companions").GetInt32(), applied.GetProperty("renamed").GetInt32(),
             applied.GetProperty("skipped").GetInt32(), applied.GetProperty("problems").GetArrayLength())).IsEqualTo((2, 6L, 0, 1, 0, 0));
@@ -345,122 +346,123 @@ public sealed class OrganizeEndpointsTests : IDisposable
             .IsEquivalentTo(new[] { (ids[0], _f.In("Trips", "Glacier", "2022", "First.JPG")), (ids[1], _f.In("Trips", "Glacier", "2023", "IMG_2.JPG")) }, CollectionOrdering.Matching);
         var batchId = applied.GetProperty("batchId").GetString()!;
 
-        var batch = (await _api.BatchesAsync(Http.Get("organize/batches").FromClient())).Json().EnumerateArray().Single();
+        var batch = (await _api.BatchesAsync(Http.Get("organize/batches").FromClient(), ct)).Json().EnumerateArray().Single();
         await Assert.That((batch.GetProperty("id").GetString(), batch.GetProperty("label").GetString(), batch.GetProperty("mode").GetString(), batch.GetProperty("count").GetInt32(), batch.GetProperty("bytes").GetInt64()))
             .IsEqualTo((batchId, "Trips\\Glacier", "move", 2, 6L));
-        await Assert.That(DateTime.UtcNow - batch.GetProperty("utc").GetDateTime().ToUniversalTime()).IsLessThan(TimeSpan.FromMinutes(1));
+        // Stamped with the moment the change was started, by the clock the fixture gives it.
+        await Assert.That(batch.GetProperty("utc").GetDateTime().ToUniversalTime()).IsEqualTo(TestClock.Day.UtcDateTime);
 
-        var undone = await _api.UndoAsync(Http.Post($"organize/undo/{batchId}").FromClient(), batchId);
+        var undone = await _api.UndoAsync(Http.Post($"organize/undo/{batchId}").FromClient(), batchId, ct);
         await Assert.That((undone.StatusCode, undone.Json().GetProperty("restored").GetInt32(), undone.Json().GetProperty("skipped").GetInt32(), undone.Json().GetProperty("problems").GetArrayLength())).IsEqualTo((HttpStatusCode.OK, 2, 0, 0));
         await Assert.That(_f.Files()).IsEquivalentTo(new[] { "IMG_1.JPG", "IMG_2.JPG" }, CollectionOrdering.Matching);
-        await Assert.That((await _api.BatchesAsync(Http.Get("organize/batches").FromClient())).Json().GetArrayLength()).IsEqualTo(0);
+        await Assert.That((await _api.BatchesAsync(Http.Get("organize/batches").FromClient(), ct)).Json().GetArrayLength()).IsEqualTo(0);
 
         // Undone already, never done, and not an id at all: each is said to be nothing to undo.
         foreach (var id in new[] { batchId, Guid.NewGuid().ToString(), "x" })
         {
-            var again = await _api.UndoAsync(Http.Post($"organize/undo/{id}").FromClient(), id);
+            var again = await _api.UndoAsync(Http.Post($"organize/undo/{id}").FromClient(), id, ct);
             await Assert.That((again.StatusCode, again.Text())).IsEqualTo((HttpStatusCode.NotFound, "There is nothing to undo: this was undone already, or was never done."));
         }
     }
 
     [Test]
-    public async Task Copies_When_Asked_And_Names_The_Batch_After_The_Folder_When_No_Label_Is_Given()
+    public async Task Copies_When_Asked_And_Names_The_Batch_After_The_Folder_When_No_Label_Is_Given(CancellationToken ct)
     {
         var a = _f.Put("IMG_1.JPG", "aaaa");
-        var request = new { basePath = _f.Root.FullName, folderName = "Copies", mode = "COPY", files = new[] { new { id = (string?)await _f.IdAsync(a) }, new { id = (string?)null } } };
+        var request = new { basePath = _f.Root.FullName, folderName = "Copies", mode = "COPY", files = new[] { new { id = (string?)await _f.IdAsync(a, ct) }, new { id = (string?)null } } };
 
-        var applied = (await _api.ApplyAsync(Http.Post("organize/apply", Body(request)).FromClient())).Json();
+        var applied = (await _api.ApplyAsync(Http.Post("organize/apply", Body(request)).FromClient(), ct)).Json();
 
         await Assert.That((applied.GetProperty("done").GetInt32(), applied.GetProperty("skipped").GetInt32(), applied.GetProperty("problems").GetArrayLength())).IsEqualTo((1, 1, 1));
         await Assert.That((File.Exists(a), File.Exists(_f.In("Copies", "IMG_1.JPG")))).IsEqualTo((true, true));
-        var batch = (await _api.BatchesAsync(Http.Get("organize/batches").FromClient())).Json().EnumerateArray().Single();
+        var batch = (await _api.BatchesAsync(Http.Get("organize/batches").FromClient(), ct)).Json().EnumerateArray().Single();
         await Assert.That((batch.GetProperty("label").GetString(), batch.GetProperty("mode").GetString())).IsEqualTo(("Copies", "copy"));
 
         // Nothing to do: no batch, and so no id to undo by.
-        var nothing = (await _api.ApplyAsync(Http.Post("organize/apply", Body(new { basePath = _f.Root.FullName, direct = true, files = new[] { new { id = await _f.IdAsync(a) } } })).FromClient())).Json();
+        var nothing = (await _api.ApplyAsync(Http.Post("organize/apply", Body(new { basePath = _f.Root.FullName, direct = true, files = new[] { new { id = await _f.IdAsync(a, ct) } } })).FromClient(), ct)).Json();
         await Assert.That((nothing.GetProperty("batchId").ValueKind, nothing.GetProperty("done").GetInt32())).IsEqualTo((JsonValueKind.Null, 0));
         // A plan may leave an id out as well; it is simply a file that is not there.
-        var plan = (await _api.PlanAsync(Http.Post("organize/plan", Body(new { basePath = _f.Root.FullName, folderName = "x", files = new[] { new { id = (string?)null } } })).FromClient())).Json();
+        var plan = (await _api.PlanAsync(Http.Post("organize/plan", Body(new { basePath = _f.Root.FullName, folderName = "x", files = new[] { new { id = (string?)null } } })).FromClient(), ct)).Json();
         await Assert.That(plan.GetProperty("items").GetArrayLength()).IsEqualTo(0);
     }
 
     // ---- showing and opening a file
 
     [Test]
-    public async Task A_Preview_Comes_From_The_Scans_Cache_Or_Is_Made_Once_And_Kept()
+    public async Task A_Preview_Comes_From_The_Scans_Cache_Or_Is_Made_Once_And_Kept(CancellationToken ct)
     {
         var scanned = _f.Put("IMG_1.JPG");
         var unscanned = _f.Put("IMG_2.JPG");
-        await _f.ScannedAsync(scanned, contentHash: "ABCDEF");
+        await _f.ScannedAsync(scanned, ct, contentHash: "ABCDEF");
         _thumbnails.Saved["ABCDEF"] = [9, 8, 7];
         _analyzer.Setup(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync(new ImageAnalysis(4, 3, "JPEG", null, 0, [], [1, 2]));
 
-        var cached = await _api.ThumbnailAsync(Http.Get("t"), await _f.IdAsync(scanned));
+        var cached = await _api.ThumbnailAsync(Http.Get("t"), await _f.IdAsync(scanned, ct), ct);
         await Assert.That(cached.Bytes()).IsEquivalentTo(new byte[] { 9, 8, 7 }, CollectionOrdering.Matching);
         await Assert.That((cached.Header("Content-Type"), cached.Header("ETag"))).IsEqualTo(("image/jpeg", "\"ABCDEF\""));
         _analyzer.VerifyNoOtherCalls();
 
-        var id = await _f.IdAsync(unscanned);
-        var made = await _api.ThumbnailAsync(Http.Get("t"), id);
+        var id = await _f.IdAsync(unscanned, ct);
+        var made = await _api.ThumbnailAsync(Http.Get("t"), id, ct);
         await Assert.That(made.Bytes()).IsEquivalentTo(new byte[] { 1, 2 }, CollectionOrdering.Matching);
-        await Assert.That((await _api.ThumbnailAsync(Http.Get("t"), id)).Bytes()).IsEquivalentTo(new byte[] { 1, 2 }, CollectionOrdering.Matching);
+        await Assert.That((await _api.ThumbnailAsync(Http.Get("t"), id, ct)).Bytes()).IsEquivalentTo(new byte[] { 1, 2 }, CollectionOrdering.Matching);
         _analyzer.Verify(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
         // Kept under a name made from its size and when it last changed, which go with it when it is moved.
         var key = _thumbnails.Saved.Keys.Single(k => k != "ABCDEF");
         await Assert.That((key.Length, key.All(char.IsAsciiHexDigit), made.Header("ETag"))).IsEqualTo((64, true, $"\"{key}\""));
         Directory.CreateDirectory(_f.In("moved"));
         File.Move(unscanned, _f.In("moved", "Another name.JPG"));
-        await Assert.That((await _api.ThumbnailAsync(Http.Get("t"), await _f.IdAsync(_f.In("moved", "Another name.JPG")))).Header("ETag")).IsEqualTo($"\"{key}\"");
+        await Assert.That((await _api.ThumbnailAsync(Http.Get("t"), await _f.IdAsync(_f.In("moved", "Another name.JPG"), ct), ct)).Header("ETag")).IsEqualTo($"\"{key}\"");
         _analyzer.Verify(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]
-    public async Task There_Is_No_Preview_For_A_Video_An_Unknown_File_Or_One_That_Cannot_Be_Decoded()
+    public async Task There_Is_No_Preview_For_A_Video_An_Unknown_File_Or_One_That_Cannot_Be_Decoded(CancellationToken ct)
     {
-        var video = await _f.IdAsync(_f.Put("clip.MOV"));
-        var broken = await _f.IdAsync(_f.Put("broken.JPG"));
-        _analyzer.Setup(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidDataException("not an image"));
+        var video = await _f.IdAsync(_f.Put("clip.MOV"), ct);
+        var broken = await _f.IdAsync(_f.Put("broken.JPG"), ct);
+        _analyzer.Setup(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ThrowsAsync(new UnreadableImageException("not an image"));
         foreach (var id in new[] { video, broken, "never-given-out" })
         {
-            await Assert.That((await _api.ThumbnailAsync(Http.Get("t"), id)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
-            if (id != broken) await Assert.That((await _api.ImageAsync(Http.Get("i"), id)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+            await Assert.That((await _api.ThumbnailAsync(Http.Get("t"), id, ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+            if (id != broken) await Assert.That((await _api.ImageAsync(Http.Get("i"), id, ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
         }
 
         _analyzer.Setup(a => a.AnalyzeAsync(It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ThrowsAsync(new OperationCanceledException());
-        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => _api.ThumbnailAsync(Http.Get("t"), broken));
+        await Assert.ThrowsExactlyAsync<OperationCanceledException>(() => _api.ThumbnailAsync(Http.Get("t"), broken, ct));
     }
 
     [Test]
-    public async Task A_Picture_Is_Shown_At_Full_Size_As_The_Browser_Can_Take_It()
+    public async Task A_Picture_Is_Shown_At_Full_Size_As_The_Browser_Can_Take_It(CancellationToken ct)
     {
-        var jpeg = await _f.IdAsync(_f.Put("IMG_1.jpg", "jpeg bytes"));
-        var heic = await _f.IdAsync(_f.Put("IMG_2.HEIC"));
+        var jpeg = await _f.IdAsync(_f.Put("IMG_1.jpg", "jpeg bytes"), ct);
+        var heic = await _f.IdAsync(_f.Put("IMG_2.HEIC"), ct);
         _analyzer.Setup(a => a.RenderJpegAsync(It.IsAny<Stream>(), 2560, It.IsAny<CancellationToken>())).ReturnsAsync([5, 5]);
 
-        var asItIs = await _api.ImageAsync(Http.Get("i"), jpeg);
+        var asItIs = await _api.ImageAsync(Http.Get("i"), jpeg, ct);
         await Assert.That((asItIs.Text(), asItIs.Header("Content-Type"), asItIs.Header("ETag"))).IsEqualTo(("jpeg bytes", "image/jpeg", null));
-        var converted = await _api.ImageAsync(Http.Get("i"), heic);
+        var converted = await _api.ImageAsync(Http.Get("i"), heic, ct);
         await Assert.That((converted.StatusCode, converted.Header("Content-Type"))).IsEqualTo((HttpStatusCode.OK, "image/jpeg"));
         await Assert.That(converted.Bytes()).IsEquivalentTo(new byte[] { 5, 5 }, CollectionOrdering.Matching);
     }
 
     [Test]
-    public async Task A_File_Is_Handed_To_The_Systems_Default_Viewer()
+    public async Task A_File_Is_Handed_To_The_Systems_Default_Viewer(CancellationToken ct)
     {
         var path = _f.Put("IMG_1.HEIC");
-        var id = await _f.IdAsync(path);
-        await Assert.That((await _api.OpenAsync(Http.Post("o").FromClient(), id)).StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        var id = await _f.IdAsync(path, ct);
+        await Assert.That((await _api.OpenAsync(Http.Post("o").FromClient(), id, ct)).StatusCode).IsEqualTo(HttpStatusCode.NoContent);
         _viewer.Verify(v => v.Open(path), Times.Once);
 
-        var unknown = await _api.OpenAsync(Http.Post("o").FromClient(), "never-given-out");
+        var unknown = await _api.OpenAsync(Http.Post("o").FromClient(), "never-given-out", ct);
         await Assert.That((unknown.StatusCode, unknown.Text())).IsEqualTo((HttpStatusCode.NotFound, "The file is no longer there. Choose the folder again."));
 
         _viewer.Setup(v => v.Open(It.IsAny<string>())).Throws(new FileNotFoundException("gone"));
-        var missing = await _api.OpenAsync(Http.Post("o").FromClient(), id);
+        var missing = await _api.OpenAsync(Http.Post("o").FromClient(), id, ct);
         await Assert.That((missing.StatusCode, missing.Text())).IsEqualTo((HttpStatusCode.NotFound, "The file is no longer there. Choose the folder again."));
 
         _viewer.Setup(v => v.Open(It.IsAny<string>())).Throws(new InvalidOperationException("No application could be started for IMG_1.HEIC"));
-        var failed = await _api.OpenAsync(Http.Post("o").FromClient(), id);
+        var failed = await _api.OpenAsync(Http.Post("o").FromClient(), id, ct);
         await Assert.That((failed.StatusCode, failed.Text())).IsEqualTo((HttpStatusCode.InternalServerError, "No application could be started for IMG_1.HEIC"));
     }
 }

@@ -2,6 +2,7 @@ using PhotoSense.Infrastructure.Places;
 
 namespace PhotoSense.Tests.Infrastructure;
 
+/// <summary>Naming the town nearest a position, from the list built in.</summary>
 public class GeoNamesPlaceResolverTests
 {
     private static readonly GeoNamesPlaceResolver Bundled = new();
@@ -10,11 +11,11 @@ public class GeoNamesPlaceResolverTests
     [Arguments(35.2677, -75.5424, "Buxton, North Carolina, US")]          // in the town
     [Arguments(48.8584, 2.2945, "Paris")]                                  // the list names its districts
     [Arguments(-33.8568, 151.2153, "New South Wales, AU")]                 // southern and eastern hemispheres
-    public async Task Names_The_Town_A_Picture_Was_Taken_In(double latitude, double longitude, string expected)
+    public async Task Names_The_Town_A_Picture_Was_Taken_In(double latitude, double longitude, string expected, CancellationToken ct)
         => await Assert.That(Bundled.Describe(latitude, longitude)).Contains(expected);
 
     [Test]
-    public async Task Says_Near_When_The_Town_Is_Some_Way_Off()
+    public async Task Says_Near_When_The_Town_Is_Some_Way_Off(CancellationToken ct)
     {
         // A trailhead in the hills above Anaconda, Montana.
         var place = Bundled.Describe(46.1994, -112.9836);
@@ -28,11 +29,11 @@ public class GeoNamesPlaceResolverTests
     [Arguments(0.0, 181.0)]
     [Arguments(double.NaN, 0.0)]
     [Arguments(0.0, double.NaN)]
-    public async Task Names_Nothing_Far_From_Anywhere_Or_For_Nonsense(double latitude, double longitude)
+    public async Task Names_Nothing_Far_From_Anywhere_Or_For_Nonsense(double latitude, double longitude, CancellationToken ct)
         => await Assert.That(Bundled.Describe(latitude, longitude)).IsNull();
 
     [Test]
-    public async Task Picks_The_Nearest_Place_Across_Cell_Edges_And_The_Date_Line()
+    public async Task Picks_The_Nearest_Place_Across_Cell_Edges_And_The_Date_Line(CancellationToken ct)
     {
         var list = string.Join('\n',
             "Westside\tRegion\tAA\t10.9900\t20.9900",
@@ -52,7 +53,7 @@ public class GeoNamesPlaceResolverTests
     }
 
     [Test]
-    public async Task Distances_Shrink_Eastward_Towards_The_Poles()
+    public async Task Distances_Shrink_Eastward_Towards_The_Poles(CancellationToken ct)
     {
         // One degree of longitude is about 111 km at the equator but about 19 km at 80 degrees north.
         var places = new GeoNamesPlaceResolver(() => new StringReader("Equator Town\t\tAA\t0.0\t10.0\nArctic Town\t\tAA\t80.0\t10.0"));
@@ -62,7 +63,7 @@ public class GeoNamesPlaceResolverTests
     }
 
     [Test]
-    public async Task A_Build_That_Left_The_Place_List_Out_Says_So()
+    public async Task A_Build_That_Left_The_Place_List_Out_Says_So(CancellationToken ct)
     {
         var error = Assert.ThrowsExactly<InvalidOperationException>(() => GeoNamesPlaceResolver.OpenBundledList(typeof(GeoNamesPlaceResolverTests).Assembly));
         await Assert.That(error.Message).Contains("missing from the build");

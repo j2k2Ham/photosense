@@ -14,12 +14,21 @@ public enum LibraryFileKind
 }
 
 /// <summary>One file a picture or video is kept as, under the name it was taken with.</summary>
+/// <param name="Kind">What the file holds.</param>
+/// <param name="FileName">The name it was taken with.</param>
+/// <param name="Length">Its size.</param>
 public sealed record LibraryFile(LibraryFileKind Kind, string FileName, long Length);
 
 /// <summary>A picture or video in a phone's photo library, and the files it is kept as.</summary>
+/// <param name="Id">The library's own id for it.</param>
+/// <param name="CreatedUtc">When it was taken or added.</param>
+/// <param name="ModifiedUtc">When it last changed.</param>
+/// <param name="Files">The files it is kept as.</param>
 public sealed record LibraryItem(string Id, DateTime CreatedUtc, DateTime ModifiedUtc, IReadOnlyList<LibraryFile> Files);
 
 /// <summary>An album PhotoSense made: the names of the folders it is in, outermost first, then its own; and what is in it.</summary>
+/// <param name="Path">The names of the folders it is in, outermost first, then its own.</param>
+/// <param name="ItemIds">The pictures and videos in it.</param>
 public sealed record LibraryAlbum(IReadOnlyList<string> Path, IReadOnlyList<string> ItemIds);
 
 /// <summary>
@@ -37,6 +46,7 @@ public sealed class LibraryChange
     /// <summary>Pictures and videos to delete. A phone keeps what is deleted in its own bin for a while, Recently Deleted on an iPhone.</summary>
     public List<string> Delete { get; } = [];
 
+    /// <summary>There is nothing to change.</summary>
     public bool IsEmpty => Add.Count == 0 && Take.Count == 0 && Delete.Count == 0;
 }
 

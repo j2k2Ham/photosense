@@ -15,6 +15,7 @@ public static class PageFiles
     /// The file, relative to the page's folder and with forward slashes, that answers <paramref name="path"/>:
     /// the file itself, or the page of that name. Null when none does.
     /// </summary>
+    /// <param name="path">The address asked for, below the page.</param>
     /// <param name="exists">Whether the page's folder holds a file at a relative path.</param>
     public static string? For(string path, Func<string, bool> exists)
     {

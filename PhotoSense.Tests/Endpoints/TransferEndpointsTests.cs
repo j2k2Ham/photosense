@@ -9,7 +9,8 @@ public sealed class TransferEndpointsTests
 {
     private static readonly TransferEndpoints Neither = new();
 
-    public static IEnumerable<Func<(Func<ApiRequest, Task<ApiResponse>> Ask, ApiRequest Request, string Why)>> AskedOfTheWrongProgram()
+    /// <summary>Each address of each half, asked of a program that has neither, with what it says.</summary>
+    public static IEnumerable<Func<(Func<ApiRequest, CancellationToken, Task<ApiResponse>> Ask, ApiRequest Request, string Why)>> AskedOfTheWrongProgram()
     {
         yield return () => (Neither.StartSendingAsync, Http.Post("send/start", "{\"files\": [\"a\"]}").FromClient(), "Only a phone sends photos.");
         yield return () => (Neither.SendingAsync, Http.Get("send/state"), "Only a phone sends photos.");
@@ -25,13 +26,14 @@ public sealed class TransferEndpointsTests
 
     [Test]
     [MethodDataSource(nameof(AskedOfTheWrongProgram))]
-    public async Task Asked_For_The_Other_Half_It_Says_It_Is_Not_The_One(Func<ApiRequest, Task<ApiResponse>> ask, ApiRequest request, string why)
+    public async Task Asked_For_The_Other_Half_It_Says_It_Is_Not_The_One(Func<ApiRequest, CancellationToken, Task<ApiResponse>> ask, ApiRequest request, string why, CancellationToken ct)
     {
-        var answer = await ask(request);
+        var answer = await ask(request, ct);
         await Assert.That((answer.StatusCode, answer.Text())).IsEqualTo((HttpStatusCode.NotFound, why));
     }
 
-    public static IEnumerable<Func<(Func<ApiRequest, Task<ApiResponse>> Ask, string Path)>> Changes()
+    /// <summary>Each address of either half that changes something.</summary>
+    public static IEnumerable<Func<(Func<ApiRequest, CancellationToken, Task<ApiResponse>> Ask, string Path)>> Changes()
     {
         yield return () => (Neither.StartSendingAsync, "send/start");
         yield return () => (Neither.ConfirmSendingAsync, "send/confirm");
@@ -45,6 +47,6 @@ public sealed class TransferEndpointsTests
 
     [Test]
     [MethodDataSource(nameof(Changes))]
-    public async Task Another_Page_Is_Refused_Before_Anything_Else(Func<ApiRequest, Task<ApiResponse>> ask, string path)
-        => await Assert.That((await ask(Http.Post(path))).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+    public async Task Another_Page_Is_Refused_Before_Anything_Else(Func<ApiRequest, CancellationToken, Task<ApiResponse>> ask, string path, CancellationToken ct)
+        => await Assert.That((await ask(Http.Post(path), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 }

@@ -27,6 +27,7 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
         }
     }
 
+    /// <summary>Puts a file with this text in place, and the folders above it.</summary>
     public string Put(string path, string text) => Put(path, Encoding.UTF8.GetBytes(text));
 
     /// <summary>Every file there is, wherever it is.</summary>
@@ -35,43 +36,52 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
         lock (_lock) return _files.Values.Select(f => f.Path).Order(StringComparer.Ordinal).ToList();
     }
 
+    /// <inheritdoc />
     public bool FileExists(string path)
     {
         lock (_lock) return _files.ContainsKey(path);
     }
 
+    /// <inheritdoc />
     public bool FolderExists(string path)
     {
         lock (_lock) return _folders.ContainsKey(Trim(path));
     }
 
+    /// <inheritdoc />
     public StoredFile? Describe(string path)
     {
         lock (_lock) return _files.TryGetValue(path, out var f) ? new StoredFile(f.Bytes.LongLength, f.ModifiedUtc) : null;
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<string> FilesIn(string folder)
     {
         lock (_lock) return _files.Values.Where(f => In(f.Path, folder)).Select(f => f.Path).ToList();
     }
 
+    /// <inheritdoc />
     public IReadOnlyList<string> FoldersIn(string folder)
     {
         lock (_lock) return _folders.Values.Where(f => In(f, folder)).ToList();
     }
 
+    /// <inheritdoc />
     public bool IsLink(string path) => false;
 
+    /// <inheritdoc />
     public Stream OpenRead(string path)
     {
         lock (_lock) return _files.TryGetValue(path, out var f) ? new MemoryStream(f.Bytes, writable: false) : throw new FileNotFoundException("No such file.", path);
     }
 
+    /// <inheritdoc />
     public bool IsCopyOf(string copy, string original)
     {
         lock (_lock) return _files[original].Bytes.AsSpan().StartsWith(_files[copy].Bytes);
     }
 
+    /// <inheritdoc />
     public void Move(string from, string to)
     {
         lock (_lock)
@@ -82,6 +92,7 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
         }
     }
 
+    /// <inheritdoc />
     public void Copy(string from, string to)
     {
         lock (_lock)
@@ -91,6 +102,7 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
         }
     }
 
+    /// <inheritdoc />
     public Stream CreateNew(string path)
     {
         lock (_lock)
@@ -112,6 +124,7 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
         }
     }
 
+    /// <inheritdoc />
     public void MakeFolder(string path)
     {
         lock (_lock)
@@ -119,17 +132,20 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
                 _folders.TryAdd(at, at);
     }
 
+    /// <inheritdoc />
     public void RemoveEmptyFolder(string path)
     {
         lock (_lock)
             if (FilesIn(path).Count == 0 && FoldersIn(path).Count == 0) _folders.Remove(Trim(path));
     }
 
+    /// <inheritdoc />
     public void DeleteCopy(string path)
     {
         lock (_lock) _files.Remove(path);
     }
 
+    /// <inheritdoc />
     public void Erase(string path)
     {
         lock (_lock) _files.Remove(path);

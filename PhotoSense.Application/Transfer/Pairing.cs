@@ -7,10 +7,15 @@ using PhotoSense.Domain.Repositories;
 namespace PhotoSense.Application.Transfer;
 
 /// <summary>A phone or computer, by the id it keeps and the name it goes by.</summary>
-public sealed record Device(string Id, string Name);
+/// <param name="Id">The id the device keeps, which tells it from any other.</param>
+/// <param name="Name">What the device is called, to show the person.</param>
+internal sealed record Device(string Id, string Name);
 
 /// <summary>Two devices that have agreed on keys, the other of the two, and whether they paired just now.</summary>
-public sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
+/// <param name="Channel">What the two say to each other from now on, sealed with the keys agreed.</param>
+/// <param name="Other">The other device.</param>
+/// <param name="Paired">The two were paired just now, the person having compared the numbers.</param>
+internal sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
 
 /// <summary>
 /// How a phone and a computer come to trust each other. Each makes a new key for every connection and the two agree
@@ -20,10 +25,15 @@ public sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
 /// between can choose a key that makes them match. After that the two keep a secret of their own, and prove to each
 /// other that they have it each time they connect.
 /// </summary>
-public static class Pairing
+internal static class Pairing
 {
     /// <summary>The computer's half. It connects; the phone speaks first.</summary>
+    /// <param name="stream">The connection to the phone.</param>
+    /// <param name="self">This computer.</param>
+    /// <param name="pairs">The devices this one has been paired with; a new pairing is kept there.</param>
     /// <param name="compare">Shows the number and says whether the person found it the same on the phone.</param>
+    /// <param name="ct">Stops the pairing.</param>
+    /// <exception cref="TransferException">The two could not agree, or the person said the numbers differ.</exception>
     public static async Task<Linked> ComputerAsync(Stream stream, Device self, IPairingStore pairs, Func<string, Device, CancellationToken, Task<bool>> compare, CancellationToken ct)
     {
         var greeting = await Wire.ReceiveAsync(stream, "phone", ct);
@@ -44,7 +54,7 @@ public static class Pairing
 
         var shared = Agree(mine, theirKey);
         var said = Transcript(self.Id, phone.Id, myKey, theirKey, myNonce, theirNonce);
-        var pair = await pairs.GetAsync(phone.Id);
+        var pair = await pairs.GetAsync(phone.Id, ct);
         byte[] secret;
         if (pair is not null && known)
         {
@@ -61,12 +71,18 @@ public static class Pairing
             if (!same) throw NoMatch;
             if (!Same(await Wire.ReceiveAsync(stream, "confirm", ct))) throw NoMatchThere("phone");
             secret = HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, said, "photosense pairing"u8.ToArray());
-            await pairs.SaveAsync(new PairedDevice(phone.Id, phone.Name, secret, DateTime.UtcNow));
+            await pairs.SaveAsync(new PairedDevice(phone.Id, phone.Name, secret), ct);
         }
         return new Linked(Channel(stream, shared, secret, said, "computer to phone", "phone to computer"), phone, pair is null || !known);
     }
 
     /// <summary>The phone's half. It waits for a computer, and speaks first.</summary>
+    /// <param name="stream">The connection to the computer.</param>
+    /// <param name="self">This phone.</param>
+    /// <param name="pairs">The devices this one has been paired with; a new pairing is kept there.</param>
+    /// <param name="compare">Shows the number and says whether the person found it the same on the computer.</param>
+    /// <param name="ct">Stops the pairing.</param>
+    /// <exception cref="TransferException">The two could not agree, or the person said the numbers differ.</exception>
     public static async Task<Linked> PhoneAsync(Stream stream, Device self, IPairingStore pairs, Func<string, Device, CancellationToken, Task<bool>> compare, CancellationToken ct)
     {
         await Wire.SendAsync(stream, new JsonObject { ["t"] = "phone", ["id"] = self.Id, ["name"] = self.Name }, ct);
@@ -76,7 +92,7 @@ public static class Pairing
         using var mine = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
         var myKey = mine.PublicKey.ExportSubjectPublicKeyInfo();
         var myNonce = RandomNumberGenerator.GetBytes(32);
-        var pair = await pairs.GetAsync(computer.Id);
+        var pair = await pairs.GetAsync(computer.Id, ct);
         await Wire.SendAsync(stream, new JsonObject
         {
             ["t"] = "key", ["key"] = Convert.ToBase64String(myKey), ["commit"] = Convert.ToBase64String(Commit(myKey, theirKey, myNonce)), ["known"] = pair is not null,
@@ -101,16 +117,13 @@ public static class Pairing
                 await Wire.SendAsync(stream, new JsonObject { ["t"] = "prove", ["mac"] = Convert.ToBase64String(Proof(pair.Key, said, "phone")) }, ct);
                 return new Linked(Channel(stream, shared, pair.Key, said, "phone to computer", "computer to phone"), computer, false);
             }
-            if (!Same(next))
-            {
-                await Wire.SendAsync(stream, new JsonObject { ["t"] = "confirm", ["same"] = false }, ct);
-                throw NoMatchThere("computer");
-            }
+            // The computer, having said no, hangs up without waiting for an answer: none is sent, and none could arrive.
+            if (!Same(next)) throw NoMatchThere("computer");
             var same = await (question ?? compare(Code(said), computer, ct));
             await Wire.SendAsync(stream, new JsonObject { ["t"] = "confirm", ["same"] = same }, ct);
             if (!same) throw NoMatch;
             secret = HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, said, "photosense pairing"u8.ToArray());
-            await pairs.SaveAsync(new PairedDevice(computer.Id, computer.Name, secret, DateTime.UtcNow));
+            await pairs.SaveAsync(new PairedDevice(computer.Id, computer.Name, secret), ct);
         }
         finally
         {

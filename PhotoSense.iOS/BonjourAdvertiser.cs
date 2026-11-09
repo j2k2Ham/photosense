@@ -15,6 +15,7 @@ public sealed class BonjourAdvertiser : ITransferAdvertiser
     private readonly object _lock = new();
     private IntPtr _registered;
 
+    /// <summary>Tells the network the phone offers photos on a port, under its id and name.</summary>
     public void Start(string id, string name, int port)
     {
         Stop();
@@ -26,6 +27,7 @@ public sealed class BonjourAdvertiser : ITransferAdvertiser
         UIApplication.SharedApplication.InvokeOnMainThread(() => UIApplication.SharedApplication.IdleTimerDisabled = true);
     }
 
+    /// <summary>Stops telling the network; nothing changes when it was not telling it.</summary>
     public void Stop()
     {
         IntPtr registered;

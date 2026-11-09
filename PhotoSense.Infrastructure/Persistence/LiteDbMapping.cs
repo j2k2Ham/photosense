@@ -12,6 +12,7 @@ internal static class LiteDbMapping
 {
     private static readonly object Gate = new();
 
+    /// <summary>Works out how <typeparamref name="T"/> maps to a document, unless that is done already, before the store uses it.</summary>
     public static void Prepare<T>()
     {
         lock (Gate) BsonMapper.Global.Entity<T>();

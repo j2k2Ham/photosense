@@ -4,6 +4,7 @@ using PhotoSense.Infrastructure.Metadata;
 
 namespace PhotoSense.Tests.Infrastructure.Metadata;
 
+/// <summary>Reading a video's details, and the identifier that ties a Live Photo together.</summary>
 public sealed class LivePhotoAndVideoMetadataTests : IDisposable
 {
     private const string LiveId = "52E3B53C-0000-4000-8000-123456789ABC";
@@ -19,36 +20,36 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
         return path;
     }
 
-    private async Task<Photo> ReadAsync(string name, byte[] content)
+    private async Task<Photo> ReadAsync(string name, byte[] content, CancellationToken ct)
     {
         var photo = new Photo { SourcePath = name, FileName = name };
-        await _extractor.ExtractAsync(photo, new MemoryStream(content));
+        await _extractor.ExtractAsync(photo, new MemoryStream(content), ct);
         return photo;
     }
 
     [Test]
-    public async Task Both_Halves_Of_A_Live_Photo_Carry_The_Same_Identifier()
+    public async Task Both_Halves_Of_A_Live_Photo_Carry_The_Same_Identifier(CancellationToken ct)
     {
         await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("IMG_1.JPG", MediaSamples.Picture(LiveId)))).IsEqualTo(LiveId);
         await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("IMG_1.MOV", MediaSamples.Movie(LiveId)))).IsEqualTo(LiveId);
-        await Assert.That((await ReadAsync("IMG_1.JPG", MediaSamples.Picture(LiveId))).LivePhotoId).IsEqualTo(LiveId);
-        await Assert.That((await ReadAsync("IMG_1.MOV", MediaSamples.Movie(LiveId))).LivePhotoId).IsEqualTo(LiveId);
+        await Assert.That((await ReadAsync("IMG_1.JPG", MediaSamples.Picture(LiveId), ct)).LivePhotoId).IsEqualTo(LiveId);
+        await Assert.That((await ReadAsync("IMG_1.MOV", MediaSamples.Movie(LiveId), ct)).LivePhotoId).IsEqualTo(LiveId);
     }
 
     [Test]
-    public async Task Ordinary_Pictures_And_Videos_Carry_None()
+    public async Task Ordinary_Pictures_And_Videos_Carry_None(CancellationToken ct)
     {
         await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("plain.JPG", MediaSamples.Picture()))).IsNull();
         await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("plain.MOV", MediaSamples.Movie()))).IsNull();
         await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Put("garbage.MOV", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))).IsNull();
         await Assert.That(LivePhotoLink.ReadId(TestFiles.Disk, Path.Combine(_root.FullName, "not-there.JPG"))).IsNull();
-        await Assert.That((await ReadAsync("plain.MOV", MediaSamples.Movie())).LivePhotoId).IsNull();
+        await Assert.That((await ReadAsync("plain.MOV", MediaSamples.Movie(), ct)).LivePhotoId).IsNull();
     }
 
     [Test]
-    public async Task Reads_What_The_Phone_Recorded_About_A_Video()
+    public async Task Reads_What_The_Phone_Recorded_About_A_Video(CancellationToken ct)
     {
-        var video = await ReadAsync("IMG_2.MOV", MediaSamples.Movie());
+        var video = await ReadAsync("IMG_2.MOV", MediaSamples.Movie(), ct);
         await Assert.That(video.DurationSeconds).IsEqualTo(84);
         await Assert.That((video.Width, video.Height)).IsEqualTo((1920, 1080));
         await Assert.That(video.CameraModel).IsEqualTo("iPhone 12 Pro Max");
@@ -60,32 +61,32 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     }
 
     [Test]
-    public async Task A_Video_Shot_With_The_Phone_Upright_Is_Taller_Than_Wide()
+    public async Task A_Video_Shot_With_The_Phone_Upright_Is_Taller_Than_Wide(CancellationToken ct)
     {
-        var video = await ReadAsync("IMG_3.MOV", MediaSamples.Movie(sideways: true));
+        var video = await ReadAsync("IMG_3.MOV", MediaSamples.Movie(sideways: true), ct);
         await Assert.That((video.Width, video.Height)).IsEqualTo((1080, 1920));
     }
 
     [Test]
-    public async Task Falls_Back_To_The_Containers_Own_Date_And_Leaves_Out_What_Is_Missing()
+    public async Task Falls_Back_To_The_Containers_Own_Date_And_Leaves_Out_What_Is_Missing(CancellationToken ct)
     {
         var written = new DateTime(2016, 10, 28, 14, 40, 24, DateTimeKind.Utc);
-        var video = await ReadAsync("clip.MP4", MediaSamples.Movie(creationDate: null, position: null, model: null, writtenUtc: written));
+        var video = await ReadAsync("clip.MP4", MediaSamples.Movie(creationDate: null, position: null, model: null, writtenUtc: written), ct);
         await Assert.That(DateTime.SpecifyKind(video.TakenOn!.Value, DateTimeKind.Local)).IsEqualTo(written.ToLocalTime());
         await Assert.That(video.Latitude).IsNull();
         await Assert.That(video.CameraModel).IsNull();
 
         // 1904 is what a container holds when its date was never set.
-        var undated = await ReadAsync("clip.MP4", MediaSamples.Movie(creationDate: null, position: "+00.0000+000.0000/"));
+        var undated = await ReadAsync("clip.MP4", MediaSamples.Movie(creationDate: null, position: "+00.0000+000.0000/"), ct);
         await Assert.That(undated.TakenOn).IsNull();
         await Assert.That(undated.Latitude).IsNull();
 
-        var notAVideo = await ReadAsync("broken.MOV", [1, 2, 3, 4]);
+        var notAVideo = await ReadAsync("broken.MOV", [1, 2, 3, 4], ct);
         await Assert.That(notAVideo.DurationSeconds).IsNull();
     }
 
     [Test]
-    public async Task A_Picture_Takes_Only_The_Video_That_Carries_Its_Identifier()
+    public async Task A_Picture_Takes_Only_The_Video_That_Carries_Its_Identifier(CancellationToken ct)
     {
         // Real files and the real reader this time: the rules themselves are covered in CompanionFileFinderTests.
         var finder = new CompanionFileFinder(TestFiles.Disk);

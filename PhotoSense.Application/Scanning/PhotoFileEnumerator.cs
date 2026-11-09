@@ -4,10 +4,16 @@ using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Scanning;
 
-public static class PhotoFileEnumerator
+/// <summary>The pictures and videos under a folder, as a scan and Organize take them in.</summary>
+internal static class PhotoFileEnumerator
 {
+    /// <summary>Whether a scan takes the file in: a picture or a video.</summary>
     public static bool IsSupported(string path) => MediaFiles.IsScanned(path);
 
+    /// <summary>
+    /// The pictures and videos in a folder, and with <paramref name="recursive"/> in the folders inside it, leaving out
+    /// the folders of removed files and the libraries of photo programs. None when the folder is not there.
+    /// </summary>
     public static IEnumerable<string> Enumerate(IPhotoFileSystem files, string root, bool recursive)
     {
         // Inside a photo program's own library every file belongs to that program.

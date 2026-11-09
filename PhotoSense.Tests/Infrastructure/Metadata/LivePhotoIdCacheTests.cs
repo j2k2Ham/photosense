@@ -2,13 +2,14 @@ using PhotoSense.Infrastructure.Metadata;
 
 namespace PhotoSense.Tests.Infrastructure.Metadata;
 
+/// <summary>Remembering what a file said of its Live Photo for as long as it stays the same.</summary>
 public sealed class LivePhotoIdCacheTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-liveids-");
     public void Dispose() => _root.Delete(true);
 
     [Test]
-    public async Task Reads_A_Files_Identifier_Once_For_As_Long_As_The_File_Stays_The_Same()
+    public async Task Reads_A_Files_Identifier_Once_For_As_Long_As_The_File_Stays_The_Same(CancellationToken ct)
     {
         var path = Path.Combine(_root.FullName, "IMG_1.HEIC");
         File.WriteAllText(path, "AAAA");
@@ -34,7 +35,7 @@ public sealed class LivePhotoIdCacheTests : IDisposable
     }
 
     [Test]
-    public async Task Reads_Real_Files_When_Given_No_Reader_Of_Its_Own()
+    public async Task Reads_Real_Files_When_Given_No_Reader_Of_Its_Own(CancellationToken ct)
     {
         var path = Path.Combine(_root.FullName, "IMG_1.JPG");
         File.WriteAllBytes(path, MediaSamples.Picture("LIVE-1"));

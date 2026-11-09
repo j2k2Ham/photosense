@@ -7,6 +7,7 @@ using PhotoSense.Infrastructure.Metadata;
 
 namespace PhotoSense.Tests.Infrastructure;
 
+/// <summary>Decoding and measuring pictures with Magick.NET.</summary>
 public class MagickImageAnalyzerTests
 {
     private readonly MagickImageAnalyzer _analyzer = new();
@@ -41,10 +42,10 @@ public class MagickImageAnalyzerTests
     private static double Difference(byte[] a, byte[] b) => PhotoMatcher.SignatureDifference(a, b);
 
     [Test]
-    public async Task Measures_A_Jpeg()
+    public async Task Measures_A_Jpeg(CancellationToken ct)
     {
         using var picture = Picture(1);
-        var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg, 85));
+        var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg, 85), ct);
 
         await Assert.That((analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality)).IsEqualTo((1200, 900, "JPEG", 85));
         await Assert.That(analysis.Signature.Length).IsEqualTo(ImageFingerprint.SignatureEdge * ImageFingerprint.SignatureEdge * 3);
@@ -54,36 +55,36 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task Formats_Without_A_Quality_Setting_Report_None_And_Small_Images_Are_Not_Enlarged()
+    public async Task Formats_Without_A_Quality_Setting_Report_None_And_Small_Images_Are_Not_Enlarged(CancellationToken ct)
     {
         using var picture = Picture(2, 200, 100);
-        var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png));
+        var analysis = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png), ct);
         await Assert.That((analysis.Width, analysis.Height, analysis.Format, analysis.EncodedQuality)).IsEqualTo((200, 100, "PNG", (int?)null));
         using var thumbnail = new MagickImage(analysis.ThumbnailJpeg);
         await Assert.That((thumbnail.Width, thumbnail.Height)).IsEqualTo((200u, 100u));
     }
 
     [Test]
-    public async Task A_Resized_Recompressed_Copy_In_Another_Format_Matches_Its_Original()
+    public async Task A_Resized_Recompressed_Copy_In_Another_Format_Matches_Its_Original(CancellationToken ct)
     {
         using var picture = Picture(3, 2400, 1800);
-        var original = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png));
+        var original = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png), ct);
         using var small = picture.Clone();
         small.Resize(600, 450);
-        var copy = await _analyzer.AnalyzeAsync(Encode(small, MagickFormat.Jpeg, 80));
+        var copy = await _analyzer.AnalyzeAsync(Encode(small, MagickFormat.Jpeg, 80), ct);
 
         await Assert.That(PhotoMatcher.HashDistance(original.PerceptualHash, copy.PerceptualHash)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.CandidateBits);
         await Assert.That(Difference(original.Signature, copy.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
     }
 
     [Test]
-    public async Task Different_Pictures_Are_Far_Apart()
+    public async Task Different_Pictures_Are_Far_Apart(CancellationToken ct)
     {
         var hashes = new List<ulong>();
         for (int seed = 10; seed < 16; seed++)
         {
             using var picture = Picture(seed, 400, 300);
-            hashes.Add((await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg))).PerceptualHash);
+            hashes.Add((await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg), ct)).PerceptualHash);
         }
         for (int i = 0; i < hashes.Count; i++)
             for (int j = i + 1; j < hashes.Count; j++)
@@ -91,10 +92,10 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task A_Picture_Stored_Sideways_With_An_Orientation_Tag_Is_Read_Upright()
+    public async Task A_Picture_Stored_Sideways_With_An_Orientation_Tag_Is_Read_Upright(CancellationToken ct)
     {
         using var upright = Picture(4, 800, 600);
-        var expected = await _analyzer.AnalyzeAsync(Encode(upright, MagickFormat.Jpeg));
+        var expected = await _analyzer.AnalyzeAsync(Encode(upright, MagickFormat.Jpeg), ct);
 
         // What a phone held upright writes: the sensor's pixels as they are, plus a tag saying how to turn them.
         using var sideways = upright.Clone();
@@ -103,7 +104,7 @@ public class MagickImageAnalyzerTests
         exif.SetValue(ExifTag.Orientation, (ushort)6);
         sideways.SetProfile(exif);
         sideways.Orientation = OrientationType.RightTop;
-        var tagged = await _analyzer.AnalyzeAsync(Encode(sideways, MagickFormat.Jpeg));
+        var tagged = await _analyzer.AnalyzeAsync(Encode(sideways, MagickFormat.Jpeg), ct);
 
         await Assert.That((tagged.Width, tagged.Height)).IsEqualTo((800, 600));
         await Assert.That(PhotoMatcher.HashDistance(expected.PerceptualHash, tagged.PerceptualHash)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.CandidateBits);
@@ -113,50 +114,61 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task A_Copy_Saved_In_Another_Colour_Space_Matches_The_Standard_One()
+    public async Task A_Copy_Saved_In_Another_Colour_Space_Matches_The_Standard_One(CancellationToken ct)
     {
         using var picture = Picture(5, 800, 600);
-        var standard = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png));
+        var standard = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Png), ct);
 
         // The same colours written as Adobe RGB numbers, with the profile that says so.
         using var converted = picture.Clone();
         converted.TransformColorSpace(ColorProfiles.SRGB, ColorProfiles.AdobeRGB1998);
         var rawNumbers = converted.GetPixels().ToByteArray(PixelMapping.RGB)!;
-        var analysed = await _analyzer.AnalyzeAsync(Encode(converted, MagickFormat.Png));
+        var analysed = await _analyzer.AnalyzeAsync(Encode(converted, MagickFormat.Png), ct);
 
         using var unconverted = new MagickImage(rawNumbers, new PixelReadSettings(800, 600, StorageType.Char, PixelMapping.RGB));
-        var misread = await _analyzer.AnalyzeAsync(Encode(unconverted, MagickFormat.Png));
+        var misread = await _analyzer.AnalyzeAsync(Encode(unconverted, MagickFormat.Png), ct);
         await Assert.That(Difference(standard.Signature, analysed.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
         await Assert.That(Difference(standard.Signature, misread.Signature) > PhotoMatcher.SimilarDifference).IsTrue().Because("the two colour spaces should differ visibly when the profile is ignored");
     }
 
     [Test]
-    public async Task An_Image_That_Yields_No_Pixels_Is_Refused()
+    public async Task An_Image_That_Yields_No_Pixels_Is_Refused(CancellationToken ct)
     {
         var pixels = new byte[] { 1, 2, 3 };
         await Assert.That(MagickImageAnalyzer.Required(pixels)).IsSameReferenceAs(pixels);
-        await Assert.That(Assert.ThrowsExactly<InvalidOperationException>(() => MagickImageAnalyzer.Required(null)).Message).IsEqualTo("Image has no pixel data");
+        await Assert.That(Assert.ThrowsExactly<UnreadableImageException>(() => MagickImageAnalyzer.Required(null)).Message).IsEqualTo("Image has no pixel data");
     }
 
     [Test]
-    public async Task What_Is_Not_An_Image_Is_Refused()
+    public async Task What_Is_Not_An_Image_Is_Refused(CancellationToken ct)
     {
-        await Assert.ThrowsAsync<MagickException>(() => _analyzer.AnalyzeAsync(new MemoryStream("not an image at all"u8.ToArray())));
-        await Assert.ThrowsAsync<MagickException>(() => _analyzer.RenderJpegAsync(new MemoryStream([1, 2, 3, 4]), 100));
+        // Magick's own error is turned into the one the rest of PhotoSense knows, with Magick's words for why.
+        var analyzing = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.AnalyzeAsync(new MemoryStream("not an image at all"u8.ToArray()), ct));
+        await Assert.That(analyzing!.InnerException).IsTypeOf<MagickMissingDelegateErrorException>();
+        await Assert.That(analyzing.Message).IsEqualTo(analyzing.InnerException!.Message);
+        await Assert.That((await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.RenderJpegAsync(new MemoryStream([1, 2, 3, 4]), 100, ct)))!.InnerException).IsAssignableTo<MagickException>();
+    }
+
+    [Test]
+    public async Task An_Empty_File_Is_Refused_Before_Magick_Is_Asked(CancellationToken ct)
+    {
+        // A transfer that never finished: Magick would take it for a mistake of the caller's.
+        var error = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.AnalyzeAsync(new MemoryStream(), ct));
+        await Assert.That((error!.Message, error.InnerException)).IsEqualTo(("The file is empty.", (Exception?)null));
     }
 
     [Test]
     [Arguments(500, 500, 375)]
     [Arguments(5000, 1200, 900)] // never enlarged
-    public async Task Renders_An_Upright_Jpeg_No_Larger_Than_Asked(int maxEdge, uint width, uint height)
+    public async Task Renders_An_Upright_Jpeg_No_Larger_Than_Asked(int maxEdge, uint width, uint height, CancellationToken ct)
     {
         using var picture = Picture(6);
-        using var rendered = new MagickImage(await _analyzer.RenderJpegAsync(Encode(picture, MagickFormat.Png), maxEdge));
+        using var rendered = new MagickImage(await _analyzer.RenderJpegAsync(Encode(picture, MagickFormat.Png), maxEdge, ct));
         await Assert.That((rendered.Format, rendered.Width, rendered.Height)).IsEqualTo((MagickFormat.Jpeg, width, height));
     }
 
     [Test]
-    public async Task The_Hash_Sets_Half_Its_Bits_And_Ignores_Overall_Brightness()
+    public async Task The_Hash_Sets_Half_Its_Bits_And_Ignores_Overall_Brightness(CancellationToken ct)
     {
         using var picture = Picture(7, ImageFingerprint.SignatureEdge, ImageFingerprint.SignatureEdge);
         var rgb = picture.GetPixels().ToByteArray(PixelMapping.RGB)!;
@@ -167,7 +179,7 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task Capture_Details_Are_Read_From_The_File()
+    public async Task Capture_Details_Are_Read_From_The_File(CancellationToken ct)
     {
         using var picture = Picture(8, 320, 240);
         var exif = new ExifProfile();
@@ -181,7 +193,7 @@ public class MagickImageAnalyzerTests
         picture.SetProfile(exif);
         var photo = new Photo { SourcePath = "x", FileName = "x.jpg" };
 
-        await new BasicExifMetadataExtractor().ExtractAsync(photo, Encode(picture, MagickFormat.Jpeg));
+        await new BasicExifMetadataExtractor().ExtractAsync(photo, Encode(picture, MagickFormat.Jpeg), ct);
 
         await Assert.That(photo.TakenOn).IsEqualTo(TestPhotos.Shot);
         await Assert.That(photo.TakenOn!.Value.Kind).IsEqualTo(DateTimeKind.Unspecified);
@@ -191,7 +203,7 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task A_Position_Of_Zero_Zero_Is_Treated_As_No_Position()
+    public async Task A_Position_Of_Zero_Zero_Is_Treated_As_No_Position(CancellationToken ct)
     {
         using var picture = Picture(9, 320, 240);
         var exif = new ExifProfile();
@@ -203,7 +215,7 @@ public class MagickImageAnalyzerTests
         picture.SetProfile(exif);
         var photo = new Photo { SourcePath = "x", FileName = "x.jpg" };
 
-        await new BasicExifMetadataExtractor().ExtractAsync(photo, Encode(picture, MagickFormat.Jpeg));
+        await new BasicExifMetadataExtractor().ExtractAsync(photo, Encode(picture, MagickFormat.Jpeg), ct);
 
         await Assert.That(photo.TakenOn).IsEqualTo(new DateTime(2024, 4, 7, 17, 35, 59));
         await Assert.That(photo.Latitude).IsNull();
@@ -211,10 +223,10 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task A_Picture_With_An_Unusable_Colour_Profile_Is_Read_As_It_Is()
+    public async Task A_Picture_With_An_Unusable_Colour_Profile_Is_Read_As_It_Is(CancellationToken ct)
     {
         using var picture = Picture(6, 400, 300);
-        var plain = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg));
+        var plain = await _analyzer.AnalyzeAsync(Encode(picture, MagickFormat.Jpeg), ct);
 
         // A profile that announces RGB and then holds nothing a conversion could be made from.
         var unusable = ColorProfiles.SRGB.ToByteArray()!;
@@ -225,7 +237,7 @@ public class MagickImageAnalyzerTests
         using (var reread = new MagickImage(encoded.ToArray()))
             await Assert.That(reread.GetColorProfile()).IsNotNull();
 
-        var analysed = await _analyzer.AnalyzeAsync(encoded);
+        var analysed = await _analyzer.AnalyzeAsync(encoded, ct);
 
         await Assert.That(Difference(plain.Signature, analysed.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
         await Assert.That(analysed.PerceptualHash).IsEqualTo(plain.PerceptualHash);

@@ -1,6 +1,6 @@
 # PhotoSense: what is left to do
 
-Last updated 2026-10-30. Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
+Last updated 2026-11-09. Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
 
 ## What Jamie is asking for, and why
 
@@ -35,12 +35,19 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 - **End-to-end tests** (`e2e/`, Playwright):
   - 56 tests on the computer project pass, accessibility checks of every screen in both themes included.
   - The `@phone` tests in WebKit have not run yet: the WebKit download was still finishing.
-- **Last measured:** service 810 tests at 100% of lines and branches; page 588 tests at 100% of branches; build tools 37 tests at 100%.
+- **Code health** (2026-11-09, after a health check graded code quality C, the API surface C and documentation D):
+  - Every type and member is documented (CS1591 now an error in CI); test classes and helpers too, test methods by their names.
+  - Only what other projects use is public; the rest is internal, seen by the tests through `InternalsVisibleTo`.
+  - Every async method takes a required token and passes it on (CA2016, CA1068); clocks come from `TimeProvider`.
+  - Anti-patterns removed, apart from those Jamie accepted (CLAUDE.md rule 10). A picture a decoder cannot read is an `UnreadableImageException`.
+- **Last measured:** service 812 tests at 100% of lines and branches (2026-11-09); end to end 56 tests in Chrome (2026-11-09); page 588 tests at 100% of branches; build tools 37 tests at 100%.
 
 ## Remaining steps
 
 ### Now
 
+- [ ] See `iphone.yml` compile the iPhone app after the code-health work (pushed at Jamie's word, 2026-11-09): its changes (tokens, `UnreadableImageException`, docs) had not been compiled. The Android app was compiled here with no warnings.
+- [ ] TSDoc on every export of the page, as the XML documentation rule asks of C# (Jamie, 2026-11-09).
 - [ ] Run the `@phone` end-to-end tests in WebKit (`cd e2e && npx playwright test --project phone`) and fix what they find.
 - [x] Push the commits that were waiting (done 2026-10-30, at Jamie's word).
 - [ ] See the main CI (`ci.yml`) pass on Linux. It runs only for `main` and pull requests, so it has never run on this branch: several service tests that rely on file behaviour have only run on Windows.
@@ -79,12 +86,12 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
    - **How to sell:** subscription, free with purchases, or one price?
    - **Which licence?**
 2. **Export compliance:** the apps now encrypt what they send to a computer (AES-GCM, ECDH), but the iPhone app still tells Apple it uses no encryption that needs declaring (`ITSAppUsesNonExemptEncryption` is false). Apple asks about this before release.
-3. **Pushing:** may the waiting commits be pushed, and may pushes for checks go on without asking each time?
-4. **Delete all duplicates:** its message says "Moved 3 duplicates (…) to _PhotoSense_Removed" without naming the originals that stay. Should it, as every other removal message does?
-5. **Android, fewer questions:** Android's "media management" access (MANAGE_MEDIA) would let PhotoSense move and delete without asking each time, if the person allows it in Settings. Should it be offered?
-6. **Android cable:** sending to a computer by cable works for an iPhone only. Is Wi-Fi enough on Android?
-7. **Android Organize:** a folder made at the top of the phone's storage is refused, as Android requires. Should Organize start in DCIM/Camera on Android instead of the whole phone?
-8. **Paired devices:** there is no way yet to forget a paired phone or computer. Is one wanted?
+3. **Delete all duplicates:** its message says "Moved 3 duplicates (…) to _PhotoSense_Removed" without naming the originals that stay. Should it, as every other removal message does?
+4. **Android, fewer questions:** Android's "media management" access (MANAGE_MEDIA) would let PhotoSense move and delete without asking each time, if the person allows it in Settings. Should it be offered?
+5. **Android cable:** sending to a computer by cable works for an iPhone only. Is Wi-Fi enough on Android?
+6. **Android Organize:** a folder made at the top of the phone's storage is refused, as Android requires. Should Organize start in DCIM/Camera on Android instead of the whole phone?
+7. **Paired devices:** there is no way yet to forget a paired phone or computer. Is one wanted?
+8. **Android's page client blocks** on each answer (`PageClient.Ask`), as Android's `ShouldInterceptRequest` must answer synchronously. Keep it as an accepted exception to rule 10, or look for another way?
 
 ## Call-outs
 
@@ -104,6 +111,10 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - What is removed from the whole phone waits in `Pictures/PhotoSense Removed`.
   - Copies are refused, as on the iPhone (Jamie: copy only from a phone to a computer).
   - Android 11 is the oldest version supported.
+- **Code health (2026-11-09):**
+  - A copy an undo could not delete, nor give back its name, is now named by the hidden name it is under ("left as .IMG_2.JPG….undo").
+  - An empty picture is counted as unreadable without being decoded; before, the decoder's error said so.
+  - The phone no longer answers a computer that has said the numbers do not match: the computer never read it, and the answer could fail as the computer hung up, hiding the real reason.
 - **Page:** the light theme's faintest text (`--t3`) is a little darker (#646a6e), so it passes WCAG AA on the compare window's grey.
 - **End-to-end tests:**
   - What only a phone or another device answers is stood in for in the browser: being the phone app, its photo access, a phone on the network, sending.

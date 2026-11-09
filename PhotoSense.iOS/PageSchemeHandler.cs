@@ -13,6 +13,7 @@ public sealed class PageSchemeHandler : NSObject, IWKUrlSchemeHandler
     // Requests the web view still waits for. Answering one it has given up on would end the app.
     private readonly Dictionary<IntPtr, CancellationTokenSource> _open = [];
 
+    /// <summary>Answers one of the web view's requests: below /api by the service, otherwise with a file of the page.</summary>
     [Export("webView:startURLSchemeTask:")]
     public async void StartUrlSchemeTask(WKWebView webView, IWKUrlSchemeTask urlSchemeTask)
     {
@@ -29,8 +30,8 @@ public sealed class PageSchemeHandler : NSObject, IWKUrlSchemeHandler
             Say.Line($"{request.HttpMethod} {url.PathAndQuery} {answer.Status} in {(DateTime.UtcNow - started).TotalMilliseconds:0} ms");
         }
         catch (OperationCanceledException) { Say.Line($"{request.HttpMethod} {url.PathAndQuery} given up by the web view"); }
-        // An exception left to escape an async void method would end the app; and the page is answered all the same,
-        // with what went wrong, or it would wait for an answer for ever.
+        // One of the catches of every error PhotoSense keeps (CLAUDE.md): an exception left to escape an async void method
+        // would end the app; and the page is answered all the same, with what went wrong, or it would wait for an answer for ever.
         catch (Exception e)
         {
             Say.Line($"{request.HttpMethod} {url.PathAndQuery} failed: {e}");
@@ -40,6 +41,7 @@ public sealed class PageSchemeHandler : NSObject, IWKUrlSchemeHandler
         finally { _open.Remove(urlSchemeTask.Handle); }
     }
 
+    /// <summary>Stops answering a request the web view has given up on.</summary>
     [Export("webView:stopURLSchemeTask:")]
     public void StopUrlSchemeTask(WKWebView webView, IWKUrlSchemeTask urlSchemeTask)
     {
