@@ -10,8 +10,9 @@ on:
 jobs:
   browsers:
     # PhotoSense as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
-    # test makes for itself (e2e/README.md).
-    runs-on: ubuntu-latest
+    # test makes for itself (e2e/README.md). Ubuntu 24.04, as Playwright 1.56 has no browsers for the 26.04 that
+    # ubuntu-latest now is.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout
