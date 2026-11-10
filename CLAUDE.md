@@ -49,7 +49,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - TUnit with Moq and coverlet: no xUnit, FluentAssertions or Testcontainers.
   - Magick.NET on a computer, the phone's own decoder on a phone. Generic .NET advice that assumes another stack does not apply.
 - **Checks on GitHub:**
-  - `ci.yml` runs on Ubuntu, Windows and macOS, for `main` and pull requests only, so it has never run on the feature branch.
+  - `ci.yml` runs on Ubuntu, Windows and macOS, for `main` and pull requests, and by hand on another branch: `gh workflow run ci.yml --ref feature/mobile-and-mac`. On Ubuntu it fails below 100% of the service's lines and branches.
   - `iphone.yml`, `android.yml` and `e2e.yml` also run on pushes to `feature/mobile-and-mac`.
 
 ## Rules

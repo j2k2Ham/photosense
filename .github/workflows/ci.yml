@@ -86,12 +86,12 @@ jobs:
           dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover*.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
-      - name: Enforce coverage thresholds (Line >= 90% / Branch >= 85%)
+      - name: Enforce coverage of every line and branch (CLAUDE.md rule 1)
         if: success()
         run: |
           set -e
-          thresholdLine=0.90
-          thresholdBranch=0.85
+          thresholdLine=1.00
+          thresholdBranch=1.00
           # The report's name carries the time it was written.
           coverageXml=$(ls PhotoSense.Tests/coverage/coverage.opencover*.xml 2>/dev/null | head -1)
           if [ -z "$coverageXml" ]; then

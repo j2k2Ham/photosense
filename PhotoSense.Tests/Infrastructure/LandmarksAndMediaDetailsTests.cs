@@ -136,7 +136,9 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     public async Task Reads_A_Videos_Date_Place_Size_And_Playing_Time(CancellationToken ct)
     {
         var details = _reader.Read(Put("IMG_4.MOV", MediaSamples.Movie()));
-        await Assert.That((details.TakenOn, details.Width, details.Height, details.DurationSeconds)).IsEqualTo((new DateTime(2023, 5, 29, 11, 4, 45), 1920, 1080, 84.0));
+        // A video records its time in UTC (15:04:45), and it is shown in this computer's time zone.
+        var taken = DateTime.SpecifyKind(new DateTime(2023, 5, 29, 15, 4, 45, DateTimeKind.Utc).ToLocalTime(), DateTimeKind.Unspecified);
+        await Assert.That((details.TakenOn, details.Width, details.Height, details.DurationSeconds)).IsEqualTo((taken, 1920, 1080, 84.0));
         await Assert.That((Math.Round(details.Latitude!.Value, 4), Math.Round(details.Longitude!.Value, 4))).IsEqualTo((35.2886, -75.5161));
         await Assert.That(details.LivePhotoId).IsNull();
         // The identifier that ties a Live Photo's two halves together is read along with the rest.
