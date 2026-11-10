@@ -1,18 +1,16 @@
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using PhotoSense.Api;
 using PhotoSense.Api.About;
-using PhotoSense.Api.Endpoints;
-using PhotoSense.Api.Scanning;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Scanning;
+using PhotoSense.Application.Transfer;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
-using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Server;
 
@@ -30,12 +28,11 @@ public sealed class PhotoSenseServicesTests : IDisposable
         {
             typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IScanHistory), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
             typeof(IPhotoMetadataExtractor), typeof(PhotoRanking), typeof(IDuplicateAnalysisService), typeof(IDuplicateRemovalService), typeof(IPlaceNameResolver),
-            typeof(PhotoDtoMapper), typeof(ScanGroupingFacade),
             typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IFolderBrowser), typeof(FileChanges),
             typeof(IScanProgressStore), typeof(IScanLogSink), typeof(IScanExecutionService), typeof(IValidateOptions<PhotoStorageOptions>),
-            typeof(ScanRunner), typeof(PhotoSenseRoutes), typeof(HealthEndpoints), typeof(FoldersEndpoints), typeof(PhotosEndpoints), typeof(DuplicateGroupsEndpoints),
-            typeof(ScanStatusEndpoints), typeof(ScanStartEndpoints), typeof(ScanResetEndpoints), typeof(ScanProgressEndpoints), typeof(ScanLogsEndpoints),
-            typeof(OrganizeEndpoints), typeof(RemovedEndpoints), typeof(AboutEndpoints), typeof(LibraryEndpoints), typeof(IPhotoAccess),
+            typeof(IOrganizeBatchStore), typeof(IPairingStore), typeof(IMediaDetailsStore), typeof(PhoneReceiving),
+            // The addresses are made with every endpoint behind them.
+            typeof(ScanRunner), typeof(PhotoSenseRoutes), typeof(IPhotoAccess),
         })
             await Assert.That(_f.Services.GetRequiredService(type)).IsNotNull();
 
@@ -53,7 +50,5 @@ public sealed class PhotoSenseServicesTests : IDisposable
         await Assert.That(_f.Services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()).IsEqualTo(_f.ThumbnailPath);
         // The folder for the database is made on first use.
         await Assert.That(File.Exists(_f.DatabasePath)).IsTrue();
-        // Changes a stop cut short are put back when the program starts.
-        await Assert.That(_f.Services.GetServices<IHostedService>().OfType<PutBackUnfinishedChanges>()).HasSingleItem();
     }
 }

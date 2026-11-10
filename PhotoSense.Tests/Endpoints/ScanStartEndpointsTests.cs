@@ -1,8 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
-using PhotoSense.Api.Endpoints;
-using PhotoSense.Api.Scanning;
 using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
@@ -16,7 +15,7 @@ public sealed class ScanStartEndpointsTests : IDisposable
 {
     private static readonly PhotoStorageOptions Defaults = new() { PrimaryPath = "configured-primary", SecondaryPath = "configured-secondary" };
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-scanstart-");
-    private readonly InMemoryScanProgressStore _progress = new();
+    private readonly InMemoryScanProgressStore _progress = new(new TestClock());
     private readonly Mock<IScanLogSink> _log = new();
     private readonly HeldScans _scans;
     private readonly ScanRunner _runner;
@@ -53,7 +52,20 @@ public sealed class ScanStartEndpointsTests : IDisposable
         }
     }
 
-    private ScanStartEndpoints Starter(PhotoStorageOptions? defaults = null) => new(Options.Create(defaults ?? new PhotoStorageOptions()), _runner, TestFiles.Disk);
+    // The scanning addresses, starting scans through the test's runner, with the folders configured as given.
+    private ScanApi Starter(PhotoStorageOptions? defaults = null, IPhotoFileSystem? files = null)
+        => new(new TestApi(s => s.AddSingleton(Options.Create(defaults ?? new PhotoStorageOptions())).AddSingleton(_runner).AddSingleton(files ?? TestFiles.Disk)));
+
+    // What a scan asked for with this body scans, on a computer where every folder named is there.
+    private async Task<ScanRequest> AskedForAsync(string body, PhotoStorageOptions defaults, CancellationToken ct)
+    {
+        var everywhere = new Mock<IPhotoFileSystem>();
+        everywhere.Setup(f => f.FolderExists(It.IsAny<string>())).Returns(true);
+        await Starter(defaults, everywhere.Object).StartAsync(Http.Post("scan/start", body).FromClient(), ct);
+        _scans.Finish.SetResult();
+        await _runner.Running;
+        return _scans.Started.Single().Request;
+    }
 
     private static string Body(string? primary, string? secondary = null)
         => System.Text.Json.JsonSerializer.Serialize(new { primaryLocation = primary, secondaryLocation = secondary, recursive = false });
@@ -63,14 +75,14 @@ public sealed class ScanStartEndpointsTests : IDisposable
     [Test]
     public async Task Reads_The_Fields_The_Web_Client_Sends(CancellationToken ct)
     {
-        var request = ScanStartEndpoints.ParseBody("""{"primaryLocation":" C:\\Photos ","secondaryLocation":"D:\\Backup","recursive":false}""", Defaults);
+        var request = await AskedForAsync("""{"primaryLocation":" C:\\Photos ","secondaryLocation":"D:\\Backup","recursive":false}""", Defaults, ct);
         await Assert.That(request).IsEqualTo(new ScanRequest("C:\\Photos", "D:\\Backup", false));
     }
 
     [Test]
     public async Task Still_Reads_The_Shorter_Field_Names(CancellationToken ct)
     {
-        var request = ScanStartEndpoints.ParseBody("""{"primary":"C:\\Photos","secondary":"D:\\Backup"}""", Defaults);
+        var request = await AskedForAsync("""{"primary":"C:\\Photos","secondary":"D:\\Backup"}""", Defaults, ct);
         await Assert.That(request).IsEqualTo(new ScanRequest("C:\\Photos", "D:\\Backup", true));
     }
 
@@ -80,7 +92,7 @@ public sealed class ScanStartEndpointsTests : IDisposable
     [Arguments("[]")]
     [Arguments("""{"primaryLocation":"  ","secondaryLocation":null,"recursive":"yes"}""")]
     public async Task Falls_Back_To_The_Configured_Folders(string body, CancellationToken ct)
-        => await Assert.That(ScanStartEndpoints.ParseBody(body, Defaults)).IsEqualTo(new ScanRequest("configured-primary", "configured-secondary", true));
+        => await Assert.That(await AskedForAsync(body, Defaults, ct)).IsEqualTo(new ScanRequest("configured-primary", "configured-secondary", true));
 
     [Test]
     [Arguments("""{"primaryLocation":"C:\\Photos","startOver":true}""", true)]
@@ -89,19 +101,19 @@ public sealed class ScanStartEndpointsTests : IDisposable
     [Arguments("""{"primaryLocation":"C:\\Photos","startOver":"yes"}""", false)]     // only a plain true forgets anything
     [Arguments("not json", false)]
     public async Task A_Scan_Starts_Over_Only_When_Plainly_Asked_To(string body, bool startOver, CancellationToken ct)
-        => await Assert.That(ScanStartEndpoints.ParseBody(body, Defaults).StartOver).IsEqualTo(startOver);
+        => await Assert.That((await AskedForAsync(body, Defaults, ct)).StartOver).IsEqualTo(startOver);
 
     [Test]
     public async Task No_Secondary_Folder_Anywhere_Means_None(CancellationToken ct)
     {
-        var request = ScanStartEndpoints.ParseBody("""{"primaryLocation":"C:\\Photos"}""", new PhotoStorageOptions());
+        var request = await AskedForAsync("""{"primaryLocation":"C:\\Photos"}""", new PhotoStorageOptions(), ct);
         await Assert.That(request).IsEqualTo(new ScanRequest("C:\\Photos", null, true));
     }
 
     [Test]
     public async Task A_Scan_Is_Running_From_Its_Start_Until_It_Completes(CancellationToken ct)
     {
-        var progress = new InMemoryScanProgressStore();
+        var progress = new InMemoryScanProgressStore(new TestClock());
         await Assert.That(ScanRunner.IsRunning(progress.GetLatest())).IsFalse();
         progress.ScanStarted("a");
         await Assert.That(ScanRunner.IsRunning(progress.GetLatest())).IsTrue();
@@ -188,7 +200,7 @@ public sealed class ScanStartEndpointsTests : IDisposable
     [Test]
     public async Task Scans_And_Their_Groups_Answer_Only_The_UI(CancellationToken ct)
     {
-        var groups = new DuplicateGroupsEndpoints(new ScanGroupingFacade(Mock.Of<IDuplicateAnalysisService>(), new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+        var groups = Starter();
 
         await Assert.That((await Starter().StartAsync(Http.Post("scan/start", Body(_root.FullName)), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await groups.GetDuplicateGroupsAsync(Http.Get("scan/groups"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);

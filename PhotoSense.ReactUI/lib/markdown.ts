@@ -1,12 +1,14 @@
 // The little Markdown the privacy policy, terms and support page are written in (site/pages), read into blocks that
 // the About window draws and tools/site.mjs writes as the web site. Plain TypeScript, so Node can run it as it is.
 
+/** A run of text within a line of a document: plain, bold, code or a link. */
 export type Inline =
   | { kind: 'text'; text: string }
   | { kind: 'strong'; text: string }
   | { kind: 'code'; text: string }
   | { kind: 'link'; text: string; href: string };
 
+/** A part of a document: a heading, a paragraph, a list, or questions each with its answer. */
 export type Block =
   | { kind: 'heading'; level: 1 | 2 | 3; text: string }
   | { kind: 'paragraph'; inline: Inline[] }

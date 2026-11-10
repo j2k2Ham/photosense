@@ -1,6 +1,6 @@
 using PhotoSense.Domain.Entities;
 
-namespace PhotoSense.Domain.DTOs;
+namespace PhotoSense.Domain.Matching;
 
 /// <summary>How sure the match between a photo and the one being kept is.</summary>
 public enum MatchKind

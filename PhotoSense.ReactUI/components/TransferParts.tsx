@@ -2,9 +2,12 @@ import React, { useEffect } from 'react';
 import { Scrim } from './Scrim';
 import { formatBytes } from '../lib/format';
 
+/** What to tell the person about an error: that the server cannot be reached, or the error's own words. */
 export const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the PhotoSense server.' : e instanceof Error ? e.message : String(e));
 
+/** A device's name in a sentence, in bold, broken anywhere when it is too long for the line. */
 export const Named = ({ children }: { readonly children: string }) => <span className="font-semibold text-t1 [overflow-wrap:anywhere]">{children}</span>;
+/** A folder's path in a sentence, in the fixed-width font, broken anywhere when it is too long for the line. */
 export const Where = ({ children }: { readonly children: string }) => <span className="font-mono text-[13.5px] [overflow-wrap:anywhere]">{children}</span>;
 
 interface WindowProps {

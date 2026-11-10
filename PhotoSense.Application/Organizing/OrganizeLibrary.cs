@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
-using PhotoSense.Application.Scanning;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;

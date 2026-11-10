@@ -3,14 +3,17 @@ import { formatBytes, formatDuration, sameFolder } from './format';
 
 /** Files on one page of the Organize gallery, and of the preview. */
 export const GALLERY_PAGE = 60;
+/** How many files the preview of a plan shows at a time. */
 export const PREVIEW_PAGE = 100;
 /** The distances, in miles, within which nearby places can share a folder. */
 export const RADII = [1, 5, 15, 25, 50] as const;
 /** Distances are worked out in kilometres and said in miles. */
 export const KM_PER_MILE = 1.609344;
 
+/** How a place's folder is named: by the place itself, by its town and state, or the place inside a folder for its state. */
 export type NameFormat = 'area' | 'city' | 'nest';
 
+/** How Organize sorts files into folders, as the person chose. */
 export interface OrganizeSettings {
   /** What the folders are made by first. */
   group: 'place' | 'date';
@@ -24,6 +27,7 @@ export interface OrganizeSettings {
   dateThen: 'place' | 'none';
 }
 
+/** How Organize sorts files until the person chooses otherwise. */
 export const defaultSettings: OrganizeSettings = { group: 'place', near: 'combine', radiusMiles: 5, nameFormat: 'area', placeThen: 'year', dateGrain: 'year', dateThen: 'none' };
 
 /** Where a file went in this sitting. */
@@ -41,6 +45,7 @@ export interface OrganizeChoices {
   organized: Readonly<Record<string, OrganizedMark>>;
 }
 
+/** No files assigned, added, renamed or organized yet. */
 export const noChoices: OrganizeChoices = { assigned: {}, added: {}, renames: {}, organized: {} };
 
 interface Point { latitude: number; longitude: number; }
@@ -103,7 +108,9 @@ export function pathOf(f: OrganizeFileDto): string {
   const sep = separatorOf(f.folder);
   return f.folder.endsWith(sep) ? f.folder + f.name : f.folder + sep + f.name;
 }
+/** The year a file is from: "2023". */
 export const yearOf = (f: OrganizeFileDto) => f.date.slice(0, 4);
+/** The month a file is from: "2023-12". */
 export const monthOf = (f: OrganizeFileDto) => f.date.slice(0, 7);
 
 /** "Dec 31, 2023": the day a file is from. */
@@ -120,6 +127,7 @@ export function dateRange(files: readonly OrganizeFileDto[]): string {
   return first === last ? first : `${first} – ${last}`;
 }
 
+/** How large the files are together. */
 export const totalBytes = (files: readonly { sizeBytes: number }[]) => files.reduce((sum, f) => sum + f.sizeBytes, 0);
 
 /** A file as far as asking about it and deleting it go: which it is, what it is called, how large, and the folder it is in. */
@@ -306,6 +314,7 @@ export interface TakenBy extends Omit<OrganizeExistingDto, 'id'> {
   incoming: boolean;
 }
 
+/** A file whose own name is taken in the folder it is going to. */
 export interface Clash {
   file: OrganizeFileDto;
   /** The folder it is going to. */
@@ -324,6 +333,7 @@ export interface Clash {
   takenBy: TakenBy[];
 }
 
+/** The names files arrive under, and which of them clash with a file already there. */
 export interface NamePlan {
   /** Files whose own name is taken where they are going, in the order of the files. */
   clashes: Clash[];
@@ -396,11 +406,13 @@ export function clashSummary(clashes: readonly Clash[]): string {
 
 // ---- the map
 
+/** A place drawn on the map of the plan, with its label and what its tooltip says. */
 export interface MapDot {
   key: string; x: number; y: number; size: number; label: string; labelled: boolean; labelSide: 'left' | 'right'; tip: string;
   /** Where the dot is on the earth, for a map that is drawn from that. */
   latitude: number; longitude: number;
 }
+/** The map of the plan: a dot for each place, and the reach within which places were combined. */
 export interface MapLayout {
   dots: MapDot[];
   /** The reach within which places were combined, around each place: centre and diameter, in percent of the width. */

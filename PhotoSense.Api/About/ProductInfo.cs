@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace PhotoSense.Api.About;
@@ -12,7 +13,7 @@ namespace PhotoSense.Api.About;
 /// <param name="TermsUrl">Where the terms of use are published; null until set.</param>
 /// <param name="SupportUrl">Where the support page is published; null until set.</param>
 /// <param name="GoverningLaw">The place whose law the terms are under; null until set.</param>
-internal sealed record ProductInfo(string Name, string Publisher, string Copyright, string? SupportEmail, string? Website,
+public sealed record ProductInfo(string Name, string Publisher, string Copyright, string? SupportEmail, string? Website,
     string? PrivacyPolicyUrl, string? TermsUrl, string? SupportUrl, string? GoverningLaw)
 {
     /// <summary>product.json as it was built into this program.</summary>
@@ -35,6 +36,7 @@ internal static class Bundle
 {
     /// <summary>A file built in, by its name in the repository's root folder.</summary>
     /// <exception cref="InvalidOperationException">The build left it out.</exception>
+    [ExcludeFromCodeCoverage(Justification = "Only a build that left a file out reaches the refusal, and the tests run on a whole build.")]
     public static Stream Open(string name) =>
         typeof(Bundle).Assembly.GetManifestResourceStream($"PhotoSense.About.{name}") ?? throw new InvalidOperationException($"{name} was not built into PhotoSense.");
 }

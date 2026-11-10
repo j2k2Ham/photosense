@@ -105,7 +105,7 @@ internal sealed class ChangesFixture : IDisposable
     /// <summary>Scans' records, in memory.</summary>
     public InMemoryPhotoRepository Repo { get; } = new();
     /// <summary>The changes, kept in a database in memory.</summary>
-    public LiteDbOrganizeBatchStore Batches { get; }
+    public IOrganizeBatchStore Batches { get; }
 
     /// <summary>What the store holds of a change at this moment, read straight from the database: for a hook that runs in the middle of a move, where nothing can be awaited.</summary>
     public OrganizeBatch? Stored(Guid id) => _db.GetCollection<OrganizeBatch>("organize_batches").FindById(id);
@@ -120,7 +120,7 @@ internal sealed class ChangesFixture : IDisposable
     {
         var audit = new Mock<IAuditRepository>();
         audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
-        Batches = new LiteDbOrganizeBatchStore(_db);
+        Batches = _db.Batches();
         Changes = new FileChanges(Batches, Repo, audit.Object, Disk);
     }
 

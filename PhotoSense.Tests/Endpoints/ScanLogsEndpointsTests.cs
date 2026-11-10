@@ -1,24 +1,16 @@
 using System.Net;
-using PhotoSense.Api.Scanning;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Application.Scanning;
+using PhotoSense.Application.Scanning.Interfaces;
 
 namespace PhotoSense.Tests.Endpoints;
 
-// These classes log through one process-wide queue, so they must not run side by side.
 /// <summary>A scan's log lines, handed over once each, at a measured pace.</summary>
-[NotInParallel("ScanLogQueue")]
 public class ScanLogsEndpointsTests
 {
-    private readonly InMemoryScanLogSink _sink = new();
+    private readonly InMemoryScanLogSink _sink = new(new TestClock());
 
-    public ScanLogsEndpointsTests() => DrainQueue();
-
-    private static void DrainQueue()
-    {
-        while (InMemoryScanLogSink.TryDequeuePending(out _)) { }
-    }
-
-    private static ScanLogsEndpoints Logs(TimeProvider? time = null) => new(time);
+    private ScanApi Logs(TimeProvider? time = null) => new(new TestApi(s => s.AddSingleton<IScanLogSink>(_sink).AddSingleton(time ?? new TestClock())));
 
     // ---- what the page polls for
 
@@ -38,7 +30,6 @@ public class ScanLogsEndpointsTests
         await Assert.That(json.GetProperty("count").GetInt32()).IsEqualTo(expected);
         var first = json.GetProperty("items")[0];
         await Assert.That((first.GetProperty("instanceId").GetString(), first.GetProperty("level").GetString(), first.GetProperty("message").GetString())).IsEqualTo(("scan-1", "Info", "line 0"));
-        DrainQueue();
     }
 
     [Test]

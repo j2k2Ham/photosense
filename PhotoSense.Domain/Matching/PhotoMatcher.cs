@@ -1,14 +1,14 @@
+using PhotoSense.Domain.ValueObjects;
 using System.Numerics;
-using PhotoSense.Domain.DTOs;
 using PhotoSense.Domain.Entities;
 
-namespace PhotoSense.Application.Scanning.Services;
+namespace PhotoSense.Domain.Matching;
 
 /// <summary>
 /// Decides whether two photos that are not identical files are the same shot, merely alike, or unrelated.
 /// A perceptual hash only nominates a pair; the pair is then checked directly.
 /// </summary>
-internal static class PhotoMatcher
+public static class PhotoMatcher
 {
     // The limits below were measured on a 5,578-photo iPhone library (2,782 HEIC, 2,736 JPEG):
     //   - 255 pairs known to be one shot saved twice (HEIC original + JPEG conversion) differed by

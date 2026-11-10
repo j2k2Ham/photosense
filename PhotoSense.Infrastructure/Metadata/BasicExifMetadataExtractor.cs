@@ -10,7 +10,7 @@ using Directory = MetadataExtractor.Directory;
 namespace PhotoSense.Infrastructure.Metadata;
 
 /// <summary>Reads what a picture's EXIF, or a video's QuickTime metadata, says about it into the record a scan makes.</summary>
-internal sealed class BasicExifMetadataExtractor : IPhotoMetadataExtractor
+public sealed class BasicExifMetadataExtractor : IPhotoMetadataExtractor
 {
     // QuickTime writes a position as signed degrees run together: +35.2886-075.5161+003.214/
     private static readonly Regex Iso6709 = new(@"^([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)", RegexOptions.Compiled);

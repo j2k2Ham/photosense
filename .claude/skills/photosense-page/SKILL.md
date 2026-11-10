@@ -23,6 +23,7 @@ npm run lint                  # ESLint 9, Next's rules and jsx-a11y strict: 0 er
 
 - **Requests** go through `lib/apiClient.ts`. One that changes files revalidates the SWR keys it affects (`refreshGroups`, `refreshOrganize`). `lib/apiBase.ts` holds the service's address; `app/layout.tsx` may import it but not `apiClient`.
 - **Types:** `types.ts` mirrors `PhotoSense.Contracts`. Change both together.
+- **TSDoc:** every export says what it is for in a `/** … */` just above it (CLAUDE.md). `tests/documentation.test.ts` fails on one that does not.
 - **Wording:** text names what the person sees, in short plain sentences. A button says exactly what happens ("Delete 3 files"), and the message after says what happened. A removal question names the file that goes and the file that stays.
 - **Themes:** use the theme tokens (`text-t2`, `bg-pop`, `border-line`, the `pill-*` buttons), never raw colours, and check both themes.
 - **The user guide:** `lib/guide.ts`, shown by Help, changes whenever something on screen is renamed, added or removed. So does the README when behaviour changes.

@@ -99,13 +99,13 @@ public sealed class ChangesTogetherTests : IDisposable
 {
     private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly TogetherFiles _files = new();
-    private readonly LiteDbOrganizeBatchStore _batches;
+    private readonly IOrganizeBatchStore _batches;
     private readonly FileChanges _changes;
     private readonly string _root = Path.Combine(Path.GetTempPath(), "photosense-together-" + Guid.NewGuid().ToString("N"));
 
     public ChangesTogetherTests()
     {
-        _batches = new LiteDbOrganizeBatchStore(_db);
+        _batches = _db.Batches();
         _changes = new FileChanges(_batches, new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, _files);
     }
 

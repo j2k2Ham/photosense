@@ -9,13 +9,13 @@ namespace PhotoSense.Application.Transfer;
 /// <summary>A phone or computer, by the id it keeps and the name it goes by.</summary>
 /// <param name="Id">The id the device keeps, which tells it from any other.</param>
 /// <param name="Name">What the device is called, to show the person.</param>
-internal sealed record Device(string Id, string Name);
+public sealed record Device(string Id, string Name);
 
 /// <summary>Two devices that have agreed on keys, the other of the two, and whether they paired just now.</summary>
 /// <param name="Channel">What the two say to each other from now on, sealed with the keys agreed.</param>
 /// <param name="Other">The other device.</param>
 /// <param name="Paired">The two were paired just now, the person having compared the numbers.</param>
-internal sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
+public sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
 
 /// <summary>
 /// How a phone and a computer come to trust each other. Each makes a new key for every connection and the two agree
@@ -25,7 +25,7 @@ internal sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
 /// between can choose a key that makes them match. After that the two keep a secret of their own, and prove to each
 /// other that they have it each time they connect.
 /// </summary>
-internal static class Pairing
+public static class Pairing
 {
     /// <summary>The computer's half. It connects; the phone speaks first.</summary>
     /// <param name="stream">The connection to the phone.</param>

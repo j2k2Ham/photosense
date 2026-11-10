@@ -12,7 +12,7 @@ public sealed class TransferException(string message) : IOException(message);
 /// What a phone and a computer say to each other: frames, each its length in four bytes and then that many bytes.
 /// Until the two have agreed on keys a frame holds a message in JSON; after, everything is sealed (<see cref="SecureChannel"/>).
 /// </summary>
-internal static class Wire
+public static class Wire
 {
     /// <summary>The largest frame either side takes: a piece of a file and what seals it.</summary>
     public const int LargestFrame = (1 << 20) + 64;

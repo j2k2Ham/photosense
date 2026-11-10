@@ -1,19 +1,14 @@
 using Microsoft.Extensions.Options;
+using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.ValueObjects;
 
-namespace PhotoSense.Domain.Configuration;
+namespace PhotoSense.Server;
 
 /// <summary>Refuses settings that would lose the service's data: none named, or kept inside the program's own folder.</summary>
-public class PhotoStorageOptionsValidator : IValidateOptions<PhotoStorageOptions>
+internal sealed class PhotoStorageOptionsValidator : IValidateOptions<PhotoStorageOptions>
 {
-    private readonly string _programFolder;
-
-    /// <summary>Checks against the folder this program runs from.</summary>
-    public PhotoStorageOptionsValidator() : this(AppContext.BaseDirectory) { }
-
-    /// <summary>Checks against the folder given.</summary>
-    /// <param name="programFolder">The folder the service runs from, which must not hold its data.</param>
-    public PhotoStorageOptionsValidator(string programFolder) => _programFolder = Path.GetFullPath(programFolder);
+    // The folder the service runs from, which must not hold its data.
+    private readonly string _programFolder = Path.GetFullPath(AppContext.BaseDirectory);
 
     /// <summary>Fails when no database is named, or when the database or the previews would be kept inside the program's folder.</summary>
     /// <param name="name">The name of the options instance; unused, as there is only one.</param>

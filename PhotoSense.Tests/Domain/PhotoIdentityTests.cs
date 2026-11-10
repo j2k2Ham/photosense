@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Configuration;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;

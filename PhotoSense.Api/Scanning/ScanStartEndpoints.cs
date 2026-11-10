@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Http;
+using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Services;

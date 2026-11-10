@@ -11,8 +11,8 @@ internal sealed class ScanProgressEndpoints
     private readonly IScanProgressStore _progress;
     private readonly TimeProvider _time;
 
-    /// <summary>Progress from <paramref name="progress"/>, timed by <paramref name="time"/> or the system's clock when none is given.</summary>
-    public ScanProgressEndpoints(IScanProgressStore progress, TimeProvider? time = null) { _progress = progress; _time = time ?? TimeProvider.System; }
+    /// <summary>Progress from <paramref name="progress"/>, timed by <paramref name="time"/>.</summary>
+    public ScanProgressEndpoints(IScanProgressStore progress, TimeProvider time) { _progress = progress; _time = time; }
 
     /// <summary>GET /api/scan/progress/{instanceId}: how far the scan has got; 404 for a scan this run has not heard of.</summary>
     public async Task<ApiResponse> GetAsync(ApiRequest req, string instanceId, CancellationToken ct)

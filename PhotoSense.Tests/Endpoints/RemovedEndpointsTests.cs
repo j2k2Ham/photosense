@@ -1,7 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
 using PhotoSense.Domain.Configuration;
-using PhotoSense.Api.Endpoints;
 using PhotoSense.Tests.Application;
 
 namespace PhotoSense.Tests.Endpoints;
@@ -11,9 +11,12 @@ public sealed class RemovedEndpointsTests : IDisposable
 {
     private const string Held = PhotoStorageOptions.RemovedFolderName;
     private readonly OrganizeFixture _f = new();
-    private readonly RemovedEndpoints _api;
+    private readonly OrganizeApi _api;
 
-    public RemovedEndpointsTests() => _api = new RemovedEndpoints(_f.Removed());
+    public RemovedEndpointsTests() => _api = Api();
+
+    // The addresses, with removed files kept and erased by the fixture's own services.
+    private OrganizeApi Api() => new(new TestApi(s => s.AddSingleton(_f.Removed())));
 
     public void Dispose() => _f.Dispose();
 
@@ -68,7 +71,7 @@ public sealed class RemovedEndpointsTests : IDisposable
     {
         _f.Put($"Phone/{Held}/IMG_1.JPG", "aaaa");
         _f.Disk.Fail("erase", _ => true, "The file is in use.");
-        var api = new RemovedEndpoints(_f.Removed());
+        var api = Api();
 
         var erased = (await api.EraseAsync(Http.Post("removed/erase", Body(new { folders = new[] { _f.In("Phone", Held) } })).FromClient(), ct)).Json();
 

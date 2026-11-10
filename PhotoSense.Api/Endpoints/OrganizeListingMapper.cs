@@ -1,6 +1,5 @@
 using System.Globalization;
 using PhotoSense.Application.Organizing;
-using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Contracts.Organize;
 using PhotoSense.Domain.Services;

@@ -24,12 +24,12 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 
 | Folder | What is in it |
 |---|---|
-| `PhotoSense.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions` |
-| `PhotoSense.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), erasing (`Removal/`), sending from a phone to a computer (`Transfer/`) |
-| `PhotoSense.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`), the shared DI (`AddPhotoSenseCore`, `AddPhotoSensePhone`, `AddPhotoSenseAndroid`) |
+| `PhotoSense.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions`, and the rules that need nothing else: what counts as the same picture (`Matching/`), file names (`NameRules`, `PhotoNaming`), which files a scan takes in. No packages |
+| `PhotoSense.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`); registered by `AddPhotoSenseApplication` |
+| `PhotoSense.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`); registered by `AddPhotoSenseCore`, with the phones' composition (`AddPhotoSensePhone`, `AddPhotoSenseAndroid`) |
 | `PhotoSense.Desktop` | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` |
 | `PhotoSense.Api` | The endpoints apart from any host, the route table `PhotoSenseRoutes`, `InProcessApi` for the phones |
-| `PhotoSense.Server` | The service as one ASP.NET Core program, serving the page too when built in |
+| `PhotoSense.Server` | The service as one ASP.NET Core program, serving the page too when built in; `PhotoSenseServer.Build` is its one public entry |
 | `PhotoSense.iOS`, `PhotoSense.Android` | The phone apps: the page in a web view, with the thin layer over each phone's frameworks. Not in `PhotoSense.sln` |
 | `PhotoSense.Contracts` | JSON DTOs sent to the page; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
 | `PhotoSense.ReactUI` | The page: Next.js 16, React 19, SWR, Tailwind 3 |
@@ -40,6 +40,8 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 ## Architecture
 
 - **Clean Architecture:** Domain ← Application ← Infrastructure. `PhotoSense.Api` never references Infrastructure or ASP.NET Core, because the phone apps answer the same endpoints in-process. New storage or OS access goes behind an interface in Domain.
+  - Each layer registers its own services: `AddPhotoSenseApplication` (Application), `AddPhotoSenseCore` (Infrastructure), `AddPhotoSenseApi` (Api). Each host calls them all, with what only it has.
+  - Logic that needs no outside world goes in Domain; logic over Domain's interfaces in Application. Infrastructure holds only adapters to LiteDB, MetadataExtractor, the disk, the network and the phones.
 - **Photos go through `IPhotoFileSystem` only:** `DiskFileSystem` on a computer, `PhotoLibraryFileSystem` on an iPhone, `MediaFileSystem` on Android. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on a photo.
 - **The stack:**
   - .NET 10 with one ASP.NET Core program. Endpoints are methods taking an `ApiRequest`: no minimal APIs and no controllers.
@@ -86,7 +88,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
       - `catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)`: a filter naming the types, which the detector misreads as a catch of everything.
       - Catches of every error at the edges where nothing else would catch it, each saying so: `InProcessApi.AnswerAsync` and the phones' `PageSchemeHandler` and `PageClient` (the page would wait for ever), and `ScanRunner` (a scan in the background would stop unseen).
       - One catch of every error around MetadataExtractor, in `MetadataFiles.TryRead`: it throws undocumented errors on damaged files, and one damaged file must not stop a scan of thousands. Each picture decoder instead turns its own errors into `UnreadableImageException`.
-    - Known and not yet decided: Android's `PageClient.Ask` blocks on the answer, as `ShouldInterceptRequest` must answer synchronously.
+    - Accepted by Jamie on 2026-11-10: Android's `PageClient.Ask` blocks on the answer. `ShouldInterceptRequest` must answer synchronously, with the status known, so there is no non-blocking way; the block is on one of WebView's own threads, where it cannot deadlock; a local web server or a second way of calling for the page would cost more than it saves.
 11. **Every async method takes a `CancellationToken`, last, and uses it** (Jamie, 2026-11-09).
     - The token is required, not `= default`, so that no caller can forget it; a test method takes the one TUnit gives it. CA2016 (pass it on) and CA1068 (last) are warnings, so errors in CI.
     - Using it means passing it to every call that takes one and checking it in long loops. A method that answers at once from memory or LiteDB checks it first (`ct.ThrowIfCancellationRequested()`).
@@ -100,9 +102,12 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - A private method has one when its purpose or intent is not plain from its name and body.
   - The compiler checks what other projects can see (CS1591, with `GenerateDocumentationFile` in `Directory.Build.props`); internal and private members are kept documented by hand.
   - In `PhotoSense.Tests`, test methods are exempt, as their names are sentences; every test class, fixture, fake and helper is documented.
-  - The rule is about C#. The page's TypeScript is not covered by it.
+  - The page's TypeScript follows the same rule with TSDoc (`/** … */`): every exported function, component, hook, type, interface and constant (Jamie, 2026-11-09).
 - **Comments** say *why*, in plain English, usually one line. They never say what the code does or narrate a change. A line that does something easy to misread gets one. Names describe what the user would recognise.
-- **Public is for what other projects use.** Anything else is `internal`; `PhotoSense.Tests` (and Moq's `DynamicProxyGenAssembly2`) see it through `InternalsVisibleTo`.
+- **Public is each project's front door; the tests use nothing else** (Jamie, 2026-11-09: no `InternalsVisibleTo`).
+  - Public: what another project uses, Domain's rules and interfaces, Application's services, an adapter a program could put together itself, the sending protocol (the contract between two programs), the HTTP vocabulary (`ApiRequest`, `RequestGuard`, `ByteRange`), and each project's registrations. `PhotoSense.Server` has `PhotoSenseServer.Build` only.
+  - Internal: endpoints, the LiteDB stores (their constructors take LiteDB's own types), mappers and helpers. Tests reach them through the front door: endpoints through the router (`TestApi`), stores through `AddPhotoSenseCore` (`Stores`), the server through `PhotoSenseServer.Build`.
+  - When a test seems to need something internal, the structure is usually wrong: move the logic to where it belongs, or give the class a constructor that takes what it asks of the outside world (as `ShellSystemViewer` and `FileSystemFolderBrowser` do).
 - **UI text:**
   - Name what the person sees, in short plain sentences, without jargon or apologies.
   - Buttons say exactly what happens ("Delete 3 files"), and the message after says what happened.

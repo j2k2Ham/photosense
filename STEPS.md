@@ -1,6 +1,6 @@
 # PhotoSense: what is left to do
 
-Last updated 2026-11-09. Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
+Last updated 2026-11-10. Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
 
 ## What Jamie is asking for, and why
 
@@ -37,17 +37,21 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - The `@phone` tests in WebKit have not run yet: the WebKit download was still finishing.
 - **Code health** (2026-11-09, after a health check graded code quality C, the API surface C and documentation D):
   - Every type and member is documented (CS1591 now an error in CI); test classes and helpers too, test methods by their names.
-  - Only what other projects use is public; the rest is internal, seen by the tests through `InternalsVisibleTo`.
+  - No `InternalsVisibleTo` (Jamie, 2026-11-09): each project's public front door is all the tests use (CLAUDE.md). Endpoints are tested through the router, the stores through `AddPhotoSenseCore`, the server through `PhotoSenseServer.Build`.
+  - Structure (2026-11-10): each layer registers its own services (`AddPhotoSenseApplication` is new); Domain has no packages and holds the pure rules (`PhotoMatcher`, `NameRules`, `PhotoNaming`, `PhotoFileEnumerator`); `CompanionFileFinder` and `ScanRunner` moved to Application; the settings validator to the server; the in-memory repository to the tests; the scan log is the registered service's own, no longer one static queue.
+  - The page: TSDoc on every export, checked by `tests/documentation.test.ts`.
+  - Confirmed by Jamie (2026-11-10): the newly public types, the two guards left out of coverage, the public MetadataExtractor helpers, and Android's blocking `PageClient` as a named exception to rule 10.
   - Every async method takes a required token and passes it on (CA2016, CA1068); clocks come from `TimeProvider`.
   - Anti-patterns removed, apart from those Jamie accepted (CLAUDE.md rule 10). A picture a decoder cannot read is an `UnreadableImageException`.
-- **Last measured:** service 812 tests at 100% of lines and branches (2026-11-09); end to end 56 tests in Chrome (2026-11-09); page 588 tests at 100% of branches; build tools 37 tests at 100%.
+- **Last measured:** service 808 tests at 100% of lines (3,439) and branches (1,976) (2026-11-10); page 590 tests at 100% (2026-11-10); end to end 56 tests in Chrome (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
 
 ## Remaining steps
 
 ### Now
 
-- [ ] See `iphone.yml` compile the iPhone app after the code-health work (pushed at Jamie's word, 2026-11-09): its changes (tokens, `UnreadableImageException`, docs) had not been compiled. The Android app was compiled here with no warnings.
-- [ ] TSDoc on every export of the page, as the XML documentation rule asks of C# (Jamie, 2026-11-09).
+- [x] See `iphone.yml` compile the iPhone app after the code-health work (pushed at Jamie's word, 2026-11-09; passed).
+- [x] TSDoc on every export of the page (Jamie, 2026-11-09; done 2026-11-10).
+- [ ] Push the structure work when Jamie agrees, to see `iphone.yml`, `android.yml` and `e2e.yml` pass on it. `e2e.yml` has not passed on GitHub since `ubuntu-latest` became 26.04: it now runs on 24.04, and the browser download, which once hung for 45 minutes, gets three tries of five minutes.
 - [ ] Run the `@phone` end-to-end tests in WebKit (`cd e2e && npx playwright test --project phone`) and fix what they find.
 - [x] Push the commits that were waiting (done 2026-10-30, at Jamie's word).
 - [ ] See the main CI (`ci.yml`) pass on Linux. It runs only for `main` and pull requests, so it has never run on this branch: several service tests that rely on file behaviour have only run on Windows.
@@ -91,7 +95,6 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 5. **Android cable:** sending to a computer by cable works for an iPhone only. Is Wi-Fi enough on Android?
 6. **Android Organize:** a folder made at the top of the phone's storage is refused, as Android requires. Should Organize start in DCIM/Camera on Android instead of the whole phone?
 7. **Paired devices:** there is no way yet to forget a paired phone or computer. Is one wanted?
-8. **Android's page client blocks** on each answer (`PageClient.Ask`), as Android's `ShouldInterceptRequest` must answer synchronously. Keep it as an accepted exception to rule 10, or look for another way?
 
 ## Call-outs
 

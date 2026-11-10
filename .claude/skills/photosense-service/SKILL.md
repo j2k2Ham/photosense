@@ -11,9 +11,9 @@ The generic .NET skills of installed plugins (minimal APIs, EF Core, xUnit, Flue
 
 | What | Where |
 |---|---|
-| An entity, value object, or an interface to storage or the OS | `PhotoSense.Domain` |
-| What PhotoSense decides: scanning, grouping, removal, Organize, erasing, sending | `PhotoSense.Application` (`Scanning/`, `Organizing/`, `Changes/`, `Removal/`, `Transfer/`) |
-| What both hosts run: LiteDB stores, hashing, metadata, place names, disks, a phone's library as folders, finding phones | `PhotoSense.Infrastructure`, registered in `AddPhotoSenseCore` |
+| An entity, value object, an interface to storage or the OS, or a rule that needs nothing else (matching, file names) | `PhotoSense.Domain` |
+| What PhotoSense decides: scanning, grouping, removal, Organize, erasing, sending | `PhotoSense.Application` (`Scanning/`, `Organizing/`, `Changes/`, `Removal/`, `Transfer/`), registered in `AddPhotoSenseApplication` |
+| An adapter both hosts run: LiteDB stores, hashing, metadata, place names, disks, a phone's library as folders, finding phones | `PhotoSense.Infrastructure`, registered in `AddPhotoSenseCore` |
 | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` | `PhotoSense.Desktop`, registered in `AddPhotoSenseComputer` (`PhotoSense.Server/PhotoSenseServices.cs`) |
 | An endpoint | `PhotoSense.Api/Endpoints`, registered in `AddPhotoSenseApi`, its address in `PhotoSenseRoutes` |
 | What the page is sent | `PhotoSense.Contracts`, mirrored by hand in `PhotoSense.ReactUI/types.ts` |

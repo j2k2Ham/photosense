@@ -12,6 +12,8 @@ using PhotoSense.Application.Changes;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Repositories;
 
+using PhotoSense.Application;
+
 namespace PhotoSense.Server;
 
 /// <summary>The services PhotoSense runs on a computer.</summary>
@@ -36,6 +38,6 @@ internal static class PhotoSenseServices
         s.AddSingleton<IPhoneFinder>(new PhoneFinders(new MdnsPhoneFinder(), new UsbmuxPhoneFinder()));
         s.AddSingleton(sp => new PhoneReceiving(sp.GetRequiredService<IPhoneFinder>(), sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<IPhotoFileSystem>(),
             sp.GetRequiredService<FileChanges>(), Environment.MachineName));
-        return s.AddPhotoSenseCore();
+        return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

@@ -8,7 +8,7 @@ namespace PhotoSense.Infrastructure.Metadata;
 /// Remembers the Live Photo identifier read from a file for as long as the file stays the same. Working
 /// out what belongs to each of a thousand files asks for the same identifiers again and again.
 /// </summary>
-internal sealed class LivePhotoIdCache
+public sealed class LivePhotoIdCache
 {
     private readonly IPhotoFileSystem _files;
     private readonly Func<string, string?> _read;

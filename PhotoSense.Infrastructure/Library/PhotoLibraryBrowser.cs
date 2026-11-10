@@ -7,7 +7,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// <summary>Offers the folder a phone's photos are shown as, and the folders inside it: its albums on an iPhone, its own folders on Android.</summary>
 /// <param name="library">The phone's photos, shown as folders.</param>
 /// <param name="root">Where the phone's photos are shown, as a folder.</param>
-internal sealed class PhotoLibraryBrowser(IPhotoFileSystem library, string root) : IFolderBrowser
+public sealed class PhotoLibraryBrowser(IPhotoFileSystem library, string root) : IFolderBrowser
 {
     /// <inheritdoc />
     public FolderListing Browse(string? path)

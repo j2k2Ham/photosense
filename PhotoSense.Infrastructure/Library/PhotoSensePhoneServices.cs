@@ -7,6 +7,8 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Transfer;
 
+using PhotoSense.Application;
+
 namespace PhotoSense.Infrastructure.Library;
 
 /// <summary>The services PhotoSense runs on a phone, for the phone apps to add to theirs.</summary>
@@ -75,6 +77,6 @@ public static class PhotoSensePhoneServices
         s.AddSingleton<IFolderBrowser>(new PhotoLibraryBrowser(photos, Path.TrimEndingDirectorySeparator(root)));
         s.AddSingleton(sp => new PhoneSending(listener ?? new TcpTransferListener(), advertiser, sp.GetRequiredService<IPairingStore>(), photos,
             sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<OrganizeLibrary>(), name));
-        return s.AddPhotoSenseCore();
+        return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

@@ -51,6 +51,7 @@ const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** The programs that run on a phone. */
 const PHONES = new Set(['iphone', 'android']);
 
+/** PhotoSense's one page: Clean up and Organize, the bar and menu over them, and every window they open. */
 export default function HomePage() {
   const [theme, setTheme] = useTheme();
   const [settings, changeSettings] = useAppSettings();

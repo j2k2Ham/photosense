@@ -181,7 +181,7 @@ public class LiteDbOrganizeBatchStoreTests
     public async Task Keeps_What_A_Move_Did_Until_It_Is_Undone(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        var store = new LiteDbOrganizeBatchStore(db);
+        var store = db.Batches();
         await Assert.That(await store.RecentAsync(20, ct)).IsEmpty();
 
         var first = new OrganizeBatch { Label = "Anaconda", Files = 2, Bytes = 9, UtcTicks = new DateTime(2026, 10, 8, 10, 0, 0, DateTimeKind.Utc).Ticks,
@@ -202,7 +202,7 @@ public class LiteDbOrganizeBatchStoreTests
         // Undone, it is no longer offered, though it is still on record; undoing what is not there changes nothing.
         await store.MarkUndoneAsync(second.Id, ct);
         await store.MarkUndoneAsync(Guid.NewGuid(), ct);
-        await Assert.That((await new LiteDbOrganizeBatchStore(db).RecentAsync(20, ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "Anaconda" }, CollectionOrdering.Matching);
+        await Assert.That((await db.Batches().RecentAsync(20, ct)).Select(b => b.Label)).IsEquivalentTo(new[] { "Trips", "Anaconda" }, CollectionOrdering.Matching);
         await Assert.That((await store.GetAsync(second.Id, ct))!.Undone).IsTrue();
     }
 
@@ -210,7 +210,7 @@ public class LiteDbOrganizeBatchStoreTests
     public async Task A_Change_Written_Before_Changes_Had_A_State_Reads_As_Carried_Out(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        var store = new LiteDbOrganizeBatchStore(db);
+        var store = db.Batches();
         var id = Guid.NewGuid();
         // As the version before wrote it: with no state at all.
         db.GetCollection("organize_batches").Insert(new BsonDocument
@@ -227,7 +227,7 @@ public class LiteDbOrganizeBatchStoreTests
     public async Task Changes_Under_Way_Are_Not_Offered_To_Undo_And_Are_Found_At_The_Next_Start_Oldest_First(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        var store = new LiteDbOrganizeBatchStore(db);
+        var store = db.Batches();
         var done = new OrganizeBatch { Label = "done", UtcTicks = 3 };
         var undoing = new OrganizeBatch { Label = "undoing", UtcTicks = 2, State = ChangeState.Undoing };
         var started = new OrganizeBatch { Label = "started", UtcTicks = 1, State = ChangeState.Started };
@@ -247,7 +247,7 @@ public class LiteDbOrganizeBatchStoreTests
     public async Task The_Records_Kept_For_A_Removal_Come_Back_As_They_Were(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        var store = new LiteDbOrganizeBatchStore(db);
+        var store = db.Batches();
         var batch = Guid.NewGuid();
         var photo = new Photo
         {

@@ -1,4 +1,5 @@
 // Shared DTO-type definitions aligned with backend contracts (PhotoSense.Contracts).
+/** A photo a scan recorded, as the Clean up screens show it. */
 export interface PhotoDto {
   id: string;
   fileName: string;
@@ -23,8 +24,10 @@ export interface PhotoDto {
   kept: boolean;
 }
 
+/** How sure the match between a photo and the one kept is. */
 export type MatchKind = 'identical' | 'samePicture' | 'similar';
 
+/** A photo matched against the one a group keeps. */
 export interface GroupMemberDto {
   photo: PhotoDto;
   match: MatchKind;
@@ -32,6 +35,7 @@ export interface GroupMemberDto {
   keeperReason: string;
 }
 
+/** A photo to keep and the photos matched against it. */
 export interface DuplicateGroupDto {
   key: string;
   /** The best copy: the one that stays. */
@@ -40,8 +44,10 @@ export interface DuplicateGroupDto {
   reclaimableBytes: number;
 }
 
+/** Which groups are listed: exact copies and conversions, or look-alikes to review. */
 export type GroupMode = 'duplicates' | 'similar';
 
+/** One page of the groups a scan found. */
 export interface GroupsPageDto {
   mode: GroupMode;
   page: number;
@@ -54,6 +60,7 @@ export interface GroupsPageDto {
   items: DuplicateGroupDto[];
 }
 
+/** What removing the copies of one or more groups did. */
 export interface BulkRemovalResultDto {
   removed: number;
   bytes: number;
@@ -74,6 +81,7 @@ export interface RemovePhotoResultDto {
   batchId: string | null;
 }
 
+/** How far a scan has got, and what is left by what earlier scans took. */
 export interface ScanProgressSnapshotDto {
   instanceId: string;
   startedUtc: string;
@@ -96,6 +104,7 @@ export interface FolderDto {
   path: string;
 }
 
+/** The folders inside one folder, or the places to start from. */
 export interface FolderListingDto {
   /** The folder that was listed; absent when the starting places are listed instead. */
   path?: string | null;
@@ -112,6 +121,7 @@ export interface ScanStatusDto {
   totalPhotos: number;
 }
 
+/** The folders to scan, whether their subfolders are looked in, and whether earlier results are forgotten first. */
 export interface StartScanRequest {
   primaryLocation: string;
   secondaryLocation?: string;
@@ -134,6 +144,7 @@ export interface OrganizePlaceDto {
   longitude: number;
 }
 
+/** A picture or video in the folder being organized. */
 export interface OrganizeFileDto {
   /** Stands for the file in requests about it. It changes when the file is moved. */
   id: string;
@@ -154,6 +165,7 @@ export interface OrganizeFileDto {
   livePhoto?: boolean;
 }
 
+/** Every picture and video under a folder, once the folder has been read. */
 export interface OrganizeFilesDto {
   root: string;
   /** Every file's details were already on record from a scan, so nothing had to be read. */
@@ -208,6 +220,7 @@ export interface OrganizeExistingDto {
   identical: boolean;
 }
 
+/** A file whose name is taken where it would go. */
 export interface OrganizeClashDto {
   /** The file that is going. */
   id: string;
@@ -216,6 +229,7 @@ export interface OrganizeClashDto {
   nextFree: string;
 }
 
+/** Where each file would go and which names are taken there; nothing has moved. */
 export interface OrganizePlanDto {
   /** The folder the files go to, before any split by year. */
   destination: string;
@@ -230,6 +244,7 @@ export interface OrganizePlanDto {
   companions: number;
 }
 
+/** Files to move or copy into a folder, each under the name it arrives with, with or without the files that go with them. */
 export interface OrganizeApplyRequest extends OrganizeDestination {
   mode: 'move' | 'copy';
   /** Bring Live Photo videos and edit files along with their pictures. */
@@ -239,6 +254,7 @@ export interface OrganizeApplyRequest extends OrganizeDestination {
   files: { id: string; name: string; subfolder?: string }[];
 }
 
+/** What a move, copy or removal did. */
 export interface OrganizeApplyDto {
   batchId: string;
   done: number;
@@ -263,6 +279,7 @@ export interface OrganizeBatchDto {
   utc: string;
 }
 
+/** What undoing a move, copy or removal did. */
 export interface OrganizeUndoDto {
   restored: number;
   skipped: number;
@@ -286,6 +303,7 @@ export interface RemovedFilesDto {
   bytes: number;
 }
 
+/** What erasing did. */
 export interface EraseRemovedDto {
   erased: number;
   bytes: number;
@@ -336,6 +354,7 @@ export interface SendStateDto {
   phone: string;
   problem: string | null;
 }
+/** How many pictures and videos were deleted from the phone. */
 export interface DeleteSentDto {
   deleted: number;
 }
@@ -345,6 +364,7 @@ export interface FoundPhoneDto {
   name: string;
   via: 'wifi' | 'usb';
 }
+/** The phones offering photos now. */
 export interface FoundPhonesDto {
   phones: FoundPhoneDto[];
 }

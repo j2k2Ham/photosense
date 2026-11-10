@@ -6,6 +6,7 @@ import { Segmented } from '../ModeSwitch';
 import { SelectAll } from '../SelectAll';
 import { Check, FileFacts, Pager, Thumb } from './shared';
 
+/** Which files are shown: all of them, those not yet organized, or those with no location. */
 export type FileFilter = 'all' | 'todo' | 'noloc';
 /** Which kind of file is shown: both, pictures alone, or videos alone. */
 export type FileKind = 'any' | 'photo' | 'video';

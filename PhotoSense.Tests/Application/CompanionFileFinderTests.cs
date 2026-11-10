@@ -7,11 +7,11 @@ using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
-using PhotoSense.Infrastructure.Deletion;
+using PhotoSense.Application.Removal;
 using PhotoSense.Infrastructure.Persistence;
 using PhotoSense.Tests.Application;
 
-namespace PhotoSense.Tests.Infrastructure;
+namespace PhotoSense.Tests.Application;
 
 /// <summary>
 /// What goes with a photo when it is removed. Each file's content stands in for the Live Photo
@@ -133,7 +133,7 @@ public sealed class CompanionFileFinderTests : IDisposable
     // Removes photos the way Clean up does, through a journal of its own.
     private DuplicateRemovalService Remover(InMemoryPhotoRepository repo, IPhotoFileSystem? disk = null)
         => new(new DuplicateAnalysisService(repo), repo, _finder,
-            new FileChanges(new LiteDbOrganizeBatchStore(new LiteDatabase(new MemoryStream())), repo, Mock.Of<IAuditRepository>(), disk ?? TestFiles.Disk), disk ?? TestFiles.Disk, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
+            new FileChanges(new LiteDatabase(new MemoryStream()).Batches(), repo, Mock.Of<IAuditRepository>(), disk ?? TestFiles.Disk), disk ?? TestFiles.Disk, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
 
     [Test]
     public async Task Removing_A_Photo_Moves_Its_Companions_With_It_And_Forgets_Their_Records(CancellationToken ct)

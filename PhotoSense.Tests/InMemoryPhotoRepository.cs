@@ -3,9 +3,9 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.ValueObjects;
 using System.Collections.Concurrent;
 
-namespace PhotoSense.Infrastructure.Persistence;
+namespace PhotoSense.Tests;
 
-/// <summary>Scans' records kept in memory only, gone when the program stops: for tests, and for a program with nowhere to keep them.</summary>
+/// <summary>Scans' records kept in memory only, standing in for the database.</summary>
 /// <remarks>Each method answers at once; its token is checked first, as nothing it does takes long enough to stop part way.</remarks>
 internal sealed class InMemoryPhotoRepository : IPhotoRepository
 {

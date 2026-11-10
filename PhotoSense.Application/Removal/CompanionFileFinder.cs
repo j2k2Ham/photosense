@@ -1,18 +1,13 @@
-using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
-using PhotoSense.Infrastructure.Metadata;
 
-namespace PhotoSense.Infrastructure.Deletion;
+namespace PhotoSense.Application.Removal;
 
 /// <summary>Finds a photo's sidecars and Live Photo video by the names iOS gives them and the identifier they share.</summary>
-internal sealed class CompanionFileFinder : ICompanionFileFinder
+public sealed class CompanionFileFinder : ICompanionFileFinder
 {
     private readonly IPhotoFileSystem _files;
     private readonly Func<string, string?> _readLivePhotoId;
-
-    /// <summary>Finds them among the files of <paramref name="files"/>, reading each file's Live Photo identifier from the file.</summary>
-    public CompanionFileFinder(IPhotoFileSystem files) : this(files, path => LivePhotoLink.ReadId(files, path)) { }
 
     /// <summary>Finds them among the files of <paramref name="files"/>, reading each file's Live Photo identifier as given.</summary>
     /// <param name="files">Where the photos are kept.</param>

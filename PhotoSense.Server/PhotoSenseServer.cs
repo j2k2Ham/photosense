@@ -5,7 +5,7 @@ using Microsoft.Extensions.FileProviders;
 namespace PhotoSense.Server;
 
 /// <summary>The service as one program: the addresses below /api and, when it has been built in, the page itself.</summary>
-internal static class PhotoSenseServer
+public static class PhotoSenseServer
 {
     /// <summary>The program, ready to run, with its services, the page when it is built in, and the addresses below /api.</summary>
     /// <param name="args">As given on the command line: <c>--urls</c>, <c>--Cors:Origins:0=</c> and any other setting.</param>

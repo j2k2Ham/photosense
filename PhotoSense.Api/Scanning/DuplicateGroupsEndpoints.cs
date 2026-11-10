@@ -1,7 +1,7 @@
 using System.Net;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 using PhotoSense.Api.Endpoints;

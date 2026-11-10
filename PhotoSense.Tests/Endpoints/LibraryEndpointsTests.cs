@@ -1,5 +1,5 @@
 using System.Net;
-using PhotoSense.Api.Endpoints;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Files;
 
@@ -9,9 +9,9 @@ namespace PhotoSense.Tests.Endpoints;
 public class LibraryEndpointsTests
 {
     private readonly FakePhotoAccess _access = new();
-    private readonly LibraryEndpoints _endpoints;
+    private readonly AboutApi _endpoints;
 
-    public LibraryEndpointsTests() => _endpoints = new LibraryEndpoints(_access);
+    public LibraryEndpointsTests() => _endpoints = new AboutApi(new TestApi(s => s.AddSingleton<IPhotoAccess>(_access)));
 
     [Test]
     [Arguments(PhotoAccess.Everything, "everything")]
@@ -39,7 +39,7 @@ public class LibraryEndpointsTests
     [Test]
     public async Task Opens_PhotoSenses_Own_Settings_Where_Its_Access_Is_Changed(CancellationToken ct)
     {
-        var response = _endpoints.OpenSettings(Http.Post("library/open-settings").FromClient());
+        var response = await _endpoints.OpenSettingsAsync(Http.Post("library/open-settings").FromClient(), ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
         await Assert.That(_access.SettingsOpened).IsEqualTo(1);
@@ -49,7 +49,7 @@ public class LibraryEndpointsTests
     public async Task Lets_No_Other_Web_Page_Show_The_Picker_Or_Open_The_Settings(CancellationToken ct)
     {
         await Assert.That((await _endpoints.ChooseMoreAsync(Http.Post("library/choose-more"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
-        await Assert.That(_endpoints.OpenSettings(Http.Post("library/open-settings")).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _endpoints.OpenSettingsAsync(Http.Post("library/open-settings"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That(_access.PickersShown).IsEqualTo(0);
         await Assert.That(_access.SettingsOpened).IsEqualTo(0);
     }

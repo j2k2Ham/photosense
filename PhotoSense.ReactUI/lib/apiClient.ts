@@ -77,8 +77,11 @@ export async function openPhotoSettings() {
   await send(`${API_BASE}/library/open-settings`, 'POST');
 }
 
+/** The address of a scanned photo's preview. */
 export const thumbnailUrl = (id: string) => `${API_BASE}/photos/${id}/thumbnail`;
+/** The address of a scanned photo, at a size a browser can show. */
 export const imageUrl = (id: string) => `${API_BASE}/photos/${id}/image`;
+/** The address of a scanned video, which a browser plays a part at a time. */
 export const videoUrl = (id: string) => `${API_BASE}/photos/${id}/video`;
 
 /** Opens the file in the default viewer or player of the machine the server runs on. */
@@ -92,6 +95,7 @@ export const PAGE_SIZE = 50;
 const groupsUrl = (mode: GroupMode, filter: string, page: number, hideKept: boolean) =>
   `${API_BASE}/scan/groups?mode=${mode}&page=${page}&pageSize=${PAGE_SIZE}&hideKept=${hideKept}&q=${encodeURIComponent(filter)}`;
 
+/** A page of the groups a scan found, asked again every five seconds, keeping the last page while the next comes. */
 export function useGroups(mode: GroupMode, filter: string, page: number, hideKept: boolean) {
   return useSWR<GroupsPageDto>(groupsUrl(mode, filter, page, hideKept), json, { refreshInterval: 5000, keepPreviousData: true });
 }
@@ -195,6 +199,7 @@ export function useScanStatus() {
   return useSWR<ScanStatusDto>(`${API_BASE}/scan/status`, json, { refreshInterval: 5000 });
 }
 
+/** How far a scan has got, asked every second and a half; nothing is asked while no scan is named. */
 export function useScanProgress(instanceId?: string) {
   const key = instanceId ? `${API_BASE}/scan/progress/${instanceId}` : null;
   return useSWR<ScanProgressSnapshotDto>(key, json, { refreshInterval: 1500 });
@@ -205,13 +210,16 @@ export function browseFolders(path?: string) {
   return json<FolderListingDto>(`${API_BASE}/folders${path ? `?path=${encodeURIComponent(path)}` : ''}`);
 }
 
+/** Starts a scan of the folders asked for, and gives the id it runs under. */
 export async function startScan(req: StartScanRequest) {
   return json<{ instanceId: string }>(`${API_BASE}/scan/start`, { method: 'POST', body: JSON.stringify(req) });
 }
 
 // ---- Organize
 
+/** The address of the preview of a file in the folder being organized. */
 export const organizeThumbnailUrl = (id: string) => `${API_BASE}/organize/files/${id}/thumbnail`;
+/** The address of a file in the folder being organized, at a size a browser can show. */
 export const organizeImageUrl = (id: string) => `${API_BASE}/organize/files/${id}/image`;
 
 // Everything Organize shows changes when files are moved, and so does what Clean up lists of the same files.
@@ -300,6 +308,7 @@ async function sending(path: string, body?: object) {
 export const startSending = (files: string[]) => sending('start', { files });
 /** Says whether the number on the computer is the one on the phone. */
 export const confirmSending = (same: boolean) => sending('confirm', { same });
+/** Stops sending from this phone. */
 export const stopSending = () => sending('stop');
 
 /** Deletes from the phone what is safely on the computer; the phone asks first, and keeps them in Recently Deleted. */
@@ -329,5 +338,7 @@ async function receiving(path: string, body?: object) {
 
 /** Receives what the phone found offers, into a folder of this computer. */
 export const startReceiving = (phone: string, folder: string) => receiving('start', { phone, folder });
+/** Says whether the numbers shown on the phone and on this computer are the same. */
 export const confirmReceiving = (same: boolean) => receiving('confirm', { same });
+/** Stops receiving photos on this computer. */
 export const stopReceiving = () => receiving('stop');

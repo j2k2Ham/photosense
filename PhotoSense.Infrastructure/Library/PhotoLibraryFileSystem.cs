@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-internal sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";

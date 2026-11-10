@@ -4,10 +4,12 @@ export interface LastScan { root: string; second: string; recursive: boolean; }
 const KEY = 'photosense-last-scan';
 const NONE: LastScan = { root: '', second: '', recursive: true };
 
+/** The folders last scanned, as this browser remembers them, or none. */
 export function loadLastScan(): LastScan {
   try { return { ...NONE, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }; } catch { return NONE; }
 }
 
+/** Remembers the folders scanned, in this browser. */
 export function saveLastScan(scan: LastScan): void {
   // A browser that refuses storage only loses the reminder.
   try { localStorage.setItem(KEY, JSON.stringify(scan)); } catch { /* not remembered */ }
@@ -20,6 +22,7 @@ export function loadOrganizeRoot(): string {
   try { return localStorage.getItem(ORGANIZE_KEY) ?? ''; } catch { return ''; }
 }
 
+/** Remembers the folder last organized, in this browser. */
 export function saveOrganizeRoot(root: string): void {
   try { localStorage.setItem(ORGANIZE_KEY, root); } catch { /* not remembered */ }
 }

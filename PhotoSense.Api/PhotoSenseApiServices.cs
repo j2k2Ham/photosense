@@ -3,6 +3,7 @@ using PhotoSense.Application.Transfer;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Scanning;
+using PhotoSense.Application.Scanning;
 
 namespace PhotoSense.Api;
 

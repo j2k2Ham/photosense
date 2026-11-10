@@ -6,7 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PhotoSense.Api;
 using PhotoSense.Api.About;
-using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Hosting;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
@@ -16,7 +15,6 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Files;
 using PhotoSense.Infrastructure.Library;
-using PhotoSense.Infrastructure.Persistence;
 using PhotoSense.Infrastructure.Transfer;
 using PhotoSense.Tests.Endpoints;
 
@@ -35,7 +33,7 @@ public sealed class TransferTests : IDisposable
     private readonly ServiceProvider _phone;
     private readonly ApiRouter _router;
     private readonly LiteDB.LiteDatabase _computerDb = new(new MemoryStream());
-    private readonly LiteDbPairingStore _computerPairs;
+    private readonly IPairingStore _computerPairs;
     private readonly PhoneReceiving _computer;
     private readonly string _folder;
     private readonly List<IDisposable> _open = [];
@@ -49,14 +47,14 @@ public sealed class TransferTests : IDisposable
             .BuildServiceProvider();
         _router = _phone.GetRequiredService<PhotoSenseRoutes>().Router;
         _folder = Directory.CreateDirectory(In("Computer")).FullName;
-        _computerPairs = new LiteDbPairingStore(_computerDb, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
+        _computerPairs = Stores.Pairings(_computerDb, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
         _computer = Receiving(new OnThisComputer(_advertiser));
     }
 
     private PhoneReceiving Receiving(IPhoneFinder finder, DiskFileSystem? disk = null)
     {
         disk ??= new DiskFileSystem();
-        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new LiteDbOrganizeBatchStore(_computerDb), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1");
+        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(_computerDb.Batches(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1");
     }
 
     public void Dispose()
@@ -454,7 +452,7 @@ public sealed class TransferTests : IDisposable
     [Test]
     public async Task The_Computer_Says_Plainly_What_Is_Wrong_With_What_It_Is_Asked(CancellationToken ct)
     {
-        var endpoints = new TransferEndpoints(receiving: _computer);
+        var endpoints = new TransferApi(new TestApi(s => s.AddSingleton(_computer)));
         await Assert.That((await endpoints.PhonesAsync(Http.Get("phones").FromClient(), ct)).Json().GetProperty("phones").GetArrayLength()).IsEqualTo(0);
         await Assert.That((await endpoints.ReceivingAsync(Http.Get("receive/state"), ct)).Json().GetProperty("stage").GetString()).IsEqualTo("idle");
         // An answer when nothing is asked: nothing happens.

@@ -1,17 +1,22 @@
 using System.Net;
 using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Http;
-using PhotoSense.Application.Scanning;
+using PhotoSense.Application.Scanning.Interfaces;
 
 namespace PhotoSense.Api.Scanning;
 
 /// <summary>The lines scans have logged, for the page to show as they come.</summary>
 internal sealed class ScanLogsEndpoints
 {
+    private readonly IScanLogSink _log;
     private readonly TimeProvider _time;
 
-    /// <summary>Lines handed over at a pace measured by <paramref name="time"/>, or the system's clock when none is given.</summary>
-    public ScanLogsEndpoints(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
+    /// <summary>The lines of <paramref name="log"/>, handed over at a pace measured by <paramref name="time"/>.</summary>
+    public ScanLogsEndpoints(IScanLogSink log, TimeProvider time)
+    {
+        _log = log;
+        _time = time;
+    }
 
     // A few requests a second at most, refilled at one a second: the page asks every second and a half.
     private const double Allowance = 20, RefillPerSecond = 1;
@@ -31,7 +36,7 @@ internal sealed class ScanLogsEndpoints
             await tooMany.WriteStringAsync("Rate limit exceeded. Try again later.", ct);
             return tooMany;
         }
-        var drained = Drain(limit).ToList();
+        var drained = _log.TakePending(limit).Select(l => new { instanceId = l.InstanceId, timestamp = l.Timestamp, level = l.Level, message = l.Message }).ToList();
         var resp = req.CreateResponse(HttpStatusCode.OK);
         await resp.WriteAsJsonAsync(new { items = drained, count = drained.Count }, ct);
         return resp;
@@ -48,11 +53,5 @@ internal sealed class ScanLogsEndpoints
             _tokens -= 1;
             return true;
         }
-    }
-
-    private static IEnumerable<object> Drain(int max)
-    {
-        for (var count = 0; count < max && InMemoryScanLogSink.TryDequeuePending(out var item); count++)
-            yield return new { item.instanceId, timestamp = item.ts, item.level, item.message };
     }
 }

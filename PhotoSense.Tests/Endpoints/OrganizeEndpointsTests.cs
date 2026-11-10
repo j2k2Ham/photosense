@@ -1,9 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Domain.Services;
-using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Http;
 using PhotoSense.Tests.Application;
 
@@ -16,10 +16,12 @@ public sealed class OrganizeEndpointsTests : IDisposable
     private readonly InMemoryThumbnailStore _thumbnails = new();
     private readonly Mock<IImageAnalyzer> _analyzer = new();
     private readonly Mock<ISystemViewer> _viewer = new();
-    private readonly OrganizeEndpoints _api;
+    private readonly OrganizeApi _api;
 
+    // The addresses, answered by the fixture's own Organize services, previews, decoder, viewer and disk.
     public OrganizeEndpointsTests()
-        => _api = new OrganizeEndpoints(_f.Library, _f.Planner, _f.Mover(), _f.Batches, new OrganizeListingMapper(_f.Places), _thumbnails, _analyzer.Object, _viewer.Object, _f.Disk);
+        => _api = new OrganizeApi(new TestApi(s => s.AddSingleton(_f.Library).AddSingleton(_f.Planner).AddSingleton(_f.Mover()).AddSingleton(_f.Batches).AddSingleton(_f.Places)
+            .AddSingleton<IThumbnailStore>(_thumbnails).AddSingleton(_analyzer.Object).AddSingleton(_viewer.Object).AddSingleton<IPhotoFileSystem>(_f.Disk)));
 
     public void Dispose() => _f.Dispose();
 

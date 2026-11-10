@@ -9,7 +9,7 @@ namespace PhotoSense.Api.Endpoints;
 /// </summary>
 /// <param name="Start">The first byte sent.</param>
 /// <param name="End">The last byte sent.</param>
-internal readonly record struct ByteRange(long Start, long End)
+public readonly record struct ByteRange(long Start, long End)
 {
     /// <summary>Largest piece sent in one response.</summary>
     public const int MaxLength = 4 * 1024 * 1024;

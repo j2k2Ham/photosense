@@ -1,7 +1,7 @@
 using Moq;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Infrastructure.Persistence;

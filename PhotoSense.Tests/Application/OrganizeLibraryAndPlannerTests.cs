@@ -1,3 +1,4 @@
+using PhotoSense.Domain.ValueObjects;
 using Moq;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Domain.Services;
@@ -369,49 +370,6 @@ public sealed class OrganizePlannerTests : IDisposable
             await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => To(name)).Message).IsEqualTo("Give the folder a name first.");
         foreach (var name in new[] { "What?", "a<b", "tab\there", "a:b", "a|b", "a*b", "a\"b", "a>b" })
             await Assert.That(Assert.ThrowsExactly<ArgumentException>(() => To(name)).Message).IsEqualTo("Folder names cannot contain < > : \" / | ? or *");
-    }
-
-    [Test]
-    public async Task Names_With_A_Number_Are_Found_And_Recognised(CancellationToken ct)
-    {
-        var taken = new HashSet<string> { "IMG_1 (1).JPG", "IMG_1 (2).JPG" };
-        await Assert.That(NameRules.NextFree("IMG_1.JPG", taken.Contains)).IsEqualTo("IMG_1 (3).JPG");
-        await Assert.That(NameRules.NextFree("README", _ => false)).IsEqualTo("README (1)");
-
-        var strict = NameRules.Family("IMG_1.JPG", ignoreCase: false);
-        await Assert.That(new[] { "IMG_1.JPG", "IMG_1 (1).JPG", "IMG_1 (12).JPG" }.All(strict.IsMatch)).IsTrue();
-        await Assert.That(new[] { "img_1.jpg", "IMG_1 (a).JPG", "IMG_11.JPG", "IMG_1.JPG.bak", "xIMG_1.JPG", "IMG_1  (1).JPG" }.Any(strict.IsMatch)).IsFalse();
-        await Assert.That(NameRules.Family("IMG_1.JPG", ignoreCase: true).IsMatch("img_1 (1).jpg")).IsTrue();
-        // Characters that mean something in a pattern are taken as they are.
-        await Assert.That(NameRules.Family("a+b (x).JPG").IsMatch("a+b (x) (1).JPG")).IsTrue();
-        await Assert.That(NameRules.Family("a+b (x).JPG").IsMatch("aab (x).JPG")).IsFalse();
-    }
-
-    [Test]
-    public async Task A_Name_Asked_For_Must_Be_A_Plain_Name_With_The_Files_Own_Extension(CancellationToken ct)
-    {
-        foreach (var good in new[] { "IMG_6435 2023-06.JPG", "new.jpg", "a.b.JPG" }) await Assert.That(NameRules.Usable(good, "IMG_6435.JPG")).IsTrue();
-        foreach (var bad in new[] { null, "", "  ", " new.JPG", "new.JPG ", "new.PNG", "new", ".JPG", "a/b.JPG", "a\\b.JPG", "what?.JPG", "a:b.JPG", "a*b.JPG", "a|b.JPG", "a<b.JPG", "a>b.JPG", "a\"b.JPG", "new.JPG." })
-            await Assert.That(NameRules.Usable(bad, "IMG_6435.JPG")).IsFalse();
-        await Assert.That(NameRules.Usable("notes", "README")).IsTrue();
-    }
-
-    [Test]
-    public async Task Only_A_File_Whose_Item_Has_Other_Files_Can_Have_Companions(CancellationToken ct)
-    {
-        var picture = _f.Put("IMG_1234.HEIC");
-        var video = _f.Put("IMG_1234.MOV");
-        var sidecar = _f.Put("IMG_O1234.AAE");
-        var alone = _f.Put("IMG_5.JPG");
-        var index = new SiblingIndex(_f.Disk);
-        await Assert.That(index.SiblingsOf(picture).Order()).IsEquivalentTo(new[] { video, sidecar }.Order(), CollectionOrdering.Matching);
-        await Assert.That(index.SiblingsOf(alone).Count + index.SiblingsOf(_f.In("gone", "IMG_1.JPG")).Count + index.SiblingsOf("IMG_1.JPG").Count).IsEqualTo(0);
-        // The folder is looked through once; a file that has since left it is no longer counted.
-        _f.Put("IMG_5.AAE");
-        await Assert.That(index.SiblingsOf(alone)).IsEmpty();
-        File.Delete(video);
-        await Assert.That(index.SiblingsOf(picture, stillThere: true)).IsEquivalentTo(new[] { sidecar }, CollectionOrdering.Matching);
-        await Assert.That(index.SiblingsOf(picture).Count).IsEqualTo(2);
     }
 
     [Test]

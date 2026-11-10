@@ -23,6 +23,7 @@ interface Props {
   readonly children?: React.ReactNode;
 }
 
+/** The bar along the top: Clean up or Organize, the folders scanned, the error count and the menu. */
 export function TopBar({ area, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu, children }: Props) {
   return (
     // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)

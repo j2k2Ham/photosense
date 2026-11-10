@@ -1,12 +1,11 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
-using PhotoSense.Api.Endpoints;
-using PhotoSense.Infrastructure.Persistence;
 using PhotoSense.Tests.Application;
 
 namespace PhotoSense.Tests.Endpoints;
@@ -23,7 +22,7 @@ public sealed class PhotosEndpointsTests : IDisposable
     private readonly Mock<IDuplicateRemovalService> _remover = new();
     private readonly Mock<IAuditRepository> _audit = new();
     private readonly List<AuditEntry> _audited = [];
-    private readonly PhotosEndpoints _api;
+    private readonly PhotosApi _api;
 
     public PhotosEndpointsTests()
     {
@@ -36,8 +35,11 @@ public sealed class PhotosEndpointsTests : IDisposable
         _root.Delete(true);
     }
 
-    private PhotosEndpoints Api(IPhotoRepository repo, IPhotoFileSystem? disk = null)
-        => new(repo, _remover.Object, _thumbnails, _analyzer.Object, _audit.Object, Mock.Of<IScanLogSink>(), _viewer.Object, disk ?? TestFiles.Disk);
+    // The addresses, answered by the test's stand-ins for the records, the removal, the previews, the decoder, the
+    // audit, the viewer and the disk.
+    private PhotosApi Api(IPhotoRepository repo, IPhotoFileSystem? disk = null)
+        => new(new TestApi(s => s.AddSingleton(repo).AddSingleton(_remover.Object).AddSingleton<IThumbnailStore>(_thumbnails).AddSingleton(_analyzer.Object)
+            .AddSingleton(_audit.Object).AddSingleton(Mock.Of<IScanLogSink>()).AddSingleton(_viewer.Object).AddSingleton(disk ?? TestFiles.Disk)));
 
     // A real file with a record that matches it, as a scan would leave it.
     private async Task<Photo> AddAsync(string name, CancellationToken ct, string content = "picture bytes", string? contentHash = "ABCDEF", bool onDisk = true)

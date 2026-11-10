@@ -1,7 +1,6 @@
-using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.ValueObjects;
 
-namespace PhotoSense.Tests.Application;
+namespace PhotoSense.Tests.Domain;
 
 /// <summary>How iOS names the files of one item.</summary>
 public class PhotoNamingTests

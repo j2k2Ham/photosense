@@ -11,7 +11,7 @@ namespace PhotoSense.Infrastructure.Places;
 /// The lists are extracts of GeoNames data, licensed CC BY 4.0, https://www.geonames.org/: "cities1000"
 /// (places of 1,000 people or more) and a selection of sights, parks and districts.
 /// </summary>
-internal sealed class GeoNamesPlaceResolver : IPlaceNameResolver
+public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
 {
     /// <summary>The list of towns built into the program.</summary>
     public const string Towns = "PhotoSense.Infrastructure.Places.places.tsv.gz";

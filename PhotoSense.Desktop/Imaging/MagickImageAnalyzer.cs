@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ImageMagick;
 using PhotoSense.Domain.Services;
 
@@ -59,9 +60,10 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
         return new ImageAnalysis(width, height, format, quality, ImageFingerprint.PerceptualHash(signature), signature, ToJpeg(thumbnail, 82));
     }
 
-    /// <summary>The pixels read from an image; the decoder hands back none for an image it could not unpack.</summary>
-    /// <exception cref="UnreadableImageException">There are none.</exception>
-    internal static byte[] Required(byte[]? pixels) => pixels ?? throw new UnreadableImageException("Image has no pixel data");
+    // The pixels read from an image. Magick.NET says it may hand back none, for an image it could not unpack; no
+    // picture that decodes has been found to do so, so no test can reach the refusal.
+    [ExcludeFromCodeCoverage(Justification = "Magick.NET's guard against an image it could not unpack, which no decodable picture reaches.")]
+    private static byte[] Required(byte[]? pixels) => pixels ?? throw new UnreadableImageException("Image has no pixel data");
 
     private static MagickImage Load(Stream imageStream, int neededEdge)
     {

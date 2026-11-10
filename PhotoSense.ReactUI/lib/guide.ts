@@ -3,6 +3,7 @@
 /** A place in PhotoSense a topic of the guide can take the reader to. */
 export type GuidePlace = 'scan' | 'duplicates' | 'similar' | 'organize' | 'settings';
 
+/** A part of a topic of the user guide: a heading with paragraphs, steps or notes. */
 export interface GuideSection {
   heading?: string;
   /** Paragraphs. */
@@ -13,6 +14,7 @@ export interface GuideSection {
   tips?: string[];
 }
 
+/** A topic of the user guide, as Help lists it. */
 export interface GuideTopic {
   id: string;
   title: string;
@@ -23,6 +25,7 @@ export interface GuideTopic {
   sections: GuideSection[];
 }
 
+/** The user guide shown by Help, topic by topic. It changes whenever something on screen is renamed, added or removed. */
 export const GUIDE: GuideTopic[] = [
   {
     id: 'start',

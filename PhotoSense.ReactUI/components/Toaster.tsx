@@ -1,13 +1,17 @@
 import React from 'react';
 
+/** What a message is: something done, something to know, or an error. */
 export type ToastKind = 'ok' | 'info' | 'error';
 /** Something that can be done about what a toast says, such as taking it back. */
 export interface ToastAction { label: string; run(): void; }
+/** A message shown for a moment, with what can be done about it, if anything. */
 export interface Toast { id: number; message: string; kind: ToastKind; action?: ToastAction; }
+/** An error kept in the list of errors, with when it happened. */
 export interface ErrorEntry { id: number; time: Date; message: string; }
 
 /** How long a message that is not an error stays up; one that offers something to do stays longer. */
 export const TOAST_MS = 4500;
+/** How long a message that offers something to do stays up. */
 export const ACTION_TOAST_MS = 9000;
 
 /**
@@ -36,6 +40,7 @@ const dot: Record<ToastKind, string> = { ok: 'bg-keep', info: 'bg-brand', error:
 
 interface ToasterProps { readonly toasts: Toast[]; readonly remove: (id: number) => void; }
 
+/** The messages shown now, newest last, each read out by a screen reader as it is added. */
 export function Toaster({ toasts, remove }: ToasterProps) {
   return (
     // On a phone the messages run the width of the screen, above its foot; on a wide screen they sit in the corner.

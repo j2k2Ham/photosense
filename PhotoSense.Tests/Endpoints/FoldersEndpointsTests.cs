@@ -1,7 +1,7 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using PhotoSense.Domain.Services;
-using PhotoSense.Api.Endpoints;
 
 namespace PhotoSense.Tests.Endpoints;
 
@@ -9,9 +9,9 @@ namespace PhotoSense.Tests.Endpoints;
 public class FoldersEndpointsTests
 {
     private readonly Mock<IFolderBrowser> _browser = new();
-    private readonly FoldersEndpoints _functions;
+    private readonly AboutApi _functions;
 
-    public FoldersEndpointsTests() => _functions = new FoldersEndpoints(_browser.Object);
+    public FoldersEndpointsTests() => _functions = new AboutApi(new TestApi(s => s.AddSingleton(_browser.Object)));
 
     [Test]
     public async Task Lists_The_Folders_Inside_The_One_Asked_For(CancellationToken ct)

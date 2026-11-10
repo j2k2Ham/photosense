@@ -1,10 +1,12 @@
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using PhotoSense.Contracts.Duplicates;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
-using PhotoSense.Api.Scanning;
 using static PhotoSense.Tests.TestPhotos;
 
 namespace PhotoSense.Tests.Endpoints;
@@ -21,13 +23,11 @@ public class ScanGroupingFacadeTests
         return new DuplicateGroup(keeper, members);
     }
 
-    private static ScanGroupingFacade Facade(IReadOnlyList<DuplicateGroup> duplicates, IReadOnlyList<DuplicateGroup>? similar = null)
+    private static GroupPages Facade(IReadOnlyList<DuplicateGroup> duplicates, IReadOnlyList<DuplicateGroup>? similar = null)
     {
-        var analysis = new Mock<IDuplicateAnalysisService>();
-        analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis(duplicates, similar ?? []));
         var places = new Mock<IPlaceNameResolver>();
         places.Setup(p => p.Describe(35.2, -80.8)).Returns("Charlotte, North Carolina, US");
-        return new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(places.Object), new PhotoRanking());
+        return new GroupPages(duplicates, similar ?? [], places.Object);
     }
 
     [Test]
@@ -41,7 +41,7 @@ public class ScanGroupingFacadeTests
             ]);
         group.Keeper.Latitude = 35.2; group.Keeper.Longitude = -80.8; group.Keeper.CameraModel = "iPhone";
 
-        var page = await Facade([group]).BuildAsync(similar: false, q: null, hideKept: false, page: 1, pageSize: 10, default);
+        var page = await Facade([group]).BuildAsync(similar: false, q: null, hideKept: false, page: 1, pageSize: 10, ct);
 
         await Assert.That((page.Mode, page.Page, page.PageSize, page.Total, page.TotalPages)).IsEqualTo(("duplicates", 1, 10, 1, 1));
         await Assert.That((page.RemovableCount, page.ReclaimableBytes)).IsEqualTo((2, 9_000L));
@@ -61,32 +61,32 @@ public class ScanGroupingFacadeTests
     {
         var facade = Facade(Enumerable.Range(0, 5).Select(i => Group($"IMG_{i}", copies: 2)).ToList());
 
-        var last = await facade.BuildAsync(false, null, false, page: 3, pageSize: 2, default);
+        var last = await facade.BuildAsync(false, null, false, page: 3, pageSize: 2, ct);
         await Assert.That((last.Page, last.Total, last.TotalPages)).IsEqualTo((3, 5, 3));
         await Assert.That(last.Items.Single().Keeper.FileName).IsEqualTo("IMG_4.HEIC"); // 5 groups => pages: 2,2,1
         await Assert.That((last.RemovableCount, last.ReclaimableBytes)).IsEqualTo((10, 10_000L));
 
-        await Assert.That((await facade.BuildAsync(false, null, false, page: 4, pageSize: 2, default)).Items).IsEmpty();
+        await Assert.That((await facade.BuildAsync(false, null, false, page: 4, pageSize: 2, ct)).Items).IsEmpty();
     }
 
     [Test]
     public async Task Search_Matches_File_Names_And_Folders_Of_Keeper_Or_Copies(CancellationToken ct)
     {
         var facade = Facade([Group("IMG_1", 1), Group("DSC_2", 1)]);
-        await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).Items.Single().Keeper.FileName).IsEqualTo("DSC_2.HEIC");
-        await Assert.That((await facade.BuildAsync(false, "img_1 (1)", false, 1, 10, default)).Items.Single().Keeper.FileName).IsEqualTo("IMG_1.HEIC");
-        await Assert.That((await facade.BuildAsync(false, "BACKUP", false, 1, 10, default)).Total).IsEqualTo(2);
-        await Assert.That((await facade.BuildAsync(false, "nothing like this", false, 1, 10, default)).Total).IsEqualTo(0);
+        await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, ct)).Items.Single().Keeper.FileName).IsEqualTo("DSC_2.HEIC");
+        await Assert.That((await facade.BuildAsync(false, "img_1 (1)", false, 1, 10, ct)).Items.Single().Keeper.FileName).IsEqualTo("IMG_1.HEIC");
+        await Assert.That((await facade.BuildAsync(false, "BACKUP", false, 1, 10, ct)).Total).IsEqualTo(2);
+        await Assert.That((await facade.BuildAsync(false, "nothing like this", false, 1, 10, ct)).Total).IsEqualTo(0);
         // Totals describe what a bulk removal would take, whatever is being searched for.
-        await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, default)).RemovableCount).IsEqualTo(2);
+        await Assert.That((await facade.BuildAsync(false, "dsc_", false, 1, 10, ct)).RemovableCount).IsEqualTo(2);
     }
 
     [Test]
     public async Task Reviewed_Groups_Can_Be_Hidden(CancellationToken ct)
     {
         var facade = Facade([Group("IMG_1", 2, allKept: true), Group("IMG_2", 1)]);
-        await Assert.That((await facade.BuildAsync(false, null, hideKept: false, 1, 10, default)).Total).IsEqualTo(2);
-        var hidden = await facade.BuildAsync(false, null, hideKept: true, 1, 10, default);
+        await Assert.That((await facade.BuildAsync(false, null, hideKept: false, 1, 10, ct)).Total).IsEqualTo(2);
+        var hidden = await facade.BuildAsync(false, null, hideKept: true, 1, 10, ct);
         await Assert.That(hidden.Items.Single().Keeper.FileName).IsEqualTo("IMG_2.HEIC");
         await Assert.That(hidden.RemovableCount).IsEqualTo(1);
     }
@@ -95,11 +95,30 @@ public class ScanGroupingFacadeTests
     public async Task Similar_Groups_Are_Listed_Separately_And_Never_Counted_As_Removable(CancellationToken ct)
     {
         var facade = Facade([Group("IMG_1", 1)], similar: [Group("IMG_9", 3, MatchKind.Similar)]);
-        var page = await facade.BuildAsync(similar: true, null, false, 1, 10, default);
+        var page = await facade.BuildAsync(similar: true, null, false, 1, 10, ct);
         await Assert.That(page.Mode).IsEqualTo("similar");
         var group = page.Items.Single();
         await Assert.That(group.Keeper.FileName).IsEqualTo("IMG_9.HEIC");
         foreach (var m in group.Members) await Assert.That(m.Match).IsEqualTo("similar");
         await Assert.That(page.RemovableCount).IsEqualTo(1);
+    }
+}
+
+/// <summary>Pages of the groups a scan found, asked for at /scan/groups as the Clean up screens ask, and read back.</summary>
+internal sealed class GroupPages(IReadOnlyList<DuplicateGroup> duplicates, IReadOnlyList<DuplicateGroup> similar, IPlaceNameResolver places)
+{
+    private readonly ScanApi _api = new(new TestApi(s =>
+    {
+        var analysis = new Mock<IDuplicateAnalysisService>();
+        analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis(duplicates, similar));
+        s.AddSingleton(analysis.Object).AddSingleton(places).AddSingleton(new PhotoRanking());
+    }));
+
+    /// <summary>One page of the groups, as the page is sent it.</summary>
+    public async Task<DuplicateGroupsPageDto> BuildAsync(bool similar, string? q, bool hideKept, int page, int pageSize, CancellationToken ct)
+    {
+        var query = $"scan/groups?mode={(similar ? "similar" : "duplicates")}&hideKept={(hideKept ? "true" : "false")}&page={page}&pageSize={pageSize}"
+            + (q is null ? "" : "&q=" + Uri.EscapeDataString(q));
+        return JsonSerializer.Deserialize<DuplicateGroupsPageDto>((await _api.GetDuplicateGroupsAsync(Http.Get(query).FromClient(), ct)).Bytes())!;
     }
 }

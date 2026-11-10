@@ -17,9 +17,4 @@
     <PackageReference Include="MetadataExtractor" Version="2.8.1" />
     <PackageReference Include="LiteDB" Version="5.0.21" />
   </ItemGroup>
-  <ItemGroup>
-    <!-- What is only used inside this project is internal; the tests reach it, and Moq makes its stand-ins of it. -->
-    <InternalsVisibleTo Include="PhotoSense.Tests" />
-    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
-  </ItemGroup>
 </Project>

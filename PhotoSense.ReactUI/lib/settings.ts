@@ -6,10 +6,12 @@ export interface AppSettings {
   eraseAskTwice: boolean;
 }
 
+/** The settings until the person changes them. */
 export const defaultAppSettings: AppSettings = { eraseAskTwice: true };
 
 const KEY = 'photosense-settings';
 
+/** The settings as this browser remembers them, with the default of any added since. */
 export function loadAppSettings(): AppSettings {
   // A setting added since the others were saved has its default.
   try { return { ...defaultAppSettings, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }; } catch { return defaultAppSettings; }

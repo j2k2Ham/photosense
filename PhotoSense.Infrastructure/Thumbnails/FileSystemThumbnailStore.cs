@@ -3,7 +3,7 @@ using PhotoSense.Domain.Services;
 namespace PhotoSense.Infrastructure.Thumbnails;
 
 /// <summary>Previews kept as JPEG files in a folder of PhotoSense's own, named by the hash of the file each shows.</summary>
-internal sealed class FileSystemThumbnailStore : IThumbnailStore
+public sealed class FileSystemThumbnailStore : IThumbnailStore
 {
     private readonly string _root;
 

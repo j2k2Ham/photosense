@@ -37,9 +37,11 @@ jobs:
 
       - name: Install the tests and their browsers
         working-directory: e2e
+        # A browser's download now and then stops short and never ends, so each try is given five minutes, three times.
         run: |
           npm ci
-          npx playwright install --with-deps chromium webkit
+          for try in 1 2 3; do timeout 300 npx playwright install --with-deps chromium webkit && exit 0; done
+          exit 1
 
       - name: Make the program the tests drive
         working-directory: e2e

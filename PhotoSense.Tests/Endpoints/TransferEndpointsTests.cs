@@ -1,5 +1,4 @@
 using System.Net;
-using PhotoSense.Api.Endpoints;
 using PhotoSense.Api.Http;
 
 namespace PhotoSense.Tests.Endpoints;
@@ -7,7 +6,8 @@ namespace PhotoSense.Tests.Endpoints;
 /// <summary>Each program answers its own half of sending photos, and only to PhotoSense's own page.</summary>
 public sealed class TransferEndpointsTests
 {
-    private static readonly TransferEndpoints Neither = new();
+    // A program that has neither half, as no host registers one without the other's part.
+    private static readonly TransferApi Neither = new(new TestApi());
 
     /// <summary>Each address of each half, asked of a program that has neither, with what it says.</summary>
     public static IEnumerable<Func<(Func<ApiRequest, CancellationToken, Task<ApiResponse>> Ask, ApiRequest Request, string Why)>> AskedOfTheWrongProgram()
@@ -32,21 +32,21 @@ public sealed class TransferEndpointsTests
         await Assert.That((answer.StatusCode, answer.Text())).IsEqualTo((HttpStatusCode.NotFound, why));
     }
 
-    /// <summary>Each address of either half that changes something.</summary>
-    public static IEnumerable<Func<(Func<ApiRequest, CancellationToken, Task<ApiResponse>> Ask, string Path)>> Changes()
+    /// <summary>Each address of either half that changes something or names the phones about, with the request it takes.</summary>
+    public static IEnumerable<Func<(Func<ApiRequest, CancellationToken, Task<ApiResponse>> Ask, ApiRequest Request)>> Guarded()
     {
-        yield return () => (Neither.StartSendingAsync, "send/start");
-        yield return () => (Neither.ConfirmSendingAsync, "send/confirm");
-        yield return () => (Neither.StopSendingAsync, "send/stop");
-        yield return () => (Neither.DeleteSentAsync, "send/delete-sent");
-        yield return () => (Neither.PhonesAsync, "phones");
-        yield return () => (Neither.StartReceivingAsync, "receive/start");
-        yield return () => (Neither.ConfirmReceivingAsync, "receive/confirm");
-        yield return () => (Neither.StopReceivingAsync, "receive/stop");
+        yield return () => (Neither.StartSendingAsync, Http.Post("send/start"));
+        yield return () => (Neither.ConfirmSendingAsync, Http.Post("send/confirm"));
+        yield return () => (Neither.StopSendingAsync, Http.Post("send/stop"));
+        yield return () => (Neither.DeleteSentAsync, Http.Post("send/delete-sent"));
+        yield return () => (Neither.PhonesAsync, Http.Get("phones"));
+        yield return () => (Neither.StartReceivingAsync, Http.Post("receive/start"));
+        yield return () => (Neither.ConfirmReceivingAsync, Http.Post("receive/confirm"));
+        yield return () => (Neither.StopReceivingAsync, Http.Post("receive/stop"));
     }
 
     [Test]
-    [MethodDataSource(nameof(Changes))]
-    public async Task Another_Page_Is_Refused_Before_Anything_Else(Func<ApiRequest, CancellationToken, Task<ApiResponse>> ask, string path, CancellationToken ct)
-        => await Assert.That((await ask(Http.Post(path), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+    [MethodDataSource(nameof(Guarded))]
+    public async Task Another_Page_Is_Refused_Before_Anything_Else(Func<ApiRequest, CancellationToken, Task<ApiResponse>> ask, ApiRequest request, CancellationToken ct)
+        => await Assert.That((await ask(request, ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 }

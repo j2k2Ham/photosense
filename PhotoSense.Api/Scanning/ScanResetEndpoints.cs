@@ -1,4 +1,5 @@
 using System.Net;
+using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;

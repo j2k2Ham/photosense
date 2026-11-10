@@ -15,7 +15,7 @@ public class LiteDbMediaDetailsStoreTests
     public async Task Keeps_What_Was_Read_From_Each_File_And_Hands_It_Back_By_Path_Or_By_Folder(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        var store = new LiteDbMediaDetailsStore(db);
+        var store = db.MediaDetails();
         await Assert.That(store.At(In("IMG_1.JPG"))).IsNull();
         await Assert.That(store.Under(Root)).IsEmpty();
 
@@ -42,7 +42,7 @@ public class LiteDbMediaDetailsStoreTests
         // Kept again for the same path, it takes the place of what was there; another store on the database sees it.
         var changed = picture with { SizeBytes = 7, Details = picture.Details with { Width = 1 } };
         store.Save([changed]);
-        await Assert.That(new LiteDbMediaDetailsStore(db).At(In("IMG_1.JPG"))).IsEqualTo(changed);
+        await Assert.That(db.MediaDetails().At(In("IMG_1.JPG"))).IsEqualTo(changed);
         await Assert.That(store.Under(Root).Count).IsEqualTo(2);
     }
 }

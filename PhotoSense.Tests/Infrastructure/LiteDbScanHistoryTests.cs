@@ -11,7 +11,7 @@ public class LiteDbScanHistoryTests
     public async Task Hands_Back_The_Latest_Scans_Newest_First(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        var history = new LiteDbScanHistory(db);
+        var history = db.ScanHistory();
         await Assert.That(await history.RecentAsync(10, ct)).IsEmpty();
 
         var day = new DateTime(2026, 10, 7, 0, 0, 0, DateTimeKind.Utc);
@@ -25,6 +25,6 @@ public class LiteDbScanHistoryTests
         await Assert.That((await history.RecentAsync(take: 2, ct)).Select(s => s.Read)).IsEquivalentTo(new[] { 1, 2 }, CollectionOrdering.Matching);
 
         // Another store on the same database finds what the first one kept.
-        await Assert.That((await new LiteDbScanHistory(db).RecentAsync(10, ct)).Count).IsEqualTo(3);
+        await Assert.That((await db.ScanHistory().RecentAsync(10, ct)).Count).IsEqualTo(3);
     }
 }

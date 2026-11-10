@@ -3,7 +3,7 @@ using System.Net.Http.Headers;
 namespace PhotoSense.Api.Endpoints;
 
 /// <summary>Tells requests from PhotoSense's own page from those any other web page could make a browser send.</summary>
-internal static class RequestGuard
+public static class RequestGuard
 {
     /// <summary>The header only the page sends, which no other web page can make a browser add.</summary>
     public const string ClientHeader = "x-photosense-client";

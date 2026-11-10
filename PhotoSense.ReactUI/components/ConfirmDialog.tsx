@@ -18,6 +18,7 @@ interface Props {
   onCancel(): void;
 }
 
+/** A question asked before something is done, with a button that says exactly what happens; Escape puts it away unless it is busy. */
 export function ConfirmDialog({ title, confirmLabel, busy, tone = 'rose', small = false, ready = true, note, children, onConfirm, onCancel }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onCancel(); };

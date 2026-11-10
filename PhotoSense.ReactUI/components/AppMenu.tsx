@@ -24,6 +24,7 @@ const themes: { id: Theme; name: string; swatch: string }[] = [
   { id: 'light', name: 'Light', swatch: '#f5f7f9' },
 ];
 
+/** The menu in the bar: the theme, errors, the folders scanned, settings, help, About, receiving photos and Delete permanently. */
 export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders, onClearResults, onSettings, onHelp, onAbout, onReceive, onDeletePermanently, onClose }: Props) {
   const ref = useDismiss<HTMLDivElement>(onClose);
   // Choosing something from the menu puts the menu away.

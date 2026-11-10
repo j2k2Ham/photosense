@@ -1,11 +1,10 @@
 using PhotoSense.Domain.Configuration;
-using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
-namespace PhotoSense.Application.Scanning;
+namespace PhotoSense.Domain.Services;
 
 /// <summary>The pictures and videos under a folder, as a scan and Organize take them in.</summary>
-internal static class PhotoFileEnumerator
+public static class PhotoFileEnumerator
 {
     /// <summary>Whether a scan takes the file in: a picture or a video.</summary>
     public static bool IsSupported(string path) => MediaFiles.IsScanned(path);

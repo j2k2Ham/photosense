@@ -1,8 +1,7 @@
-using PhotoSense.Application.Scanning.Services;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using static PhotoSense.Tests.TestPhotos;
 
-namespace PhotoSense.Tests.Application;
+namespace PhotoSense.Tests.Domain;
 
 /// <summary>Telling the same shot from a look-alike and from an unrelated picture.</summary>
 public class PhotoMatcherTests

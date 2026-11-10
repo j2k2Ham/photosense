@@ -5,7 +5,7 @@ using PhotoSense.Application.Organizing;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
-using PhotoSense.Infrastructure.Deletion;
+using PhotoSense.Application.Removal;
 using PhotoSense.Infrastructure.Hashing;
 using PhotoSense.Infrastructure.Persistence;
 
@@ -71,9 +71,9 @@ internal sealed class OrganizeFixture : IDisposable
     /// <summary>Plans moves over the library.</summary>
     public OrganizePlanner Planner { get; }
     /// <summary>The changes, kept in a database in memory.</summary>
-    public LiteDbOrganizeBatchStore Batches { get; }
+    public IOrganizeBatchStore Batches { get; }
     /// <summary>What Organize read, kept in a database in memory.</summary>
-    public LiteDbMediaDetailsStore Details { get; }
+    public IMediaDetailsStore Details { get; }
     /// <summary>The disk the moves go through; a test can make it fail.</summary>
     public FailingDisk Disk { get; } = new();
     /// <summary>The changes moves are made through.</summary>
@@ -84,12 +84,12 @@ internal sealed class OrganizeFixture : IDisposable
     public OrganizeFixture()
     {
         _audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
-        Details = new LiteDbMediaDetailsStore(_db);
+        Details = _db.MediaDetails();
         Library = new OrganizeLibrary(Repo, Reader, Hasher, Details, Disk);
         Places = new PlaceLookup(Resolver.Object);
         Finder = new CompanionFileFinder(Disk, ContentAsId);
         Planner = new OrganizePlanner(Library, Finder, Places, Disk);
-        Batches = new LiteDbOrganizeBatchStore(_db);
+        Batches = _db.Batches();
         Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);
     }
 

@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace PhotoSense.Application.Scanning.Services;
+namespace PhotoSense.Domain.ValueObjects;
 
 /// <summary>
 /// How iOS names the files of one item. For the picture IMG_1234 it can write:

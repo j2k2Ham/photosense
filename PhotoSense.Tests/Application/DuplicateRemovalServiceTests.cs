@@ -7,7 +7,7 @@ using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
-using PhotoSense.Infrastructure.Deletion;
+using PhotoSense.Application.Removal;
 using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Application;
@@ -24,7 +24,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
 
     public DuplicateRemovalServiceTests()
     {
-        _changes = new FileChanges(new LiteDbOrganizeBatchStore(_db), _repo, Mock.Of<IAuditRepository>(), _disk);
+        _changes = new FileChanges(_db.Batches(), _repo, Mock.Of<IAuditRepository>(), _disk);
         _service = Service(new CompanionFileFinder(_disk, _ => null));
     }
 

@@ -160,7 +160,20 @@ public sealed class PairingTests
     private async Task<(Task Phone, Task<Linked> Computer)> WithPhoneAsync(Func<Stream, Task> phone, CancellationToken ct)
     {
         var (near, far) = await Loopback.PairAsync(ct);
-        return (phone(near), Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, Answering("computer"), CancellationToken.None)));
+        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, Answering("computer"), CancellationToken.None));
+        return (Holding(near, phone(near), computer), computer);
+    }
+
+    // The phone's end stays open until the computer is done with it, as a real phone's does. Let go of sooner, the
+    // connection could be closed under the computer while it still had something to read.
+    private static async Task Holding(Stream near, Task phone, Task computer)
+    {
+        try { await phone; }
+        finally
+        {
+            await Task.WhenAny(computer);
+            await near.DisposeAsync();
+        }
     }
 
     [Test]

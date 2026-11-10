@@ -10,7 +10,7 @@ namespace PhotoSense.Infrastructure.Transfer;
 /// is told of all the same.
 /// </summary>
 /// <param name="port">The port to wait on when it is free.</param>
-internal sealed class TcpTransferListener(int port = TcpTransferListener.Port) : ITransferListener
+public sealed class TcpTransferListener(int port = TcpTransferListener.Port) : ITransferListener
 {
     /// <summary>The port a phone waits on, where a computer looks for it through a cable.</summary>
     public const int Port = 47615;

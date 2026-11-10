@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { THEME_KEY } from './themeKey';
 
+/** The page's colours: dark or light. */
 export type Theme = 'dark' | 'light';
 
 

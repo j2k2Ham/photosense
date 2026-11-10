@@ -16,7 +16,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// sends to the phone's own bin. Nothing is ever copied onto the phone: photos are copied to a computer.
 /// </para>
 /// </summary>
-internal sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
 {
     /// <summary>Where what is removed from the phone's storage as a whole waits, as Android shows it: inside Pictures.</summary>
     public const string RemovedHere = "PhotoSense Removed";

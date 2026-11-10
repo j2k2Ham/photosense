@@ -3,7 +3,7 @@ using PhotoSense.Domain.Services;
 namespace PhotoSense.Infrastructure.Library;
 
 /// <summary>A phone has no other program PhotoSense can hand a photo to yet.</summary>
-internal sealed class PhoneViewer : ISystemViewer
+public sealed class PhoneViewer : ISystemViewer
 {
     /// <summary>Refuses: there is no other app to open it in yet.</summary>
     /// <exception cref="InvalidOperationException">Always.</exception>

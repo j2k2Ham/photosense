@@ -1,11 +1,9 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using PhotoSense.Api;
+using Microsoft.AspNetCore.Builder;
 using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Server;
 
-/// <summary>The service's registrations, with a data folder of the test's own.</summary>
+/// <summary>The program as it is built to start, with a data folder of the test's own.</summary>
 internal sealed class ServerFixture : IDisposable
 {
     /// <summary>The fixture's own folder, deleted when it ends.</summary>
@@ -14,24 +12,39 @@ internal sealed class ServerFixture : IDisposable
     public string DatabasePath => Path.Combine(Root.FullName, "not-there-yet", "photosense.db");
     /// <summary>Where the previews go.</summary>
     public string ThumbnailPath => Path.Combine(Root.FullName, "thumbnails");
-    /// <summary>The service's registrations.</summary>
-    public ServiceProvider Services { get; }
+    /// <summary>The program, built but not started.</summary>
+    public WebApplication Program { get; }
+    /// <summary>The program's services.</summary>
+    public IServiceProvider Services => Program.Services;
 
-    public ServerFixture()
+    /// <summary>The program with its data in the fixture's folder, and any other settings given, as on the command line.</summary>
+    public ServerFixture(params string[] settings)
+        => Program = PhotoSenseServer.Build(
+        [
+            $"--PhotoStorage:DatabasePath={DatabasePath}",
+            $"--PhotoStorage:ThumbnailPath={ThumbnailPath}",
+            "--PhotoStorage:KeepFormat=WidelyCompatible",
+            .. settings,
+        ], Root.FullName);
+
+    /// <summary>A path in the fixture's folder.</summary>
+    public string In(params string[] parts) => Path.Combine([Root.FullName, .. parts]);
+
+    /// <summary>The program, started on a port of its own.</summary>
+    public static async Task<ServerFixture> StartedAsync(CancellationToken ct)
     {
-        var settings = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
-        {
-            ["PhotoStorage:DatabasePath"] = DatabasePath,
-            ["PhotoStorage:ThumbnailPath"] = ThumbnailPath,
-            ["PhotoStorage:KeepFormat"] = "WidelyCompatible",
-        }).Build();
-        Services = new ServiceCollection().AddLogging().AddPhotoSenseComputer(settings).AddPhotoSenseApi().BuildServiceProvider();
+        var started = new ServerFixture("--urls=http://127.0.0.1:0");
+        await started.Program.StartAsync(ct);
+        return started;
     }
+
+    /// <summary>An address of the program, once started.</summary>
+    public Uri At(string pathAndQuery) => new(new Uri(Program.Urls.Single()), pathAndQuery);
 
     public void Dispose()
     {
         // The database file is let go of first, so that the folder can go.
-        Services.Dispose();
+        ((IDisposable)Program).Dispose();
         TestFiles.Remove(Root);
     }
 }

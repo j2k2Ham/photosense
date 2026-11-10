@@ -64,7 +64,8 @@ public sealed class PageClient(Context context) : WebViewClient
         var headers = request.RequestHeaders?.Select(h => new KeyValuePair<string, string>(h.Key, h.Value)).ToList() ?? [];
         var body = BodyBridge.Take(headers.FirstOrDefault(h => h.Key.Equals(BodyBridge.Header, StringComparison.OrdinalIgnoreCase)).Value);
         // Android asks for the answer on a thread of its own and waits for it there, with no way of saying it has given up:
-        // the request is answered in full, and its waiting is Android's own.
+        // the request is answered in full, and its waiting is Android's own. Blocking here is an exception Jamie accepted
+        // (CLAUDE.md rule 10): the thread is WebView's, never the main one, so nothing it waits for needs it.
         PhoneApp.Ready.GetAwaiter().GetResult();
         return PhoneApp.Router.AnswerAsync(request.Method ?? "GET", url, headers, body, CancellationToken.None).GetAwaiter().GetResult();
     }

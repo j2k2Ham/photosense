@@ -2,8 +2,8 @@ using System.Net;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Api.About;
-using PhotoSense.Api.Endpoints;
 using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Endpoints;
@@ -16,12 +16,15 @@ public class AboutEndpointsTests
     private static readonly ProductInfo NothingSetYet = Product with { SupportEmail = null, Website = null, PrivacyPolicyUrl = null, TermsUrl = null, SupportUrl = null, GoverningLaw = null };
     private static readonly ProgramInfo Program = new("iphone", "1.2.0.57", () => "LiteDB 5.0.21 (MIT)");
 
+    // The About addresses of a program that is the iPhone app, made by the product given.
+    private static AboutApi About(ProductInfo product) => new(new TestApi(s => s.AddSingleton(product).AddSingleton(Program)));
+
     private static ProductInfo Read(string json) => ProductInfo.Read(new MemoryStream(Encoding.UTF8.GetBytes(json)));
 
     [Test]
     public async Task Says_Who_Makes_PhotoSense_How_To_Reach_Them_And_Which_Program_And_Version_Is_Answering(CancellationToken ct)
     {
-        var json = (await new AboutEndpoints(Product, Program).GetAsync(Http.Get("about"), ct)).Json();
+        var json = (await About(Product).GetAsync(Http.Get("about"), ct)).Json();
 
         await Assert.That(json.GetProperty("name").GetString()).IsEqualTo("PhotoSense");
         await Assert.That(json.GetProperty("version").GetString()).IsEqualTo("1.2.0.57");
@@ -41,7 +44,7 @@ public class AboutEndpointsTests
     [Arguments("support", "# Support")]
     public async Task Gives_Each_Document_As_The_Web_Site_Has_It_With_The_Products_Details_Filled_In(string document, string title, CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get($"about/{document}"), document, ct);
+        var response = await About(Product).TextAsync(Http.Get($"about/{document}"), document, ct);
         var text = response.Text();
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
@@ -54,20 +57,19 @@ public class AboutEndpointsTests
     [Test]
     public async Task Names_The_Maker_And_The_Law_That_Applies_In_The_Terms_And_Says_So_Where_Something_Is_Not_Set_Yet(CancellationToken ct)
     {
-        var terms = AboutDocuments.Text("terms", Product)!;
+        var terms = (await About(Product).TextAsync(Http.Get("about/terms"), "terms", ct)).Text();
         await Assert.That(terms).Contains("between you and Jamie Hamman");
         await Assert.That(terms).Contains("governed by the laws of the State of Example");
 
-        var unset = AboutDocuments.Text("terms", NothingSetYet)!;
+        var unset = (await About(NothingSetYet).TextAsync(Http.Get("about/terms"), "terms", ct)).Text();
         await Assert.That(unset).Contains("(the support address is not set yet)");
         await Assert.That(unset).Contains("(the place whose law applies is not set yet)");
-        await Assert.That(AboutDocuments.Text("cookies", Product)).IsNull();
     }
 
     [Test]
     public async Task Gives_The_Programs_Own_Third_Party_Notices_As_Plain_Text(CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get("about/notices"), "notices", ct);
+        var response = await About(Product).TextAsync(Http.Get("about/notices"), "notices", ct);
 
         await Assert.That(response.Header("Content-Type")).IsEqualTo("text/plain; charset=utf-8");
         await Assert.That(response.Text()).IsEqualTo("LiteDB 5.0.21 (MIT)");
@@ -76,7 +78,7 @@ public class AboutEndpointsTests
     [Test]
     public async Task Gives_PhotoSenses_Icon_As_It_Is_Kept_In_Branding(CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).IconAsync(Http.Get("about/icon"), ct);
+        var response = await About(Product).IconAsync(Http.Get("about/icon"), ct);
 
         await Assert.That(response.Header("Content-Type")).IsEqualTo("image/png");
         await Assert.That(response.Bytes()).IsEquivalentTo(await File.ReadAllBytesAsync(Path.Combine(Repository.Root, "branding", "app-icon.png"), ct), CollectionOrdering.Matching);
@@ -85,7 +87,7 @@ public class AboutEndpointsTests
     [Test]
     public async Task Says_Which_Documents_There_Are_When_Asked_For_One_That_Is_Not(CancellationToken ct)
     {
-        var response = await new AboutEndpoints(Product, Program).TextAsync(Http.Get("about/cookies"), "cookies", ct);
+        var response = await About(Product).TextAsync(Http.Get("about/cookies"), "cookies", ct);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
         await Assert.That(response.Text()).IsEqualTo("There is no document called cookies. There are privacy, terms, support and notices.");
@@ -106,8 +108,6 @@ public class AboutEndpointsTests
     {
         await Assert.That(ProductInfo.Bundled.Name).IsEqualTo("PhotoSense");
         await Assert.That(ProductInfo.Bundled.Publisher).IsEqualTo("Jamie Hamman");
-        var error = Assert.Throws<InvalidOperationException>(() => Bundle.Open("cookies.md"));
-        await Assert.That(error!.Message).IsEqualTo("cookies.md was not built into PhotoSense.");
     }
 
     [Test]

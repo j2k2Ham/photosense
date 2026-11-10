@@ -1,16 +1,14 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
 using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
-using PhotoSense.Api.Endpoints;
-using PhotoSense.Api.Scanning;
-using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Endpoints;
 
@@ -18,17 +16,21 @@ namespace PhotoSense.Tests.Endpoints;
 public sealed class ScanAndStatusEndpointsTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-scanapi-");
-    private readonly InMemoryScanProgressStore _progress = new();
+    private readonly InMemoryScanProgressStore _progress = new(new TestClock());
 
     public void Dispose() => TestFiles.Remove(_root);
 
     // ---- forgetting earlier results
 
-    private (ScanResetEndpoints Reset, InMemoryPhotoRepository Repo, InMemoryThumbnailStore Thumbnails) Resetter()
+    // The scanning addresses, with the test's progress and whatever else it gives.
+    private ScanApi Scans(Action<IServiceCollection>? with = null)
+        => new(new TestApi(s => { s.AddSingleton<IScanProgressStore>(_progress); with?.Invoke(s); }));
+
+    private (ScanApi Reset, InMemoryPhotoRepository Repo, InMemoryThumbnailStore Thumbnails) Resetter()
     {
         var repo = new InMemoryPhotoRepository();
         var thumbnails = new InMemoryThumbnailStore();
-        return (new ScanResetEndpoints(repo, thumbnails, _progress), repo, thumbnails);
+        return (Scans(s => s.AddSingleton<IPhotoRepository>(repo).AddSingleton<IThumbnailStore>(thumbnails)), repo, thumbnails);
     }
 
     [Test]
@@ -90,7 +92,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         _progress.SetTotals("scan-1", 4, 2);
         _progress.IncrementProcessed("scan-1", primary: true);
         _progress.IncrementProcessed("scan-1", primary: false);
-        var function = new ScanProgressEndpoints(_progress);
+        var function = Scans();
 
         var json = (await function.GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json();
         await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(),
@@ -119,7 +121,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         progress.Expect("scan-1", 780);
         clock.Now += TimeSpan.FromMinutes(1);
 
-        var json = (await new ScanProgressEndpoints(progress, clock).GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json();
+        var json = (await new ScanApi(new TestApi(s => s.AddSingleton<IScanProgressStore>(progress).AddSingleton<TimeProvider>(clock))).GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json();
 
         await Assert.That(json.GetProperty("secondsLeft").GetDouble()).IsEqualTo(720);
     }
@@ -133,7 +135,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         _progress.SetTotals("scan-1", 2, 0);
         _progress.ScanCompleted("scan-1");
 
-        var json = (await new ScanStatusEndpoints(repo, _progress).GetStatusAsync(Http.Get("scan/status"), ct)).Json();
+        var json = (await Scans(s => s.AddSingleton<IPhotoRepository>(repo)).GetStatusAsync(Http.Get("scan/status"), ct)).Json();
 
         await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(), json.GetProperty("totalPhotos").GetInt32())).IsEqualTo(("scan-1", 2, 1));
         await Assert.That(json.GetProperty("completed").ValueKind).IsNotEqualTo(System.Text.Json.JsonValueKind.Null);
@@ -145,7 +147,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     public async Task Health_Says_Which_Folders_Are_Configured(string? primary, string? secondary, bool hasPrimary, bool hasSecondary, CancellationToken ct)
     {
         var options = Options.Create(new PhotoStorageOptions { PrimaryPath = primary ?? "", SecondaryPath = secondary ?? "" });
-        var json = (await new HealthEndpoints(options).GetAsync(Http.Get("health"), ct)).Json();
+        var json = (await new AboutApi(new TestApi(s => s.AddSingleton(options))).HealthAsync(Http.Get("health"), ct)).Json();
         await Assert.That((json.GetProperty("status").GetString(), json.GetProperty("storagePrimaryConfigured").GetBoolean(), json.GetProperty("storageSecondaryConfigured").GetBoolean())).IsEqualTo(("ok", hasPrimary, hasSecondary));
     }
 
@@ -161,7 +163,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     {
         var analysis = new Mock<IDuplicateAnalysisService>();
         analysis.Setup(a => a.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new DuplicateAnalysis([], []));
-        var function = new DuplicateGroupsEndpoints(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+        var function = Scans(s => s.AddSingleton(analysis.Object));
 
         var json = (await function.GetDuplicateGroupsAsync(Http.Get(url).FromClient(), ct)).Json();
 
@@ -174,7 +176,7 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     {
         var analysis = new Mock<IDuplicateAnalysisService>();
         analysis.Setup(a => a.GetAsync(It.Is<CancellationToken>(t => t.IsCancellationRequested))).ThrowsAsync(new OperationCanceledException());
-        var function = new DuplicateGroupsEndpoints(new ScanGroupingFacade(analysis.Object, new PhotoDtoMapper(Mock.Of<IPlaceNameResolver>()), new PhotoRanking()));
+        var function = Scans(s => s.AddSingleton(analysis.Object));
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => function.GetDuplicateGroupsAsync(Http.Get("scan/groups").FromClient(), new CancellationToken(canceled: true)));
     }
@@ -184,18 +186,23 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
     {
         var places = new Mock<IPlaceNameResolver>();
         places.Setup(p => p.Describe(35.2, -80.8)).Returns("Charlotte, North Carolina, US");
-        var mapper = new PhotoDtoMapper(places.Object);
         var located = TestPhotos.Make("a.jpg"); located.Latitude = 35.2; located.Longitude = -80.8;
         var half = TestPhotos.Make("b.jpg"); half.Latitude = 35.2;
         var other = TestPhotos.Make("c.jpg"); other.Longitude = -80.8;
         var video = TestPhotos.Video("clip.MOV"); video.DurationSeconds = 12.5;
+        var members = new[] { half, other, TestPhotos.Make("d.jpg"), video, new PhotoSense.Domain.Entities.Photo { SourcePath = "e.jpg", FileName = "e.jpg" },
+            new PhotoSense.Domain.Entities.Photo { SourcePath = "", FileName = "f.jpg" } };
+        var group = new DuplicateGroup(located, members.Select(m => new DuplicateMember(m, MatchKind.Identical, 0, 0)).ToList());
 
-        await Assert.That(mapper.Map(located).PlaceName).IsEqualTo("Charlotte, North Carolina, US");
-        await Assert.That(mapper.Map(half).PlaceName).IsNull();
-        await Assert.That(mapper.Map(other).PlaceName).IsNull();
-        await Assert.That(mapper.Map(TestPhotos.Make("d.jpg")).PlaceName).IsNull();
-        await Assert.That((mapper.Map(video).IsVideo, mapper.Map(video).DurationSeconds, mapper.Map(video).Format)).IsEqualTo((true, 12.5, "MOV"));
-        await Assert.That(mapper.Map(new PhotoSense.Domain.Entities.Photo { SourcePath = "a.jpg", FileName = "a.jpg" }).Folder).IsEqualTo(string.Empty);
-        await Assert.That(mapper.Map(new PhotoSense.Domain.Entities.Photo { SourcePath = "", FileName = "a.jpg" }).Folder).IsEqualTo(string.Empty);
+        // As the page is sent each photo: the keeper and its members of the one group there is.
+        var shown = (await new GroupPages([group], [], places.Object).BuildAsync(false, null, false, 1, 10, ct)).Items.Single();
+        var sent = shown.Members.Select(m => m.Photo).Append(shown.Keeper).ToDictionary(p => p.FileName);
+        await Assert.That(sent["a.jpg"].PlaceName).IsEqualTo("Charlotte, North Carolina, US");
+        await Assert.That(sent["b.jpg"].PlaceName).IsNull();
+        await Assert.That(sent["c.jpg"].PlaceName).IsNull();
+        await Assert.That(sent["d.jpg"].PlaceName).IsNull();
+        await Assert.That((sent["clip.MOV"].IsVideo, sent["clip.MOV"].DurationSeconds, sent["clip.MOV"].Format)).IsEqualTo((true, 12.5, "MOV"));
+        await Assert.That(sent["e.jpg"].Folder).IsEqualTo(string.Empty);
+        await Assert.That(sent["f.jpg"].Folder).IsEqualTo(string.Empty);
     }
 }

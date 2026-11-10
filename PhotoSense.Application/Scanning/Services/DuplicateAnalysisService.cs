@@ -1,5 +1,5 @@
 using PhotoSense.Application.Scanning.Interfaces;
-using PhotoSense.Domain.DTOs;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.ValueObjects;

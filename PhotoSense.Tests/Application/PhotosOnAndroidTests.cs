@@ -11,12 +11,10 @@ using PhotoSense.Infrastructure.Transfer;
 
 namespace PhotoSense.Tests.Application;
 
-// A scan's lines go to the one queue the page reads, which other classes count.
 /// <summary>
 /// PhotoSense as the Android app runs it, all but Android's own media store and picture decoder: the page's requests
 /// answered inside the app, on the photos of a phone's storage that is on no disk.
 /// </summary>
-[NotInParallel("ScanLogQueue")]
 public sealed class PhotosOnAndroidTests : IDisposable
 {
     private readonly DirectoryInfo _data = Directory.CreateTempSubdirectory("photosense-android-");
@@ -40,7 +38,6 @@ public sealed class PhotosOnAndroidTests : IDisposable
     {
         _services.Dispose();
         TestFiles.Remove(_data);
-        while (PhotoSense.Application.Scanning.InMemoryScanLogSink.TryDequeuePending(out _)) { }
     }
 
     private string In(string folder) => Path.Combine(_data.FullName, folder);

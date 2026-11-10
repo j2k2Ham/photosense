@@ -7,24 +7,17 @@ namespace PhotoSense.Infrastructure.Persistence;
 
 /// <summary>Scans' records of each file, kept in the database, one record per file.</summary>
 /// <remarks>Each method answers at once; its token is checked first, as nothing it does takes long enough to stop part way.</remarks>
-internal sealed class LiteDbPhotoRepository : IPhotoRepository, IDisposable
+internal sealed class LiteDbPhotoRepository : IPhotoRepository
 {
     private readonly LiteDatabase _db;
-    private readonly bool _ownsDb;
     private readonly ILiteCollection<PhotoDocument> _col;
     private readonly object _writeLock = new();
     private long _version;
 
-    /// <summary>Opens a database of its own, which it disposes.</summary>
-    public LiteDbPhotoRepository(string databasePath) : this(new LiteDatabase(databasePath), ownsDb: true) { }
-
-    /// <summary>Uses a database that other stores share; the caller disposes it.</summary>
-    public LiteDbPhotoRepository(LiteDatabase db) : this(db, ownsDb: false) { }
-
-    private LiteDbPhotoRepository(LiteDatabase db, bool ownsDb)
+    /// <summary>Uses the database the other stores share, which its owner disposes.</summary>
+    public LiteDbPhotoRepository(LiteDatabase db)
     {
         _db = db;
-        _ownsDb = ownsDb;
         LiteDbMapping.Prepare<PhotoDocument>();
         _col = _db.GetCollection<PhotoDocument>("photos");
         _col.EnsureIndex(x => x.ContentHash);
@@ -101,12 +94,6 @@ internal sealed class LiteDbPhotoRepository : IPhotoRepository, IDisposable
         ct.ThrowIfCancellationRequested();
         var list = _col.Find(x => x.ContentHash == hash).Select(d => d.ToEntity()).ToList();
         return Task.FromResult<IReadOnlyList<Photo>>(list);
-    }
-
-    /// <summary>Disposes the database when it opened its own.</summary>
-    public void Dispose()
-    {
-        if (_ownsDb) _db.Dispose();
     }
 
     // Databases written before records were keyed by path can hold several records for one file,

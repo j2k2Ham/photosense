@@ -18,7 +18,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
     private readonly InMemoryPhotoRepository _repo = new();
     private readonly FakeAnalyzer _analyzer = new();
     private readonly FakeThumbnails _thumbnails = new();
-    private readonly InMemoryScanProgressStore _progress = new();
+    private readonly InMemoryScanProgressStore _progress = new(new TestClock());
     private readonly Mock<IScanLogSink> _log = new();
     // A file held open by another program cannot be read on Windows alone; this disk refuses to on any system.
     private readonly FailingDisk _disk = new();

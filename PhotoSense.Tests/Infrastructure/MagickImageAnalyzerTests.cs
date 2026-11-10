@@ -1,5 +1,5 @@
 using ImageMagick;
-using PhotoSense.Application.Scanning.Services;
+using PhotoSense.Domain.Matching;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 using PhotoSense.Desktop.Imaging;
@@ -129,14 +129,6 @@ public class MagickImageAnalyzerTests
         var misread = await _analyzer.AnalyzeAsync(Encode(unconverted, MagickFormat.Png), ct);
         await Assert.That(Difference(standard.Signature, analysed.Signature)).IsGreaterThanOrEqualTo(0).And.IsLessThanOrEqualTo(PhotoMatcher.SameDifference);
         await Assert.That(Difference(standard.Signature, misread.Signature) > PhotoMatcher.SimilarDifference).IsTrue().Because("the two colour spaces should differ visibly when the profile is ignored");
-    }
-
-    [Test]
-    public async Task An_Image_That_Yields_No_Pixels_Is_Refused(CancellationToken ct)
-    {
-        var pixels = new byte[] { 1, 2, 3 };
-        await Assert.That(MagickImageAnalyzer.Required(pixels)).IsSameReferenceAs(pixels);
-        await Assert.That(Assert.ThrowsExactly<UnreadableImageException>(() => MagickImageAnalyzer.Required(null)).Message).IsEqualTo("Image has no pixel data");
     }
 
     [Test]

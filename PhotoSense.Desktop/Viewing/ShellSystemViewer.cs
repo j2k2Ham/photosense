@@ -5,32 +5,32 @@ using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Desktop.Viewing;
 
-/// <summary>Which desktop the service is running on, as far as opening a file is concerned.</summary>
-internal enum DesktopSystem
-{
-    /// <summary>Windows, whose shell opens a file itself.</summary>
-    Windows,
-    /// <summary>macOS, which opens a file with <c>open</c>.</summary>
-    MacOS,
-    /// <summary>Linux and the rest, which open a file with <c>xdg-open</c>.</summary>
-    Linux
-}
-
 /// <summary>Hands a file to the operating system to open, as double-clicking it would.</summary>
 public sealed class ShellSystemViewer : ISystemViewer
 {
+    // Which desktop the service is running on, as far as opening a file is concerned.
+    private enum DesktopSystem
+    {
+        // Windows, whose shell opens a file itself.
+        Windows,
+        // macOS, which opens a file with "open".
+        MacOS,
+        // Linux and the rest, which open a file with "xdg-open".
+        Linux
+    }
+
     private readonly DesktopSystem _desktop;
     private readonly Func<ProcessStartInfo, IDisposable?> _start;
 
     /// <summary>Opens files on the desktop this computer has.</summary>
-    public ShellSystemViewer() : this(CurrentDesktop(), Process.Start) { }
+    public ShellSystemViewer() : this(RuntimeInformation.IsOSPlatform, Process.Start) { }
 
-    /// <summary>Opens files on the desktop given, starting the opener as given.</summary>
-    /// <param name="desktop">The desktop whose way of opening a file is used.</param>
-    /// <param name="start">Starts the process; replaced in tests so that nothing is really opened.</param>
-    internal ShellSystemViewer(DesktopSystem desktop, Func<ProcessStartInfo, IDisposable?> start)
+    /// <summary>Opens files as the system that <paramref name="runningOn"/> describes would, starting each opener with <paramref name="start"/>.</summary>
+    /// <param name="runningOn">Whether the computer runs a system; a test answers for another computer than its own.</param>
+    /// <param name="start">Starts a process; a test gives one that opens nothing.</param>
+    public ShellSystemViewer(Func<OSPlatform, bool> runningOn, Func<ProcessStartInfo, IDisposable?> start)
     {
-        _desktop = desktop;
+        _desktop = runningOn(OSPlatform.Windows) ? DesktopSystem.Windows : runningOn(OSPlatform.OSX) ? DesktopSystem.MacOS : DesktopSystem.Linux;
         _start = start;
     }
 
@@ -52,8 +52,8 @@ public sealed class ShellSystemViewer : ISystemViewer
         }
     }
 
-    /// <summary>What to run to open a file: the file itself through the Windows shell, or the desktop's opener elsewhere.</summary>
-    internal static ProcessStartInfo CommandFor(string path, DesktopSystem desktop)
+    // What to run to open a file: the file itself through the Windows shell, or the desktop's opener elsewhere.
+    private static ProcessStartInfo CommandFor(string path, DesktopSystem desktop)
     {
         if (desktop == DesktopSystem.Windows) return new ProcessStartInfo(path) { UseShellExecute = true };
         // The path is passed as one argument, never through a shell, so nothing in a file name is interpreted.
@@ -62,10 +62,4 @@ public sealed class ShellSystemViewer : ISystemViewer
         return info;
     }
 
-    /// <summary>The desktop this computer has.</summary>
-    internal static DesktopSystem CurrentDesktop() => DesktopOf(RuntimeInformation.IsOSPlatform);
-
-    /// <summary>The desktop of a system, asked about through <paramref name="runningOn"/>, so that each answer can be tried on one computer.</summary>
-    internal static DesktopSystem DesktopOf(Func<OSPlatform, bool> runningOn)
-        => runningOn(OSPlatform.Windows) ? DesktopSystem.Windows : runningOn(OSPlatform.OSX) ? DesktopSystem.MacOS : DesktopSystem.Linux;
 }

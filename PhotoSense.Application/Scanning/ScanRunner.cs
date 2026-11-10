@@ -1,12 +1,12 @@
 using PhotoSense.Application.Scanning.Interfaces;
 
-namespace PhotoSense.Api.Scanning;
+namespace PhotoSense.Application.Scanning;
 
 /// <summary>
-/// Runs a scan in the background of whichever program serves the endpoints, one scan at a time. What it has
+/// Runs a scan in the background of whichever program asks for one, one scan at a time. What it has
 /// got to is kept in the progress store, which the status and progress addresses read.
 /// </summary>
-internal sealed class ScanRunner
+public sealed class ScanRunner
 {
     private readonly IScanExecutionService _scans;
     private readonly IScanProgressStore _progress;

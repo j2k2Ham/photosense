@@ -8,7 +8,6 @@ using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Application.Scanning.Services;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Repositories;
-using PhotoSense.Infrastructure.Deletion;
 using PhotoSense.Infrastructure.Hashing;
 using PhotoSense.Desktop.Imaging;
 using PhotoSense.Infrastructure.Metadata;
@@ -28,7 +27,7 @@ public sealed class PhotosNotOnDiskTests : IDisposable
     private readonly InMemoryFileSystem _files = new();
     private readonly InMemoryPhotoRepository _repo = new();
     private readonly LiteDatabase _db = new(new MemoryStream());
-    private readonly LiteDbOrganizeBatchStore _batches;
+    private readonly IOrganizeBatchStore _batches;
     private readonly FileChanges _changes;
     private readonly ScanExecutionService _scan;
     private readonly DuplicateRemovalService _cleanUp;
@@ -40,11 +39,11 @@ public sealed class PhotosNotOnDiskTests : IDisposable
     {
         var audit = Mock.Of<IAuditRepository>();
         var hashing = new Sha256ImageHashingService();
-        _batches = new LiteDbOrganizeBatchStore(_db);
+        _batches = _db.Batches();
         _changes = new FileChanges(_batches, _repo, audit, _files);
-        _scan = new ScanExecutionService(_repo, hashing, new MagickImageAnalyzer(), new BasicExifMetadataExtractor(), new InMemoryThumbnailStore(), new InMemoryScanProgressStore(), _files);
-        _cleanUp = new DuplicateRemovalService(new DuplicateAnalysisService(_repo), _repo, new CompanionFileFinder(_files), _changes, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
-        _library = new OrganizeLibrary(_repo, new ExifMediaDetailsReader(_files), hashing, new LiteDbMediaDetailsStore(_db), _files);
+        _scan = new ScanExecutionService(_repo, hashing, new MagickImageAnalyzer(), new BasicExifMetadataExtractor(), new InMemoryThumbnailStore(), new InMemoryScanProgressStore(new TestClock()), _files);
+        _cleanUp = new DuplicateRemovalService(new DuplicateAnalysisService(_repo), _repo, new CompanionFileFinder(_files, new LivePhotoIdCache(_files).Read), _changes, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
+        _library = new OrganizeLibrary(_repo, new ExifMediaDetailsReader(_files), hashing, _db.MediaDetails(), _files);
         var companions = new CompanionFileFinder(_files, _library.LivePhotoIds(new LivePhotoIdCache(_files).Read));
         _organize = new OrganizeMover(_library, companions, _changes, audit, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
         _removed = new RemovedFiles(_repo, _batches, audit, _files);

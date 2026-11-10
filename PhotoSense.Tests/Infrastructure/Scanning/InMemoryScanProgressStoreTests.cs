@@ -9,7 +9,7 @@ public class InMemoryScanProgressStoreTests
     [Test]
     public async Task Progress_Flow_Works(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         store.ScanStarted("inst1");
         store.SetTotals("inst1", 10, 5);
         for (int i = 0; i < 3; i++) store.IncrementProcessed("inst1", true);
@@ -26,7 +26,7 @@ public class InMemoryScanProgressStoreTests
     [Test]
     public async Task What_Is_Said_Of_A_Scan_That_Was_Never_Started_Is_Ignored(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         store.SetTotals("never-started", 10, 5);
         store.Expect("never-started", 60);
         store.IncrementProcessed("never-started", primary: true);
@@ -41,7 +41,7 @@ public class InMemoryScanProgressStoreTests
     [Test]
     public async Task Carries_How_Long_The_Scan_Is_Expected_To_Take_Once_That_Is_Known(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         store.ScanStarted("scan");
         await Assert.That(store.Get("scan").ExpectedSeconds).IsNull();
         store.Expect("scan", 780);
@@ -66,7 +66,7 @@ public class InMemoryScanProgressStoreTests
     [Test]
     public async Task Latest_Default_When_None(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         var snap = store.GetLatest();
         await Assert.That(snap.InstanceId).IsEqualTo(string.Empty);
     }

@@ -1,8 +1,11 @@
 // Google's map library, as far as this page uses it. It is fetched from Google when a map is first shown,
 // and only when a key for it has been set: without one the page asks Google for nothing.
 
+/** A point on the earth, as Google's maps take it. */
 export interface LatLng { lat: number; lng: number; }
+/** The part of the earth a map is fitted to, grown by each point added. */
 export interface GoogleBounds { extend(at: LatLng): void; }
+/** The parts of a Google map PhotoSense uses. */
 export interface GoogleMap {
   fitBounds(bounds: GoogleBounds, padding?: number): void; setCenter(at: LatLng): void; setZoom(zoom: number): void; setMapTypeId(kind: string): void;
   /** A click on the map itself: not on a marker, and not the end of a drag. */
@@ -10,6 +13,7 @@ export interface GoogleMap {
 }
 /** A marker drawn from the page's own element; it is taken off its map by setting `map` to null. */
 export interface GoogleMarker { map: GoogleMap | null; addEventListener(event: 'gmp-click', handler: () => void): void; }
+/** The parts of Google's maps library PhotoSense uses, once it has loaded. */
 export interface GoogleMaps {
   Map: new (element: HTMLElement, options: Record<string, unknown>) => GoogleMap;
   LatLngBounds: new () => GoogleBounds;

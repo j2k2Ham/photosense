@@ -1,7 +1,7 @@
-using PhotoSense.Application.Scanning;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.Configuration;
 
-namespace PhotoSense.Tests.Application;
+namespace PhotoSense.Tests.Domain;
 
 /// <summary>Which files under a folder a scan takes in.</summary>
 public sealed class PhotoFileEnumeratorTests : IDisposable

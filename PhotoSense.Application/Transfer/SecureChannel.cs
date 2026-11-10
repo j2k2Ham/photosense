@@ -10,7 +10,7 @@ namespace PhotoSense.Application.Transfer;
 /// AES-GCM: no one else on the network can read them, and anything changed or put in on the way is noticed. Each
 /// direction has its own key, and each frame its own number, so that none can be sent again or taken out unseen.
 /// </summary>
-internal sealed class SecureChannel : IDisposable
+public sealed class SecureChannel : IDisposable
 {
     private const int Tag = 16;
     private const byte Message = 0, Data = 1;

@@ -4,7 +4,7 @@ using PhotoSense.Domain.Services;
 namespace PhotoSense.Infrastructure.Hashing;
 
 /// <summary>Tells identical files by the SHA-256 hash of their bytes.</summary>
-internal sealed class Sha256ImageHashingService : IImageHashingService
+public sealed class Sha256ImageHashingService : IImageHashingService
 {
     /// <summary>The SHA-256 hash of the whole stream, from its start, in upper-case hex.</summary>
     public async Task<string> ComputeHashAsync(Stream imageStream, CancellationToken ct)

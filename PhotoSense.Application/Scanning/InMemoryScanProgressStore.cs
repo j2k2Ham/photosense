@@ -10,8 +10,8 @@ public class InMemoryScanProgressStore : IScanProgressStore
     private volatile string? _latest;
     private readonly TimeProvider _time;
 
-    /// <summary>Progress stamped with the time from <paramref name="time"/>, or the system's clock when none is given.</summary>
-    public InMemoryScanProgressStore(TimeProvider? time = null) => _time = time ?? TimeProvider.System;
+    /// <summary>Progress stamped with the time from <paramref name="time"/>.</summary>
+    public InMemoryScanProgressStore(TimeProvider time) => _time = time;
 
     /// <inheritdoc />
     public void ScanStarted(string instanceId)
