@@ -7,6 +7,8 @@ test.describe('looking at a file before deciding', () => {
     photos.copy('IMG_0001.JPG', 'Backup/IMG_0001.JPG');
     await service.scan(photos.root);
     await page.goto('/');
+    // The group is opened, as on a phone it has to be; on a computer it is open already.
+    await page.getByRole('region', { name: 'Groups' }).getByRole('button', { name: /IMG_0001\.JPG/ }).click();
     const review = page.getByRole('region', { name: 'Review' });
     await expect(review.getByRole('row', { name: /^Place/ })).toContainText('Butte, Montana, US');
     await expect(review.getByRole('link', { name: 'Show on map' })).toHaveAttribute('href', /openstreetmap\.org\/\?mlat=46\.0038&mlon=-112\.5348/);

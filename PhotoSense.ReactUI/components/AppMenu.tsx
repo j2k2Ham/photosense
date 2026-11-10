@@ -70,6 +70,10 @@ export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders,
       <div role="separator" className="my-1 border-t border-line" />
       <button type="button" role="menuitem" onClick={pick(onDeletePermanently)} className={`${item} text-rose-t hover:bg-rose-bg`}
         title="Removed files wait in _PhotoSense_Removed inside each folder they were removed from. Delete permanently erases them.">Delete permanently</button>
+      {/* Where the bar has no room for it, the note that nothing leaves the device is here. */}
+      <p className="flex items-center gap-2 px-3 pb-1 pt-2 text-[12.5px] text-t2 xl:hidden">
+        <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full bg-keep" />Runs on this device. Nothing is uploaded.
+      </p>
     </div>
   );
 }

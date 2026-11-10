@@ -104,6 +104,12 @@ describe('AppMenu', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('says that nothing leaves the device, for a screen whose bar has no room to say it', () => {
+    show();
+    // Shown only below the width at which the bar says it itself.
+    expect(screen.getByText('Runs on this device. Nothing is uploaded.')).toHaveClass('xl:hidden');
+  });
+
   it('on a computer, receives photos from a phone', async () => {
     const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn(), onReceive: vi.fn() };
     render(<AppMenu theme="dark" errorCount={0} {...handlers} />);

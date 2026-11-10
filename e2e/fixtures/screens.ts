@@ -43,3 +43,14 @@ export async function namesIn(list: Locator): Promise<string[]> {
 
 /** What a test's photos folder holds now, but what PhotoSense keeps for itself. */
 export const photoFiles = (photos: Photos) => photos.files().filter(f => !f.includes('_PhotoSense_Removed'));
+
+/** On a narrow screen Organize shows its files or its folders, switched by these buttons; on a wide one it shows both, and this does nothing. */
+export async function pane(page: Page, which: 'Files' | 'Folders') {
+  const toggle = page.getByRole('group', { name: 'Files or folders' });
+  if (await toggle.isVisible()) await toggle.getByRole('button', { name: new RegExp(`^${which}`) }).click();
+}
+
+/** On a phone Clean up shows the groups or one group's review; this goes back to the groups, as the person would. */
+export async function allGroups(page: Page, isMobile: boolean) {
+  if (isMobile) await page.getByRole('button', { name: 'All groups' }).click();
+}

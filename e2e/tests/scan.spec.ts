@@ -2,23 +2,28 @@ import { expect, message, test } from '../fixtures/app';
 import { menu } from '../fixtures/screens';
 
 test.describe('scanning', () => {
-  test('a first visit asks for a folder, scans it and shows the copies found @phone', async ({ page, photos }) => {
+  test('a first visit asks for a folder, scans it and shows the copies found @phone', async ({ page, photos, isMobile }) => {
     photos.picture('Trips/IMG_0001.JPG', { seed: 1 });
     photos.copy('Trips/IMG_0001.JPG', 'Backup/IMG_0001.JPG');
     photos.picture('Trips/IMG_0002.JPG', { seed: 2 });
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Find duplicate photos and videos' })).toBeVisible();
-    await expect(page.getByText('Runs on this device. Nothing is uploaded.')).toBeVisible();
+    // In the bar, or in the menu where the bar has no room for it.
+    if (isMobile) await page.getByRole('button', { name: 'Menu' }).click();
+    await expect((isMobile ? page.getByRole('menu', { name: 'Menu' }) : page.getByRole('banner')).getByText('Runs on this device. Nothing is uploaded.')).toBeVisible();
+    if (isMobile) await page.keyboard.press('Escape');
 
     await page.getByRole('textbox', { name: 'Root folder' }).fill(photos.root);
     await page.getByRole('button', { name: 'Scan' }).click();
     await expect(message(page, /^Scan finished: 1 duplicate group/)).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole('tab', { name: 'Duplicates 1' })).toBeVisible();
-    await expect(page.getByText('3 files · scanned')).toBeVisible();
+    // The folders scanned are in the bar; on a phone the menu changes them.
+    if (!isMobile) await expect(page.getByText('3 files · scanned')).toBeVisible();
     // A reload shows the same results, and the folder is remembered for the next scan.
     await page.reload();
     await expect(page.getByRole('tab', { name: 'Duplicates 1' })).toBeVisible();
-    await page.getByRole('button', { name: 'Change or rescan' }).click();
+    if (isMobile) await menu(page, 'Change folders or rescan');
+    else await page.getByRole('button', { name: 'Change or rescan' }).click();
     await expect(page.getByRole('textbox', { name: 'Root folder' })).toHaveValue(photos.root);
   });
 
@@ -61,8 +66,9 @@ test.describe('scanning', () => {
     const picker = page.getByRole('dialog', { name: 'Choose the root folder' });
     await expect(picker.getByRole('navigation', { name: 'Start from' }).getByRole('button').first()).toBeVisible();
     await picker.getByRole('navigation', { name: 'Start from' }).getByRole('button').first().click();
+    // Read once the picker has gone there, which takes the service a moment.
+    await expect(picker.getByLabel('Current folder')).not.toHaveText('Choose where to start');
     const here = await picker.getByLabel('Current folder').innerText();
-    expect(here).not.toBe('Choose where to start');
     await picker.getByRole('button', { name: 'Use this folder' }).click();
     await expect(picker).toBeHidden();
     await expect(page.getByRole('textbox', { name: 'Root folder' })).toHaveValue(here);

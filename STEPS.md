@@ -44,7 +44,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Confirmed by Jamie (2026-11-10): the newly public types, the two guards left out of coverage, the public MetadataExtractor helpers, and Android's blocking `PageClient` as a named exception to rule 10.
   - Every async method takes a required token and passes it on (CA2016, CA1068); clocks come from `TimeProvider`.
   - Anti-patterns removed, apart from those Jamie accepted (CLAUDE.md rule 10). A picture a decoder cannot read is an `UnreadableImageException`.
-- **Last measured:** service 811 tests at 100% of lines (3,435) and branches (1,978) (2026-11-10); page 590 tests at 100% (2026-11-10); end to end 56 tests in Playwright's Chromium and 8 of 14 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
+- **Last measured:** service 811 tests at 100% of lines (3,435) and branches (1,978) (2026-11-10); page 590 tests at 100% (2026-11-10); end to end 70 tests, 56 in Playwright's Chromium and 14 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
 
 ## Remaining steps
 
@@ -53,8 +53,10 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 - [x] See `iphone.yml` compile the iPhone app after the code-health work (pushed at Jamie's word, 2026-11-09; passed).
 - [x] TSDoc on every export of the page (Jamie, 2026-11-09; done 2026-11-10).
 - [x] Push the structure work (2026-11-10, at Jamie's word): `android.yml` passed.
-- [ ] See `e2e.yml` pass on GitHub. Its browser download failed under Node 26, which removed a call Playwright 1.56 made (`fs.rmdir` with `recursive`); the tests now use Playwright 1.64.1, which downloads both browsers here. It runs on Ubuntu 24.04 (26.04 had no browsers for 1.56), with three tries of five minutes for the download. It will fail on the six WebKit tests below until they are fixed.
-- [ ] Fix what the `@phone` end-to-end tests find in WebKit (`cd e2e && npx playwright test --project phone`). First run, 2026-11-10: 8 of 14 pass. The six that fail seem to expect a computer's layout on a phone's screen: the note "Runs on this device", which a narrow bar leaves to the menu; the Place row of the comparison; the groups list after a deletion; Recently moved and Preview in Suggested folders (two); and closing the sending window.
+- [ ] See `e2e.yml` pass on GitHub. Its browser download failed under Node 26, which removed a call Playwright 1.56 made (`fs.rmdir` with `recursive`); the tests now use Playwright 1.64.1, which downloads both browsers here. It runs on Ubuntu 24.04 (26.04 had no browsers for 1.56), with three tries of five minutes for the download. Its first run past the download (68439d3) failed on the six WebKit tests fixed below and on two computer tests that had never run on Linux: one expected a folder chosen in the picker to be named with a backslash (Linux writes `Archive/Old trips`), and one read the picker's folder before the picker had gone there. Both are fixed; 70 of 70 pass here.
+- [x] Fix what the `@phone` end-to-end tests find in WebKit (2026-11-10): all 14 pass, and all 70 in both projects.
+  - Two faults in the page: the menu did not say "Runs on this device. Nothing is uploaded." where the bar has no room for it, though the bar's comment said it did; and Escape pressed the moment the phone said it was waiting closed the sending window without stopping the offer, as the window's key listener was still the one from before (it now always calls the window's latest close).
+  - The rest were the tests expecting a computer's layout: on a phone they now open a group, go back to All groups, switch Organize between Files and Folders, and close Recently moved, as a person would (`allGroups`, `pane` in `fixtures/screens.ts`).
 - [x] Push the commits that were waiting (done 2026-10-30, at Jamie's word).
 - [ ] See the main CI (`ci.yml`) pass on Linux. It runs only for `main` and pull requests, so it has never run on this branch: several service tests that rely on file behaviour have only run on Windows.
 - [ ] Merge the branch, or open a pull request, when Jamie decides.

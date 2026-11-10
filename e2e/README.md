@@ -15,7 +15,7 @@ npm test
 ```
 
 - `npm run app` builds the page in a copy of `PhotoSense.ReactUI`, without that folder's `.env.local`, so a page server running there is left alone and no map key gets into the program; the service's build files go into `.cache` as well, never into the repository's `bin` and `obj`.
-- `npm test -- --project computer` runs Chrome at a computer's size only; `PHOTOSENSE_E2E_CHROME=1` uses the Chrome installed on this computer instead of Playwright's own.
+- `npm test -- --project=computer` runs Chrome at a computer's size only; `PHOTOSENSE_E2E_CHROME=1` uses the Chrome installed on this computer instead of Playwright's own.
 - `npm run report` opens what the last run found, with a trace of each test that failed.
 
 ## What runs where

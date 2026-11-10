@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { Scrim } from './Scrim';
 import { formatBytes } from '../lib/format';
 
@@ -20,12 +20,17 @@ interface WindowProps {
 
 /** The window sending and receiving photos happen in. */
 export function TransferWindow({ title, frozen, children, onClose }: WindowProps) {
+  // Escape closes the window as it is now. The listener is put up again only after the screen is drawn, so it calls the
+  // latest close through this: a key pressed the moment the phone says it is waiting would otherwise close the window
+  // as it was before, which knew nothing to stop.
+  const close = useRef(onClose);
+  useLayoutEffect(() => { close.current = onClose; });
   useEffect(() => {
     if (frozen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [frozen, onClose]);
+  }, [frozen]);
 
   return (
     <Scrim className="fixed inset-0 z-40 flex items-center justify-center bg-scrim p-3 sm:p-6" onDismiss={onClose}>

@@ -1,6 +1,6 @@
 import { expect, message, test, type Photos } from '../fixtures/app';
 import { PLACES } from '../fixtures/media';
-import { drag, gallery, openOrganize, photoFiles, preview, suggestions, tile } from '../fixtures/screens';
+import { drag, gallery, openOrganize, pane, photoFiles, preview, suggestions, tile } from '../fixtures/screens';
 import type { Page } from '@playwright/test';
 
 function some(photos: Photos) {
@@ -10,7 +10,7 @@ function some(photos: Photos) {
 }
 
 const folderDialog = (page: Page) => page.getByRole('dialog', { name: /^Put \d+ files? in a folder$|^New folder$/ });
-const yours = (page: Page, name: string) => suggestions(page).getByRole('button', { name: `Preview ${name}` });
+const yours = (page: Page, name: string | RegExp) => suggestions(page).getByRole('button', { name: typeof name === 'string' ? `Preview ${name}` : name });
 
 async function newFolder(page: Page, name: string) {
   await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'New folder from these' }).click();
@@ -27,6 +27,7 @@ test.describe('Organize: folders of your own', () => {
     await tile(page, 'IMG_0003.JPG').click();
     await expect(page.getByRole('region', { name: 'Selection' })).toContainText('2 selected');
     await newFolder(page, 'Family\\Summer');
+    await pane(page, 'Folders');
     await yours(page, 'Family\\Summer').click();
     await expect(preview(page)).toContainText('2 files will move');
     await preview(page).getByRole('button', { name: 'Move 2 files' }).click();
@@ -46,7 +47,8 @@ test.describe('Organize: folders of your own', () => {
     await dialog.getByRole('button', { name: /^Old trips/ }).click();
     await dialog.getByRole('button', { name: 'Use Old trips' }).click();
     await expect(dialog).toBeHidden();
-    await yours(page, 'Archive\\Old trips').click();
+    // A folder already there is named as this computer writes its path: Archive\Old trips on Windows, Archive/Old trips elsewhere.
+    await yours(page, /^Preview Archive[\\/]Old trips$/).click();
     await preview(page).getByRole('button', { name: 'Move 1 file' }).click();
     await expect(message(page, /^Moved 1 file/)).toBeVisible();
     expect(photoFiles(photos)).toContain('Archive/Old trips/IMG_0002.JPG');

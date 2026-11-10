@@ -1,6 +1,6 @@
 import { expect, message, test, type Photos } from '../fixtures/app';
 import { PLACES } from '../fixtures/media';
-import { gallery, namesIn, openOrganize, photoFiles, question, suggestions, tile } from '../fixtures/screens';
+import { gallery, namesIn, openOrganize, pane, photoFiles, question, suggestions, tile } from '../fixtures/screens';
 
 function mixed(photos: Photos) {
   photos.picture('Trips/IMG_0001.JPG', { seed: 1, at: PLACES.butte, taken: new Date(2022, 6, 4, 10, 0, 0) });
@@ -76,10 +76,13 @@ test.describe('Organize: the files', () => {
     expect(photos.files('_PhotoSense_Removed')).toEqual(['_PhotoSense_Removed/Trips/IMG_0003.JPG']);
     await expect(tile(page, 'IMG_0003.JPG')).toBeHidden();
 
+    await pane(page, 'Folders');
     await suggestions(page).getByRole('button', { name: /^Recently moved/ }).click();
     await suggestions(page).getByRole('button', { name: /^Undo/ }).first().click();
     await expect(message(page, /back to where it was/)).toBeVisible();
     expect(photoFiles(photos)).toContain('Trips/IMG_0003.JPG');
+    await page.getByRole('dialog', { name: 'Recently moved' }).getByRole('button', { name: 'Done' }).click();
+    await pane(page, 'Files');
     await expect(tile(page, 'IMG_0003.JPG')).toBeVisible();
   });
 

@@ -17,9 +17,9 @@ description: Use before running, writing or fixing PhotoSense's Playwright end-t
 cd e2e
 npm ci && npx playwright install chromium webkit     # once
 npm run app                                           # again after any change to the page or the service
-npx playwright test --project computer                # Chrome at a computer's size: every test
-npx playwright test --project phone                   # WebKit as an iPhone 13: the tests named @phone
-npx playwright test tests/organize-own.spec.ts -g "dragged"
+npx playwright test --project=computer                # Chrome at a computer's size: every test
+npx playwright test --project=phone                   # WebKit as an iPhone 13: the tests named @phone
+npx playwright test --project=phone tests/organize-own.spec.ts -g "dragged"
 npm run typecheck
 ```
 
@@ -39,6 +39,9 @@ npm run typecheck
 - **`@phone`:** add it to a test's name when it must also work at a phone's size and in WebKit.
 
 ## Traps already met
+
+- **`--project phone tests/x.spec.ts`** takes the file for a second project's name since Playwright 1.64: write `--project=phone`.
+- **At a phone's size** Clean up shows the groups or one group's review, and Organize its files or its folders, one at a time; the bar leaves the scanned folders and the note that nothing is uploaded to the menu. A test marked `@phone` steps through them as a person would: open the group, `allGroups(page, isMobile)`, `pane(page, 'Folders')`, and close a window before touching what it covers.
 
 - **Which copy is kept** is PhotoSense's choice, not the order the test made the files in. Check that one whole set stays, not which folder it is in.
 - **Messages** go after 4.5 s. Check one straight after the action that shows it.

@@ -1,5 +1,5 @@
 import { expect, message, test, type Photos, type Service } from '../fixtures/app';
-import { photoFiles, question } from '../fixtures/screens';
+import { allGroups, photoFiles, question } from '../fixtures/screens';
 import type { Page } from '@playwright/test';
 
 const groups = (page: Page) => page.getByRole('region', { name: 'Groups' });
@@ -18,7 +18,7 @@ async function twoCopies(photos: Photos, service: Service, page: Page) {
 }
 
 test.describe('duplicates', () => {
-  test('a copy is deleted into _PhotoSense_Removed after a question that names it and the original, and Undo puts it back @phone', async ({ page, photos, service }) => {
+  test('a copy is deleted into _PhotoSense_Removed after a question that names it and the original, and Undo puts it back @phone', async ({ page, photos, service, isMobile }) => {
     await twoCopies(photos, service, page);
     await groups(page).getByRole('button', { name: /IMG_0001\.JPG/ }).click();
     await expect(review(page).getByRole('heading', { name: 'IMG_0001.JPG', level: 2 })).toBeVisible();
@@ -30,6 +30,7 @@ test.describe('duplicates', () => {
     await expect(message(page, 'Moved IMG_0001 (1).JPG (23 KB) to _PhotoSense_Removed. IMG_0001.JPG stays where it is.')).toBeVisible();
     expect(photos.exists('_PhotoSense_Removed/Trips/Backup/IMG_0001 (1).JPG')).toBe(true);
     expect(photos.exists('Trips/Backup/IMG_0001 (1).JPG')).toBe(false);
+    await allGroups(page, isMobile);
     await expect(groups(page).getByRole('listitem')).toHaveCount(1);
 
     await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
