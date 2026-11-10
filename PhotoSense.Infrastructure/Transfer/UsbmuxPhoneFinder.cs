@@ -20,30 +20,37 @@ public sealed class UsbmuxPhoneFinder : IPhoneFinder
     private const int Plist = 8;
     private readonly Func<CancellationToken, Task<Stream>> _muxer;
     private readonly int _port;
+    private readonly TimeSpan _answerWithin;
 
     /// <summary>Finds phones through this computer's own device service, to connect to the port a phone waits on.</summary>
-    public UsbmuxPhoneFinder() : this(ct => OpenMuxerAsync(Muxer(OperatingSystem.IsWindows()), ct), TcpTransferListener.Port) { }
+    public UsbmuxPhoneFinder() : this(ct => OpenMuxerAsync(Muxer(OperatingSystem.IsWindows()), ct), TcpTransferListener.Port, TimeSpan.FromSeconds(5)) { }
 
     /// <summary>Finds phones through the device service given, to connect to the port given.</summary>
     /// <param name="muxer">A connection to the device service.</param>
     /// <param name="port">The port a phone waits on.</param>
-    public UsbmuxPhoneFinder(Func<CancellationToken, Task<Stream>> muxer, int port)
+    /// <param name="answerWithin">How long the device service has to list the phones: one that takes longer is as good as none.</param>
+    public UsbmuxPhoneFinder(Func<CancellationToken, Task<Stream>> muxer, int port, TimeSpan answerWithin)
     {
         _muxer = muxer;
         _port = port;
+        _answerWithin = answerWithin;
     }
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct)
     {
         XElement answer;
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(_answerWithin);
         try
         {
-            await using var muxer = await _muxer(ct);
-            answer = await AskAsync(muxer, "ListDevices", [], ct);
+            await using var muxer = await _muxer(limit.Token);
+            answer = await AskAsync(muxer, "ListDevices", [], limit.Token);
         }
         // No device service on this computer, or one that will not answer: no phone on a cable can be reached.
         catch (Exception ex) when (ex is IOException or SocketException or XmlException or TransferException) { return []; }
+        // One that does not answer in time, the caller not having gone away, is as good as none.
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return []; }
         return [.. Entries(answer, "DeviceList")
             .Select(d => Entries(d, "Properties").SingleOrDefault() is { } p ? (Id: Number(Value(p, "DeviceID")), Via: Value(p, "ConnectionType")?.Value) : default)
             .Where(d => d.Via == "USB" && d.Id is not null)

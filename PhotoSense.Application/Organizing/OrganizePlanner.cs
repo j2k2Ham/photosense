@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -177,7 +178,12 @@ public sealed class OrganizePlanner
         var going = items.Select(i => i.File.Path).ToHashSet(PhotoPath.Comparer);
         var siblings = new SiblingIndex(_files);
         var withSiblings = items.Select(i => (i.File.Path, Siblings: siblings.SiblingsOf(i.File.Path))).Where(i => i.Siblings.Count > 0).ToList();
-        var companions = withSiblings.AsParallel().WithCancellation(ct).SelectMany(i => _companions.FindAmong(i.Path, i.Siblings)).Where(c => !going.Contains(c)).Distinct(PhotoPath.Comparer).Count();
+        var left = new ConcurrentBag<string>();
+        await Parallel.ForEachAsync(withSiblings, ct, async (i, token) =>
+        {
+            foreach (var companion in await _companions.FindAmongAsync(i.Path, i.Siblings, token)) left.Add(companion);
+        });
+        var companions = left.Where(c => !going.Contains(c)).Distinct(PhotoPath.Comparer).Count();
 
         return new OrganizePlan(destination.Folder, _files.FolderExists(destination.Folder), items, clashes, taken, companions);
     }

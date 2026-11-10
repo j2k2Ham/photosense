@@ -222,7 +222,7 @@ public sealed class OrganizeMoverTests : IDisposable
         File.Delete(gone);
         // The finder names a companion that is not there to be moved.
         var finder = new Mock<ICompanionFileFinder>();
-        finder.Setup(c => c.FindAmong(withCompanion, It.IsAny<IReadOnlyList<string>>())).Returns([_f.In("IMG_1234 missing.MOV")]);
+        finder.Setup(c => c.FindAmongAsync(withCompanion, It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>())).ReturnsAsync([_f.In("IMG_1234 missing.MOV")]);
 
         var result = await _f.Mover(finder.Object).ApplyAsync(To("There", yearSplit: true), copy: false, bringCompanions: true, "There", files, null, ct);
 
@@ -231,8 +231,8 @@ public sealed class OrganizeMoverTests : IDisposable
         await Assert.That(result.Problems.Count(p => p == "IMG_1234 missing.MOV is no longer where it was, so it stays behind.")).IsEqualTo(1);
         await Assert.That(_f.Files("There", "2022")).IsEquivalentTo(new[] { "IMG_1.JPG", "IMG_1234.HEIC", "IMG_4.JPG" }, CollectionOrdering.Matching);
         // Only the file that had another of its item beside it was asked about.
-        finder.Verify(c => c.FindAmong(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>()), Times.Once);
-        finder.Verify(c => c.FindAmong(withCompanion, It.Is<IReadOnlyList<string>>(s => s.Single() == _f.In("IMG_1234.MOV"))), Times.Once);
+        finder.Verify(c => c.FindAmongAsync(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<CancellationToken>()), Times.Once);
+        finder.Verify(c => c.FindAmongAsync(withCompanion, It.Is<IReadOnlyList<string>>(s => s.Single() == _f.In("IMG_1234.MOV")), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Test]

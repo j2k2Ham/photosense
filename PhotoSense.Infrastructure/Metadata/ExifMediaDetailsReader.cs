@@ -16,15 +16,15 @@ public sealed class ExifMediaDetailsReader(IPhotoFileSystem files) : IMediaDetai
     private static readonly (string Width, string Height)[] SizeTags = [("Image Width", "Image Height"), ("Exif Image Width", "Exif Image Height"), ("Width", "Height")];
 
     /// <inheritdoc />
-    public MediaDetails Read(string path)
+    public async Task<MediaDetails> ReadAsync(string path, CancellationToken ct)
     {
         var photo = new Photo { SourcePath = path, FileName = Path.GetFileName(path) };
         // A file that cannot be read is listed by its name and the file's own date: its details stay empty.
-        _ = MetadataFiles.TryRead(files, path, directories =>
+        _ = await MetadataFiles.TryReadAsync(files, path, directories =>
         {
             BasicExifMetadataExtractor.Read(photo, directories);
             if (photo.Width == 0) (photo.Width, photo.Height) = PixelSize(directories);
-        });
+        }, ct);
         return new MediaDetails(photo.TakenOn, photo.Width, photo.Height, photo.DurationSeconds, photo.Latitude, photo.Longitude, photo.LivePhotoId);
     }
 

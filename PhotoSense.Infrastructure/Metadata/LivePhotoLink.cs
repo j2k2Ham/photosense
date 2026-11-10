@@ -28,10 +28,10 @@ internal static class LivePhotoLink
     }
 
     /// <summary>The identifier in a file, or null when it has none or cannot be read.</summary>
-    public static string? ReadId(IPhotoFileSystem files, string path)
+    public static async Task<string?> ReadIdAsync(IPhotoFileSystem files, string path, CancellationToken ct)
     {
         string? id = null;
-        _ = MetadataFiles.TryRead(files, path, directories => id = ReadId(directories, MediaFiles.IsVideo(path)));
+        _ = await MetadataFiles.TryReadAsync(files, path, directories => id = ReadId(directories, MediaFiles.IsVideo(path)), ct);
         return id;
     }
 }

@@ -68,7 +68,7 @@ public sealed class PhotoLibraryFileSystemTests
         // Asked about before the folder is listed, the library is read for it.
         await Assert.That(_photos.Describe(In("IMG_0001.HEIC"))).IsEqualTo(new StoredFile(11, item.ModifiedUtc));
         await Assert.That((_photos.Describe(In("IMG_0002.HEIC")), _photos.FileExists(In("IMG_0001.HEIC")))).IsEqualTo(((StoredFile?)null, true));
-        using (var read = _photos.OpenRead(In("IMG_0001.HEIC")))
+        using (var read = await _photos.OpenReadAsync(In("IMG_0001.HEIC"), ct))
         {
             read.Position = 4;
             await Assert.That(new StreamReader(read).ReadToEnd()).IsEqualTo("picture");
@@ -76,11 +76,11 @@ public sealed class PhotoLibraryFileSystemTests
 
         // One the framework hands out to be read from the start only is held whole, to be read from anywhere.
         _library.OnlyFromTheStart = true;
-        using var whole = _photos.OpenRead(In("IMG_0001.HEIC"));
+        using var whole = await _photos.OpenReadAsync(In("IMG_0001.HEIC"), ct);
         whole.Position = 4;
         await Assert.That(new StreamReader(whole).ReadToEnd()).IsEqualTo("picture");
 
-        await Assert.That(Assert.Throws<FileNotFoundException>(() => _photos.OpenRead(In("IMG_0002.HEIC")))!.Message).IsEqualTo("The picture is no longer in the photo library.");
+        await Assert.That((await Assert.ThrowsAsync<FileNotFoundException>(() => _photos.OpenReadAsync(In("IMG_0002.HEIC"), ct)))!.Message).IsEqualTo("The picture is no longer in the photo library.");
     }
 
     [Test]
@@ -104,7 +104,7 @@ public sealed class PhotoLibraryFileSystemTests
         _library.Add("B2", File(LibraryFileKind.Photo, "IMG_2.JPG", "the whole"));
         _library.Add("C3", File(LibraryFileKind.Photo, "IMG_3.JPG", "another one"));
 
-        await Assert.That((_photos.IsCopyOf(In("IMG_2.JPG"), In("IMG_1.JPG")), _photos.IsCopyOf(In("IMG_3.JPG"), In("IMG_1.JPG")), _photos.IsCopyOf(In("IMG_1.JPG"), In("IMG_2.JPG"))))
+        await Assert.That((await _photos.IsCopyOfAsync(In("IMG_2.JPG"), In("IMG_1.JPG"), ct), await _photos.IsCopyOfAsync(In("IMG_3.JPG"), In("IMG_1.JPG"), ct), await _photos.IsCopyOfAsync(In("IMG_1.JPG"), In("IMG_2.JPG"), ct)))
             .IsEqualTo((true, false, false));
     }
 

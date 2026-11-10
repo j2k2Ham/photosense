@@ -19,7 +19,7 @@ namespace PhotoSense.Tests.Application;
 public sealed class CompanionFileFinderTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-companions-");
-    private readonly CompanionFileFinder _finder = new(TestFiles.Disk, ContentAsId);
+    private readonly CompanionFileFinder _finder = new(TestFiles.Disk, (path, _) => Task.FromResult(ContentAsId(path)));
 
     public void Dispose() => _root.Delete(true);
 
@@ -37,7 +37,7 @@ public sealed class CompanionFileFinderTests : IDisposable
         return path;
     }
 
-    private List<string> Names(string path) => _finder.FindFor(path).Select(f => Path.GetFileName(f)!).OrderBy(n => n, StringComparer.Ordinal).ToList();
+    private async Task<List<string>> NamesAsync(string path, CancellationToken ct) => (await _finder.FindForAsync(path, ct)).Select(f => Path.GetFileName(f)!).OrderBy(n => n, StringComparer.Ordinal).ToList();
 
     [Test]
     public async Task A_Picture_Takes_Its_Live_Photo_Video_And_Both_Sidecars(CancellationToken ct)
@@ -50,7 +50,7 @@ public sealed class CompanionFileFinderTests : IDisposable
         Put("IMG_1235.MOV", "id:BBBB");
         Put("IMG_1235.AAE");
 
-        await Assert.That(Names(picture)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.MOV", "IMG_O1234.AAE"], CollectionOrdering.Matching);
+        await Assert.That(await NamesAsync(picture, ct)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.MOV", "IMG_O1234.AAE"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -62,11 +62,11 @@ public sealed class CompanionFileFinderTests : IDisposable
         Put("IMG_1234.MOV", "id:AAAA");
         Put("IMG_1234.AAE");
 
-        await Assert.That(Names(heic)).IsEmpty();
-        await Assert.That(Names(jpeg)).IsEmpty();
+        await Assert.That(await NamesAsync(heic, ct)).IsEmpty();
+        await Assert.That(await NamesAsync(jpeg, ct)).IsEmpty();
 
         File.Delete(heic); // once the other format is gone, the last picture takes them
-        await Assert.That(Names(jpeg)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.MOV"], CollectionOrdering.Matching);
+        await Assert.That(await NamesAsync(jpeg, ct)).IsEquivalentTo(["IMG_1234.AAE", "IMG_1234.MOV"], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -79,8 +79,8 @@ public sealed class CompanionFileFinderTests : IDisposable
         Put("IMG_1234.AAE");
         Put("IMG_O1234.AAE");
 
-        await Assert.That(Names(edited)).IsEmpty();   // the original stays
-        await Assert.That(Names(original)).IsEmpty(); // the edited version stays
+        await Assert.That(await NamesAsync(edited, ct)).IsEmpty();   // the original stays
+        await Assert.That(await NamesAsync(original, ct)).IsEmpty(); // the edited version stays
     }
 
     [Test]
@@ -89,16 +89,16 @@ public sealed class CompanionFileFinderTests : IDisposable
         // A real 1.3 GB video sat beside a same-numbered picture in the sample library.
         var picture = Put("IMG_0723.JPG");                    // carries no identifier
         Put("IMG_0723.MOV");                                  // nor does the video
-        await Assert.That(Names(picture)).IsEmpty();
+        await Assert.That(await NamesAsync(picture, ct)).IsEmpty();
 
         var live = Put("IMG_3405.JPG", "id:52E3");
         Put("IMG_3405.MOV", "id:FF8F");                       // somebody else's Live Photo video
         Put("IMG_3405.AAE");
-        await Assert.That(Names(live)).IsEmpty();                            // and the sidecar stays, since a video of that name remains
+        await Assert.That(await NamesAsync(live, ct)).IsEmpty();                            // and the sidecar stays, since a video of that name remains
 
         var half = Put("IMG_0001.HEIC");                      // picture without an identifier, video with one
         Put("IMG_0001.MOV", "id:AAAA");
-        await Assert.That(Names(half)).IsEmpty();
+        await Assert.That(await NamesAsync(half, ct)).IsEmpty();
     }
 
     [Test]
@@ -106,17 +106,17 @@ public sealed class CompanionFileFinderTests : IDisposable
     {
         var picture = Put("IMG_2000.PNG");
         Put("IMG_2000.AAE");
-        await Assert.That(Names(picture)).IsEquivalentTo(["IMG_2000.AAE"], CollectionOrdering.Matching);
+        await Assert.That(await NamesAsync(picture, ct)).IsEquivalentTo(["IMG_2000.AAE"], CollectionOrdering.Matching);
 
         var video = Put("IMG_3000.MOV");
         Put("IMG_3000.AAE");
         Put("IMG_O3000.AAE");
-        await Assert.That(Names(video)).IsEquivalentTo(["IMG_3000.AAE", "IMG_O3000.AAE"], CollectionOrdering.Matching);
+        await Assert.That(await NamesAsync(video, ct)).IsEquivalentTo(["IMG_3000.AAE", "IMG_O3000.AAE"], CollectionOrdering.Matching);
 
         var liveVideo = Put("IMG_4000.MOV", "id:AAAA");       // removing just the video half leaves the picture its sidecar
         Put("IMG_4000.HEIC", "id:AAAA");
         Put("IMG_4000.AAE");
-        await Assert.That(Names(liveVideo)).IsEmpty();
+        await Assert.That(await NamesAsync(liveVideo, ct)).IsEmpty();
     }
 
     [Test]
@@ -125,8 +125,8 @@ public sealed class CompanionFileFinderTests : IDisposable
         var picture = Put(Path.Combine("a", "IMG_1234.HEIC"), "id:AAAA");
         Put(Path.Combine("b", "IMG_1234.MOV"), "id:AAAA");
         Put(Path.Combine("b", "IMG_1234.AAE"));
-        await Assert.That(Names(picture)).IsEmpty();
-        await Assert.That(_finder.FindFor(Path.Combine(_root.FullName, "missing-folder", "IMG_1.HEIC"))).IsEmpty();
+        await Assert.That(await NamesAsync(picture, ct)).IsEmpty();
+        await Assert.That(await _finder.FindForAsync(Path.Combine(_root.FullName, "missing-folder", "IMG_1.HEIC"), ct)).IsEmpty();
     }
 
     // Removes photos the way Clean up does, through a journal of its own.
@@ -191,5 +191,5 @@ public sealed class CompanionFileFinderTests : IDisposable
 
     [Test]
     public async Task What_Is_Not_Inside_A_Folder_Has_No_Companions(CancellationToken ct)
-        => await Assert.That(_finder.FindFor(Path.GetPathRoot(_root.FullName)!)).IsEmpty();
+        => await Assert.That(await _finder.FindForAsync(Path.GetPathRoot(_root.FullName)!, ct)).IsEmpty();
 }

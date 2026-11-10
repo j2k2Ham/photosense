@@ -44,7 +44,15 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Confirmed by Jamie (2026-11-10): the newly public types, the two guards left out of coverage, the public MetadataExtractor helpers, and Android's blocking `PageClient` as a named exception to rule 10.
   - Every async method takes a required token and passes it on (CA2016, CA1068); clocks come from `TimeProvider`.
   - Anti-patterns removed, apart from those Jamie accepted (CLAUDE.md rule 10). A picture a decoder cannot read is an `UnreadableImageException`.
-- **Last measured:** service 811 tests at 100% of lines (3,435) and branches (1,978) (2026-11-10); page 590 tests at 100% (2026-11-10); end to end 70 tests, 56 in Playwright's Chromium and 14 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
+- **Resilience** (2026-11-10, after a scan for fault tolerance, time limits and consistency; Jamie asked for all six gaps fixed, with a minute's limit):
+  - A phone and a computer give up on each other after a minute's silence, with "The other device stopped answering. Try again."; connecting has the same minute. The two waits on the person comparing numbers have none. A side busy with its own work (an iCloud fetch, reading a file of the same name already there) says "wait" every 20 seconds (`TimedConnection`, `SecureChannel.MeanwhileAsync`).
+  - Neither side can be left showing "Sending" or "Receiving": whatever error ends it, the state says it stopped. Photo access withdrawn mid-send is now said, not swallowed.
+  - A file arriving on the computer is written through to the disk before the phone is told it is there.
+  - Reading a file is asynchronous everywhere (`IPhotoFileSystem.OpenReadAsync`, `IsCopyOfAsync`, `IMediaDetailsReader.ReadAsync`, Live Photo ids, companions). On an iPhone a picture kept in iCloud is fetched without blocking a thread, can be stopped, and is given up after a minute without progress, counting as unreadable. This also removed a blocking wait the anti-pattern scan had missed.
+  - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
+  - Looking for an iPhone on a cable gives Apple's device service five seconds.
+  - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
+- **Last measured:** service 821 tests at 100% of lines (3,510) and branches (1,990) (2026-11-10); page 591 tests at 100% (2026-11-10); end to end 70 tests, 56 in Playwright's Chromium and 14 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
 
 ## Remaining steps
 
@@ -58,7 +66,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Two faults in the page: the menu did not say "Runs on this device. Nothing is uploaded." where the bar has no room for it, though the bar's comment said it did; and Escape pressed the moment the phone said it was waiting closed the sending window without stopping the offer, as the window's key listener was still the one from before (it now always calls the window's latest close).
   - The rest were the tests expecting a computer's layout: on a phone they now open a group, go back to All groups, switch Organize between Files and Folders, and close Recently moved, as a person would (`allGroups`, `pane` in `fixtures/screens.ts`).
 - [x] Push the commits that were waiting (done 2026-10-30, at Jamie's word).
-- [ ] See the main CI (`ci.yml`) pass on Linux, Windows and macOS. First run on this branch, started by hand (2026-11-10): everything passed but one service test, on all three, which expected a video's time in Jamie's time zone (UTC−4) where GitHub's machines keep UTC; it now expects the UTC time in whichever zone the computer has. Linux measured 100% of lines and branches, so its gate is now 100% (it was 90% and 85%). Waiting on a push and a second run.
+- [x] See the main CI (`ci.yml`) pass on Linux, Windows and macOS (d5d6855, started by hand, 2026-11-10): 811 of 811 service tests on each, and on Linux 100% of lines and branches, the build tools and the page. The first run failed on one test that expected a video's time in Jamie's time zone; it now expects it in whichever zone the computer has. Linux's gate is now 100% (it was 90% and 85%).
 - [ ] Merge the branch, or open a pull request, when Jamie decides.
 
 ### Trying the apps on real devices (by hand, as Jamie agreed)
@@ -122,6 +130,11 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - A copy an undo could not delete, nor give back its name, is now named by the hidden name it is under ("left as .IMG_2.JPG….undo").
   - An empty picture is counted as unreadable without being decoded; before, the decoder's error said so.
   - The phone no longer answers a computer that has said the numbers do not match: the computer never read it, and the answer could fail as the computer hung up, hiding the real reason.
+- **Resilience (2026-11-10):**
+  - The minute's limit counts silence, not the whole send; "wait" every 20 seconds (a third of it) keeps a busy side's partner waiting. An iCloud fetch is given up after a minute without progress, not a fixed total. Apple's device service has five seconds to list the phones.
+  - An error nothing expected ends a send with "Sending stopped. Try again." or "Receiving stopped. Try again.", without its own words.
+  - Arriving files are written through to the disk as they arrive (`FileOptions.WriteThrough`); not measured on a slow external disk.
+  - On Android, a question still up when the app's screen is closed for good counts as no, so nothing it asked about changes; a screen only redrawn still gets the answer.
 - **Page:** the light theme's faintest text (`--t3`) is a little darker (#646a6e), so it passes WCAG AA on the compare window's grey.
 - **End-to-end tests:**
   - What only a phone or another device answers is stood in for in the browser: being the phone app, its photo access, a phone on the network, sending.
@@ -137,6 +150,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 - Heavily re-compressed copies are listed as similar shots, not duplicates, on purpose.
 - The iPhone and Android apps cannot be built on Jamie's PC without admin rights, for the missing Mono pack. The Android app builds with the workaround in CLAUDE.md, and neither has an emulator or simulator here.
 - 17 react-hooks compiler warnings are known and left.
+- The minute's limit and iCloud fetching are tested with a stand-in clock and library; neither has met a real phone that sleeps, loses the Wi-Fi or fetches from iCloud. The iPhone's new fetch (`PhotoKitLibrary.OpenAsync`, using `RequestData` and `CancelDataRequest`) and Android's change compile only on GitHub's checks.
 
 ## For later
 

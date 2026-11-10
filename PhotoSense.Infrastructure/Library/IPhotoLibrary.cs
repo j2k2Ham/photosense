@@ -59,9 +59,13 @@ public interface IPhotoLibrary
     /// <summary>Every picture and video the app has been allowed to see, oldest first.</summary>
     IReadOnlyList<LibraryItem> Items();
 
-    /// <summary>One file of a picture or video as it was taken, fetched from the cloud first when it is kept there.</summary>
+    /// <summary>
+    /// One file of a picture or video as it was taken, fetched from the cloud first when it is kept there. A fetch
+    /// that goes a minute without getting any further is given up, as the phone may have lost its connection.
+    /// </summary>
     /// <exception cref="FileNotFoundException">The picture or video is no longer in the library.</exception>
-    Stream Open(string id, LibraryFileKind kind);
+    /// <exception cref="IOException">It could not be fetched from the cloud.</exception>
+    Task<Stream> OpenAsync(string id, LibraryFileKind kind, CancellationToken ct);
 
     /// <summary>The albums PhotoSense has made, empty ones too. Albums of the person's own are never among them.</summary>
     IReadOnlyList<LibraryAlbum> Albums();

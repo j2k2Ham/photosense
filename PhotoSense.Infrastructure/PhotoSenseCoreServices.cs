@@ -50,7 +50,7 @@ public static class PhotoSenseCoreServices
         s.AddSingleton<ICompanionFileFinder>(sp =>
         {
             var files = sp.GetRequiredService<IPhotoFileSystem>();
-            return new CompanionFileFinder(files, sp.GetRequiredService<OrganizeLibrary>().LivePhotoIds(new LivePhotoIdCache(files).Read));
+            return new CompanionFileFinder(files, sp.GetRequiredService<OrganizeLibrary>().LivePhotoIds(new LivePhotoIdCache(files).ReadAsync));
         });
         s.AddSingleton<IMediaDetailsReader, ExifMediaDetailsReader>();
         s.AddSingleton<IMediaDetailsStore>(sp => new LiteDbMediaDetailsStore(sp.GetRequiredService<LiteDatabase>()));

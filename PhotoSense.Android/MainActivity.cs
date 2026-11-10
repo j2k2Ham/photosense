@@ -97,7 +97,15 @@ public sealed class MainActivity : Activity
 
     protected override void OnDestroy()
     {
-        if (Shown == this) Shown = null;
+        if (Shown == this)
+        {
+            Shown = null;
+            // The screen is going for good, so no answer will come to a question still up: it counts as no, and
+            // nothing it asked about is changed. One only being redrawn, as for a new language, still gets the answer.
+            if (!IsChangingConfigurations)
+                foreach (var id in Questions.Keys)
+                    if (Questions.TryRemove(id, out var asked)) asked.TrySetResult(false);
+        }
         base.OnDestroy();
     }
 

@@ -157,12 +157,12 @@ public sealed class OrganizeLibrary
                 }
 
                 var read = new ConcurrentBag<StoredMediaDetails>();
-                Parallel.ForEach(paths, new ParallelOptions { MaxDegreeOfParallelism = ReadersAtOnce, CancellationToken = ct }, path =>
+                await Parallel.ForEachAsync(paths, new ParallelOptions { MaxDegreeOfParallelism = ReadersAtOnce, CancellationToken = ct }, async (path, token) =>
                 {
                     var at = PhotoPath.Key(path);
                     if (_files.Describe(path) is { } now)
                     {
-                        var file = Known(now, at) ?? Learn(path, now, at, scanned.GetValueOrDefault(at), kept.GetValueOrDefault(at), read.Add);
+                        var file = Known(now, at) ?? await LearnAsync(path, now, at, scanned.GetValueOrDefault(at), kept.GetValueOrDefault(at), read.Add, token);
                         // Kept in the order found, so that whoever is watching can be handed the new ones each time they ask.
                         lock (reading.Found) reading.Found.Add(file);
                     }
@@ -198,7 +198,7 @@ public sealed class OrganizeLibrary
         var key = PhotoPath.Key(path);
         if (Known(now, key) is { } known) return known;
         var read = new List<StoredMediaDetails>();
-        var file = Learn(path, now, key, await _repo.GetByPathAsync(path, ct), _details.At(path), read.Add);
+        var file = await LearnAsync(path, now, key, await _repo.GetByPathAsync(path, ct), _details.At(path), read.Add, ct);
         _details.Save(read);
         return file;
     }
@@ -207,7 +207,7 @@ public sealed class OrganizeLibrary
         => _known.TryGetValue(key, out var known) && known.SizeBytes == now.Length && known.ModifiedUtc == now.ModifiedUtc ? known : null;
 
     // What is on record about a file holds for as long as the file has not changed since; otherwise the file is read.
-    private LibraryFile Learn(string path, StoredFile now, string key, Domain.Entities.Photo? scanned, StoredMediaDetails? kept, Action<StoredMediaDetails> onRead)
+    private async Task<LibraryFile> LearnAsync(string path, StoredFile now, string key, Domain.Entities.Photo? scanned, StoredMediaDetails? kept, Action<StoredMediaDetails> onRead, CancellationToken ct)
     {
         var id = IdOf(key);
         _paths[id] = path;
@@ -219,7 +219,7 @@ public sealed class OrganizeLibrary
             file = new LibraryFile(id, path, now.Length, now.ModifiedUtc, kept.Details, FromScan: false, ContentHash: null);
         else
         {
-            file = new LibraryFile(id, path, now.Length, now.ModifiedUtc, _reader.Read(path), FromScan: false, ContentHash: null);
+            file = new LibraryFile(id, path, now.Length, now.ModifiedUtc, await _reader.ReadAsync(path, ct), FromScan: false, ContentHash: null);
             onRead(new StoredMediaDetails(path, now.Length, now.ModifiedUtc, file.Details));
         }
         return _known[key] = file;
@@ -230,9 +230,9 @@ public sealed class OrganizeLibrary
     /// and asks <paramref name="otherwise"/> only about a file it does not know. Finding what belongs to
     /// each of thousands of pictures would otherwise open every one of them, and its video, again.
     /// </summary>
-    public Func<string, string?> LivePhotoIds(Func<string, string?> otherwise) => path =>
+    public Func<string, CancellationToken, Task<string?>> LivePhotoIds(Func<string, CancellationToken, Task<string?>> otherwise) => (path, ct) =>
     {
-        return _files.Describe(path) is { } now && Known(now, PhotoPath.Key(path)) is { } known ? known.Details.LivePhotoId : otherwise(path);
+        return _files.Describe(path) is { } now && Known(now, PhotoPath.Key(path)) is { } known ? Task.FromResult(known.Details.LivePhotoId) : otherwise(path, ct);
     };
 
     /// <summary>The hash of the file's bytes, worked out once for as long as the file stays the same.</summary>
@@ -242,7 +242,7 @@ public sealed class OrganizeLibrary
         // The file as it was handed in may be from before its hash was worked out.
         var key = PhotoPath.Key(file.Path);
         if (_known.TryGetValue(key, out var known) && known.ContentHash is { } worked && known.SizeBytes == file.SizeBytes && known.ModifiedUtc == file.ModifiedUtc) return worked;
-        await using var stream = _files.OpenRead(file.Path);
+        await using var stream = await _files.OpenReadAsync(file.Path, ct);
         hash = await _hashing.ComputeHashAsync(stream, ct);
         _known[key] = file with { ContentHash = hash };
         return hash;

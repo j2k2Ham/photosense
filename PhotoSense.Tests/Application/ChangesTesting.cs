@@ -87,10 +87,10 @@ internal sealed class FailingDisk : DiskFileSystem
         base.Erase(path);
     }
 
-    public override Stream OpenRead(string path)
+    public override Task<Stream> OpenReadAsync(string path, CancellationToken ct)
     {
         Check("read", path);
-        return base.OpenRead(path);
+        return base.OpenReadAsync(path, ct);
     }
 }
 

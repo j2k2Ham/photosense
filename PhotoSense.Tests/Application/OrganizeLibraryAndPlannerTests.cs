@@ -300,15 +300,15 @@ public sealed class OrganizeLibraryTests : IDisposable
         await _f.Library.ListAsync(_f.Root.FullName, ct);
 
         var asked = new List<string>();
-        var ids = _f.Library.LivePhotoIds(path => { asked.Add(Path.GetFileName(path)); return "from the file"; });
+        var ids = _f.Library.LivePhotoIds((path, _) => { asked.Add(Path.GetFileName(path)); return Task.FromResult<string?>("from the file"); });
         // Read with the other details, or taken from the scan's record; a file that has none is known to have none.
-        await Assert.That((ids(picture), ids(video), ids(plain))).IsEqualTo(("LIVE-1", "LIVE-1", null));
+        await Assert.That((await ids(picture, ct), await ids(video, ct), await ids(plain, ct))).IsEqualTo(("LIVE-1", "LIVE-1", null));
         await Assert.That(asked).IsEmpty();
 
         // A file the library has not seen, one that has changed since it was, and one that is not there are asked about.
         var unseen = _f.Put("there/IMG_9.HEIC");
         File.WriteAllText(picture, "changed since");
-        await Assert.That((ids(unseen), ids(picture), ids(_f.In("gone.HEIC")))).IsEqualTo(("from the file", "from the file", "from the file"));
+        await Assert.That((await ids(unseen, ct), await ids(picture, ct), await ids(_f.In("gone.HEIC"), ct))).IsEqualTo(("from the file", "from the file", "from the file"));
         await Assert.That(asked).IsEquivalentTo(new[] { "IMG_9.HEIC", "IMG_1234.HEIC", "gone.HEIC" }, CollectionOrdering.Matching);
     }
 

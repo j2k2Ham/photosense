@@ -313,7 +313,7 @@ public sealed class TransferLinkTests
     private static UsbmuxPhoneFinder Muxer(params ScriptedStream[] connections)
     {
         var next = 0;
-        return new UsbmuxPhoneFinder(_ => Task.FromResult<Stream>(connections[next++]), 47615);
+        return new UsbmuxPhoneFinder(_ => Task.FromResult<Stream>(connections[next++]), 47615, TimeSpan.FromSeconds(5));
     }
 
     [Test]
@@ -376,7 +376,18 @@ public sealed class TransferLinkTests
     [Test]
     [MethodDataSource(nameof(DeviceServicesThatDoNotAnswer))]
     public async Task No_Device_Service_Or_One_That_Does_Not_Answer_Finds_No_Phone(Func<CancellationToken, Task<Stream>> muxer, CancellationToken ct)
-        => await Assert.That(await new UsbmuxPhoneFinder(muxer, 47615).FindAsync(ct)).IsEmpty();
+        => await Assert.That(await new UsbmuxPhoneFinder(muxer, 47615, TimeSpan.FromSeconds(5)).FindAsync(ct)).IsEmpty();
+
+    [Test]
+    public async Task A_Device_Service_That_Takes_Too_Long_To_Answer_Finds_No_Phone_And_A_Caller_That_Has_Gone_Is_Told_So(CancellationToken ct)
+    {
+        var (near, far) = await Loopback.PairAsync(ct);
+        await using (far)
+            await Assert.That(await new UsbmuxPhoneFinder(_ => Task.FromResult(near), 47615, TimeSpan.FromMilliseconds(200)).FindAsync(ct)).IsEmpty();
+
+        var asking = new UsbmuxPhoneFinder(_ => Task.FromResult<Stream>(new ScriptedStream([])), 47615, TimeSpan.FromSeconds(5));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => asking.FindAsync(new CancellationToken(canceled: true)));
+    }
 
     [Test]
     public async Task The_Device_Service_Is_Where_Apple_Puts_It_On_Each_System(CancellationToken ct)

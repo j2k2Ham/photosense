@@ -51,10 +51,23 @@ public sealed class TransferTests : IDisposable
         _computer = Receiving(new OnThisComputer(_advertiser));
     }
 
-    private PhoneReceiving Receiving(IPhoneFinder finder, DiskFileSystem? disk = null)
+    private PhoneReceiving Receiving(IPhoneFinder finder, DiskFileSystem? disk = null, TimeProvider? clock = null)
     {
         disk ??= new DiskFileSystem();
-        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1");
+        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1", clock ?? TimeProvider.System);
+    }
+
+    /// <summary>The phone's sending on a clock of the test's own, offering through the same network and library as the phone.</summary>
+    private PhoneSending Sending(TimeProvider clock)
+        => new(new TcpTransferListener(0), _advertiser, _phone.GetRequiredService<IPairingStore>(), _phone.GetRequiredService<IPhotoFileSystem>(),
+            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), "Jamie's iPhone", clock);
+
+    /// <summary>The phone and the computer paired already, as after a first time.</summary>
+    private async Task PairedAsync(CancellationToken ct)
+    {
+        var secret = RandomNumberGenerator.GetBytes(32);
+        await _computerPairs.SaveAsync(new PairedDevice(_advertiser.Telling!.Value.Id, "Jamie's iPhone", secret), ct);
+        await _phone.GetRequiredService<IPairingStore>().SaveAsync(new PairedDevice(await _computerPairs.SelfIdAsync(ct), "DESKTOP-1", secret), ct);
     }
 
     public void Dispose()
@@ -224,7 +237,7 @@ public sealed class TransferTests : IDisposable
     public async Task Only_A_Phone_Deletes_What_It_Sent(CancellationToken ct)
     {
         var onAComputer = new PhoneSending(new TcpTransferListener(0), new FakeAdvertiser(), new MemoryPairs("computer"), new DiskFileSystem(),
-            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), "DESKTOP-1");
+            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), "DESKTOP-1", TimeProvider.System);
         await Assert.That(Assert.Throws<InvalidOperationException>(() => onAComputer.DeleteSent())!.Message).IsEqualTo("Only a phone deletes what it has sent.");
     }
 
@@ -308,7 +321,7 @@ public sealed class TransferTests : IDisposable
 
     // ---- a phone of the test's own, paired with the computer already, sending what it likes
 
-    private async Task<(PhoneReceiving Computer, SecureChannel Phone)> FromPlayedPhoneAsync(CancellationToken ct, DiskFileSystem? disk = null)
+    private async Task<(PhoneReceiving Computer, SecureChannel Phone)> FromPlayedPhoneAsync(CancellationToken ct, DiskFileSystem? disk = null, TimeProvider? clock = null)
     {
         var (near, far) = await Loopback.PairAsync(ct);
         _open.Add(near);
@@ -317,7 +330,7 @@ public sealed class TransferTests : IDisposable
         var pairs = new MemoryPairs("test-phone");
         await pairs.SaveAsync(new PairedDevice(await _computerPairs.SelfIdAsync(ct), "DESKTOP-1", secret), ct);
         await _computerPairs.SaveAsync(new PairedDevice("test-phone", "Test phone", secret), ct);
-        var computer = Receiving(new Found(new FoundPhone("wifi:test-phone", "Test phone", "wifi", _ => Task.FromResult(near))), disk);
+        var computer = Receiving(new Found(new FoundPhone("wifi:test-phone", "Test phone", "wifi", _ => Task.FromResult(near))), disk, clock);
         await computer.FindAsync(ct);
         computer.Start("wifi:test-phone", _folder);
         var linked = await Pairing.PhoneAsync(far, new Device("test-phone", "Test phone"), pairs, (_, _, _) => Task.FromResult(false), CancellationToken.None);
@@ -432,6 +445,84 @@ public sealed class TransferTests : IDisposable
         await Offer(phone2, Offered("f1", "IMG_0001.JPG", 3));
         await SendFile(phone2, [1, 2, 3], whole: false);
         await Assert.That((await Ended(forbidden)).Problem).IsEqualTo("Receiving stopped: Access to the folder is denied.");
+    }
+
+    // ---- silences, and what was not expected
+
+    [Test]
+    public async Task A_Phone_That_Goes_Silent_Is_Given_Up_On_And_What_It_Began_Is_Not_Kept(CancellationToken ct)
+    {
+        var (computer, phone) = await FromPlayedPhoneAsync(ct, clock: HurriedClock.Minute);
+        await Offer(phone, Offered("f1", "IMG_0001.JPG", 3));
+        await SendFile(phone, [1, 2, 3], whole: false);
+        var ended = await Ended(computer);
+        await Assert.That((ended.Stage, ended.Problem)).IsEqualTo((ReceiveStage.Failed, "The other device stopped answering. Try again."));
+        await Assert.That(Directory.GetFiles(_folder)).IsEmpty();
+    }
+
+    [Test]
+    public async Task A_Computer_That_Goes_Silent_Is_Given_Up_On(CancellationToken ct)
+    {
+        var phone = Sending(HurriedClock.Minute);
+        try
+        {
+            await phone.StartAsync(await OfferedAsync(ct), ct);
+            var channel = await PlayComputerAsync(ct);
+            await channel.SendAsync(new JsonObject { ["t"] = "offer?" }, CancellationToken.None);
+            await channel.ReceiveAsync(CancellationToken.None, "offer");
+            await Until(() => Task.FromResult(phone.State.Stage == SendStage.Failed), "given up");
+            await Assert.That(phone.State.Problem).IsEqualTo("The other device stopped answering. Try again.");
+        }
+        finally { phone.Stop(); }
+    }
+
+    [Test]
+    public async Task A_Picture_Fetched_From_The_Cloud_For_Longer_Than_A_Silence_Still_Arrives(CancellationToken ct)
+    {
+        var phone = Sending(HurriedClock.Minute);
+        try
+        {
+            await phone.StartAsync(await OfferedAsync(ct), ct);
+            await PairedAsync(ct);
+            // The first picture takes a minute and a half on the phone's clock to come from the cloud; the phone says
+            // meanwhile that it is still there, and the computer, which gives up after a minute's silence, waits.
+            var fetches = 0;
+            _library.Fetching = stop => Interlocked.Increment(ref fetches) == 1 ? Task.Delay(TimeSpan.FromSeconds(3), stop) : Task.CompletedTask;
+            var computer = Receiving(new OnThisComputer(_advertiser), clock: HurriedClock.Minute);
+            await computer.FindAsync(ct);
+            computer.Start($"wifi:{_advertiser.Telling!.Value.Id}", _folder);
+            var ended = await Ended(computer);
+            await Assert.That((ended.Stage, ended.Done, ended.Problem)).IsEqualTo((ReceiveStage.Done, 3, (string?)null));
+            await Until(() => Task.FromResult(phone.State.Stage == SendStage.Sent), "sent");
+        }
+        finally { phone.Stop(); }
+    }
+
+    [Test]
+    [Arguments(true, "Sending stopped: PhotoSense may no longer see your photos.")]
+    [Arguments(false, "Sending stopped. Try again.")]
+    public async Task A_Phone_That_Cannot_Read_A_Picture_It_Offered_Says_Sending_Stopped(bool accessTakenAway, string problem, CancellationToken ct)
+    {
+        var (channel, _) = await SentToComputerAsync(ct);
+        _library.Fetching = _ => accessTakenAway ? throw new UnauthorizedAccessException("PhotoSense may no longer see your photos.") : throw new InvalidOperationException("Something PhotoSense did not expect.");
+        await channel.SendAsync(new JsonObject { ["t"] = "get", ["id"] = "f1" }, CancellationToken.None);
+        await Assert.That((await SendingProblemAsync(ct)).GetProperty("problem").GetString()).IsEqualTo(problem);
+        await Assert.ThrowsAsync<TransferException>(() => channel.ReceiveAsync(CancellationToken.None, "file"));
+    }
+
+    private sealed class Unexpected : DiskFileSystem
+    {
+        public override Stream CreateNew(string path) => throw new InvalidOperationException("Something PhotoSense did not expect.");
+    }
+
+    [Test]
+    public async Task A_Computer_Meeting_What_It_Did_Not_Expect_Says_Receiving_Stopped(CancellationToken ct)
+    {
+        var (computer, phone) = await FromPlayedPhoneAsync(ct, new Unexpected());
+        await Offer(phone, Offered("f1", "IMG_0001.JPG", 3));
+        await SendFile(phone, [1, 2, 3], whole: false);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => computer.Running.WaitAsync(TimeSpan.FromSeconds(20), ct));
+        await Assert.That((computer.State.Stage, computer.State.Problem)).IsEqualTo((ReceiveStage.Failed, "Receiving stopped. Try again."));
     }
 
     [Test]

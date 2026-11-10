@@ -14,5 +14,5 @@ public sealed record MediaDetails(DateTime? TakenOn, int Width, int Height, doub
 public interface IMediaDetailsReader
 {
     /// <summary>Reads what the file records. A file that cannot be read yields details with nothing in them.</summary>
-    MediaDetails Read(string path);
+    Task<MediaDetails> ReadAsync(string path, CancellationToken ct);
 }

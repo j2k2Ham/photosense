@@ -23,11 +23,11 @@ internal sealed class FakeDetailsReader : IMediaDetailsReader
     public Action<string>? OnRead { get; set; }
 
     /// <inheritdoc />
-    public MediaDetails Read(string path)
+    public Task<MediaDetails> ReadAsync(string path, CancellationToken ct)
     {
         lock (Reads) Reads.Add(Path.GetFileName(path));
         OnRead?.Invoke(path);
-        return Says.GetValueOrDefault(Path.GetFileName(path), Nothing);
+        return Task.FromResult(Says.GetValueOrDefault(Path.GetFileName(path), Nothing));
     }
 }
 
@@ -85,7 +85,7 @@ internal sealed class OrganizeFixture : IDisposable
         Details = new MemoryMediaDetailsStore();
         Library = new OrganizeLibrary(Repo, Reader, Hasher, Details, Disk);
         Places = new PlaceLookup(Resolver.Object);
-        Finder = new CompanionFileFinder(Disk, ContentAsId);
+        Finder = new CompanionFileFinder(Disk, (path, _) => Task.FromResult(ContentAsId(path)));
         Planner = new OrganizePlanner(Library, Finder, Places, Disk);
         Batches = new MemoryBatchStore();
         Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);

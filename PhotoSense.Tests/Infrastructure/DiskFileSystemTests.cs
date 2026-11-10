@@ -99,7 +99,7 @@ public sealed class DiskFileSystemTests : IDisposable
     public async Task A_File_Being_Read_Can_Still_Be_Moved_And_Is_Read_From_Any_Point(CancellationToken ct)
     {
         var file = Put("clip.MOV", "0123456789");
-        await using var reading = _disk.OpenRead(file);
+        await using var reading = await _disk.OpenReadAsync(file, ct);
 
         _disk.Move(file, In("moved.MOV"));
         reading.Position = 6;
@@ -122,11 +122,11 @@ public sealed class DiskFileSystemTests : IDisposable
         }
         var original = Write("original.bin", bytes);
 
-        await Assert.That(_disk.IsCopyOf(Write("whole.bin", bytes), original)).IsTrue();
-        await Assert.That(_disk.IsCopyOf(Write("part.bin", bytes[..100_000]), original)).IsTrue();
-        await Assert.That(_disk.IsCopyOf(Write("empty.bin", []), original)).IsTrue();
-        await Assert.That(_disk.IsCopyOf(Write("longer.bin", [.. bytes, 1]), original)).IsFalse();
-        await Assert.That(_disk.IsCopyOf(Write("differs.bin", changed), original)).IsFalse();
+        await Assert.That(await _disk.IsCopyOfAsync(Write("whole.bin", bytes), original, ct)).IsTrue();
+        await Assert.That(await _disk.IsCopyOfAsync(Write("part.bin", bytes[..100_000]), original, ct)).IsTrue();
+        await Assert.That(await _disk.IsCopyOfAsync(Write("empty.bin", []), original, ct)).IsTrue();
+        await Assert.That(await _disk.IsCopyOfAsync(Write("longer.bin", [.. bytes, 1]), original, ct)).IsFalse();
+        await Assert.That(await _disk.IsCopyOfAsync(Write("differs.bin", changed), original, ct)).IsFalse();
     }
 
     // ---- changing

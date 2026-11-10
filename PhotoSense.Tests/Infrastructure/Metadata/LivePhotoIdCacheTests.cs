@@ -14,24 +14,24 @@ public sealed class LivePhotoIdCacheTests : IDisposable
         var path = Path.Combine(_root.FullName, "IMG_1.HEIC");
         File.WriteAllText(path, "AAAA");
         var reads = new List<string>();
-        var cache = new LivePhotoIdCache(TestFiles.Disk, p => { reads.Add(p); return File.Exists(p) ? File.ReadAllText(p) : null; });
+        var cache = new LivePhotoIdCache(TestFiles.Disk, (p, _) => { reads.Add(p); return Task.FromResult(File.Exists(p) ? File.ReadAllText(p) : null); });
 
-        await Assert.That((cache.Read(path), cache.Read(path), reads.Count)).IsEqualTo(("AAAA", "AAAA", 1));
+        await Assert.That((await cache.ReadAsync(path, ct), await cache.ReadAsync(path, ct), reads.Count)).IsEqualTo(("AAAA", "AAAA", 1));
 
         // Another size, or the same size written at another time: read again.
         File.WriteAllText(path, "BBBBBB");
-        await Assert.That((cache.Read(path), reads.Count)).IsEqualTo(("BBBBBB", 2));
+        await Assert.That((await cache.ReadAsync(path, ct), reads.Count)).IsEqualTo(("BBBBBB", 2));
         File.WriteAllText(path, "CCCCCC");
         File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(1));
-        await Assert.That((cache.Read(path), cache.Read(path), reads.Count)).IsEqualTo(("CCCCCC", "CCCCCC", 3));
+        await Assert.That((await cache.ReadAsync(path, ct), await cache.ReadAsync(path, ct), reads.Count)).IsEqualTo(("CCCCCC", "CCCCCC", 3));
 
         // A file with no identifier is remembered as having none; one that is not there is left to the reader each time.
         var plain = Path.Combine(_root.FullName, "plain.JPG");
         File.WriteAllText(plain, "x");
-        var none = new LivePhotoIdCache(TestFiles.Disk, p => { reads.Add(p); return null; });
-        await Assert.That((none.Read(plain), none.Read(plain), reads.Count)).IsEqualTo((null, null, 4));
+        var none = new LivePhotoIdCache(TestFiles.Disk, (p, _) => { reads.Add(p); return Task.FromResult<string?>(null); });
+        await Assert.That((await none.ReadAsync(plain, ct), await none.ReadAsync(plain, ct), reads.Count)).IsEqualTo((null, null, 4));
         var missing = Path.Combine(_root.FullName, "missing.JPG");
-        await Assert.That((cache.Read(missing), cache.Read(missing), reads.Count)).IsEqualTo((null, null, 6));
+        await Assert.That((await cache.ReadAsync(missing, ct), await cache.ReadAsync(missing, ct), reads.Count)).IsEqualTo((null, null, 6));
     }
 
     [Test]
@@ -39,6 +39,6 @@ public sealed class LivePhotoIdCacheTests : IDisposable
     {
         var path = Path.Combine(_root.FullName, "IMG_1.JPG");
         File.WriteAllBytes(path, MediaSamples.Picture("LIVE-1"));
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(path)).IsEqualTo("LIVE-1");
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(path, ct)).IsEqualTo("LIVE-1");
     }
 }

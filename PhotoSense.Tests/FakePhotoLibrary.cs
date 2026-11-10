@@ -22,6 +22,9 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
     /// <summary>What was deleted, which the phone keeps in its own bin.</summary>
     public List<string> RecentlyDeleted { get; } = [];
 
+    /// <summary>Runs before a file is handed out, as fetching it from the cloud would: it can take a while, or fail.</summary>
+    public Func<CancellationToken, Task>? Fetching { get; set; }
+
     /// <summary>When set, the person says no to the next change, and this is why; nothing changes.</summary>
     public string? Refuse { get; set; }
 
@@ -52,9 +55,10 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
     }
 
     /// <inheritdoc />
-    public Stream Open(string id, LibraryFileKind kind)
+    public async Task<Stream> OpenAsync(string id, LibraryFileKind kind, CancellationToken ct)
     {
         if (!_bytes.TryGetValue((id, kind), out var bytes)) throw new FileNotFoundException("Not in the library.", id);
+        if (Fetching is { } fetching) await fetching(ct);
         return OnlyFromTheStart ? new FromTheStart(bytes) : new MemoryStream(bytes, writable: false);
     }
 

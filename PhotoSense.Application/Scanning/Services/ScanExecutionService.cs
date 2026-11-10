@@ -176,7 +176,7 @@ public class ScanExecutionService : IScanExecutionService
             return;
         }
 
-        await using var stream = _files.OpenRead(file);
+        await using var stream = await _files.OpenReadAsync(file, ct);
         var photo = new Photo
         {
             Id = existing?.Id ?? PhotoId.New(),

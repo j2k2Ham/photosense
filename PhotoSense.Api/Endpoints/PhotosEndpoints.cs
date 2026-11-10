@@ -63,7 +63,7 @@ internal sealed class PhotosEndpoints
             // The cache was cleared since the scan: make the thumbnail again from the file.
             try
             {
-                await using var stream = _files.OpenRead(photo.SourcePath);
+                await using var stream = await _files.OpenReadAsync(photo.SourcePath, ct);
                 jpeg = (await _analyzer.AnalyzeAsync(stream, ct)).ThumbnailJpeg;
                 await _thumbnails.SaveAsync(photo.ContentHash, jpeg, ct);
             }
@@ -98,7 +98,7 @@ internal sealed class PhotosEndpoints
             // What browsers can show is sent as it is; anything else is converted for viewing.
             var asItIs = BrowserFormats.TryGetValue(Path.GetExtension(path), out var contentType);
             byte[] bytes;
-            await using (var stream = files.OpenRead(path))
+            await using (var stream = await files.OpenReadAsync(path, ct))
             {
                 if (asItIs) await stream.ReadExactlyAsync(bytes = new byte[stream.Length], ct);
                 else bytes = await analyzer.RenderJpegAsync(stream, ReviewImageEdge, ct);
@@ -120,7 +120,7 @@ internal sealed class PhotosEndpoints
         var photo = await _repo.GetAsync(new PhotoId(Guid.Parse(id)), ct);
         if (photo is null || !photo.IsVideo || !_files.FileExists(photo.SourcePath)) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        await using var file = _files.OpenRead(photo.SourcePath);
+        await using var file = await _files.OpenReadAsync(photo.SourcePath, ct);
         var requested = req.Headers.TryGetValues("Range", out var values) ? values.FirstOrDefault() : null;
         if (ByteRange.Parse(requested, file.Length) is not { } range)
         {

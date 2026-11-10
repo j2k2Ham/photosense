@@ -14,6 +14,9 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
     // The framework's code for a change the person said no to (PHPhotosError.userCancelled).
     private const nint SaidNo = 3072;
 
+    // A fetch from iCloud that goes this long without getting any further is given up: the phone may have lost its connection.
+    private static readonly TimeSpan CloudSilence = TimeSpan.FromSeconds(60);
+
     /// <summary>Every picture and video the app has been allowed to see, oldest first.</summary>
     public IReadOnlyList<LibraryItem> Items()
     {
@@ -33,7 +36,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
     }
 
     /// <summary>One file of a picture or video as it was taken, fetched from iCloud first when it is kept there.</summary>
-    public Stream Open(string id, LibraryFileKind kind)
+    public async Task<Stream> OpenAsync(string id, LibraryFileKind kind, CancellationToken ct)
     {
         var found = PHAsset.FetchAssetsUsingLocalIdentifiers([id], null);
         var resource = found.Count > 0 && found[0] is PHAsset asset
@@ -43,12 +46,39 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
 
         var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + Path.GetExtension(resource.OriginalFilename));
         var written = new TaskCompletionSource<NSError?>(TaskCreationOptions.RunContinuationsAsynchronously);
-        // One kept in iCloud only is downloaded first.
-        using var options = new PHAssetResourceRequestOptions { NetworkAccessAllowed = true };
-        PHAssetResourceManager.DefaultManager.WriteData(resource, NSUrl.FromFilename(file), options, error => written.SetResult(error));
-        if (written.Task.GetAwaiter().GetResult() is { } error)
-            throw new IOException($"{resource.OriginalFilename} could not be read from the photo library: {error.LocalizedDescription}");
-        return new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.DeleteOnClose);
+        using var stalled = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        stalled.CancelAfter(CloudSilence);
+        var kept = false;
+        try
+        {
+            await using (var output = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16))
+            {
+                // One kept in iCloud only is downloaded first. Each piece that arrives shows it is still coming.
+                using var options = new PHAssetResourceRequestOptions { NetworkAccessAllowed = true };
+                var request = PHAssetResourceManager.DefaultManager.RequestData(resource, options, data =>
+                {
+                    output.Write(data.ToArray());
+                    stalled.CancelAfter(CloudSilence);
+                }, error => written.TrySetResult(error));
+                NSError? failed;
+                // A fetch given up on still ends with its own answer, after which nothing more arrives.
+                await using (stalled.Token.Register(() => PHAssetResourceManager.DefaultManager.CancelDataRequest(request)))
+                    failed = await written.Task;
+                ct.ThrowIfCancellationRequested();
+                if (stalled.IsCancellationRequested)
+                    throw new IOException($"{resource.OriginalFilename} stopped arriving from iCloud. Check the phone's connection and try again.");
+                if (failed is not null)
+                    throw new IOException($"{resource.OriginalFilename} could not be read from the photo library: {failed.LocalizedDescription}");
+            }
+            var read = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.DeleteOnClose);
+            kept = true;
+            return read;
+        }
+        finally
+        {
+            // A fetch that did not finish leaves nothing behind.
+            if (!kept) File.Delete(file);
+        }
     }
 
     /// <summary>The albums PhotoSense has made, empty ones too.</summary>

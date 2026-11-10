@@ -396,7 +396,7 @@ public sealed class FileChanges
             }
             // A copy, or a move to another disk that had copied the file and not yet taken the original away:
             // what PhotoSense wrote goes, and only while it holds nothing but what the original holds.
-            if (_files.IsCopyOf(item.To, item.From)) _files.DeleteCopy(item.To);
+            if (await _files.IsCopyOfAsync(item.To, item.From, ct)) _files.DeleteCopy(item.To);
         }
         if (batch.Removed)
         {
@@ -424,7 +424,7 @@ public sealed class FileChanges
             if (!_files.FileExists(item.Back!)) continue;
             if (!_files.FileExists(item.To)) _files.Move(item.Back!, item.To);
             // An undo to another disk that had copied the file back and not yet taken it away.
-            else if (!batch.Copy && _files.IsCopyOf(item.Back!, item.To)) _files.DeleteCopy(item.Back!);
+            else if (!batch.Copy && await _files.IsCopyOfAsync(item.Back!, item.To, ct)) _files.DeleteCopy(item.Back!);
         }
         if (batch.Removed)
         {

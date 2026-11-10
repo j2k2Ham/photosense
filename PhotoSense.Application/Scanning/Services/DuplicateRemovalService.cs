@@ -78,7 +78,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
                 // The photo kept was seen to stay, and what goes along with a copy (its Live Photo video, its sidecars)
                 // is never a file of the copy's own group, so a copy here is never the last one: having changed since
                 // the scan is the one reason to leave it.
-                if (removal.Add(photo, [group.Keeper]) != RemovalOutcome.Changed) continue;
+                if (await removal.AddAsync(photo, [group.Keeper], ct) != RemovalOutcome.Changed) continue;
                 skipped++;
                 problems.Add($"Changed since the scan, left alone: {photo.SourcePath}");
             }
@@ -112,7 +112,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         IReadOnlyList<Photo>? copyOf = group is null ? null
             : group.Keeper.Id == id ? group.Members.Select(m => m.Photo).ToList() : [group.Keeper];
         var removal = new Removal(this);
-        if (removal.Add(photo, copyOf) is var refused and not RemovalOutcome.Removed) return new RemovalResult(refused);
+        if (await removal.AddAsync(photo, copyOf, ct) is var refused and not RemovalOutcome.Removed) return new RemovalResult(refused);
 
         var done = await removal.CarryOutAsync(ct);
         if (!done.Done) return new RemovalResult(RemovalOutcome.Failed, Error: done.Problem);
@@ -152,8 +152,9 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         /// <summary>Adds a photo to the request, with what goes along with it, unless it is to be left.</summary>
         /// <param name="photo">The photo.</param>
         /// <param name="copyOf">The files it is a copy of, when it is being removed as one: it goes only while one of them stays.</param>
+        /// <param name="ct">Stops the reading of what goes along with it.</param>
         /// <returns>Removed when it is to go, or why it is not.</returns>
-        public RemovalOutcome Add(Photo photo, IReadOnlyList<Photo>? copyOf)
+        public async Task<RemovalOutcome> AddAsync(Photo photo, IReadOnlyList<Photo>? copyOf, CancellationToken ct)
         {
             // Already going, for instance as the Live Photo video of a picture this request takes.
             if (_going.Contains(photo.SourcePath)) return RemovalOutcome.NotFound;
@@ -168,7 +169,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
             if (copyOf is not null && stays is null) return RemovalOutcome.LastCopy;
 
             // Worked out while the file is still in place: its sidecars and Live Photo video, if nothing else uses them.
-            var companions = service._companions.FindFor(photo.SourcePath).Where(c => !_going.Contains(c)).ToList();
+            var companions = (await service._companions.FindForAsync(photo.SourcePath, ct)).Where(c => !_going.Contains(c)).ToList();
             _of[Plan(photo.SourcePath, photo.ScanRoot, companion: false)] = (photo, stays);
             foreach (var companion in companions) _of[Plan(companion, photo.ScanRoot, companion: true)] = (photo, null);
             return RemovalOutcome.Removed;

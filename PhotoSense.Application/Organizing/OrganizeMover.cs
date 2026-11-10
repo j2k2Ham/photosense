@@ -142,7 +142,7 @@ public sealed class OrganizeMover
             var item = Plan(batch, file.Path, folder, NameRules.Usable(wanted, file.Name) ? wanted! : file.Name, companion: false, taken, going);
             asked.Add((id, item));
             var others = bringCompanions ? siblings.SiblingsOf(file.Path, stillThere: true).Where(s => !going.Contains(s)).ToList() : [];
-            foreach (var companion in others.Count > 0 ? _companions.FindAmong(file.Path, others) : [])
+            foreach (var companion in others.Count > 0 ? await _companions.FindAmongAsync(file.Path, others, ct) : [])
             {
                 if (!_files.FileExists(companion))
                 {

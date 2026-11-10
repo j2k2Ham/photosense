@@ -76,7 +76,7 @@ public static class PhotoSensePhoneServices
         s.AddSingleton<ISystemViewer, PhoneViewer>();
         s.AddSingleton<IFolderBrowser>(new PhotoLibraryBrowser(photos, Path.TrimEndingDirectorySeparator(root)));
         s.AddSingleton(sp => new PhoneSending(listener ?? new TcpTransferListener(), advertiser, sp.GetRequiredService<IPairingStore>(), photos,
-            sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<OrganizeLibrary>(), name));
+            sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<OrganizeLibrary>(), name, sp.GetRequiredService<TimeProvider>()));
         return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

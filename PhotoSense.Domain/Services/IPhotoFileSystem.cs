@@ -40,12 +40,14 @@ public interface IPhotoFileSystem
     /// <summary>
     /// Opens a file to read it, from any point, without holding on to it: while it is being read it can still
     /// be moved or removed. Held the usual way, a video could not be removed while its player was fetching the
-    /// next piece of it, nor a picture while it was being converted for viewing.
+    /// next piece of it, nor a picture while it was being converted for viewing. A picture a phone keeps only in
+    /// its cloud is fetched first, which can take a while.
     /// </summary>
-    Stream OpenRead(string path);
+    /// <exception cref="IOException">The file could not be read, or could not be fetched from the cloud.</exception>
+    Task<Stream> OpenReadAsync(string path, CancellationToken ct);
 
     /// <summary>Whether one file holds the bytes another begins with: a whole copy of it, or the part of one that a copy cut short had written.</summary>
-    bool IsCopyOf(string copy, string original);
+    Task<bool> IsCopyOfAsync(string copy, string original, CancellationToken ct);
 
     /// <summary>Moves a file. It never replaces one: should a file stand at <paramref name="to"/>, it fails.</summary>
     void Move(string from, string to);
@@ -53,7 +55,11 @@ public interface IPhotoFileSystem
     /// <summary>Copies a file. It never replaces one.</summary>
     void Copy(string from, string to);
 
-    /// <summary>A new file to write, as one arriving from a phone. It never replaces one: should a file stand at <paramref name="path"/>, it fails.</summary>
+    /// <summary>
+    /// A new file to write, as one arriving from a phone. It never replaces one: should a file stand at
+    /// <paramref name="path"/>, it fails. What is written is on the disk itself, not only in the system's memory, by
+    /// the time each write ends: a phone deletes its own copy once the computer has said the file is there.
+    /// </summary>
     Stream CreateNew(string path);
 
     /// <summary>Makes a folder, and the folders above it that are not there yet; one already there is left as it is.</summary>

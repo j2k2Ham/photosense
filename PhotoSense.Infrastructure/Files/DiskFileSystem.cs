@@ -42,15 +42,18 @@ public class DiskFileSystem : IPhotoFileSystem
     }
 
     /// <inheritdoc />
-    public virtual Stream OpenRead(string path)
-        => new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16, FileOptions.SequentialScan);
+    public virtual Task<Stream> OpenReadAsync(string path, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<Stream>(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1 << 16, FileOptions.SequentialScan));
+    }
 
     /// <inheritdoc />
-    public virtual bool IsCopyOf(string copy, string original)
+    public virtual async Task<bool> IsCopyOfAsync(string copy, string original, CancellationToken ct)
     {
-        using var part = OpenRead(copy);
-        using var whole = OpenRead(original);
-        return Copies.BeginsWith(whole, part);
+        await using var part = await OpenReadAsync(copy, ct);
+        await using var whole = await OpenReadAsync(original, ct);
+        return await Copies.BeginsWithAsync(whole, part, ct);
     }
 
     /// <inheritdoc />
@@ -60,7 +63,7 @@ public class DiskFileSystem : IPhotoFileSystem
     public virtual void Copy(string from, string to) => File.Copy(from, to, overwrite: false);
 
     /// <inheritdoc />
-    public virtual Stream CreateNew(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16);
+    public virtual Stream CreateNew(string path) => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 1 << 16, FileOptions.WriteThrough);
 
     /// <inheritdoc />
     public virtual void MakeFolder(string path) => Directory.CreateDirectory(path);

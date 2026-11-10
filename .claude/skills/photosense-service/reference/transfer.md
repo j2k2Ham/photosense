@@ -11,6 +11,8 @@
   - The phone commits to its key before it sees the computer's nonce.
   - The first time, both show a six-digit `Code` and the person confirms it on each. They then keep a secret (`IPairingStore`) and prove it to each other on every later connection.
 - **Sealed:** after pairing, everything is sealed by `SecureChannel` (AES-GCM, a key for each direction, a counter as the nonce).
+- **Time limits** (`TimedConnection`): each side wraps its connection so that a read or write the other side leaves silent for `Silence` (60 s) throws `TransferException` "The other device stopped answering. Try again."; connecting has the same limit (`WithinAsync`). The two waits on the person comparing numbers read through `TimedConnection.Unlimited`. Work of a side's own that can take long (the phone opening a file, which may come from iCloud; the computer hashing a file already there) runs in `SecureChannel.MeanwhileAsync`, which sends `{"t":"wait"}` every 20 s; `ReceiveAsync` passes those over. Each runner takes a `TimeProvider` for this.
+- **Ending:** `RunAsync` and `ServeAsync` set the problem in `finally`, so no error of any kind leaves `Receiving` or `Sending` standing. The computer writes arriving files through to the disk (`DiskFileSystem.CreateNew` with `WriteThrough`) before saying "got".
 - **Checked:** each file is checked by SHA-256. The computer writes it under `.{name}.{guid}.photosense-part` and gives it its own name (`FreePlace`) only once whole. A file identical to one already there is not written again.
 - **Phone side:** `PhoneSending`. Its states are `Idle`, `Waiting`, `Comparing`, `Sending`, `Sent` and `Failed`, plus `Deletable`. `DeleteSent` erases only the units the computer confirmed whole, through `IPhotoChangesTogether.EraseAll`. This is rule 2's one exception.
 - **Computer side:** `PhoneReceiving`. Its states are `Connecting`, `Comparing`, `Receiving`, `Done` and `Failed`. `Plain(name)` makes a phone's name a plain file name.
@@ -21,6 +23,7 @@
 - `TransferTests` runs a phone's whole stack and a computer's receiving against each other over loopback. It also runs each against a device of the test's own that says what it likes, for broken messages, damaged files and refusals.
 - `PairingTests` covers `Pairing`, `Wire` and `SecureChannel`.
 - `TransferLinkTests` covers the listener, mDNS with packets built by the test, and usbmux through `ScriptedStream`.
+- `TimedConnectionTests` covers the connection's limit and the "wait" message. A silence is tested with `HurriedClock.Minute`, on which a minute passes in two seconds; give it to only the side whose patience is being tested, and to both only when the test is of "wait" (`FakePhotoLibrary.Fetching` makes a fetch slow, or fail).
 
 ## Checked by hand so far
 

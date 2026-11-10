@@ -74,9 +74,9 @@ internal sealed class TogetherFiles : IPhotoFileSystem, IPhotoChangesTogether
     /// <inheritdoc />
     public bool IsLink(string path) => false;
     /// <inheritdoc />
-    public Stream OpenRead(string path) => _files.OpenRead(path);
+    public Task<Stream> OpenReadAsync(string path, CancellationToken ct) => _files.OpenReadAsync(path, ct);
     /// <inheritdoc />
-    public bool IsCopyOf(string copy, string original) => _files.IsCopyOf(copy, original);
+    public Task<bool> IsCopyOfAsync(string copy, string original, CancellationToken ct) => _files.IsCopyOfAsync(copy, original, ct);
     /// <inheritdoc />
     public void Move(string from, string to) => throw new InvalidOperationException("Moved one at a time.");
     /// <inheritdoc />

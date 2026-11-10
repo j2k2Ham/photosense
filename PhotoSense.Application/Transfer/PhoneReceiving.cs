@@ -53,6 +53,7 @@ public sealed class PhoneReceiving
     private readonly IPhotoFileSystem _files;
     private readonly FileChanges _changes;
     private readonly string _name;
+    private readonly TimeProvider _clock;
     private readonly object _lock = new();
     private ReceiveState _state = new(ReceiveStage.Idle, null, null, 0, 0, 0, 0, 0, null, null);
     private IReadOnlyList<FoundPhone> _found = [];
@@ -65,13 +66,15 @@ public sealed class PhoneReceiving
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="changes">Gives each arriving file a name nothing has yet.</param>
     /// <param name="name">What this computer is called, as the phone shows it.</param>
-    public PhoneReceiving(IPhoneFinder finder, IPairingStore pairs, IPhotoFileSystem files, FileChanges changes, string name)
+    /// <param name="clock">Times how long the phone has been silent (<see cref="TimedConnection"/>).</param>
+    public PhoneReceiving(IPhoneFinder finder, IPairingStore pairs, IPhotoFileSystem files, FileChanges changes, string name, TimeProvider clock)
     {
         _finder = finder;
         _pairs = pairs;
         _files = files;
         _changes = changes;
         _name = name;
+        _clock = clock;
     }
 
     /// <summary>How receiving stands now.</summary>
@@ -131,9 +134,12 @@ public sealed class PhoneReceiving
     private async Task RunAsync(FoundPhone phone, string folder, CancellationToken ct)
     {
         string? arriving = null;
+        // What is said unless it ends as it should, or is stopped.
+        var problem = "Receiving stopped. Try again.";
         try
         {
-            await using var stream = await phone.Connect(ct);
+            await using var connection = await TimedConnection.WithinAsync(phone.Connect, _clock, ct);
+            var stream = new TimedConnection(connection, _clock);
             var linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ct);
             using var channel = linked.Channel;
             await channel.SendAsync(new JsonObject { ["t"] = "offer?" }, ct);
@@ -147,7 +153,9 @@ public sealed class PhoneReceiving
                 arriving = Path.Combine(folder, $".{name}.{Guid.NewGuid():N}{Arriving}");
                 var check = await ReceiveFileAsync(channel, id, arriving, ct);
                 var wanted = Path.Combine(folder, name);
-                var already = _files.Describe(wanted) is { } there && there.Length == _files.Describe(arriving)!.Length && await HashOfAsync(wanted, ct) == check;
+                // Reading through a large file already there takes a while, which the phone is told of.
+                var already = _files.Describe(wanted) is { } there && there.Length == _files.Describe(arriving)!.Length
+                    && await channel.MeanwhileAsync(stop => HashOfAsync(wanted, stop), _clock, ct) == check;
                 if (already) _files.DeleteCopy(arriving);
                 else _files.Move(arriving, _changes.FreePlace(wanted, taken));
                 arriving = null;
@@ -157,13 +165,18 @@ public sealed class PhoneReceiving
             await channel.SendAsync(new JsonObject { ["t"] = "done" }, ct);
             await channel.ReceiveAsync(ct, "bye");
             Set(s => s with { Stage = ReceiveStage.Done });
+            problem = null;
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
         {
-            // A file cut short is PhotoSense's own writing, and does not stay.
+            problem = ex is OperationCanceledException ? "Receiving was stopped. What had arrived is kept." : ex is TransferException ? ex.Message : $"Receiving stopped: {ex.Message}";
+        }
+        finally
+        {
+            // However it ended, receiving is no longer said to be going on, and a file cut short is PhotoSense's own
+            // writing and does not stay.
+            if (problem is not null) Set(s => s with { Stage = ReceiveStage.Failed, Code = null, Problem = problem });
             if (arriving is not null && _files.FileExists(arriving)) _files.DeleteCopy(arriving);
-            var why = ex is OperationCanceledException ? "Receiving was stopped. What had arrived is kept." : ex is TransferException ? ex.Message : $"Receiving stopped: {ex.Message}";
-            Set(s => s with { Stage = ReceiveStage.Failed, Code = null, Problem = why });
         }
     }
 
@@ -194,7 +207,7 @@ public sealed class PhoneReceiving
 
     private async Task<string> HashOfAsync(string path, CancellationToken ct)
     {
-        await using var read = _files.OpenRead(path);
+        await using var read = await _files.OpenReadAsync(path, ct);
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
     }
 

@@ -214,7 +214,7 @@ internal sealed class OrganizeEndpoints
             await PreviewsBeingMade.WaitAsync(ct);
             try
             {
-                await using var stream = _files.OpenRead(file.Path);
+                await using var stream = await _files.OpenReadAsync(file.Path, ct);
                 jpeg = (await _analyzer.AnalyzeAsync(stream, ct)).ThumbnailJpeg;
                 await _thumbnails.SaveAsync(key, jpeg, ct);
             }

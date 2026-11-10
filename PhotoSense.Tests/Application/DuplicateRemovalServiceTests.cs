@@ -23,7 +23,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public DuplicateRemovalServiceTests()
     {
         _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk);
-        _service = Service(new CompanionFileFinder(_disk, _ => null));
+        _service = Service(new CompanionFileFinder(_disk, (_, _) => Task.FromResult<string?>(null)));
     }
 
     public void Dispose()
@@ -404,7 +404,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public async Task A_Picture_Takes_Its_Live_Photo_Video_Along_And_The_Kept_Copy_Keeps_Its_Own(CancellationToken ct)
     {
         // Records made before Live Photo identifiers were stored, so the videos appear as a group of their own.
-        var service = Service(new CompanionFileFinder(_disk, _ => "LIVE-1"));
+        var service = Service(new CompanionFileFinder(_disk, (_, _) => Task.FromResult<string?>("LIVE-1")));
         var keptPicture = await AddAsync(Path.Combine("a", "IMG_1.JPG"), "PPPP", ct);
         var keptVideo = await AddAsync(Path.Combine("a", "IMG_1.MOV"), "VVVV", ct);
         var copyPicture = await AddAsync(Path.Combine("b", "IMG_1.JPG"), "PPPP", ct);
@@ -424,7 +424,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
     public async Task The_Last_Copy_Of_A_Video_Is_Never_Removed_As_Somebody_Elses_Duplicate(CancellationToken ct)
     {
         // The picture kept is in b, but of the two identical videos the one in a ranks first.
-        var service = Service(new CompanionFileFinder(_disk, _ => "LIVE-1"));
+        var service = Service(new CompanionFileFinder(_disk, (_, _) => Task.FromResult<string?>("LIVE-1")));
         var pictureA = await AddAsync(Path.Combine("a", "IMG_1.JPG"), "PPPP", ct, set: PhotoSet.Secondary);
         var videoA = await AddAsync(Path.Combine("a", "IMG_1.MOV"), "VVVV", ct);
         var pictureB = await AddAsync(Path.Combine("b", "IMG_1.JPG"), "PPPP", ct);

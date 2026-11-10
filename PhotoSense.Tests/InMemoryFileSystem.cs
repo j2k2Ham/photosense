@@ -70,15 +70,15 @@ internal sealed class InMemoryFileSystem : IPhotoFileSystem
     public bool IsLink(string path) => false;
 
     /// <inheritdoc />
-    public Stream OpenRead(string path)
+    public Task<Stream> OpenReadAsync(string path, CancellationToken ct)
     {
-        lock (_lock) return _files.TryGetValue(path, out var f) ? new MemoryStream(f.Bytes, writable: false) : throw new FileNotFoundException("No such file.", path);
+        lock (_lock) return Task.FromResult<Stream>(_files.TryGetValue(path, out var f) ? new MemoryStream(f.Bytes, writable: false) : throw new FileNotFoundException("No such file.", path));
     }
 
     /// <inheritdoc />
-    public bool IsCopyOf(string copy, string original)
+    public Task<bool> IsCopyOfAsync(string copy, string original, CancellationToken ct)
     {
-        lock (_lock) return _files[original].Bytes.AsSpan().StartsWith(_files[copy].Bytes);
+        lock (_lock) return Task.FromResult(_files[original].Bytes.AsSpan().StartsWith(_files[copy].Bytes));
     }
 
     /// <inheritdoc />

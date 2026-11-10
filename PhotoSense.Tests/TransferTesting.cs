@@ -79,3 +79,30 @@ internal sealed class ScriptedStream(byte[] answers) : Stream
         base.Dispose(disposing);
     }
 }
+
+/// <summary>
+/// A clock whose timers go off sooner by the factor given, so that a minute's silence between a phone and a computer
+/// passes in a moment. It tells the time as this computer does.
+/// </summary>
+internal sealed class HurriedClock(double factor) : TimeProvider
+{
+    /// <summary>A minute in two seconds.</summary>
+    public static readonly HurriedClock Minute = new(30);
+
+    /// <inheritdoc />
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        => new Hurried(TimeProvider.System.CreateTimer(callback, state, Sooner(dueTime), Sooner(period)), this);
+
+    private TimeSpan Sooner(TimeSpan span) => span == Timeout.InfiniteTimeSpan ? span : span / factor;
+
+    /// <summary>A timer set again goes off sooner by the same factor.</summary>
+    private sealed class Hurried(ITimer timer, HurriedClock clock) : ITimer
+    {
+        /// <inheritdoc />
+        public bool Change(TimeSpan dueTime, TimeSpan period) => timer.Change(clock.Sooner(dueTime), clock.Sooner(period));
+        /// <inheritdoc />
+        public void Dispose() => timer.Dispose();
+        /// <inheritdoc />
+        public ValueTask DisposeAsync() => timer.DisposeAsync();
+    }
+}

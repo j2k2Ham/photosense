@@ -44,12 +44,12 @@ public sealed class MediaFileSystemTests
         foreach (var onlyForward in new[] { false, true })
         {
             _store.OnlyFromTheStart = onlyForward;
-            using var read = _phone.OpenRead(In("DCIM", "Camera", "IMG_0001.jpg"));
+            using var read = await _phone.OpenReadAsync(In("DCIM", "Camera", "IMG_0001.jpg"), ct);
             read.Position = 4;
             await Assert.That(new StreamReader(read).ReadToEnd()).IsEqualTo("whole picture");
         }
-        await Assert.That(_phone.IsCopyOf(In("DCIM", "Camera", "IMG_0002.jpg"), In("DCIM", "Camera", "IMG_0001.jpg"))).IsTrue();
-        await Assert.That(Assert.Throws<FileNotFoundException>(() => _phone.OpenRead(In("DCIM", "gone.jpg")))!.Message).IsEqualTo("The photo is no longer on the phone.");
+        await Assert.That(await _phone.IsCopyOfAsync(In("DCIM", "Camera", "IMG_0002.jpg"), In("DCIM", "Camera", "IMG_0001.jpg"), ct)).IsTrue();
+        await Assert.That((await Assert.ThrowsAsync<FileNotFoundException>(() => _phone.OpenReadAsync(In("DCIM", "gone.jpg"), ct)))!.Message).IsEqualTo("The photo is no longer on the phone.");
     }
 
     [Test]

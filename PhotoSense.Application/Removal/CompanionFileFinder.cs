@@ -7,19 +7,19 @@ namespace PhotoSense.Application.Removal;
 public sealed class CompanionFileFinder : ICompanionFileFinder
 {
     private readonly IPhotoFileSystem _files;
-    private readonly Func<string, string?> _readLivePhotoId;
+    private readonly Func<string, CancellationToken, Task<string?>> _readLivePhotoId;
 
     /// <summary>Finds them among the files of <paramref name="files"/>, reading each file's Live Photo identifier as given.</summary>
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="readLivePhotoId">Reads the Live Photo identifier a picture or video carries, if any.</param>
-    public CompanionFileFinder(IPhotoFileSystem files, Func<string, string?> readLivePhotoId)
+    public CompanionFileFinder(IPhotoFileSystem files, Func<string, CancellationToken, Task<string?>> readLivePhotoId)
     {
         _files = files;
         _readLivePhotoId = readLivePhotoId;
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<string> FindFor(string path)
+    public async Task<IReadOnlyList<string>> FindForAsync(string path, CancellationToken ct)
     {
         if (Path.GetDirectoryName(Path.GetFullPath(path)) is not { } folder) return [];
 
@@ -29,11 +29,11 @@ public sealed class CompanionFileFinder : ICompanionFileFinder
         var siblings = _files.FilesIn(folder)
             .Where(f => PhotoNaming.ItemOf(f) == item && PhotoPath.Key(f) != self)
             .ToList();
-        return FindAmong(path, siblings);
+        return await FindAmongAsync(path, siblings, ct);
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<string> FindAmong(string path, IReadOnlyList<string> siblings)
+    public async Task<IReadOnlyList<string>> FindAmongAsync(string path, IReadOnlyList<string> siblings, CancellationToken ct)
     {
         // Nothing else carries its name, so nothing can go with it. While another picture of the item stays,
         // its sidecars and its Live Photo video still have an owner.
@@ -42,8 +42,9 @@ public sealed class CompanionFileFinder : ICompanionFileFinder
         var companions = new List<string>();
         // A video is this picture's Live Photo half only if the two carry the same identifier. The name is
         // not enough: an unrelated video can have the same number.
-        if (MediaFiles.IsImage(path) && _readLivePhotoId(path) is { } id)
-            companions.AddRange(siblings.Where(f => MediaFiles.IsVideo(f) && string.Equals(_readLivePhotoId(f), id, StringComparison.OrdinalIgnoreCase)));
+        if (MediaFiles.IsImage(path) && await _readLivePhotoId(path, ct) is { } id)
+            foreach (var video in siblings.Where(MediaFiles.IsVideo))
+                if (string.Equals(await _readLivePhotoId(video, ct), id, StringComparison.OrdinalIgnoreCase)) companions.Add(video);
 
         // Sidecars record edits to the item. They go once no picture or video of it is left.
         if (siblings.Where(MediaFiles.IsVideo).All(companions.Contains))

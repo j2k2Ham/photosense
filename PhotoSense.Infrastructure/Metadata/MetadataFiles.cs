@@ -11,18 +11,14 @@ internal static class MetadataFiles
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="path">The file.</param>
     /// <param name="use">Takes what was read; it runs only when the file could be read.</param>
+    /// <param name="ct">Stops the opening.</param>
     /// <returns>Whether the file could be opened and read.</returns>
-    public static bool TryRead(IPhotoFileSystem files, string path, Action<IReadOnlyList<Directory>> use)
+    public static async Task<bool> TryReadAsync(IPhotoFileSystem files, string path, Action<IReadOnlyList<Directory>> use, CancellationToken ct)
     {
-        try
-        {
-            using var stream = files.OpenRead(path);
-            return TryRead(stream, use);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
+        Stream stream;
+        try { stream = await files.OpenReadAsync(path, ct); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+        await using (stream) return TryRead(stream, use);
     }
 
     /// <summary>Reads what the file at the start of a stream says about itself.</summary>

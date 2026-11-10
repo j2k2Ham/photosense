@@ -8,12 +8,12 @@ public interface ICompanionFileFinder
     /// were removed: its edit sidecars and, for a picture, its Live Photo video. Empty while anything else in
     /// the folder still uses them. Must be called while the file is still in place.
     /// </summary>
-    IReadOnlyList<string> FindFor(string path);
+    Task<IReadOnlyList<string>> FindForAsync(string path, CancellationToken ct);
 
     /// <summary>
     /// The same, for a caller that has already looked through the folder: <paramref name="siblings"/> are the
     /// other files there that carry the item's name. Asking about many files of one folder this way reads
     /// the folder once instead of once for each.
     /// </summary>
-    IReadOnlyList<string> FindAmong(string path, IReadOnlyList<string> siblings);
+    Task<IReadOnlyList<string>> FindAmongAsync(string path, IReadOnlyList<string> siblings, CancellationToken ct);
 }

@@ -332,6 +332,13 @@ export const GUIDE: GuideTopic[] = [
           'Photos are copied to a computer, never onto the phone: in Organize on a phone, photos are moved between albums only.',
         ],
       },
+      {
+        heading: 'If sending stops',
+        tips: [
+          'If the phone or the computer hears nothing from the other for a minute, as when the phone loses the Wi-Fi or its screen locks, sending stops and says **The other device stopped answering**. What had arrived is kept, and nothing that had not arrived is deleted from the phone. Send again: what is already on the computer is not copied twice.',
+          'A photo kept only in iCloud is fetched to the phone first, which can take a while. The computer is told meanwhile, and waits.',
+        ],
+      },
     ],
   },
   {

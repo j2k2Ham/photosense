@@ -53,6 +53,7 @@ public sealed class PhoneSending
     private readonly ICompanionFileFinder _companions;
     private readonly OrganizeLibrary _library;
     private readonly string _name;
+    private readonly TimeProvider _clock;
     private readonly object _lock = new();
     private SendState _state = new(SendStage.Idle, null, null, 0, 0, 0, 0, [], null, null);
     private List<Offered> _offer = [];
@@ -72,7 +73,8 @@ public sealed class PhoneSending
     /// <param name="companions">Finds the Live Photo videos and edit files that go with a picture.</param>
     /// <param name="library">The files Organize knows, by id.</param>
     /// <param name="name">What this phone is called, as the computer shows it.</param>
-    public PhoneSending(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, IPhotoFileSystem files, ICompanionFileFinder companions, OrganizeLibrary library, string name)
+    /// <param name="clock">Times how long the computer has been silent (<see cref="TimedConnection"/>).</param>
+    public PhoneSending(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, IPhotoFileSystem files, ICompanionFileFinder companions, OrganizeLibrary library, string name, TimeProvider clock)
     {
         _listener = listener;
         _advertiser = advertiser;
@@ -81,6 +83,7 @@ public sealed class PhoneSending
         _companions = companions;
         _library = library;
         _name = name;
+        _clock = clock;
     }
 
     /// <summary>What this phone is called, as the computer shows it.</summary>
@@ -106,7 +109,7 @@ public sealed class PhoneSending
         {
             if (await _library.FindAsync(id, ct) is not { } file || !listed.Add(file.Path)) continue;
             var unit = offer.Count == 0 ? 0 : offer[^1].Unit + 1;
-            string[] together = [file.Path, .. _companions.FindAmong(file.Path, siblings.SiblingsOf(file.Path))];
+            string[] together = [file.Path, .. await _companions.FindAmongAsync(file.Path, siblings.SiblingsOf(file.Path), ct)];
             foreach (var path in together)
                 if ((path == file.Path || listed.Add(path)) && _files.Describe(path) is { } stored)
                     offer.Add(new Offered($"f{offer.Count + 1}", path, stored.Length, stored.ModifiedUtc, unit));
@@ -180,8 +183,9 @@ public sealed class PhoneSending
     }
 
     // One computer at a time; another is told so.
-    private async Task ServeAsync(Stream stream, CancellationToken ct)
+    private async Task ServeAsync(Stream connection, CancellationToken ct)
     {
+        var stream = new TimedConnection(connection, _clock);
         bool busy;
         lock (_lock)
         {
@@ -193,6 +197,8 @@ public sealed class PhoneSending
             await Wire.SendAsync(stream, new JsonObject { ["t"] = "busy" }, ct);
             return;
         }
+        // What is said unless it ends as it should.
+        var problem = "Sending stopped. Try again.";
         try
         {
             var linked = await Pairing.PhoneAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ct);
@@ -200,15 +206,20 @@ public sealed class PhoneSending
             Set(s => s with { Stage = SendStage.Sending, Code = null, Computer = linked.Other.Name, Problem = null });
             while (await AnswerAsync(channel, ct)) { }
             Set(s => s with { Stage = SendStage.Sent });
+            problem = null;
         }
-        // A connection ended by stopping is no failure; any other is said.
-        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or UnauthorizedAccessException)
         {
-            Set(s => !_offering ? s : s with { Stage = SendStage.Failed, Code = null, Problem = ex is TransferException ? ex.Message : $"Sending stopped: {ex.Message}" });
+            problem = ex is TransferException ? ex.Message : $"Sending stopped: {ex.Message}";
         }
         finally
         {
-            lock (_lock) _serving = false;
+            lock (_lock)
+            {
+                _serving = false;
+                // However it ended, sending is no longer said to be going on; a connection ended by stopping is no failure.
+                if (problem is not null && _offering) _state = _state with { Stage = SendStage.Failed, Code = null, Problem = problem };
+            }
         }
     }
 
@@ -253,7 +264,8 @@ public sealed class PhoneSending
 
     private async Task SendFileAsync(SecureChannel channel, Offered file, CancellationToken ct)
     {
-        await using var read = _files.OpenRead(file.Path);
+        // A picture kept only in the cloud is fetched first, which can take a while; the computer is told of it.
+        await using var read = await channel.MeanwhileAsync(stop => _files.OpenReadAsync(file.Path, stop), _clock, ct);
         await channel.SendAsync(new JsonObject { ["t"] = "file", ["id"] = file.Id, ["size"] = read.Length }, ct);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var piece = new byte[SecureChannel.PieceSize];

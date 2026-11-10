@@ -234,7 +234,7 @@ public sealed class PhotosEndpointsTests : IDisposable
 
         // A video is read a piece at a time, each read as short as the disk allows; the same opening serves it.
         var video = await AddAsync("clip.MOV", ct, "0123456789", contentHash: "H3");
-        await using (var playing = TestFiles.Disk.OpenRead(video.SourcePath))
+        await using (var playing = await TestFiles.Disk.OpenReadAsync(video.SourcePath, ct))
         {
             var to = Moved(video);
             await Assert.That(new StreamReader(playing).ReadToEnd()).IsEqualTo("0123456789");

@@ -69,7 +69,8 @@ public static class Pairing
             var same = await compare(Code(said), phone, ct);
             await Wire.SendAsync(stream, new JsonObject { ["t"] = "confirm", ["same"] = same }, ct);
             if (!same) throw NoMatch;
-            if (!Same(await Wire.ReceiveAsync(stream, "confirm", ct))) throw NoMatchThere("phone");
+            // The person at the phone is comparing the numbers, and may take their time.
+            if (!Same(await Wire.ReceiveAsync(TimedConnection.Unlimited(stream), "confirm", ct))) throw NoMatchThere("phone");
             secret = HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, said, "photosense pairing"u8.ToArray());
             await pairs.SaveAsync(new PairedDevice(phone.Id, phone.Name, secret), ct);
         }
@@ -109,7 +110,8 @@ public static class Pairing
         var question = pair is null ? compare(Code(said), computer, asking.Token) : null;
         try
         {
-            var next = Wire.Expect(await Wire.ReadFrameAsync(stream, ct), pair is null ? ["confirm"] : ["prove", "confirm"]);
+            // The person at the computer may be comparing the numbers, and may take their time.
+            var next = Wire.Expect(await Wire.ReadFrameAsync(TimedConnection.Unlimited(stream), ct), pair is null ? ["confirm"] : ["prove", "confirm"]);
             if (Wire.Text(next, "t") == "prove")
             {
                 if (!CryptographicOperations.FixedTimeEquals(Wire.Bytes(next, "mac"), Proof(pair!.Key, said, "computer")))

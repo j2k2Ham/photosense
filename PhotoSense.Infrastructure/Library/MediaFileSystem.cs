@@ -80,24 +80,24 @@ public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
     public bool IsLink(string path) => false;
 
     /// <inheritdoc />
-    public Stream OpenRead(string path)
+    public async Task<Stream> OpenReadAsync(string path, CancellationToken ct)
     {
         var found = Find(path) ?? throw new FileNotFoundException("The photo is no longer on the phone.", path);
         var stream = _store.Open(found.Id);
         if (stream.CanSeek) return stream;
         // A file is read from wherever it is asked to be, so one that can only be read from the start is held whole.
         var whole = new MemoryStream();
-        using (stream) stream.CopyTo(whole);
+        await using (stream) await stream.CopyToAsync(whole, ct);
         whole.Position = 0;
         return whole;
     }
 
     /// <inheritdoc />
-    public bool IsCopyOf(string copy, string original)
+    public async Task<bool> IsCopyOfAsync(string copy, string original, CancellationToken ct)
     {
-        using var part = OpenRead(copy);
-        using var whole = OpenRead(original);
-        return Copies.BeginsWith(whole, part);
+        await using var part = await OpenReadAsync(copy, ct);
+        await using var whole = await OpenReadAsync(original, ct);
+        return await Copies.BeginsWithAsync(whole, part, ct);
     }
 
     /// <inheritdoc />

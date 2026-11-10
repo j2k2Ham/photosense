@@ -37,7 +37,7 @@ internal static class PhotoSenseServices
         // Photos come from phones over the network, or through a cable by Apple's device service.
         s.AddSingleton<IPhoneFinder>(new PhoneFinders(new MdnsPhoneFinder(), new UsbmuxPhoneFinder()));
         s.AddSingleton(sp => new PhoneReceiving(sp.GetRequiredService<IPhoneFinder>(), sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<IPhotoFileSystem>(),
-            sp.GetRequiredService<FileChanges>(), Environment.MachineName));
+            sp.GetRequiredService<FileChanges>(), Environment.MachineName, sp.GetRequiredService<TimeProvider>()));
         return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

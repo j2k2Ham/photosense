@@ -30,8 +30,8 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     [Test]
     public async Task Both_Halves_Of_A_Live_Photo_Carry_The_Same_Identifier(CancellationToken ct)
     {
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(Put("IMG_1.JPG", MediaSamples.Picture(LiveId)))).IsEqualTo(LiveId);
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(Put("IMG_1.MOV", MediaSamples.Movie(LiveId)))).IsEqualTo(LiveId);
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(Put("IMG_1.JPG", MediaSamples.Picture(LiveId)), ct)).IsEqualTo(LiveId);
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(Put("IMG_1.MOV", MediaSamples.Movie(LiveId)), ct)).IsEqualTo(LiveId);
         await Assert.That((await ReadAsync("IMG_1.JPG", MediaSamples.Picture(LiveId), ct)).LivePhotoId).IsEqualTo(LiveId);
         await Assert.That((await ReadAsync("IMG_1.MOV", MediaSamples.Movie(LiveId), ct)).LivePhotoId).IsEqualTo(LiveId);
     }
@@ -39,10 +39,10 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     [Test]
     public async Task Ordinary_Pictures_And_Videos_Carry_None(CancellationToken ct)
     {
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(Put("plain.JPG", MediaSamples.Picture()))).IsNull();
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(Put("plain.MOV", MediaSamples.Movie()))).IsNull();
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(Put("garbage.MOV", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]))).IsNull();
-        await Assert.That(new LivePhotoIdCache(TestFiles.Disk).Read(Path.Combine(_root.FullName, "not-there.JPG"))).IsNull();
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(Put("plain.JPG", MediaSamples.Picture()), ct)).IsNull();
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(Put("plain.MOV", MediaSamples.Movie()), ct)).IsNull();
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(Put("garbage.MOV", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]), ct)).IsNull();
+        await Assert.That(await new LivePhotoIdCache(TestFiles.Disk).ReadAsync(Path.Combine(_root.FullName, "not-there.JPG"), ct)).IsNull();
         await Assert.That((await ReadAsync("plain.MOV", MediaSamples.Movie(), ct)).LivePhotoId).IsNull();
     }
 
@@ -89,18 +89,18 @@ public sealed class LivePhotoAndVideoMetadataTests : IDisposable
     public async Task A_Picture_Takes_Only_The_Video_That_Carries_Its_Identifier(CancellationToken ct)
     {
         // Real files and the real reader this time: the rules themselves are covered in CompanionFileFinderTests.
-        var finder = new CompanionFileFinder(TestFiles.Disk, new LivePhotoIdCache(TestFiles.Disk).Read);
+        var finder = new CompanionFileFinder(TestFiles.Disk, new LivePhotoIdCache(TestFiles.Disk).ReadAsync);
         var picture = Put("IMG_1234.JPG", MediaSamples.Picture(LiveId));
         var video = Put("IMG_1234.MOV", MediaSamples.Movie(LiveId));
         var sidecar = Put("IMG_1234.AAE", [1]);
-        await Assert.That(finder.FindFor(picture).OrderBy(p => p)).IsEquivalentTo(new[] { sidecar, video }.OrderBy(p => p), CollectionOrdering.Matching);
+        await Assert.That((await finder.FindForAsync(picture, ct)).OrderBy(p => p)).IsEquivalentTo(new[] { sidecar, video }.OrderBy(p => p), CollectionOrdering.Matching);
 
         var other = Put("IMG_5678.JPG", MediaSamples.Picture(LiveId));
         Put("IMG_5678.MOV", MediaSamples.Movie("ANOTHER-LIVE-PHOTO"));
-        await Assert.That(finder.FindFor(other)).IsEmpty();
+        await Assert.That(await finder.FindForAsync(other, ct)).IsEmpty();
 
         var plain = Put("IMG_9000.JPG", MediaSamples.Picture());
         Put("IMG_9000.MOV", MediaSamples.Movie());
-        await Assert.That(finder.FindFor(plain)).IsEmpty();
+        await Assert.That(await finder.FindForAsync(plain, ct)).IsEmpty();
     }
 }

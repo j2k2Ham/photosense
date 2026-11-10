@@ -118,7 +118,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     [Test]
     public async Task Reads_A_Pictures_Date_And_Size(CancellationToken ct)
     {
-        var details = _reader.Read(Put("IMG_1.JPG", Jpeg(64, 48)));
+        var details = await _reader.ReadAsync(Put("IMG_1.JPG", Jpeg(64, 48)), ct);
         await Assert.That((details.TakenOn, details.Width, details.Height, details.DurationSeconds, details.Latitude, details.Longitude))
             .IsEqualTo((new DateTime(2023, 6, 9, 14, 3, 22), 64, 48, null, null, null));
     }
@@ -126,35 +126,35 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
     [Test]
     public async Task Gives_The_Size_As_The_Picture_Is_Shown_When_The_Camera_Was_Held_Upright(CancellationToken ct)
     {
-        var upright = _reader.Read(Put("IMG_2.JPG", Jpeg(64, 48, orientation: 6)));
+        var upright = await _reader.ReadAsync(Put("IMG_2.JPG", Jpeg(64, 48, orientation: 6)), ct);
         await Assert.That((upright.Width, upright.Height)).IsEqualTo((48, 64));
-        var level = _reader.Read(Put("IMG_3.JPG", Jpeg(64, 48, orientation: 1)));
+        var level = await _reader.ReadAsync(Put("IMG_3.JPG", Jpeg(64, 48, orientation: 1)), ct);
         await Assert.That((level.Width, level.Height)).IsEqualTo((64, 48));
     }
 
     [Test]
     public async Task Reads_A_Videos_Date_Place_Size_And_Playing_Time(CancellationToken ct)
     {
-        var details = _reader.Read(Put("IMG_4.MOV", MediaSamples.Movie()));
+        var details = await _reader.ReadAsync(Put("IMG_4.MOV", MediaSamples.Movie()), ct);
         // A video records its time in UTC (15:04:45), and it is shown in this computer's time zone.
         var taken = DateTime.SpecifyKind(new DateTime(2023, 5, 29, 15, 4, 45, DateTimeKind.Utc).ToLocalTime(), DateTimeKind.Unspecified);
         await Assert.That((details.TakenOn, details.Width, details.Height, details.DurationSeconds)).IsEqualTo((taken, 1920, 1080, 84.0));
         await Assert.That((Math.Round(details.Latitude!.Value, 4), Math.Round(details.Longitude!.Value, 4))).IsEqualTo((35.2886, -75.5161));
         await Assert.That(details.LivePhotoId).IsNull();
         // The identifier that ties a Live Photo's two halves together is read along with the rest.
-        await Assert.That(_reader.Read(Put("IMG_5.MOV", MediaSamples.Movie("LIVE-1"))).LivePhotoId).IsEqualTo("LIVE-1");
-        await Assert.That(_reader.Read(Put("IMG_5.JPG", MediaSamples.Picture("LIVE-1"))).LivePhotoId).IsEqualTo("LIVE-1");
+        await Assert.That((await _reader.ReadAsync(Put("IMG_5.MOV", MediaSamples.Movie("LIVE-1")), ct)).LivePhotoId).IsEqualTo("LIVE-1");
+        await Assert.That((await _reader.ReadAsync(Put("IMG_5.JPG", MediaSamples.Picture("LIVE-1")), ct)).LivePhotoId).IsEqualTo("LIVE-1");
     }
 
     [Test]
     public async Task A_File_That_Says_Nothing_Or_Cannot_Be_Read_Has_No_Details(CancellationToken ct)
     {
-        var undated = _reader.Read(Put("plain.JPG", Jpeg(40, 30, dated: false)));
+        var undated = await _reader.ReadAsync(Put("plain.JPG", Jpeg(40, 30, dated: false)), ct);
         await Assert.That((undated.TakenOn, undated.Width, undated.Height)).IsEqualTo((null, 40, 30));
 
         var nothing = new PhotoSense.Domain.Services.MediaDetails(null, 0, 0, null, null, null);
-        await Assert.That(_reader.Read(Put("broken.JPG", "not a picture at all"u8.ToArray()))).IsEqualTo(nothing);
-        await Assert.That(_reader.Read(Path.Combine(_root.FullName, "missing.JPG"))).IsEqualTo(nothing);
+        await Assert.That(await _reader.ReadAsync(Put("broken.JPG", "not a picture at all"u8.ToArray()), ct)).IsEqualTo(nothing);
+        await Assert.That(await _reader.ReadAsync(Path.Combine(_root.FullName, "missing.JPG"), ct)).IsEqualTo(nothing);
         await Assert.That(ExifMediaDetailsReader.PixelSize([])).IsEqualTo((0, 0));
     }
 
