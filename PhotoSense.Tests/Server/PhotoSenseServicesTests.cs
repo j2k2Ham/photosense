@@ -1,4 +1,3 @@
-using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PhotoSense.Api;
@@ -26,7 +25,7 @@ public sealed class PhotoSenseServicesTests : IDisposable
     {
         foreach (var type in new[]
         {
-            typeof(LiteDatabase), typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IScanHistory), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
+            typeof(IPhotoRepository), typeof(IAuditRepository), typeof(IScanHistory), typeof(IImageHashingService), typeof(IImageAnalyzer), typeof(IThumbnailStore),
             typeof(IPhotoMetadataExtractor), typeof(PhotoRanking), typeof(IDuplicateAnalysisService), typeof(IDuplicateRemovalService), typeof(IPlaceNameResolver),
             typeof(ICompanionFileFinder), typeof(ISystemViewer), typeof(IFolderBrowser), typeof(FileChanges),
             typeof(IScanProgressStore), typeof(IScanLogSink), typeof(IScanExecutionService), typeof(IValidateOptions<PhotoStorageOptions>),
@@ -48,7 +47,5 @@ public sealed class PhotoSenseServicesTests : IDisposable
         var jpeg = TestPhotos.Make("a.JPG", format: "JPEG");
         await Assert.That(new[] { heic, jpeg }.OrderBy(p => p, ranking.BestFirst).First()).IsSameReferenceAs(jpeg);
         await Assert.That(_f.Services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()).IsEqualTo(_f.ThumbnailPath);
-        // The folder for the database is made on first use.
-        await Assert.That(File.Exists(_f.DatabasePath)).IsTrue();
     }
 }

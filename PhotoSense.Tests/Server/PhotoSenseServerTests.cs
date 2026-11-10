@@ -28,7 +28,7 @@ public sealed class PhotoSenseServerTests : IDisposable
             $"--PhotoStorage:DatabasePath={Path.Combine(_root.FullName, "data", "photosense.db")}",
             $"--PhotoStorage:ThumbnailPath={Path.Combine(_root.FullName, "data", "thumbnails")}",
             "--Cors:Origins:0=http://localhost:3000",
-        ], Path.Combine(_root.FullName, "site"));
+        ], Path.Combine(_root.FullName, "site"), s => s.AddStandInStores());
         await app.StartAsync(ct);
 
         await Assert.That(await Client.GetStringAsync(At(app, "/"), ct)).IsEqualTo("<p>PhotoSense</p>");
@@ -66,7 +66,7 @@ public sealed class PhotoSenseServerTests : IDisposable
             $"--PhotoStorage:DatabasePath={Path.Combine(_root.FullName, "data", "photosense.db")}",
             $"--PhotoStorage:ThumbnailPath={Path.Combine(_root.FullName, "data", "thumbnails")}",
             .. allowed is null ? Array.Empty<string>() : [$"--AllowedHosts={allowed}"],
-        ], _root.FullName);
+        ], _root.FullName, s => s.AddStandInStores());
         await app.StartAsync(ct);
 
         // As a page whose own name had been pointed at this machine would ask, client header and all.
@@ -93,7 +93,7 @@ public sealed class PhotoSenseServerTests : IDisposable
             "--urls=http://127.0.0.1:0",
             $"--PhotoStorage:DatabasePath={Path.Combine(_root.FullName, "data", "photosense.db")}",
             $"--PhotoStorage:ThumbnailPath={Path.Combine(_root.FullName, "data", "thumbnails")}",
-        ], _root.FullName);
+        ], _root.FullName, s => s.AddStandInStores());
         await app.StartAsync(ct);
 
         await Assert.That((await Client.GetAsync(At(app, "/"), ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);

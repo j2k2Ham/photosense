@@ -1,4 +1,3 @@
-using LiteDB;
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Organizing;
@@ -78,18 +77,17 @@ internal sealed class OrganizeFixture : IDisposable
     public FailingDisk Disk { get; } = new();
     /// <summary>The changes moves are made through.</summary>
     public FileChanges Changes { get; }
-    private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly Mock<IAuditRepository> _audit = new();
 
     public OrganizeFixture()
     {
         _audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
-        Details = _db.MediaDetails();
+        Details = new MemoryMediaDetailsStore();
         Library = new OrganizeLibrary(Repo, Reader, Hasher, Details, Disk);
         Places = new PlaceLookup(Resolver.Object);
         Finder = new CompanionFileFinder(Disk, ContentAsId);
         Planner = new OrganizePlanner(Library, Finder, Places, Disk);
-        Batches = _db.Batches();
+        Batches = new MemoryBatchStore();
         Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);
     }
 
@@ -110,7 +108,6 @@ internal sealed class OrganizeFixture : IDisposable
 
     public void Dispose()
     {
-        _db.Dispose();
         TestFiles.Remove(Root);
     }
 

@@ -10,13 +10,15 @@ public static class PhotoSenseServer
     /// <summary>The program, ready to run, with its services, the page when it is built in, and the addresses below /api.</summary>
     /// <param name="args">As given on the command line: <c>--urls</c>, <c>--Cors:Origins:0=</c> and any other setting.</param>
     /// <param name="contentRoot">Where its settings and the page (in wwwroot) are; beside the program when not given, wherever it is started from.</param>
-    public static WebApplication Build(string[] args, string? contentRoot = null)
+    /// <param name="replace">Registers services in place of the program's own, after them: a test's stand-ins for its stores. The program itself gives none.</param>
+    public static WebApplication Build(string[] args, string? contentRoot = null, Action<IServiceCollection>? replace = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = contentRoot ?? AppContext.BaseDirectory });
         // A web page can have its own name pointed at this machine (DNS rebinding) and then use these addresses as
         // its own, client header and all; so only this machine's own names are answered unless the settings name others.
         builder.Configuration.Sources.Insert(0, new MemoryConfigurationSource { InitialData = [new("AllowedHosts", "localhost;127.0.0.1;[::1]")] });
         builder.Services.AddPhotoSenseComputer(builder.Configuration).AddPhotoSenseApi();
+        replace?.Invoke(builder.Services);
         // Any web page can make a browser send a plain request to this machine; only the page's own address
         // is let add the client header that every request touching someone's files must carry.
         var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [];

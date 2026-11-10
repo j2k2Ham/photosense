@@ -1,4 +1,3 @@
-using LiteDB;
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Scanning.Interfaces;
@@ -133,7 +132,7 @@ public sealed class CompanionFileFinderTests : IDisposable
     // Removes photos the way Clean up does, through a journal of its own.
     private DuplicateRemovalService Remover(InMemoryPhotoRepository repo, IPhotoFileSystem? disk = null)
         => new(new DuplicateAnalysisService(repo), repo, _finder,
-            new FileChanges(new LiteDatabase(new MemoryStream()).Batches(), repo, Mock.Of<IAuditRepository>(), disk ?? TestFiles.Disk), disk ?? TestFiles.Disk, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
+            new FileChanges(new MemoryBatchStore(), repo, Mock.Of<IAuditRepository>(), disk ?? TestFiles.Disk), disk ?? TestFiles.Disk, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
 
     [Test]
     public async Task Removing_A_Photo_Moves_Its_Companions_With_It_And_Forgets_Their_Records(CancellationToken ct)

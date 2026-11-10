@@ -40,10 +40,11 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - No `InternalsVisibleTo` (Jamie, 2026-11-09): each project's public front door is all the tests use (CLAUDE.md). Endpoints are tested through the router, the stores through `AddPhotoSenseCore`, the server through `PhotoSenseServer.Build`.
   - Structure (2026-11-10): each layer registers its own services (`AddPhotoSenseApplication` is new); Domain has no packages and holds the pure rules (`PhotoMatcher`, `NameRules`, `PhotoNaming`, `PhotoFileEnumerator`); `CompanionFileFinder` and `ScanRunner` moved to Application; the settings validator to the server; the in-memory repository to the tests; the scan log is the registered service's own, no longer one static queue.
   - The page: TSDoc on every export, checked by `tests/documentation.test.ts`.
+  - No test touches the database (Jamie, 2026-11-10) but the LiteDB stores' own, which use LiteDB in memory; checked by making the opening of a database file throw, with every test still passing. Opening the file is left out of coverage.
   - Confirmed by Jamie (2026-11-10): the newly public types, the two guards left out of coverage, the public MetadataExtractor helpers, and Android's blocking `PageClient` as a named exception to rule 10.
   - Every async method takes a required token and passes it on (CA2016, CA1068); clocks come from `TimeProvider`.
   - Anti-patterns removed, apart from those Jamie accepted (CLAUDE.md rule 10). A picture a decoder cannot read is an `UnreadableImageException`.
-- **Last measured:** service 808 tests at 100% of lines (3,439) and branches (1,976) (2026-11-10); page 590 tests at 100% (2026-11-10); end to end 56 tests in Chrome (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
+- **Last measured:** service 811 tests at 100% of lines (3,435) and branches (1,978) (2026-11-10); page 590 tests at 100% (2026-11-10); end to end 56 tests in Playwright's Chromium and 8 of 14 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
 
 ## Remaining steps
 
@@ -51,8 +52,9 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 
 - [x] See `iphone.yml` compile the iPhone app after the code-health work (pushed at Jamie's word, 2026-11-09; passed).
 - [x] TSDoc on every export of the page (Jamie, 2026-11-09; done 2026-11-10).
-- [ ] Push the structure work when Jamie agrees, to see `iphone.yml`, `android.yml` and `e2e.yml` pass on it. `e2e.yml` has not passed on GitHub since `ubuntu-latest` became 26.04: it now runs on 24.04, and the browser download, which once hung for 45 minutes, gets three tries of five minutes.
-- [ ] Run the `@phone` end-to-end tests in WebKit (`cd e2e && npx playwright test --project phone`) and fix what they find.
+- [x] Push the structure work (2026-11-10, at Jamie's word): `android.yml` passed.
+- [ ] See `e2e.yml` pass on GitHub. Its browser download failed under Node 26, which removed a call Playwright 1.56 made (`fs.rmdir` with `recursive`); the tests now use Playwright 1.64.1, which downloads both browsers here. It runs on Ubuntu 24.04 (26.04 had no browsers for 1.56), with three tries of five minutes for the download. It will fail on the six WebKit tests below until they are fixed.
+- [ ] Fix what the `@phone` end-to-end tests find in WebKit (`cd e2e && npx playwright test --project phone`). First run, 2026-11-10: 8 of 14 pass. The six that fail seem to expect a computer's layout on a phone's screen: the note "Runs on this device", which a narrow bar leaves to the menu; the Place row of the comparison; the groups list after a deletion; Recently moved and Preview in Suggested folders (two); and closing the sending window.
 - [x] Push the commits that were waiting (done 2026-10-30, at Jamie's word).
 - [ ] See the main CI (`ci.yml`) pass on Linux. It runs only for `main` and pull requests, so it has never run on this branch: several service tests that rely on file behaviour have only run on Windows.
 - [ ] Merge the branch, or open a pull request, when Jamie decides.

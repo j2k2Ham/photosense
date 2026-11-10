@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -32,12 +33,7 @@ public static class PhotoSenseCoreServices
     {
         // The stores stamp what they keep with this clock; tests give their own.
         s.TryAddSingleton(TimeProvider.System);
-        s.AddSingleton<LiteDatabase>(sp =>
-        {
-            var opts = sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value;
-            Directory.CreateDirectory(opts.ResolveDatabaseFolder());
-            return new LiteDatabase(opts.ResolveDatabasePath());
-        });
+        s.AddSingleton(sp => OpenDatabase(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value));
         // Every store shares the one database connection.
         s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IAuditRepository>(sp => new LiteDbAuditRepository(sp.GetRequiredService<LiteDatabase>(), sp.GetRequiredService<TimeProvider>()));
@@ -59,5 +55,14 @@ public static class PhotoSenseCoreServices
         s.AddSingleton<IMediaDetailsReader, ExifMediaDetailsReader>();
         s.AddSingleton<IMediaDetailsStore>(sp => new LiteDbMediaDetailsStore(sp.GetRequiredService<LiteDatabase>()));
         return s;
+    }
+
+    // The database file every store shares, in a folder made for it if there is none yet. No test opens a database file
+    // (Jamie, 2026-11-10): the store tests use one in memory, and the end-to-end tests run the program with its own.
+    [ExcludeFromCodeCoverage(Justification = "Opens the database file, which no test does; the end-to-end tests run it.")]
+    private static LiteDatabase OpenDatabase(PhotoStorageOptions options)
+    {
+        Directory.CreateDirectory(options.ResolveDatabaseFolder());
+        return new LiteDatabase(options.ResolveDatabasePath());
     }
 }

@@ -6,6 +6,7 @@
 - Compare collections with `IsEquivalentTo(expected, CollectionOrdering.Matching)`, or with `.Any`.
 - `Assert.ThrowsAsync<T>` and `Assert.Throws<T>` return `T?`, and accept a derived exception.
 - Tests run in parallel, even within one class. Shared static state needs `[NotInParallel("key")]`; there is none in the service now.
+- No test touches the database but the LiteDB stores' own, which use `new LiteDatabase(new MemoryStream())` through `Stores`. Everything else registers `AddStandInStores()` (after a phone's setup, or as `PhotoSenseServer.Build`'s `replace`) or uses a stand-in directly (`MemoryBatchStore`, `MemoryMediaDetailsStore`, `MemoryScanHistory`, `MemoryAudit`, `MemoryPairs`, `InMemoryPhotoRepository`). A stand-in copies what it keeps, as a database would.
 - Tests use only what each project makes public. An endpoint is asked through the router (`TestApi` and its address wrappers), a store is made by `AddPhotoSenseCore` (`Stores`), the server by `PhotoSenseServer.Build` (`ServerFixture`).
 - Test names are sentences of what happens: `A_Copy_Is_Removed_Into_The_Album_Of_Removed_Pictures`. They are the test's documentation; a test class, fixture, fake or helper has a `<summary>` (CLAUDE.md).
 - An async test takes `CancellationToken ct` last, which TUnit hands it, and passes it to every call that takes one. A helper that awaits takes one too. A test of what happens when a caller has gone away passes `new CancellationToken(canceled: true)`.
@@ -29,9 +30,10 @@
 |---|---|---|
 | `OrganizeFixture` | `Tests/Application/OrganizeTesting.cs` | A temporary folder, an in-memory repository, the Organize services, `Mover()` and `Removed()` |
 | `Http.Get/Post/Delete(...)` with `.FromClient()` | `Tests/Endpoints/ApiTesting.cs` | Requests for endpoint tests; `.Json()` and `.Text()` read an answer |
-| `ServerFixture` | `Tests/Server/ServerTesting.cs` | The program as `PhotoSenseServer.Build` makes it, on a data folder of its own; `StartedAsync` starts it on a port of its own |
-| `TestApi` with `AboutApi`, `PhotosApi`, `ScanApi`, `OrganizeApi`, `TransferApi` | `Tests/Endpoints/TestApi.cs` | Every address through the router, on stand-ins (database and previews in memory, a still clock), with the test's own services registered in their place; the wrappers take the endpoints' method names and build the real address |
-| `Stores` | `Tests/Stores.cs` | The LiteDB stores as `AddPhotoSenseCore` makes them, on a database the test holds (`db.Photos()`, `db.Batches()`, …) |
+| `ServerFixture` | `Tests/Server/ServerTesting.cs` | The program as `PhotoSenseServer.Build` makes it, with its stores in memory; `StartedAsync` starts it on a port of its own |
+| `TestApi` with `AboutApi`, `PhotosApi`, `ScanApi`, `OrganizeApi`, `TransferApi` | `Tests/Endpoints/TestApi.cs` | Every address through the router, on stand-ins (stores and previews in memory, a still clock), with the test's own services registered in their place; the wrappers take the endpoints' method names and build the real address |
+| `Stores` | `Tests/Stores.cs` | The LiteDB stores as `AddPhotoSenseCore` makes them, on a database in memory the test holds (`db.Photos()`, `db.Batches()`, …): for the stores' own tests only |
+| `AddStandInStores`, `MemoryBatchStore` and the rest | `Tests/StandInStores.cs` | Every store in memory, for every other test; `MemoryBatchStore.Stored(id)` is what is kept at that moment, for a hook mid-move |
 | `InMemoryPhotoRepository`, `InMemoryThumbnailStore` | `Tests/` | Scans' records and previews in memory |
 | `FailingDisk` | `Tests/Application/ChangesTesting.cs` | The real `DiskFileSystem`, except that "move", "copy", "make", "remove folder", "delete", "erase", "read" or "create" fail for the paths named, on any OS |
 | `InMemoryFileSystem` | `Tests/InMemoryFileSystem.cs` | Photos in memory only; `PhotosNotOnDiskTests` runs Clean up and Organize on it end to end |

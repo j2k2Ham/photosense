@@ -1,4 +1,3 @@
-using LiteDB;
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Removal;
@@ -95,9 +94,8 @@ internal sealed class TogetherFiles : IPhotoFileSystem, IPhotoChangesTogether
 }
 
 /// <summary>Changes, undos and erasing where the photos are kept by something that takes many changes as one.</summary>
-public sealed class ChangesTogetherTests : IDisposable
+public sealed class ChangesTogetherTests
 {
-    private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly TogetherFiles _files = new();
     private readonly IOrganizeBatchStore _batches;
     private readonly FileChanges _changes;
@@ -105,11 +103,9 @@ public sealed class ChangesTogetherTests : IDisposable
 
     public ChangesTogetherTests()
     {
-        _batches = _db.Batches();
+        _batches = new MemoryBatchStore();
         _changes = new FileChanges(_batches, new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, _files);
     }
-
-    public void Dispose() => _db.Dispose();
 
     private string In(params string[] parts) => Path.Combine([_root, .. parts]);
 

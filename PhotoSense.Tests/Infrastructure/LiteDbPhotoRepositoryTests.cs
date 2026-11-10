@@ -5,20 +5,12 @@ using PhotoSense.Domain.ValueObjects;
 namespace PhotoSense.Tests.Infrastructure;
 
 /// <summary>Scans' records kept in the database, one to a file.</summary>
-public sealed class LiteDbPhotoRepositoryTests : IDisposable
+public sealed class LiteDbPhotoRepositoryTests
 {
-    private readonly string _db = Path.Combine(Path.GetTempPath(), $"photosense-{Guid.NewGuid():N}.db");
-
-    public void Dispose()
-    {
-        foreach (var file in new[] { _db, Path.ChangeExtension(_db, null) + "-log.db" })
-            if (File.Exists(file)) File.Delete(file);
-    }
-
     [Test]
     public async Task RoundTrip_Persists_And_Maps_Categories(CancellationToken ct)
     {
-        using var db = new LiteDatabase(_db);
+        using var db = new LiteDatabase(new MemoryStream());
         var repo = db.Photos();
         var photo = new Photo{ SourcePath="x", FileName="y.jpg", FileSizeBytes=1, Set=PhotoSet.Secondary, ContentHash="ABC", PerceptualHash="FFFF" };
         photo.AddCategory("Nature");
@@ -38,7 +30,7 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
     [Test]
     public async Task A_Photo_Read_Back_Has_The_Id_And_Details_It_Was_Saved_With(CancellationToken ct)
     {
-        using var db = new LiteDatabase(_db);
+        using var db = new LiteDatabase(new MemoryStream());
         var repo = db.Photos();
         var modified = new DateTime(2024, 4, 7, 21, 35, 59, DateTimeKind.Utc).AddTicks(1234567);
         var photo = new Photo
@@ -67,7 +59,7 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
     [Test]
     public async Task A_File_Has_One_Record_However_It_Is_Saved(CancellationToken ct)
     {
-        using var db = new LiteDatabase(_db);
+        using var db = new LiteDatabase(new MemoryStream());
         var repo = db.Photos();
         var path = Path.Combine(Path.GetTempPath(), "IMG_0001.JPG");
         var first = new Photo { SourcePath = path, FileName = "IMG_0001.JPG", ContentHash = "A" };
@@ -86,7 +78,7 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
     [Test]
     public async Task Version_Changes_With_Every_Write(CancellationToken ct)
     {
-        using var db = new LiteDatabase(_db);
+        using var db = new LiteDatabase(new MemoryStream());
         var repo = db.Photos();
         var start = repo.Version;
         var photo = new Photo { SourcePath = "a", FileName = "a" };
@@ -101,15 +93,14 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
     {
         // Before records were keyed by path, every scan added a record for every file.
         var path = Path.Combine(Path.GetTempPath(), "IMG_0001.JPG");
-        using (var db = new LiteDatabase(_db))
+        using var shared = new LiteDatabase(new MemoryStream());
         {
-            var photos = db.GetCollection("photos");
+            var photos = shared.GetCollection("photos");
             foreach (var _ in Enumerable.Range(0, 3))
                 photos.Insert(new BsonDocument { ["_id"] = Guid.NewGuid(), ["SourcePath"] = path, ["FileName"] = "IMG_0001.JPG", ["ContentHash"] = "A", ["Set"] = 1, ["Categories"] = new BsonArray() });
             photos.Insert(new BsonDocument { ["_id"] = Guid.NewGuid(), ["SourcePath"] = path + "2", ["FileName"] = "IMG_0002.JPG", ["ContentHash"] = "A", ["Set"] = 1, ["Categories"] = new BsonArray() });
         }
 
-        using var shared = new LiteDatabase(_db);
         var repo = shared.Photos();
         await Assert.That((await repo.GetAllAsync(ct)).Count).IsEqualTo(2);
         await Assert.That(await repo.GetByPathAsync(path, ct)).IsNotNull();
@@ -119,7 +110,7 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
     [Test]
     public async Task An_Unknown_Id_Or_Path_Finds_Nothing(CancellationToken ct)
     {
-        using var db = new LiteDatabase(_db);
+        using var db = new LiteDatabase(new MemoryStream());
         var repo = db.Photos();
         await Assert.That(await repo.GetAsync(PhotoId.New(), ct)).IsNull();
         await Assert.That(await repo.GetByPathAsync(Path.Combine(Path.GetTempPath(), "never-scanned.jpg"), ct)).IsNull();
@@ -128,7 +119,7 @@ public sealed class LiteDbPhotoRepositoryTests : IDisposable
     [Test]
     public async Task Clearing_Forgets_Every_Record_And_Counts_Them(CancellationToken ct)
     {
-        using var db = new LiteDatabase(_db);
+        using var db = new LiteDatabase(new MemoryStream());
         var repo = db.Photos();
         await Assert.That(await repo.ClearAsync(ct)).IsEqualTo(0);
         await repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "a.jpg"), FileName = "a.jpg", ContentHash = "A" }, ct);

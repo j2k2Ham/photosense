@@ -1,4 +1,3 @@
-using LiteDB;
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Scanning.Interfaces;
@@ -17,20 +16,18 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-removal-");
     private readonly InMemoryPhotoRepository _repo = new();
-    private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly FailingDisk _disk = new();
     private readonly FileChanges _changes;
     private readonly DuplicateRemovalService _service;
 
     public DuplicateRemovalServiceTests()
     {
-        _changes = new FileChanges(_db.Batches(), _repo, Mock.Of<IAuditRepository>(), _disk);
+        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk);
         _service = Service(new CompanionFileFinder(_disk, _ => null));
     }
 
     public void Dispose()
     {
-        _db.Dispose();
         _root.Delete(true);
     }
 

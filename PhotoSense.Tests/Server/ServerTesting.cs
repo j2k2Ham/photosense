@@ -3,7 +3,7 @@ using PhotoSense.Server;
 
 namespace PhotoSense.Tests.Server;
 
-/// <summary>The program as it is built to start, with a data folder of the test's own.</summary>
+/// <summary>The program as it is built to start, with a data folder of the test's own and its stores in memory.</summary>
 internal sealed class ServerFixture : IDisposable
 {
     /// <summary>The fixture's own folder, deleted when it ends.</summary>
@@ -25,7 +25,7 @@ internal sealed class ServerFixture : IDisposable
             $"--PhotoStorage:ThumbnailPath={ThumbnailPath}",
             "--PhotoStorage:KeepFormat=WidelyCompatible",
             .. settings,
-        ], Root.FullName);
+        ], Root.FullName, s => s.AddStandInStores());
 
     /// <summary>A path in the fixture's folder.</summary>
     public string In(params string[] parts) => Path.Combine([Root.FullName, .. parts]);

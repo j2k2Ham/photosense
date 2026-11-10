@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Domain.Configuration;
+using Microsoft.Extensions.Options;
 using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Hosting;
@@ -33,6 +35,7 @@ public sealed class PhotosOnAPhoneTests : IDisposable
             .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for PhotoSense for iPhone and iPad"))
+            .AddStandInStores()
             .BuildServiceProvider();
         _router = _services.GetRequiredService<PhotoSenseRoutes>().Router;
     }
@@ -164,7 +167,7 @@ public sealed class PhotosOnAPhoneTests : IDisposable
         await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length, _library.RecentlyDeleted.Count)).IsEqualTo((4, 0, 0));
 
         // What PhotoSense records is kept where the phone keeps an app's own files, and the previews where it may clear them.
-        await Assert.That((File.Exists(Path.Combine(In("Documents"), "photosense.db")), Directory.EnumerateFiles(Path.Combine(In("Caches"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))
+        await Assert.That((_services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveDatabasePath() == Path.Combine(In("Documents"), "photosense.db"), Directory.EnumerateFiles(Path.Combine(In("Caches"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))
             .IsEqualTo((true, true));
     }
 }

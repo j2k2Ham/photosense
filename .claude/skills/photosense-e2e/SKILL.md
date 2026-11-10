@@ -24,6 +24,7 @@ npm run typecheck
 ```
 
 - **Chrome:** `PHOTOSENSE_E2E_CHROME=1` uses the installed Chrome instead of Playwright's download.
+- **Playwright's browsers** (`npx playwright install chromium webkit`) download here since Playwright 1.64.1. Older versions fail under Node 26, which removed `fs.rmdir`'s `recursive` option: on Windows with an error, on GitHub's Linux by hanging.
 - **Jamie's app:** `npm run app` builds the page in a copy, without `.env.local`, and publishes the service into `.cache` through `--artifacts-path`. It is safe while Jamie's app runs.
 - **After a failure:** read `test-results/<test>/error-context.md`. It holds the page as a screen reader saw it at that moment: what was on screen, and the exact names.
 - **A WebKit install that hangs on unpacking:** stop it, delete the half-made `%LOCALAPPDATA%\ms-playwright\webkit-<n>` and `__dirlock`, and install again.

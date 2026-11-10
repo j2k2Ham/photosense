@@ -1,4 +1,3 @@
-using LiteDB;
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Organizing;
@@ -19,14 +18,13 @@ namespace PhotoSense.Tests.Application;
 /// Clean up and Organize from start to finish on photos that are on no disk at all, as a phone's library will
 /// be: every file is listed, read, moved, put back and erased through where the photos live, and only there.
 /// </summary>
-public sealed class PhotosNotOnDiskTests : IDisposable
+public sealed class PhotosNotOnDiskTests
 {
     private const string LiveId = "LIVE-PHOTO-1";
     // A folder no disk has: a file read or written anywhere but in memory would be missed, or left behind.
     private readonly string _root = Path.Combine(Path.GetTempPath(), "photosense-not-on-disk-" + Guid.NewGuid().ToString("N"));
     private readonly InMemoryFileSystem _files = new();
     private readonly InMemoryPhotoRepository _repo = new();
-    private readonly LiteDatabase _db = new(new MemoryStream());
     private readonly IOrganizeBatchStore _batches;
     private readonly FileChanges _changes;
     private readonly ScanExecutionService _scan;
@@ -39,17 +37,15 @@ public sealed class PhotosNotOnDiskTests : IDisposable
     {
         var audit = Mock.Of<IAuditRepository>();
         var hashing = new Sha256ImageHashingService();
-        _batches = _db.Batches();
+        _batches = new MemoryBatchStore();
         _changes = new FileChanges(_batches, _repo, audit, _files);
         _scan = new ScanExecutionService(_repo, hashing, new MagickImageAnalyzer(), new BasicExifMetadataExtractor(), new InMemoryThumbnailStore(), new InMemoryScanProgressStore(new TestClock()), _files);
         _cleanUp = new DuplicateRemovalService(new DuplicateAnalysisService(_repo), _repo, new CompanionFileFinder(_files, new LivePhotoIdCache(_files).Read), _changes, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
-        _library = new OrganizeLibrary(_repo, new ExifMediaDetailsReader(_files), hashing, _db.MediaDetails(), _files);
+        _library = new OrganizeLibrary(_repo, new ExifMediaDetailsReader(_files), hashing, new MemoryMediaDetailsStore(), _files);
         var companions = new CompanionFileFinder(_files, _library.LivePhotoIds(new LivePhotoIdCache(_files).Read));
         _organize = new OrganizeMover(_library, companions, _changes, audit, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
         _removed = new RemovedFiles(_repo, _batches, audit, _files);
     }
-
-    public void Dispose() => _db.Dispose();
 
     private string In(params string[] parts) => Path.Combine([_root, .. parts]);
 

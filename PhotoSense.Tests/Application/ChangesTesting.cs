@@ -1,4 +1,3 @@
-using LiteDB;
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Domain.Entities;
@@ -98,17 +97,15 @@ internal sealed class FailingDisk : DiskFileSystem
 /// <summary>A folder of files with the records of a scan and a journal of changes, all of its own.</summary>
 internal sealed class ChangesFixture : IDisposable
 {
-    private readonly LiteDatabase _db = new(new MemoryStream());
-
     /// <summary>The test's own folder, deleted when it ends.</summary>
     public DirectoryInfo Root { get; } = Directory.CreateTempSubdirectory("photosense-changes-");
     /// <summary>Scans' records, in memory.</summary>
     public InMemoryPhotoRepository Repo { get; } = new();
-    /// <summary>The changes, kept in a database in memory.</summary>
-    public IOrganizeBatchStore Batches { get; }
+    /// <summary>The changes, kept in memory.</summary>
+    public MemoryBatchStore Batches { get; } = new();
 
     /// <summary>What the store holds of a change at this moment, read straight from the database: for a hook that runs in the middle of a move, where nothing can be awaited.</summary>
-    public OrganizeBatch? Stored(Guid id) => _db.GetCollection<OrganizeBatch>("organize_batches").FindById(id);
+    public OrganizeBatch? Stored(Guid id) => Batches.Stored(id);
     /// <summary>The disk, which fails as the test says.</summary>
     public FailingDisk Disk { get; } = new();
     /// <summary>What was recorded as done.</summary>
@@ -120,7 +117,6 @@ internal sealed class ChangesFixture : IDisposable
     {
         var audit = new Mock<IAuditRepository>();
         audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
-        Batches = _db.Batches();
         Changes = new FileChanges(Batches, Repo, audit.Object, Disk);
     }
 
@@ -163,7 +159,6 @@ internal sealed class ChangesFixture : IDisposable
 
     public void Dispose()
     {
-        _db.Dispose();
         TestFiles.Remove(Root);
     }
 }

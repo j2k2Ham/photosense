@@ -32,7 +32,6 @@ public sealed class TransferTests : IDisposable
     private readonly FakeAdvertiser _advertiser = new();
     private readonly ServiceProvider _phone;
     private readonly ApiRouter _router;
-    private readonly LiteDB.LiteDatabase _computerDb = new(new MemoryStream());
     private readonly IPairingStore _computerPairs;
     private readonly PhoneReceiving _computer;
     private readonly string _folder;
@@ -44,17 +43,18 @@ public sealed class TransferTests : IDisposable
             .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), _advertiser, "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
+            .AddStandInStores()
             .BuildServiceProvider();
         _router = _phone.GetRequiredService<PhotoSenseRoutes>().Router;
         _folder = Directory.CreateDirectory(In("Computer")).FullName;
-        _computerPairs = Stores.Pairings(_computerDb, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
+        _computerPairs = new MemoryPairs("computer");
         _computer = Receiving(new OnThisComputer(_advertiser));
     }
 
     private PhoneReceiving Receiving(IPhoneFinder finder, DiskFileSystem? disk = null)
     {
         disk ??= new DiskFileSystem();
-        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(_computerDb.Batches(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1");
+        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1");
     }
 
     public void Dispose()
@@ -63,7 +63,6 @@ public sealed class TransferTests : IDisposable
         _computer.Stop();
         _phone.GetRequiredService<PhoneSending>().Stop();
         _phone.Dispose();
-        _computerDb.Dispose();
         TestFiles.Remove(_data);
     }
 

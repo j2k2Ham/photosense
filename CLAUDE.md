@@ -55,6 +55,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 ## Rules
 
 1. **100% branch coverage in all three parts.** Every change ships with tests that keep the service, the UI and the build tools (`tools/`) at 100% of branches. Report the measured figures when done, not a guess.
+   - **No test touches the database** (Jamie, 2026-11-10), except the LiteDB stores' own tests, which use LiteDB in memory with no file. Every other test uses the stand-ins in `PhotoSense.Tests/StandInStores.cs`; the program's tests give them to `PhotoSenseServer.Build` or after a phone's setup. Opening the database file (`AddPhotoSenseCore`'s `OpenDatabase`) is left out of coverage; the end-to-end tests run it.
 2. **Nothing is ever replaced, and nothing is erased except by "Delete permanently".**
    - Removing a file moves it into `_PhotoSense_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
    - The only code that erases files is `RemovedFiles.EraseAsync`, through `IPhotoFileSystem.Erase`, which nothing else calls. It only empties folders named `_PhotoSense_Removed`.

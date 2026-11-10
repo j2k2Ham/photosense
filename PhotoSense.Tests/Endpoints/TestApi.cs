@@ -1,4 +1,3 @@
-using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -17,7 +16,7 @@ namespace PhotoSense.Tests.Endpoints;
 /// <summary>
 /// The service's addresses as a program has them, with every endpoint behind them: a request is answered through the
 /// router and the request guard, as a host hands it on. What a test does not give is a stand-in that touches nothing:
-/// a database in memory, previews in memory, a clock that stands still, and this computer's disks.
+/// stores and previews in memory, a clock that stands still, and this computer's disks.
 /// </summary>
 internal sealed class TestApi
 {
@@ -38,7 +37,7 @@ internal sealed class TestApi
             .AddSingleton(ProgramInfo.From(typeof(TestApi).Assembly, "server"))
             .AddPhotoSenseApplication()
             .AddPhotoSenseCore()
-            .AddSingleton(new LiteDatabase(new MemoryStream()))
+            .AddStandInStores()
             .AddSingleton<IThumbnailStore>(new InMemoryThumbnailStore())
             .AddPhotoSenseApi();
         with?.Invoke(services);

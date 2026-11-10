@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Domain.Configuration;
+using Microsoft.Extensions.Options;
 using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Hosting;
@@ -30,6 +32,7 @@ public sealed class PhotosOnAndroidTests : IDisposable
             .AddPhotoSenseAndroid(_store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), "Pixel 8", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("android", "1.2.0.57", () => "Third-party notices for PhotoSense for Android"))
+            .AddStandInStores()
             .BuildServiceProvider();
         _router = _services.GetRequiredService<PhotoSenseRoutes>().Router;
     }
@@ -100,7 +103,7 @@ public sealed class PhotosOnAndroidTests : IDisposable
         var erased = await JsonAsync("POST", "removed/erase", ct, new { folders = new[] { Path.Combine(_root, "_PhotoSense_Removed") } });
         await Assert.That((erased.GetProperty("erased").GetInt32(), _store.Trashed.Count, _store.Places().Count)).IsEqualTo((1, 1, 2));
 
-        await Assert.That((File.Exists(Path.Combine(In("files"), "photosense.db")), Directory.EnumerateFiles(Path.Combine(In("cache"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))
+        await Assert.That((_services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveDatabasePath() == Path.Combine(In("files"), "photosense.db"), Directory.EnumerateFiles(Path.Combine(In("cache"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))
             .IsEqualTo((true, true));
     }
 
