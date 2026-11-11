@@ -5,6 +5,8 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 const layers: { entry: number; close(): void }[] = [];
 let made = 0;
 let listening = false;
+// Entries of layers closed some other way than by Back, not yet taken out of the history.
+let unwanted = 0;
 
 // Each entry is numbered as it is made. Going back to one closes every layer made after it: one for a Back, none for an
 // entry the page took out itself, and all of them should a Back land on an entry left over from before.
@@ -13,9 +15,17 @@ function onPop(e: PopStateEvent) {
   while ((layers.at(-1)?.entry ?? 0) > landed) layers.pop()!.close();
 }
 
+// Taken out once the page has settled: going back is not done at once, and a layer opened meanwhile would be closed by it.
+function takeOut() {
+  const n = unwanted;
+  unwanted = 0;
+  if (n > 0) history.go(-n);
+}
+
 /**
  * Gives what is open its own entry in the history while it is open: Back closes it, by calling `onBack`, and closing it
- * any other way takes its entry back out, so that the next Back closes what is under it.
+ * any other way takes its entry back out, so that the next Back closes what is under it. Something opened as another
+ * closes, as when one sheet gives way to the next, takes over the other's entry.
  */
 export function useBackLayer(open: boolean, onBack: () => void): void {
   const back = useRef(onBack);
@@ -26,13 +36,19 @@ export function useBackLayer(open: boolean, onBack: () => void): void {
     if (!listening) { window.addEventListener('popstate', onPop); listening = true; }
     const layer = { entry: ++made, close: () => back.current() };
     layers.push(layer);
-    history.pushState({ photosense: layer.entry }, '');
+    if (unwanted > 0) {
+      unwanted--;
+      history.replaceState({ photosense: layer.entry }, '');
+    } else {
+      history.pushState({ photosense: layer.entry }, '');
+    }
     return () => {
       const at = layers.indexOf(layer);
       // Closed by Back, its entry has gone already; closed any other way, it is taken out.
       if (at < 0) return;
       layers.splice(at, 1);
-      history.back();
+      unwanted++;
+      queueMicrotask(takeOut);
     };
   }, [open]);
 }

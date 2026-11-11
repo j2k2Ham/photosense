@@ -7,7 +7,8 @@ export interface GridItem {
   readonly id: string;
   /** Its name, which a screen reader says for it. */
   readonly name: string;
-  readonly thumbnail: string;
+  /** Its preview; absent for a video, which has none. */
+  readonly thumbnail?: string;
   /** How long a video plays, as shown on it ("0:42"); absent for a picture. */
   readonly duration?: string;
 }
@@ -37,7 +38,9 @@ export function PhotoGrid({ items, selecting, selected, onTap }: GridProps) {
           <li key={item.id}>
             <button type="button" aria-label={item.name} aria-pressed={selecting ? on : undefined} onClick={() => onTap(item.id)}
               className="relative block aspect-square w-full overflow-hidden bg-fill">
-              <img src={item.thumbnail} alt="" loading="lazy" className={`absolute object-cover transition-all duration-150 ${shrunk}`} />
+              {item.thumbnail
+                ? <img src={item.thumbnail} alt="" loading="lazy" className={`absolute object-cover transition-all duration-150 ${shrunk}`} />
+                : <span aria-hidden className={`absolute grid place-items-center bg-[#1c2124] transition-all duration-150 ${shrunk}`}><span className="ml-1 h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-white" /></span>}
               {item.duration && <span className="absolute bottom-1 right-1.5 text-[12px] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,.6)]">{item.duration}</span>}
               {selecting && (
                 <span aria-hidden className={`absolute grid h-6 w-6 place-items-center rounded-full border-[1.5px] border-white ${on ? 'bg-acc' : 'bg-black/20'} ${ios ? 'bottom-1.5 right-1.5' : 'left-1.5 top-1.5'}`}>

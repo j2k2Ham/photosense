@@ -79,6 +79,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'On an iPhone or iPad',
         text: [
+          '**Library** shows every photo and video, newest first, by month. Tap one to see it whole; **Select** chooses several to send, add to an album or delete. **Not organized** shows those in no album yet.',
           'The first time, **Continue** asks the phone\'s own question of which photos PhotoSense may see, and then reads them all. If you said no, **Open Settings** goes to where access is turned on; come back, and the reading starts.',
           'The phone\'s photos are the one folder, **Photo Library**, read whole: **Scan again** in Settings reads it again, and **Stop** ends a scan, keeping what it read. If you let PhotoSense see only some of them, the scan screen says so: **Choose more photos** opens the phone\'s own picker, and **Open Settings** goes to where all of them can be allowed.',
           'There, a folder is an album. Organizing a photo puts it in an album, inside a folder where the name has a \\, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied. An album left empty, by **Undo** or otherwise, stays in Photos until you delete it there.',

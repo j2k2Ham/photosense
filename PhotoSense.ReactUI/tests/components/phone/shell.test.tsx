@@ -13,6 +13,12 @@ import { frame, inFrame, width } from './frame';
 const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } }));
+// Library is tested on its own; here the library holds one photo.
+vi.mock('../../../lib/library', async importOriginal => {
+  const real = await importOriginal<typeof import('../../../lib/library')>();
+  const one = { id: 'f1', name: 'IMG_1.JPG', folder: '/Photo Library', sizeBytes: 1, isVideo: false, date: '2023-12-01T00:00:00', dateFromFile: false, width: 1, height: 1 };
+  return { ...real, useLibrary: () => ({ root: '/Photo Library', files: [one], listing: { root: '/Photo Library', fromScan: true, places: [], files: [one] } }) };
+});
 
 describe('a screen\'s header', () => {
   it('on an iPhone: round glass buttons over a large title, and the gear opens Settings', async () => {
@@ -234,6 +240,18 @@ describe('PhotoSense on a phone', () => {
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
     expect(ended).toHaveBeenCalledOnce();
+  });
+
+  it('counts the library beside its tab on an iPad, and while choosing in Library puts the selection bar in place of the tabs', async () => {
+    width(true);
+    const view = render(<App start="library" />);
+    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library 1' })).toBeInTheDocument();
+    view.unmount();
+    width(false);
+    render(<App start="library" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    expect(screen.getByRole('toolbar', { name: 'What is selected' })).toBeInTheDocument();
   });
 
   it('shows a review beside the list on a tablet, so nothing is pushed', () => {

@@ -1,6 +1,6 @@
 import { expect, message, test } from '../fixtures/app';
 import { Phone } from '../fixtures/phone';
-import { openOrganize, phoneSettings, preview, question, suggestions, tile } from '../fixtures/screens';
+import { openOrganize, phoneSettings, phoneTab, preview, question, suggestions, tile } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
 const sendWindow = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Send to computer' });
@@ -56,6 +56,47 @@ test.describe('on a phone', () => {
     await expect(message(page, 'PhotoSense can now see all your photos.')).toBeVisible();
     await expect(note).toBeHidden();
     expect(phone.asked).toContain('library/choose-more');
+  });
+
+  test('Library shows every photo by month; chosen ones go into a new album, or are deleted after a question and come back with Undo @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2023, 11, 27, 23, 34) });
+    photos.picture('IMG_0002.JPG', { seed: 2, taken: new Date(2023, 10, 2, 8, 0) });
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const library = page.getByRole('region', { name: 'Library' });
+    await expect(library.getByRole('region', { name: 'December 2023' }).getByRole('button', { name: 'IMG_0001.JPG' })).toBeVisible({ timeout: 60_000 });
+    await expect(library.getByRole('group', { name: 'Show' }).getByRole('button', { name: 'Not organized 2' })).toBeVisible();
+
+    await library.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+    const viewer = page.getByRole('dialog', { name: 'IMG_0001.JPG' });
+    await expect(viewer).toContainText('Dec 27, 2023, 11:34 PM');
+    await viewer.getByRole('button', { name: 'Back' }).click();
+
+    const bar = page.getByRole('toolbar', { name: 'What is selected' });
+    await library.getByRole('button', { name: 'Select' }).click();
+    await library.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+    await bar.getByRole('button', { name: 'Add to album' }).click();
+    await page.getByRole('dialog', { name: 'Add 1 to an album' }).getByRole('button', { name: '+ New album…' }).click();
+    await page.getByRole('dialog', { name: 'New album' }).getByRole('textbox', { name: 'Album name' }).fill('Butte');
+    await page.getByRole('dialog', { name: 'New album' }).getByRole('button', { name: 'Create' }).click();
+    await expect(message(page, 'Moved 1 item to Butte.')).toBeVisible();
+    expect(photos.exists('Butte/IMG_0001.JPG')).toBe(true);
+    await expect(library.getByRole('button', { name: 'Not organized 1' })).toBeVisible();
+
+    await library.getByRole('button', { name: 'Select' }).click();
+    await library.getByRole('button', { name: 'IMG_0002.JPG' }).click();
+    await bar.getByRole('button', { name: 'Delete' }).click();
+    const asked = page.getByRole('dialog', { name: 'Delete 1 item?' });
+    await expect(asked).toContainText('IMG_0002.JPG goes to PhotoSense Removed.');
+    await asked.getByRole('button', { name: 'Delete 1 item' }).click();
+    await expect(message(page, '1 item moved to PhotoSense Removed.')).toBeVisible();
+    expect(photos.exists('_PhotoSense_Removed/IMG_0002.JPG')).toBe(true);
+    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
+    await expect(message(page, 'Moved 1 item back.')).toBeVisible();
+    expect(photos.exists('IMG_0002.JPG')).toBe(true);
   });
 
   test('About, from Settings, names the phone app, which has no menu and receives nothing @phone', async ({ page }) => {

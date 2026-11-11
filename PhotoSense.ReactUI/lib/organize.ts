@@ -51,7 +51,8 @@ export const noChoices: OrganizeChoices = { assigned: {}, added: {}, renames: {}
 interface Point { latitude: number; longitude: number; }
 
 const EARTH_KM = 6371;
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+/** The months' names, January first. */
+export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 /** Characters a folder or file name cannot hold on Windows, the strictest of the systems this runs on. */
 const UNUSABLE = /[<>:"|?*/]/;
 

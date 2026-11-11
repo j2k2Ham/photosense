@@ -3,8 +3,10 @@ import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
 import type { ThemeChoice } from '../../lib/theme';
 import type { ScanProgressSnapshotDto } from '../../types';
-import type { Toast, ToastKind } from '../Toaster';
+import type { Toast, ToastAction, ToastKind } from '../Toaster';
 import { useFirstRun, usePhoneScan } from './FirstRun';
+import { LibraryScreen } from './Library';
+import { useLibrary } from '../../lib/library';
 import { PhoneShell } from './PhoneShell';
 import { RootHeader, Screen } from './Screens';
 import { SettingsSheet } from './SettingsSheet';
@@ -34,7 +36,7 @@ interface Props {
   onStarted(instanceId: string): void;
   /** Stops the scan under way. */
   onStopScan(): void;
-  notify(message: string, kind: ToastKind): void;
+  notify(message: string, kind: ToastKind, action?: ToastAction): void;
   onTab(tab: TabId): void;
   onEndReview(): void;
   removeToast(id: number): void;
@@ -55,6 +57,10 @@ export function PhoneApp(props: Props) {
   const { platform, tab, reviewing, cleanup, organize, cleanupSubtitle, notice, counts, toasts, theme, version, errorCount, onTab, onEndReview, removeToast, notify } = props;
   const { starting, scan } = usePhoneScan(props.onStarted, notify);
   const cover = useFirstRun({ scanning: props.scanning, progress: props.progress, starting, scan, onStop: props.onStopScan, notify });
+  // The library is read once the first run is through, and again after each scan; Library keeps whether it is choosing.
+  const library = useLibrary(!cover);
+  const [selecting, setSelecting] = useState(false);
+  const libraryCount = library.listing && library.files.length.toLocaleString();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const words = WORDS[platform];
@@ -64,10 +70,10 @@ export function PhoneApp(props: Props) {
   useBackLayer(pushed, onEndReview);
 
   return (
-    <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : 'tabs'} counts={counts} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
+    <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : tab === 'library' && selecting ? 'selection' : 'tabs'} counts={{ ...counts, library: libraryCount }} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
       notice={notice} cover={cover}
       screens={{
-        library: <Screen label="Library"><RootHeader title="Library" /></Screen>,
+        library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} notify={notify} />,
         cleanup: <Screen label="Clean up" fixed>{!pushed && <RootHeader title="Clean up" subtitle={cleanupSubtitle} />}{cleanup}</Screen>,
         // Until Organize is rebuilt for phones, its screen scrolls as a whole, at least as tall as a phone held upright,
         // so that on a short screen nothing of it stays under the tab bar.

@@ -19,6 +19,10 @@ Object.defineProperty(window, 'matchMedia', {
   value: (query: string) => ({ media: query, matches: false, addEventListener() {}, removeEventListener() {} }),
 });
 
+// The test browser has no IntersectionObserver; Library's stand-in sees nothing come into view unless a test says so.
+class NoIntersections { observe() {} disconnect() {} }
+Object.defineProperty(window, 'IntersectionObserver', { configurable: true, writable: true, value: NoIntersections });
+
 afterEach(() => {
   localStorage.clear();
   cleanup();

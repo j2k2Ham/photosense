@@ -64,6 +64,19 @@ describe('Back', () => {
     expect(pushed).not.toHaveBeenCalled();
   });
 
+  it('something opened as another closes takes over its entry, so it stays open, and Back then closes it', async () => {
+    const first = vi.fn(), next = vi.fn();
+    const { rerender } = render(<><Layer open onBack={first} /><Layer open={false} onBack={next} /></>);
+    const before = history.length;
+    rerender(<><Layer open={false} onBack={first} /><Layer open onBack={next} /></>);
+    await settle();
+    expect(history.length).toBe(before);
+    expect(next).not.toHaveBeenCalled();
+    await act(async () => { history.back(); });
+    await settle();
+    expect([first.mock.calls.length, next.mock.calls.length]).toEqual([0, 1]);
+  });
+
   it('a Back that lands on an entry left over from before closes every layer made since', async () => {
     const stale = vi.fn(), open = vi.fn();
     history.pushState({ photosense: 0 }, '');

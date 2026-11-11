@@ -29,7 +29,8 @@ npm run lint                  # ESLint 9, Next's rules and jsx-a11y strict: 0 er
 - **The user guide:** `lib/guide.ts`, shown by Help, changes whenever something on screen is renamed, added or removed. So does the README when behaviour changes.
 - **Phones:** `platformOf(useAbout().data?.program)` (`lib/phone.ts`) is `ios`, `android`, or none on a computer. On a phone or tablet the page is laid out by `components/phone/` instead of the computer's bar and menu (`PhoneApp`, `PhoneShell`), in the skin `useSkin` sets (`data-skin`, `app/globals.css`) and the theme `useTheme` gives (Auto, Dark, Light). The design is `docs/design_handoff_photosense_mobile` (untracked); `STEPS.md` has the steps still to build.
   - A phone's parts read where they are from `usePhone()`: the platform, phone or tablet (768 px wide or more), the platform's words (`album` or `folder`), and what stands at the foot.
-  - Anything opened over a screen (a pushed screen, a sheet, a full-screen view) calls `useBackLayer(open, close)`, so that Android's Back and iOS's edge swipe close it.
+  - Anything opened over a screen (a pushed screen, a sheet, a full-screen view) calls `useBackLayer(open, close)`, so that Android's Back and iOS's edge swipe close it. One opened as another closes takes over its history entry; going back is never done at once, or it would close the new one.
+  - A sheet or full-screen view opened from inside a tab is drawn with `createPortal(…, document.body)`: the shell's screens are a fixed layer of their own, and anything inside them stays under the tab bar whatever its z-index (`Library.tsx`).
   - Colours come from the skin's own tokens (`bg-cell`, `text-acc`, `bg-bar`, `text-danger-t`); sizes that differ by platform from its variables (`h-[var(--btn-h)]`, `rounded-cell`).
 
 Before building a window, dialog, message or setting, read `reference/patterns.md`: z-order, `Scrim`, `ConfirmDialog`, Escape, toasts, settings and the icon.

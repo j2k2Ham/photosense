@@ -52,7 +52,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
   - Looking for an iPhone on a cable gives Apple's device service five seconds.
   - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
-- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 661 tests at 100% (2026-11-10); end to end 74 tests, 58 in Playwright's Chromium and 16 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the shell push (4f6dc67, 2026-11-10).
+- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 690 tests at 100% (2026-11-10); end to end 76 tests, 59 in Playwright's Chromium and 17 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the first-run push (8351dce, 2026-11-10).
 
 ## Remaining steps
 
@@ -86,8 +86,13 @@ The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and
   - Scanning covers the tabs: the percentage, time left, the count, and tiles (10 a row on a phone, 16 on a tablet) that fill with the pictures read (new `recent` on `scan/progress`, Jamie's choice). **Stop** (new `POST scan/stop/{id}`, Jamie's choice) keeps what was read. When it finishes the phone shows Library, with "Found 264 duplicates and 178 groups of similar shots." and **Review**. **Scan again** in Settings scans the library again.
   - In the apps the page is hidden until it knows it is the phone app (`data-app`, set before the first paint from the app's bridge; shown after three seconds whatever happens), which settles the computer's layout showing for a moment at launch.
   - The iPhone's photo question now says the design's words: "PhotoSense finds copies of the same photo and sorts photos into albums. Nothing leaves this phone unless you send it to your computer."
-  - Checked: service 828 tests at 100% (3,547 lines, 2,008 branches); page 661 at 100%; end to end 58 and 16 (two new first-run tests); screenshots at 402 × 874, 412 × 892, 1180 × 820 and 1280 × 800 in both themes against the handoff's 01, 03 and 04; Stop on a real scan of Jamie's photo folder (read only, on a data folder of its own): stopped at 180 of 6,296, all 180 kept, the next scan carried on. Not checked: either app's build or a device (the iPhone app needs GitHub's Mac); the real system questions; whether Android's WebView revalidates the access on coming back from Settings.
-- [ ] **4. Library** (05–10), new: `organize/files` for the whole library, filters All, Not organized, No location, Videos, by month; select mode with Send, Add to album / Move to folder, Delete; the viewer.
+  - Checked: service 828 tests at 100% (3,547 lines, 2,008 branches); page 661 at 100%; end to end 58 and 16 (two new first-run tests); screenshots at 402 × 874, 412 × 892, 1180 × 820 and 1280 × 800 in both themes against the handoff's 01, 03 and 04; Stop on a real scan of Jamie's photo folder (read only, on a data folder of its own): stopped at 180 of 6,296, all 180 kept, the next scan carried on. On GitHub (8351dce) both apps built and passed their self-checks on the simulator and emulator, and the end-to-end tests passed. Not checked: a device; the real system questions; whether Android's WebView revalidates the access on coming back from Settings.
+- [x] **4. Library** (2026-11-10), in `components/phone/Library.tsx` and `lib/library.ts`:
+  - Every picture and video, latest first, by month, on `organize/files` for the library's one folder, shown as it is read; filters All, Not organized, No location, Videos, with counts; more drawn as the end comes into view. With only some photos allowed, the banner and **Choose more**.
+  - Select: the count in the title, Cancel (iOS) or a cross (Android), Back stops it, the selection bar in place of the tabs. **Add to album** / **Move to folder**: the albums or folders there are, or a new one (`organize/plan` then `organize/apply`); **Delete** after the design's question, into PhotoSense Removed (`organize/remove`); both with Undo. **Send** opens today's sending window until step 7.
+  - The viewer: the picture whole (the small preview first, as a computer takes 2–3 s to decode a large HEIC), when and where, where it is, its size, and the three actions.
+  - Fixed on the way: a sheet that gave way to another (the album list to New album) was closed by the first one's late Back (`useBackLayer` now hands its entry over); Library's viewer and sheets are drawn over the whole page, as inside a tab they stayed under the tab bar.
+  - Checked: page 690 tests at 100%; end to end 59 and 17 (a new Library test: viewer, new album, delete and Undo on the disk); screenshots at the four sizes in both themes against the handoff's 05–10 and the tablets' 01, with Jamie's photo folder (read only) as the library: 6,243 shown, the first after 6 s, all after 8 s. Not checked: on a device; a real phone's album rules on Android.
 - [ ] **5. Clean up** (11–18): groups, review, full-screen compare, the delete questions; on `GroupList`, `ReviewPanel`, `Differences`, `MatchChip`.
 - [ ] **6. Organize** (19–28): suggestions, the plain map, options, preview, where it goes, name taken, moved, recently moved; on `OrganizeView`, `MovePreview`, `NameClashWindow`, `RecentMoves`.
 - [ ] **7. Send** (29–34): its own tab, over `send/*` and `SendStateDto.stage`.
@@ -173,6 +178,14 @@ After a review of security, the Delete permanently wording, complaints and trans
   - A phone with no theme chosen starts in **Auto**, as its own apps do; a computer still starts dark.
   - The skins use the handoff's own names, which the desktop's tokens share (`--bg`, `--t1` to `--t3`, `--stage`, `--sel`, `--keep`, `--amber`, `--ident`, `--ident-bg`, `--scrim`): on a phone the skin's values win, so the screens not yet rebuilt already take the skin's background, text and those colours. The desktop is untouched, having no skin.
   - The body text on a phone is the platform's size (17 px on iOS, 16 px on Android) instead of the desktop's 14 px.
+- **Phone and tablet design, step 4 (2026-11-10):**
+  - "Not organized" is at the top of the library (the design's rule); on Android, where nothing is at the top, it also counts DCIM/Camera, where the camera puts photos.
+  - The albums or folders offered are those the library's files are in; a new album is made at the top of an iPhone's library, a new folder in Pictures on Android.
+  - A name already taken in the album gets a number ("IMG_1 (1).HEIC") without asking; Organize's own Name taken screen comes in step 6.
+  - A Live Photo's video is not shown on its own; it goes with its picture.
+  - A video opened shows "PhotoSense cannot play videos yet." with its details, as the phone serves no video for Organize's files.
+  - Select is offered once the library has been read through.
+  - After a move or deletion Undo says "Moved 3 items back."
 - **Phone and tablet design, step 3 (2026-11-10):**
   - A phone scans its whole library, recursively, keeping earlier results; a first scan, "Scan again" and coming back with access all do the same.
   - "Found …" counts duplicate files (the copies a bulk delete would take) and groups of similar shots, as the design does; with neither, "Found no duplicates or similar shots." and no Review. Until the files are counted the scan says "Counting your photos and videos…"; time left uses the computer's wording ("About 4 minutes left", "Less than a minute left").
