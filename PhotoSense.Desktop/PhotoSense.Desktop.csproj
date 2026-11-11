@@ -10,6 +10,6 @@
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="14.17.2" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
   </ItemGroup>
 </Project>
