@@ -15,6 +15,6 @@
     "@types/node": "^20.19.43",
     "jpeg-js": "0.4.4",
     "piexifjs": "1.0.6",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
