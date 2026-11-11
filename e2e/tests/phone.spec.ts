@@ -25,7 +25,7 @@ test.describe('on a phone', () => {
     await expect(tabs.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
     await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Review' }).click();
     await expect(tabs.getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('region', { name: 'Groups' }).getByRole('listitem')).toHaveCount(1);
+    await expect(page.getByRole('list', { name: 'Groups' }).getByRole('listitem')).toHaveCount(1);
   });
 
   test('refused its photos, it says where access is turned on, and reads them once it is on and the app opens again @phone', async ({ page, photos }) => {
@@ -46,16 +46,73 @@ test.describe('on a phone', () => {
     await expect(message(page, 'Found no duplicates or similar shots.')).toBeVisible({ timeout: 60_000 });
     await expect(refused).toBeHidden();
   });
-  test('a phone that may see only some photos says so, and more are chosen with its own picker @phone', async ({ page }) => {
+  test('a phone that may see only some photos says so in Library, and more are chosen with its own picker @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1 });
     const phone = new Phone('selected');
+    phone.root = photos.root;
     await phone.attach(page);
     await page.goto('/');
+    await phoneTab(page, 'Library');
     const note = page.getByRole('note');
-    await expect(note).toContainText('PhotoSense can see only the photos you selected.');
-    await note.getByRole('button', { name: 'Choose more photos' }).click();
+    await expect(note).toContainText('PhotoSense can see only the 1 photos you chose.', { timeout: 60_000 });
+    await note.getByRole('button', { name: 'Choose more' }).click();
     await expect(message(page, 'PhotoSense can now see all your photos.')).toBeVisible();
     await expect(note).toBeHidden();
     expect(phone.asked).toContain('library/choose-more');
+  });
+
+  test('Clean up deletes a copy after a question naming both files by where each is, Undo brings it back, and Delete all duplicates keeps one of each @phone', async ({ page, photos, service }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1 });
+    photos.picture('IMG_0002.JPG', { seed: 2 });
+    photos.copy('IMG_0001.JPG', 'Saved again/IMG_0001.JPG');
+    photos.copy('IMG_0002.JPG', 'Saved again/IMG_0002.JPG');
+    await service.scan(photos.root);
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    await page.goto('/');
+    const groups = page.getByRole('list', { name: 'Groups' });
+    await expect(page.getByRole('region', { name: 'Duplicates to delete' })).toContainText('2 duplicates');
+    await expect(groups.getByRole('listitem')).toHaveCount(2);
+    // Which of the two is kept is PhotoSense's choice: each set keeps one whole.
+    const one = () => [photos.exists('IMG_0001.JPG'), photos.exists('Saved again/IMG_0001.JPG')].filter(Boolean).length;
+
+    await groups.getByRole('button', { name: /^IMG_0001\.JPG/ }).click();
+    // On a phone the review is pushed over the list, without the tabs; at a tablet's width it is beside the list.
+    const review = page.getByRole('main');
+    await expect(review.getByText('Identical file')).toBeVisible();
+    if (page.viewportSize()!.width < 768) await expect(page.getByRole('navigation', { name: 'Tabs' })).toBeHidden();
+    await review.getByRole('button', { name: 'See IMG_0001.JPG full screen' }).first().click();
+    const full = page.getByRole('dialog', { name: 'IMG_0001.JPG, full screen' });
+    await expect(full.getByRole('radio', { name: 'Original' })).toHaveAttribute('aria-checked', 'true');
+    await full.getByRole('button', { name: 'Show the copy' }).click();
+    await expect(full.getByRole('radio', { name: 'This copy' })).toHaveAttribute('aria-checked', 'true');
+    await full.getByRole('button', { name: 'Close' }).click();
+
+    await review.getByRole('button', { name: 'Delete IMG_0001.JPG' }).click();
+    const asked = page.getByRole('dialog', { name: 'Delete IMG_0001.JPG?' });
+    await expect(asked).toContainText(/IMG_0001\.JPG stays, in Photo Library/);
+    await expect(asked).toContainText(/IMG_0001\.JPG, in Photo Library.*, goes to PhotoSense Removed, where Undo can still bring it back\./);
+    await asked.getByRole('button', { name: 'Delete IMG_0001.JPG' }).click();
+    await expect(message(page, /^IMG_0001\.JPG, in Photo Library.*, deleted\. The one in Photo Library.* stays\.$/)).toBeVisible();
+    expect(one()).toBe(1);
+    expect(photos.files('_PhotoSense_Removed').length).toBe(1);
+    await expect(groups.getByRole('listitem')).toHaveCount(1);
+
+    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
+    await expect(message(page, 'Put IMG_0001.JPG back where it was.')).toBeVisible();
+    expect(one()).toBe(2);
+    await expect(groups.getByRole('listitem')).toHaveCount(2);
+
+    await page.getByRole('button', { name: 'Delete all duplicates' }).click();
+    const all = page.getByRole('dialog', { name: 'Delete all duplicates?' });
+    await expect(all).toContainText('2 copies go to PhotoSense Removed');
+    await all.getByRole('button', { name: 'Delete 2 duplicates' }).click();
+    await expect(message(page, '2 duplicates deleted. The best copy of each stays.')).toBeVisible();
+    expect(one()).toBe(1);
+    expect([photos.exists('IMG_0002.JPG'), photos.exists('Saved again/IMG_0002.JPG')].filter(Boolean)).toHaveLength(1);
+    // Said under the list, and beside it too at a tablet's width.
+    await expect(page.getByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.').first()).toBeVisible();
   });
 
   test('Library shows every photo by month; chosen ones go into a new album, or are deleted after a question and come back with Undo @phone', async ({ page, photos }) => {

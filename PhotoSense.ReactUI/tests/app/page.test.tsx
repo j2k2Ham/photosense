@@ -9,7 +9,7 @@ import { deferred } from '../deferred';
 import { group, groupsPage, member, photo } from '../fixtures';
 
 const api = vi.hoisted(() => ({
-  useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
+  useGroups: vi.fn(), useGroupsThrough: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
   fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(),
   useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
@@ -62,6 +62,8 @@ beforeEach(() => {
   statusNow = { data: { instanceId: '', totalPhotos: 6941 } };
   progressFor = () => ({});
   api.useGroups.mockImplementation((mode, filter, page, hideKept) => groupsFor(mode, filter, page, hideKept));
+  // A phone reads the groups as one list, from the same answers.
+  api.useGroupsThrough.mockImplementation(mode => groupsFor(mode, '', 1, false));
   api.useScanStatus.mockImplementation(() => statusNow);
   api.useScanProgress.mockImplementation(id => progressFor(id));
   api.connectLogStream.mockImplementation(onLine => { emitLog = onLine; return stopLogs; });
@@ -1216,7 +1218,7 @@ describe('on a phone or tablet', () => {
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
-    await userEvent.click(tab(/Similar/));
+    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
     expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
     // Tapping the tab already showing keeps it, on its first screen.
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
@@ -1237,18 +1239,19 @@ describe('on a phone or tablet', () => {
     expect(document.documentElement).not.toHaveAttribute('data-skin');
   });
 
-  it('reviews a group on a screen of its own, which the tab, or Back, takes back to the list', async () => {
+  it('reviews a group on a screen of its own, which Back, on the phone or on the screen, takes back to the list', async () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
     open();
-    await userEvent.click(tile('IMG_4198.JPG'));
+    const row = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button')[0];
+    await userEvent.click(row());
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Clean up' })).not.toBeInTheDocument();
     await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
 
-    await userEvent.click(tile('IMG_4198.JPG'));
+    await userEvent.click(row());
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
-    await click('All groups');
+    await click('Back');
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
   });
 

@@ -404,10 +404,9 @@ export default function HomePage() {
     // The height the browser shows, which on a phone leaves out its own bars.
     <div className="flex h-dvh flex-col bg-bg text-t1">
       {platform ? (
-        <PhoneApp platform={platform} tab={tab} reviewing={showReview} cleanup={cleanScreen} organize={organizing && <OrganizeView startRoot={folders[0]} notify={push} />}
-          cleanupSubtitle={mode === 'duplicates' ? 'Copies of the same photo or video' : 'Shots that look alike'} notice={offlineNotice}
-          counts={{ cleanup: removable > 0 ? removable.toLocaleString() : undefined }} toasts={toasts} removeToast={remove}
-          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} onTab={turnToTab} onEndReview={() => setReviewing(false)}
+        <PhoneApp platform={platform} tab={tab} organize={organizing && <OrganizeView startRoot={folders[0]} notify={push} />} status={status.data}
+          notice={offlineNotice} toasts={toasts} removeToast={remove}
+          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} onTab={turnToTab}
           scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}
           onDeletePermanently={askToErase} onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} />
       ) : (

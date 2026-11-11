@@ -9,7 +9,7 @@ import type { ScanProgressSnapshotDto } from '../../../types';
 import { deferred } from '../../deferred';
 import { width } from './frame';
 
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), askForPhotos: vi.fn(), openPhotoSettings: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn() }));
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), askForPhotos: vi.fn(), openPhotoSettings: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useGroupsThrough: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 type Access = 'everything' | 'selected' | 'nothing';
@@ -28,6 +28,7 @@ beforeEach(() => {
   api.openPhotoSettings.mockResolvedValue(undefined);
   api.libraryRoot.mockResolvedValue('/Photo Library');
   api.startScan.mockResolvedValue({ instanceId: 'scan-1' });
+  api.useGroupsThrough.mockReturnValue({});
   width(false);
 });
 
@@ -44,9 +45,9 @@ interface AppProps {
 function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn(), onStop = vi.fn(), notify = vi.fn() }: AppProps) {
   const [tab, setTab] = React.useState<TabId>('cleanup');
   return (
-    <PhoneApp platform={platform} tab={tab} reviewing={false} cleanup={<p>the groups</p>} organize={null} cleanupSubtitle="Copies of the same photo or video"
-      counts={{}} toasts={[]} theme="dark" errorCount={0} scanning={scanning} progress={progress} onStarted={onStarted} onStopScan={onStop} notify={notify}
-      onTab={setTab} onEndReview={vi.fn()} removeToast={vi.fn()} onTheme={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
+    <PhoneApp platform={platform} tab={tab} organize={null}
+      toasts={[]} theme="dark" errorCount={0} scanning={scanning} progress={progress} onStarted={onStarted} onStopScan={onStop} notify={notify}
+      onTab={setTab} removeToast={vi.fn()} onTheme={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
   );
 }
 

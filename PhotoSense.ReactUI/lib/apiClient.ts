@@ -107,6 +107,22 @@ export function useGroups(mode: GroupMode, filter: string, page: number, hideKep
   return useSWR<GroupsPageDto>(groupsUrl(mode, filter, page, hideKept), json, { refreshInterval: 5000, keepPreviousData: true });
 }
 
+/** Groups to a page on a phone, the most the service gives at once. */
+export const PHONE_PAGE = 200;
+
+/**
+ * The groups of one kind from the first page through the one given, as one list, asked again every five seconds: a
+ * phone's list grows as it is scrolled. A group that moved from one page to the next as they were read is listed once.
+ */
+export function useGroupsThrough(mode: GroupMode, pages: number) {
+  const page = (n: number) => `${API_BASE}/scan/groups?mode=${mode}&page=${n}&pageSize=${PHONE_PAGE}&hideKept=false&q=`;
+  return useSWR<GroupsPageDto>(`${API_BASE}/scan/groups?mode=${mode}&pageSize=${PHONE_PAGE}&through=${pages}`, async () => {
+    const read = await Promise.all(Array.from({ length: pages }, (_, i) => json<GroupsPageDto>(page(i + 1))));
+    const seen = new Set<string>();
+    return { ...read[0], items: read.flatMap(p => p.items).filter(g => !seen.has(g.key) && !!seen.add(g.key)) };
+  }, { refreshInterval: 5000, keepPreviousData: true });
+}
+
 /**
  * Fetches a page of groups before it is asked for, with the pictures its tiles show, so that turning to
  * it shows it at once. The page's own request finds this waiting, shows it, and still asks for itself.

@@ -280,6 +280,22 @@ describe('what the page reads', () => {  it('asks for groups fifty to a page, by
     expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&pageSize=50&hideKept=true&q=trip%20%26%20beach`);
   });
 
+  it('on a phone reads the groups two hundred to a page, through the page asked for, listing a group that moved between pages once', async () => {
+    swr.useSWR.mockReturnValue({ data: 'the groups' });
+    const api = await load();
+    expect(api.useGroupsThrough('similar', 2)).toEqual({ data: 'the groups' });
+    const [key, fetcher, options] = swr.useSWR.mock.calls[0] as [string, () => Promise<unknown>, unknown];
+    expect(key).toBe(`${API}/scan/groups?mode=similar&pageSize=200&through=2`);
+    expect(options).toEqual({ refreshInterval: 5000, keepPreviousData: true });
+
+    const pages: Record<string, unknown> = {
+      [`${API}/scan/groups?mode=similar&page=1&pageSize=200&hideKept=false&q=`]: { mode: 'similar', total: 3, items: [{ key: 'a' }, { key: 'b' }] },
+      [`${API}/scan/groups?mode=similar&page=2&pageSize=200&hideKept=false&q=`]: { mode: 'similar', total: 3, items: [{ key: 'b' }, { key: 'c' }] },
+    };
+    fetchMock.mockImplementation(async url => reply(pages[String(url)]));
+    await expect(fetcher()).resolves.toEqual({ mode: 'similar', total: 3, items: [{ key: 'a' }, { key: 'b' }, { key: 'c' }] });
+  });
+
   it('fetches a page ahead of its being turned to, with the pictures its tiles show', async () => {
     const pictures: string[] = [];
     vi.stubGlobal('Image', class { set src(url: string) { pictures.push(url); } });

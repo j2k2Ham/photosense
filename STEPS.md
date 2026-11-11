@@ -1,6 +1,6 @@
 # PhotoSense: what is left to do
 
-Last updated 2026-11-10. Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
+Last updated 2026-11-11. Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
 
 ## What Jamie is asking for, and why
 
@@ -52,7 +52,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
   - Looking for an iPhone on a cable gives Apple's device service five seconds.
   - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
-- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 690 tests at 100% (2026-11-10); end to end 76 tests, 59 in Playwright's Chromium and 17 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the first-run push (8351dce, 2026-11-10).
+- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 727 tests at 100% (2026-11-11); end to end 78 tests, 60 in Playwright's Chromium and 18 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Library push (b22ddf0, 2026-11-11).
 
 ## Remaining steps
 
@@ -92,8 +92,14 @@ The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and
   - Select: the count in the title, Cancel (iOS) or a cross (Android), Back stops it, the selection bar in place of the tabs. **Add to album** / **Move to folder**: the albums or folders there are, or a new one (`organize/plan` then `organize/apply`); **Delete** after the design's question, into PhotoSense Removed (`organize/remove`); both with Undo. **Send** opens today's sending window until step 7.
   - The viewer: the picture whole (the small preview first, as a computer takes 2–3 s to decode a large HEIC), when and where, where it is, its size, and the three actions.
   - Fixed on the way: a sheet that gave way to another (the album list to New album) was closed by the first one's late Back (`useBackLayer` now hands its entry over); Library's viewer and sheets are drawn over the whole page, as inside a tab they stayed under the tab bar.
-  - Checked: page 690 tests at 100%; end to end 59 and 17 (a new Library test: viewer, new album, delete and Undo on the disk); screenshots at the four sizes in both themes against the handoff's 05–10 and the tablets' 01, with Jamie's photo folder (read only) as the library: 6,243 shown, the first after 6 s, all after 8 s. Not checked: on a device; a real phone's album rules on Android.
-- [ ] **5. Clean up** (11–18): groups, review, full-screen compare, the delete questions; on `GroupList`, `ReviewPanel`, `Differences`, `MatchChip`.
+  - Checked: page 690 tests at 100%; end to end 59 and 17 (a new Library test: viewer, new album, delete and Undo on the disk); screenshots at the four sizes in both themes against the handoff's 05–10 and the tablets' 01, with Jamie's photo folder (read only) as the library: 6,243 shown, the first after 6 s, all after 8 s. On GitHub (b22ddf0) both apps built and passed their self-checks, and the end-to-end tests passed. Not checked: on a device; a real phone's album rules on Android.
+- [x] **5. Clean up** (2026-11-11), in `components/phone/CleanUp.tsx` and `lib/cleanup.ts`:
+  - The list: how many duplicates and what they take, with **Delete all duplicates**; Duplicates / Similar; each group with two of its pictures, the file that stays, what there is to delete (or "all marked keep") and how many copies; 200 groups at a time, more read as the end comes into view (`useGroupsThrough`); when and how much the last scan read, with **Scan again**; what to say when nothing is left.
+  - The review, pushed on a phone and beside the list on a tablet (the first group to start with, and the next once one is done): how they match and why, the original or best shot beside the copy, a chip for each of several copies, what differs (the copy's value marked) and what is the same, **Delete** *name* and **Keep this copy too** / **Marked keep. Tap to unmark**.
+  - Full screen: a tap flips between the two, or the switch; previous and next between several copies; **Delete** from there too.
+  - The questions and messages as the design words them, naming the file that stays and the file that goes, each with where it is; the message by where each is when the two share a name; Undo on each.
+  - Clean up's state moved from the page into the phone layout (`useCleanUp`); the computer's screens are untouched. The access note moved with the design to Library alone.
+  - Checked: page 727 tests at 100%; end to end 60 and 18 (a new Clean up test: review, full screen, delete with its question, Undo and Delete all, on the disk); screenshots at the four sizes in both themes against the handoff's 11–18 and the tablets' 02, over a scratch copy of 10 of Jamie's photos and videos with duplicates made among them. Fixed on the way: a video's preview in the list was pale in the light themes. Not checked: on a device; similar shots on real photos (the copy had none); a library of hundreds of groups.
 - [ ] **6. Organize** (19–28): suggestions, the plain map, options, preview, where it goes, name taken, moved, recently moved; on `OrganizeView`, `MovePreview`, `NameClashWindow`, `RecentMoves`.
 - [ ] **7. Send** (29–34): its own tab, over `send/*` and `SendStateDto.stage`.
 - [ ] **8. Settings** (35–37): appearance (Auto, Dark, Light), photos, removed files with Delete permanently and its second question, history, errors, help and about.
@@ -178,6 +184,13 @@ After a review of security, the Delete permanently wording, complaints and trans
   - A phone with no theme chosen starts in **Auto**, as its own apps do; a computer still starts dark.
   - The skins use the handoff's own names, which the desktop's tokens share (`--bg`, `--t1` to `--t3`, `--stage`, `--sel`, `--keep`, `--amber`, `--ident`, `--ident-bg`, `--scrim`): on a phone the skin's values win, so the screens not yet rebuilt already take the skin's background, text and those colours. The desktop is untouched, having no skin.
   - The body text on a phone is the platform's size (17 px on iOS, 16 px on Android) instead of the desktop's 14 px.
+- **Phone and tablet design, step 5 (2026-11-11):**
+  - A copy marked keep cannot be deleted from its review until it is unmarked, as on the computer; the design shows its Delete button as usual.
+  - Unmarking says "IMG_1.JPG is no longer marked keep."; the design says nothing. Marking a similar shot says only that it is marked keep, as Delete all is for duplicates.
+  - Why a copy is in its group is worked out from the two files ("Same bytes, saved three times.", "Converted and resized.", "The same picture, as JPEG and as HEIC."); the design's notes, such as "The JPEG was made from the HEIC.", say which was made from which, which PhotoSense does not know.
+  - "Delete IMG_1.HEIC" deletes only the copy shown, as the design has it; the computer's "Delete all N copies" of one group is not offered on a phone.
+  - Undo says "Put IMG_4299.HEIC back where it was.", as the computer does.
+  - A video full screen shows its play mark only, as in Library: the phone plays no video yet.
 - **Phone and tablet design, step 4 (2026-11-10):**
   - "Not organized" is at the top of the library (the design's rule); on Android, where nothing is at the top, it also counts DCIM/Camera, where the camera puts photos.
   - The albums or folders offered are those the library's files are in; a new album is made at the top of an iPhone's library, a new folder in Pictures on Android.

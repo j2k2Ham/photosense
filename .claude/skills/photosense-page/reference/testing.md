@@ -19,6 +19,7 @@
 ## Traps already met
 
 - **Run Vitest from `C:\`, not `c:\`.** A shell started in a folder spelled with a small drive letter makes Vitest load itself twice, and every file fails with "Vitest failed to find the current suite" at `tests/setup.ts`. In PowerShell, `Set-Location 'C:\dev\git\photosense\PhotoSense.ReactUI'` first.
+- **A mocked SWR hook does not draw again by itself** when what it returns changes, as SWR does: a parent holding the hook is drawn again only when its own state changes. Have the stand-in subscribe with `useSyncExternalStore` and tell it when the data changes (`tests/components/phone/cleanup.test.tsx`).
 - **Back in the test browser** is not the real thing: a sheet that gave way to another was closed by a late Back in WebKit while every Vitest test passed. Check anything that swaps one layer for another in an end-to-end test too.
 - **A part of the phone layout** is drawn inside its frame: `inFrame(ui, frame('android', { tablet: true }))` from `tests/components/phone/frame.tsx`; `width(true)` makes the page a tablet's width for `useForm`. The test browser answers `matchMedia` with no (`tests/setup.ts`): dark, and a phone's width.
 - **The name a screen reader gives** a label and a count drawn side by side runs them together unless a space is written between them ("Errors None", not "ErrorsNone").

@@ -8,11 +8,16 @@ import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from '../..
 import { SettingsSheet } from '../../../components/phone/SettingsSheet';
 import type { Platform, TabId } from '../../../lib/phone';
 import { frame, inFrame, width } from './frame';
+import { group, groupsPage, photo } from './groups';
 
-// The phone has said PhotoSense may see everything; what comes before that is tested with the first run.
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn() }));
+// The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
+// tested on its own, has one group of duplicates.
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
-beforeEach(() => api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } }));
+beforeEach(() => {
+  api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } });
+  api.useGroupsThrough.mockReturnValue({ data: groupsPage('duplicates', [group(photo('IMG_4299.JPG'), [photo('IMG_4299.HEIC')])]) });
+});
 // Library is tested on its own; here the library holds one photo.
 vi.mock('../../../lib/library', async importOriginal => {
   const real = await importOriginal<typeof import('../../../lib/library')>();
@@ -200,12 +205,12 @@ describe('Settings', () => {
 describe('PhotoSense on a phone', () => {
   beforeEach(() => localStorage.setItem('photosense-first-run', 'done'));
 
-  function App({ platform = 'ios', reviewing = false, start = 'cleanup' as TabId, onEnd = vi.fn() }: { platform?: Platform; reviewing?: boolean; start?: TabId; onEnd?: () => void }) {
+  function App({ platform = 'ios', start = 'cleanup' as TabId }: { platform?: Platform; start?: TabId }) {
     const [tab, setTab] = React.useState<TabId>(start);
     const [theme, setTheme] = React.useState<'auto' | 'dark' | 'light'>('auto');
     return (
-      <PhoneApp platform={platform} tab={tab} reviewing={reviewing} cleanup={<p>the groups</p>} organize={<p>the suggestions</p>} cleanupSubtitle="Copies of the same photo or video"
-        counts={{}} toasts={[]} theme={theme} version="1.4.0" errorCount={0} onTab={setTab} onEndReview={onEnd} removeToast={vi.fn()} onTheme={setTheme}
+      <PhoneApp platform={platform} tab={tab} organize={<p>the suggestions</p>} status={{ instanceId: 's', completed: '2026-11-10T16:25:00Z', totalPhotos: 2 }}
+        toasts={[]} theme={theme} version="1.4.0" errorCount={0} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
         scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
     );
   }
@@ -234,18 +239,41 @@ describe('PhotoSense on a phone', () => {
 
   it('pushes a review over the list on a phone, without the tabs, and Back takes it back', async () => {
     width(false);
-    const ended = vi.fn();
-    render(<App reviewing onEnd={ended} />);
+    render(<App />);
+    await userEvent.click(within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: /IMG_4299\.JPG/ }));
+    expect(screen.getByRole('region', { name: 'Review' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Clean up' })).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(ended).toHaveBeenCalledOnce();
+    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Tabs' })).toBeInTheDocument();
+  });
+
+  it('scans the whole library again from under the list of Clean up', async () => {
+    width(false);
+    api.libraryRoot.mockResolvedValue('/Photo Library');
+    api.startScan.mockResolvedValue({ instanceId: 'scan-2' });
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Scan again' }));
+    expect(api.startScan).toHaveBeenCalledWith({ primaryLocation: '/Photo Library', recursive: true });
+  });
+
+  it('goes back to the list when the Clean up tab is tapped again, and leaves another tab as it is', async () => {
+    width(false);
+    render(<App />);
+    const tabs = () => screen.getByRole('navigation', { name: 'Tabs' });
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
+    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
+    expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
   });
 
   it('counts the library beside its tab on an iPad, and while choosing in Library puts the selection bar in place of the tabs', async () => {
     width(true);
     const view = render(<App start="library" />);
     expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library 1' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Clean up 1' })).toBeInTheDocument();
     view.unmount();
     width(false);
     render(<App start="library" />);
@@ -256,8 +284,9 @@ describe('PhotoSense on a phone', () => {
 
   it('shows a review beside the list on a tablet, so nothing is pushed', () => {
     width(true);
-    render(<App reviewing start="cleanup" />);
+    render(<App start="cleanup" />);
     expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'IMG_4299.JPG' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Tabs' })).toBeInTheDocument();
   });
 });
