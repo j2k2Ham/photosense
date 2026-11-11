@@ -29,7 +29,7 @@
     <key>XSAppIconAssets</key>
     <string>Assets.xcassets/AppIcon.appiconset</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>PhotoSense looks through your photos for copies and for shots that look alike, and shows them by place and date.</string>
+    <string>PhotoSense finds copies of the same photo and sorts photos into albums. Nothing leaves this phone unless you send it to your computer.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>PhotoSense sends the photos you choose to PhotoSense on your computer, over your Wi-Fi.</string>
     <key>NSBonjourServices</key>

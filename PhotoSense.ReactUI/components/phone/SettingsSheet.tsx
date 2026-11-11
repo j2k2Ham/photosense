@@ -1,5 +1,5 @@
 import React from 'react';
-import { usePhone } from '../../lib/phone';
+import { deviceName, usePhone } from '../../lib/phone';
 import type { ThemeChoice } from '../../lib/theme';
 import { ListGroup, ListRow, Segmented } from './Controls';
 import { Sheet } from './Sheet';
@@ -23,7 +23,7 @@ interface Props {
 /** Settings, from the gear: the theme, scanning again, Delete permanently, the errors, and help and about. */
 export function SettingsSheet({ theme, version, errorCount, onTheme, onScanAgain, onDeletePermanently, onErrors, onHelp, onAbout, onClose }: Props) {
   const { platform, tablet } = usePhone();
-  const device = !tablet ? 'phone' : platform === 'ios' ? 'iPad' : 'tablet';
+  const device = deviceName(platform, tablet);
   // What a row leads to opens over the screen once the sheet has gone.
   const then = (go: () => void) => () => { onClose(); go(); };
   return (

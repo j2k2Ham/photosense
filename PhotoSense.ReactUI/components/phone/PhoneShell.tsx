@@ -27,6 +27,8 @@ interface Props {
   readonly notice?: React.ReactNode;
   /** A sheet open over the screens, such as Settings. */
   readonly sheet?: React.ReactNode;
+  /** A screen of its own over the tabs, such as Welcome or Scanning; the tabs wait behind it, out of reach. */
+  readonly cover?: React.ReactElement | null;
   /** Turns to a tab; turning to the one showing goes back to its first screen. */
   onTab(tab: TabId): void;
   onSettings(): void;
@@ -38,7 +40,7 @@ interface Props {
  * sidebar on an iPad, a rail on an Android tablet), the tab's screens, and its messages. It tells every screen inside
  * where it is through `usePhone`.
  */
-export function PhoneShell({ platform, tab, foot, counts, screens, toasts, notice, sheet, onTab, onSettings, removeToast }: Props) {
+export function PhoneShell({ platform, tab, foot: asked, counts, screens, toasts, notice, sheet, cover, onTab, onSettings, removeToast }: Props) {
   const form = useForm();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [seen, setSeen] = useState<ReadonlySet<TabId>>(new Set([tab]));
@@ -46,6 +48,7 @@ export function PhoneShell({ platform, tab, foot, counts, screens, toasts, notic
 
   const ios = platform === 'ios';
   const tablet = form === 'tablet';
+  const foot = cover ? 'none' : asked;
   const frame = useMemo<PhoneFrame>(() => ({
     platform, form, ios, tablet, words: WORDS[platform], sidebarHidden: ios && tablet && sidebarHidden, foot: tablet ? 'tabs' : foot, openSettings: onSettings,
   }), [platform, form, ios, tablet, sidebarHidden, foot, onSettings]);
@@ -56,7 +59,7 @@ export function PhoneShell({ platform, tab, foot, counts, screens, toasts, notic
       {/* Android draws its own status and gesture bars over the page's edges: the page paints under them. */}
       {!ios && <div aria-hidden className="fixed inset-x-0 top-0 z-30 h-[var(--safe-t)] bg-bg" />}
       {!ios && <div aria-hidden className={`fixed inset-x-0 bottom-0 z-30 h-[var(--safe-b)] ${!tablet && foot !== 'none' ? 'bg-bar' : 'bg-bg'}`} />}
-      <div className={`fixed inset-x-0 flex overflow-hidden bg-bg font-ui text-t1 ${ios ? 'inset-y-0' : 'bottom-[var(--safe-b)] top-[var(--safe-t)]'}`}>
+      <div inert={!!cover} className={`fixed inset-x-0 flex overflow-hidden bg-bg font-ui text-t1 ${ios ? 'inset-y-0' : 'bottom-[var(--safe-b)] top-[var(--safe-t)]'}`}>
         {ios && tablet && !sidebarHidden && <Sidebar tab={tab} counts={counts} onTab={onTab} onHide={() => setSidebarHidden(true)} />}
         {!ios && tablet && <Rail tab={tab} onTab={onTab} />}
         <main className="relative flex min-w-0 flex-1 flex-col">
@@ -68,6 +71,7 @@ export function PhoneShell({ platform, tab, foot, counts, screens, toasts, notic
         </main>
       </div>
       {bars && (ios ? <GlassTabBar tab={tab} onTab={onTab} /> : <NavigationBar tab={tab} onTab={onTab} />)}
+      {cover}
       {sheet}
       <PhoneToaster toasts={toasts} remove={removeToast} />
     </PhoneContext.Provider>

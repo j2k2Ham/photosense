@@ -11,6 +11,8 @@ public interface IScanProgressStore
     void Expect(string instanceId, double? seconds);
     /// <summary>Counts one more file gone through, in the first folder or the second.</summary>
     void IncrementProcessed(string instanceId, bool primary);
+    /// <summary>Notes a picture the scan has gone through that has a preview, as one of the latest it has read.</summary>
+    void Read(string instanceId, string photoId);
     /// <summary>Notes that the scan has ended, however it ended.</summary>
     void ScanCompleted(string instanceId);
     /// <summary>How far a scan has got; one with nothing done when the scan is not known.</summary>
@@ -38,6 +40,12 @@ public sealed record ScanProgressSnapshot(
 {
     /// <summary>How long earlier scans suggest this one will take in all, when they have anything to say.</summary>
     public double? ExpectedSeconds { get; init; }
+
+    /// <summary>The ids of the latest pictures gone through that have a preview, oldest first, at most <see cref="RecentKept"/>.</summary>
+    public IReadOnlyList<string> Recent { get; init; } = [];
+
+    /// <summary>How many of the latest pictures read are kept to be shown.</summary>
+    public const int RecentKept = 12;
 
     /// <summary>How much of the first folder has been gone through, out of 100; 100 for an empty one.</summary>
     public double PrimaryPercent => PrimaryTotal == 0 ? 100 : (double)PrimaryProcessed / PrimaryTotal * 100d;

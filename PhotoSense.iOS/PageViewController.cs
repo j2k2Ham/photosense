@@ -36,16 +36,12 @@ public sealed class PageViewController : UIViewController
         View.AddSubview(_web);
     }
 
-    public override async void ViewDidAppear(bool animated)
+    public override void ViewDidAppear(bool animated)
     {
         base.ViewDidAppear(animated);
         if (_web is null || _web.Url is not null) return;
-        // Asked once, before the page first shows: all the photos, some of them, or none. The page shows what was allowed.
-        var access = PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.ReadWrite);
-        Say.Line($"photo access: {access} (add only: {PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.AddOnly)})");
-        // On GitHub's simulator nobody can answer the system's question, so the check runs with what was granted.
-        if (access == PHAuthorizationStatus.NotDetermined && !SelfCheck.Running)
-            Say.Line($"photo access chosen: {await PHPhotoLibrary.RequestAuthorizationAsync(PHAccessLevel.ReadWrite)}");
+        // The page asks for the photos itself, once it has said what PhotoSense does with them (library/ask).
+        Say.Line($"photo access: {PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.ReadWrite)} (add only: {PHPhotoLibrary.GetAuthorizationStatus(PHAccessLevel.AddOnly)})");
         _web.LoadRequest(new NSUrlRequest(Start));
         Say.Line($"loading {Start}");
     }

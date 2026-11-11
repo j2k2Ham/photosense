@@ -17,6 +17,20 @@ public sealed class FakePhotoAccess : IPhotoAccess
     /// <summary>How often the system's settings were opened.</summary>
     public int SettingsOpened { get; private set; }
 
+    /// <summary>What the person answers to the system's question.</summary>
+    public PhotoAccess Answer { get; set; } = PhotoAccess.Everything;
+
+    /// <summary>How often the system's question was asked.</summary>
+    public int Asked { get; private set; }
+
+    /// <inheritdoc />
+    public Task AskAsync(CancellationToken ct)
+    {
+        Asked++;
+        Current = Answer;
+        return Task.CompletedTask;
+    }
+
     /// <inheritdoc />
     public Task ChooseMoreAsync(CancellationToken ct)
     {

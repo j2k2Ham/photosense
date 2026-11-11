@@ -6,6 +6,46 @@ import { PLACES } from '../fixtures/media';
 const sendWindow = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Send to computer' });
 
 test.describe('on a phone', () => {
+  test('the first time, Welcome says what PhotoSense does, and Continue asks for the photos, reads them all and says what it found @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1 });
+    photos.picture('IMG_0002.JPG', { seed: 2 });
+    photos.copy('IMG_0001.JPG', 'Saved again/IMG_0001.JPG');
+    const phone = new Phone('nothing');
+    Object.assign(phone, { firstRun: true, root: photos.root });
+    await phone.attach(page);
+    await page.goto('/');
+    const welcome = page.getByRole('region', { name: 'Welcome' });
+    await expect(welcome.getByRole('heading', { name: 'Welcome to PhotoSense' })).toBeVisible();
+    await expect(welcome).toContainText('Suggested albums for each place and year');
+    await welcome.getByRole('button', { name: 'Continue' }).click();
+
+    await expect(message(page, 'Found 1 duplicate and no similar shots.')).toBeVisible({ timeout: 60_000 });
+    expect(phone.asked).toContain('library/ask');
+    const tabs = page.getByRole('navigation', { name: 'Tabs' });
+    await expect(tabs.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
+    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Review' }).click();
+    await expect(tabs.getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('region', { name: 'Groups' }).getByRole('listitem')).toHaveCount(1);
+  });
+
+  test('refused its photos, it says where access is turned on, and reads them once it is on and the app opens again @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1 });
+    const phone = new Phone('nothing');
+    Object.assign(phone, { firstRun: true, root: photos.root, answer: 'nothing' });
+    await phone.attach(page);
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Continue' }).click();
+    const refused = page.getByRole('region', { name: 'Photo access' });
+    await expect(refused.getByRole('heading', { name: 'PhotoSense can\'t see your photos' })).toBeVisible();
+    await refused.getByRole('button', { name: 'Open Settings' }).click();
+    expect(phone.asked).toContain('library/open-settings');
+
+    // iOS starts an app again when its access is changed in Settings.
+    phone.access = 'everything';
+    await page.reload();
+    await expect(message(page, 'Found no duplicates or similar shots.')).toBeVisible({ timeout: 60_000 });
+    await expect(refused).toBeHidden();
+  });
   test('a phone that may see only some photos says so, and more are chosen with its own picker @phone', async ({ page }) => {
     const phone = new Phone('selected');
     await phone.attach(page);

@@ -27,6 +27,19 @@ public class LibraryEndpointsTests
     }
 
     [Test]
+    [Arguments(PhotoAccess.Selected, "selected")]
+    [Arguments(PhotoAccess.Nothing, "nothing")]
+    public async Task Asks_The_Systems_Question_And_Answers_Once_It_Is_Answered_With_What_May_Be_Seen_Then(PhotoAccess answer, string said, CancellationToken ct)
+    {
+        _access.Current = PhotoAccess.Nothing;
+        _access.Answer = answer;
+        var response = await _endpoints.AskAsync(Http.Post("library/ask").FromClient(), ct);
+
+        await Assert.That(_access.Asked).IsEqualTo(1);
+        await Assert.That(response.Json().GetProperty("access").GetString()).IsEqualTo(said);
+    }
+
+    [Test]
     public async Task Shows_The_Systems_Picker_And_Answers_Once_It_Is_Put_Away_With_What_May_Be_Seen_Then(CancellationToken ct)
     {
         _access.Current = PhotoAccess.Selected;
@@ -46,8 +59,10 @@ public class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task Lets_No_Other_Web_Page_Show_The_Picker_Or_Open_The_Settings(CancellationToken ct)
+    public async Task Lets_No_Other_Web_Page_Ask_Show_The_Picker_Or_Open_The_Settings(CancellationToken ct)
     {
+        await Assert.That((await _endpoints.AskAsync(Http.Post("library/ask"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That(_access.Asked).IsEqualTo(0);
         await Assert.That((await _endpoints.ChooseMoreAsync(Http.Post("library/choose-more"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That((await _endpoints.OpenSettingsAsync(Http.Post("library/open-settings"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That(_access.PickersShown).IsEqualTo(0);
@@ -58,7 +73,8 @@ public class LibraryEndpointsTests
     public async Task On_A_Computer_Everything_It_Can_Reach_Is_Seen_And_There_Is_Nothing_To_Choose_Or_Allow(CancellationToken ct)
     {
         var folders = new FolderAccess();
-        await folders.ChooseMoreAsync(CancellationToken.None);
+        await folders.AskAsync(ct);
+        await folders.ChooseMoreAsync(ct);
         folders.OpenSettings();
         await Assert.That(folders.Current).IsEqualTo(PhotoAccess.Everything);
     }

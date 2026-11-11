@@ -173,6 +173,7 @@ public class ScanExecutionService : IScanExecutionService
             }
             run.Touched[existing.Id] = true;
             Interlocked.Increment(ref run.Unchanged);
+            if (existing.PerceptualHash is not null) _progress.Read(run.InstanceId, existing.Id.ToString());
             return;
         }
 
@@ -228,6 +229,8 @@ public class ScanExecutionService : IScanExecutionService
         await _meta.ExtractAsync(photo, stream, ct);
         await _repo.AddOrUpdateAsync(photo, ct);
         run.Touched[photo.Id] = true;
+        // Only a picture that was decoded has a preview, and only once it is on record, as the preview is asked for by its id.
+        if (photo.PerceptualHash is not null) _progress.Read(run.InstanceId, photo.Id.ToString());
     }
 
     private sealed class Run(string instanceId, int total, HashSet<long> sharedVideoSizes)

@@ -63,6 +63,13 @@ export function usePhotoAccess() {
   return useSWR<PhotoAccessDto>(accessUrl, json);
 }
 
+/** Asks the phone's own question of what PhotoSense may see, and answers once it is answered. */
+export async function askForPhotos(): Promise<PhotoAccessDto> {
+  const access = await json<PhotoAccessDto>(`${API_BASE}/library/ask`, { method: 'POST' });
+  await mutate(accessUrl, access, { revalidate: false });
+  return access;
+}
+
 /** Shows the phone's own picker for choosing more photos, and answers once it is put away. */
 export async function chooseMorePhotos(): Promise<PhotoAccessDto> {
   const access = await json<PhotoAccessDto>(`${API_BASE}/library/choose-more`, { method: 'POST' });
@@ -187,11 +194,11 @@ export async function clearResults(): Promise<{ forgotten: number }> {
   return result;
 }
 
-/** How many groups of each kind there are now, asked afresh: for saying what a scan found. */
-export async function fetchGroupTotals(): Promise<{ duplicates: number; similar: number }> {
-  const total = async (mode: GroupMode) => (await json<GroupsPageDto>(groupsUrl(mode, '', 1, false))).total;
-  const [duplicates, similar] = await Promise.all([total('duplicates'), total('similar')]);
-  return { duplicates, similar };
+/** How many groups of each kind there are now, and how many files are copies, asked afresh: for saying what a scan found. */
+export async function fetchGroupTotals(): Promise<{ duplicates: number; similar: number; copies: number }> {
+  const first = (mode: GroupMode) => json<GroupsPageDto>(groupsUrl(mode, '', 1, false));
+  const [duplicates, similar] = await Promise.all([first('duplicates'), first('similar')]);
+  return { duplicates: duplicates.total, similar: similar.total, copies: duplicates.removableCount };
 }
 
 /** How many files are on record, and whether the last scan has finished. */
@@ -213,6 +220,18 @@ export function browseFolders(path?: string) {
 /** Starts a scan of the folders asked for, and gives the id it runs under. */
 export async function startScan(req: StartScanRequest) {
   return json<{ instanceId: string }>(`${API_BASE}/scan/start`, { method: 'POST', body: JSON.stringify(req) });
+}
+
+/** Stops the scan named; what it has read so far is kept, and the next scan carries on from there. */
+export async function stopScan(instanceId: string) {
+  await send(`${API_BASE}/scan/stop/${encodeURIComponent(instanceId)}`, 'POST');
+}
+
+/** On a phone, the one folder its photos are shown as: the Photo Library on an iPhone, the Phone on Android. */
+export async function libraryRoot(): Promise<string> {
+  const top = (await browseFolders()).folders[0];
+  if (!top) throw new Error('The phone did not say where its photos are.');
+  return top.path;
 }
 
 // ---- Organize

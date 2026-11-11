@@ -74,6 +74,13 @@
   --safe-t: var(--app-inset-top, env(safe-area-inset-top, 0px));
   --safe-b: var(--app-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
+/* In a phone app the page stays hidden until it has its skin, so the computer's layout never shows there for a moment.
+   Should the program never answer, it shows after three seconds all the same, with whatever it can say. */
+html[data-app] { background: #000; }
+html[data-app].light { background: #fff; }
+html[data-app]:not([data-skin]) body { visibility: hidden; animation: shown 0s 3s forwards; }
+@keyframes shown { to { visibility: visible; } }
+
 /* Phones scroll without a scrollbar drawn, as their own apps do. */
 [data-skin] *::-webkit-scrollbar { display: none; }
 [data-skin] * { scrollbar-width: none; }

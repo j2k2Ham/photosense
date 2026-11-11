@@ -11,7 +11,7 @@ import { group, groupsPage, member, photo } from '../fixtures';
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
-  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(),
+  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(),
   useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
@@ -1193,6 +1193,15 @@ describe('on a phone or tablet', () => {
     return screen.getByRole('dialog', { name: 'Settings' });
   };
   afterEach(() => { document.documentElement.classList.remove('light'); delete document.documentElement.dataset.skin; });
+  // Past the first run: the phone lets PhotoSense see everything, and its library is the one folder it has.
+  beforeEach(() => {
+    localStorage.setItem('photosense-first-run', 'done');
+    api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } } as never);
+    api.libraryRoot.mockResolvedValue('/Photo Library');
+    api.stopScan.mockResolvedValue(undefined);
+  });
+  const messages = () => screen.getByRole('log', { name: 'Messages' });
+  const scanAgain = async () => userEvent.click(within(await settings()).getByRole('button', { name: 'Scan again' }));
 
   it('is laid out as the phone\'s own apps are: tabs, a header for each, and no bar or menu of the computer\'s', async () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
@@ -1250,8 +1259,6 @@ describe('on a phone or tablet', () => {
     api.fetchRemoved.mockResolvedValue({ files: 0, bytes: 0, folders: [] });
     api.useAboutText.mockReturnValue({ data: 'About text' } as never);
     open();
-    await userEvent.click(within(await settings()).getByRole('button', { name: 'Scan again' }));
-    expect(setupHeading()).toBeInTheDocument();
     await userEvent.click(within(await settings()).getByRole('button', { name: 'Delete permanently…' }));
     expect(await screen.findByText(/There is nothing to delete/)).toBeInTheDocument();
     await click('Cancel');
@@ -1263,6 +1270,61 @@ describe('on a phone or tablet', () => {
     await userEvent.keyboard('{Escape}');
     await userEvent.click(within(await settings()).getByRole('button', { name: 'About PhotoSense 1.4.0' }));
     expect(screen.getByRole('dialog', { name: /About/ })).toBeInTheDocument();
+  });
+
+  it.each([
+    [{ duplicates: 120, similar: 178, copies: 264 }, 'Found 264 duplicates and 178 groups of similar shots.'],
+    [{ duplicates: 1, similar: 1, copies: 1 }, 'Found 1 duplicate and 1 group of similar shots.'],
+    [{ duplicates: 0, similar: 2, copies: 0 }, 'Found no duplicates and 2 groups of similar shots.'],
+    [{ duplicates: 3, similar: 0, copies: 4 }, 'Found 4 duplicates and no similar shots.'],
+  ])('scans its whole library again from Settings, then shows the library, says what was found, and Review leads to it', async (totals, said) => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    api.fetchGroupTotals.mockResolvedValue(totals);
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await scanAgain();
+    expect(api.startScan).toHaveBeenCalledWith({ primaryLocation: '/Photo Library', recursive: true });
+    expect(await within(messages()).findByText(said)).toBeInTheDocument();
+    expect(within(tabs()).getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(messages()).getByRole('button', { name: 'Review' }));
+    expect(within(tabs()).getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('says plainly when a scan found nothing, with nothing to review', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'android' } } as never);
+    api.fetchGroupTotals.mockResolvedValue({ duplicates: 0, similar: 0, copies: 0 });
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await scanAgain();
+    expect(await within(messages()).findByText('Found no duplicates or similar shots.')).toBeInTheDocument();
+    expect(within(messages()).queryByRole('button', { name: 'Review' })).not.toBeInTheDocument();
+  });
+
+  it('covers the tabs while it scans; Stop says what was kept, and the scan is not said to have finished', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    let done = false;
+    progressFor = id => (id ? { data: snapshot(done ? { completedUtc: '2026-10-07T12:01:00Z' } : {}) } : {});
+    const page = open();
+    await scanAgain();
+    const scanning = screen.getByRole('region', { name: 'Scanning' });
+    expect(scanning).toHaveTextContent('Read 34 of 100 photos and videos');
+    await userEvent.click(within(scanning).getByRole('button', { name: 'Stop' }));
+    expect(api.stopScan).toHaveBeenCalledWith('scan-7');
+    expect(within(messages()).getByText('Scan stopped. What was read so far is kept, and the next scan carries on from there.')).toBeInTheDocument();
+    done = true;
+    page.refresh();
+    expect(screen.queryByRole('region', { name: 'Scanning' })).not.toBeInTheDocument();
+    expect(api.fetchGroupTotals).not.toHaveBeenCalled();
+  });
+
+  it('says why a scan could not be stopped', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    api.stopScan.mockRejectedValue(new Error('That scan is not running.'));
+    progressFor = id => (id ? { data: snapshot() } : {});
+    open();
+    await scanAgain();
+    await click('Stop');
+    expect(within(messages()).getByText('That scan is not running.')).toBeInTheDocument();
   });
 
   it('says its messages in the phone\'s own way, and the service not answering above every screen', async () => {

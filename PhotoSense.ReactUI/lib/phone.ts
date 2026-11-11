@@ -76,6 +76,11 @@ export interface PhoneFrame {
   openSettings(): void;
 }
 
+/** What the person is holding, as the page names it: "phone", "iPad", or an Android "tablet". */
+export function deviceName(platform: Platform, tablet: boolean): string {
+  return !tablet ? 'phone' : platform === 'ios' ? 'iPad' : 'tablet';
+}
+
 /** The frame a phone's screens are drawn in, given by the shell. */
 export const PhoneContext = createContext<PhoneFrame | null>(null);
 

@@ -48,6 +48,17 @@ public class InMemoryScanProgressStore : IScanProgressStore
     }
 
     /// <inheritdoc />
+    public void Read(string instanceId, string photoId)
+    {
+        if (_store.TryGetValue(instanceId, out var p))
+            lock (p.Recent)
+            {
+                p.Recent.Enqueue(photoId);
+                if (p.Recent.Count > ScanProgressSnapshot.RecentKept) p.Recent.Dequeue();
+            }
+    }
+
+    /// <inheritdoc />
     public void ScanCompleted(string instanceId)
     {
         if (_store.TryGetValue(instanceId, out var p))
@@ -80,8 +91,13 @@ public class InMemoryScanProgressStore : IScanProgressStore
         public int SecondaryProcessed;
         /// <summary>How long earlier scans suggest it will take in all.</summary>
         public double? ExpectedSeconds;
+        /// <summary>The latest pictures read that have a preview, oldest first; locked while used, as files are read in parallel.</summary>
+        public readonly Queue<string> Recent = new();
         /// <summary>How far it has got, as it stands now.</summary>
-        public ScanProgressSnapshot ToSnapshot() =>
-            new(InstanceId, StartedUtc, CompletedUtc, PrimaryTotal, PrimaryProcessed, SecondaryTotal, SecondaryProcessed) { ExpectedSeconds = ExpectedSeconds };
+        public ScanProgressSnapshot ToSnapshot()
+        {
+            lock (Recent)
+                return new(InstanceId, StartedUtc, CompletedUtc, PrimaryTotal, PrimaryProcessed, SecondaryTotal, SecondaryProcessed) { ExpectedSeconds = ExpectedSeconds, Recent = [.. Recent] };
+        }
     }
 }

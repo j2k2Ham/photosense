@@ -10,9 +10,18 @@ export interface SendState {
   deletable: string[]; where: string | null; phone: string; problem: string | null;
 }
 
-/** A phone, as the page sees it: which program it is, what it may see of the photos, and sending to a computer. */
+/**
+ * A phone, as the page sees it: which program it is, what it may see of the photos, where its library is, and sending
+ * to a computer. It is past its first run unless the test says otherwise.
+ */
 export class Phone {
   access: 'everything' | 'selected' | 'nothing';
+  /** What the person answers when the phone asks what PhotoSense may see. */
+  answer: Phone['access'] = 'everything';
+  /** The folder the phone's library is shown as, which Scan again reads; none unless the test gives one. */
+  root?: string;
+  /** Whether this is the phone's first run, with Welcome; otherwise it has been through it already. */
+  firstRun = false;
   state: SendState = { stage: 'idle', code: null, computer: null, done: 0, total: 0, bytes: 0, totalBytes: 0, deletable: [], where: null, phone: "Jamie's iPhone", problem: null };
   /** What the page asked of the phone, but where sending has got to. */
   readonly asked: string[] = [];
@@ -22,6 +31,9 @@ export class Phone {
   set(changes: Partial<SendState>) { this.state = { ...this.state, ...changes }; }
 
   async attach(page: Page) {
+    if (!this.firstRun) await page.addInitScript(() => { if (!localStorage.getItem('photosense-first-run')) localStorage.setItem('photosense-first-run', 'done'); });
+    await page.route(url => url.pathname.endsWith('/api/folders') && !url.search,
+      route => json(route, { path: null, parent: null, folders: this.root ? [{ name: 'Photo Library', path: this.root }] : [] }));
     await page.route('**/api/about', async route => {
       const real = await (await route.fetch()).json();
       await json(route, { ...real, program: 'iphone' });
@@ -30,6 +42,7 @@ export class Phone {
       const what = new URL(route.request().url()).pathname.split('/').pop();
       if (what !== 'access') this.asked.push(`library/${what}`);
       if (what === 'choose-more') this.access = 'everything';
+      if (what === 'ask') this.access = this.answer;
       if (what === 'open-settings') return route.fulfill({ status: 204 });
       return json(route, { access: this.access });
     });

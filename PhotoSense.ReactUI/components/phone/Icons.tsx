@@ -76,6 +76,11 @@ export const ListIcon = (p: IconProps) => (
   <Line size={21} stroke={1.8} {...p}><path d="M9 6.5h11M9 12h11M9 17.5h11" /><circle cx="4.5" cy="6.5" r=".8" /><circle cx="4.5" cy="12" r=".8" /><circle cx="4.5" cy="17.5" r=".8" /></Line>
 );
 
+/** A photo: a frame with hills and a sun, for where photos are missing. */
+export const ImageIcon = (p: IconProps) => (
+  <Line size={34} stroke={1.7} {...p}><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><path d="m3.5 16 4.5-4.5 4 4 3-3 5.5 5.5" /><circle cx="15.5" cy="8.5" r="1.5" /></Line>
+);
+
 /** A tick, white on the accent, for what is selected. */
 export const TickIcon = ({ size = 14 }: IconProps) => (
   <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>

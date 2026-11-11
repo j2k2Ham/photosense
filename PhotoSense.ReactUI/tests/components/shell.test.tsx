@@ -30,6 +30,21 @@ describe('the page frame', () => {
       return document.documentElement.classList.contains('light');
     };
     expect([lightBefore('light', false), lightBefore('auto', true), lightBefore('auto', false), lightBefore('dark', true)]).toEqual([true, true, false, false]);
+    expect(document.documentElement.hasAttribute('data-app')).toBe(false);
+
+    // In a phone app the page is marked as the app's before it is painted, and with no theme chosen it follows the system.
+    localStorage.clear();
+    vi.stubGlobal('webkit', { messageHandlers: { photosenseBars: {} } });
+    document.documentElement.classList.remove('light');
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    paint();
+    expect([document.documentElement.hasAttribute('data-app'), document.documentElement.classList.contains('light')]).toEqual([true, true]);
+    vi.unstubAllGlobals();
+    vi.stubGlobal('PhotoSenseBars', {});
+    document.documentElement.removeAttribute('data-app');
+    paint();
+    expect(document.documentElement.hasAttribute('data-app')).toBe(true);
+    document.documentElement.removeAttribute('data-app');
     document.documentElement.classList.remove('light');
     expect(metadata.title).toBe('PhotoSense');
     // The one icon every program keeps, which the program answering hands out.

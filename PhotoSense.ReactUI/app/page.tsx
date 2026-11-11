@@ -17,7 +17,7 @@ import { SetupScreen } from '../components/SetupScreen';
 import { PHONE_TOAST_MS, Toaster, TOAST_MS, useToasts, type ToastAction } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
 import {
-  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, undoChange, useGroups,
+  clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, stopScan, undoChange, useGroups,
   useAbout, useScanProgress, useScanStatus,
 } from '../lib/apiClient';
 import { formatBytes, linkedFiles } from '../lib/format';
@@ -52,6 +52,13 @@ const files = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'
 const NAMED = 4;
 const groupsOf = (n: number, kind: string) => `${n.toLocaleString()} ${kind} ${n === 1 ? 'group' : 'groups'}`;
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** What a scan found, as a phone says it: the copies there are, and the groups of similar shots. */
+function found({ copies, similar }: { copies: number; similar: number }) {
+  if (copies + similar === 0) return 'Found no duplicates or similar shots.';
+  const dupes = copies === 0 ? 'no duplicates' : `${copies.toLocaleString()} ${copies === 1 ? 'duplicate' : 'duplicates'}`;
+  const alike = similar === 0 ? 'no similar shots' : `${similar.toLocaleString()} ${similar === 1 ? 'group' : 'groups'} of similar shots`;
+  return `Found ${dupes} and ${alike}.`;
+}
 /** PhotoSense's one page: Clean up and Organize, the bar and menu over them, and every window they open. */
 export default function HomePage() {
   const about = useAbout().data;
@@ -164,9 +171,25 @@ export default function HomePage() {
     setTicked(new Map());
     void retryNow();
     fetchGroupTotals().then(
-      t => push(`Scan finished: ${groupsOf(t.duplicates, 'duplicate')} and ${groupsOf(t.similar, 'similar')}`, 'ok'),
+      t => {
+        if (!onPhone) { push(`Scan finished: ${groupsOf(t.duplicates, 'duplicate')} and ${groupsOf(t.similar, 'similar')}`, 'ok'); return; }
+        // A phone shows its library once the scan is done, and Review takes the person to what was found.
+        setTab('library');
+        push(found(t), 'ok', t.copies + t.similar > 0 ? { label: 'Review', run: () => { setArea('clean'); setTab('cleanup'); } } : undefined);
+      },
       () => push('Scan finished.', 'ok'));
-  }, [finished, instanceId, push]);
+  }, [finished, instanceId, push, onPhone]);
+
+  // A scan stopped is not announced as finished: the person knows, and is told what was kept.
+  async function stop() {
+    announced.current = instanceId;
+    try {
+      await stopScan(instanceId!);
+      push('Scan stopped. What was read so far is kept, and the next scan carries on from there.', 'ok');
+    } catch (e) {
+      push(messageOf(e), 'error');
+    }
+  }
 
   const run = useCallback(async (action: () => Promise<void>) => {
     setBusy(true);
@@ -279,11 +302,11 @@ export default function HomePage() {
     if (result.erased + result.skipped === 0) push('There was nothing left to delete.', 'info');
   });
 
-  function started(id: string) {
+  const started = useCallback((id: string) => {
     setInstanceId(id);
     setLogs([]);
     readFolders();
-  }
+  }, [readFolders]);
 
   // Scanning is part of Clean up, wherever it is asked for from.
   const changeFolders = () => { turnTo('clean'); setChosen('setup'); };
@@ -385,7 +408,8 @@ export default function HomePage() {
           cleanupSubtitle={mode === 'duplicates' ? 'Copies of the same photo or video' : 'Shots that look alike'} notice={offlineNotice}
           counts={{ cleanup: removable > 0 ? removable.toLocaleString() : undefined }} toasts={toasts} removeToast={remove}
           theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} onTab={turnToTab} onEndReview={() => setReviewing(false)}
-          onScanAgain={changeFolders} onDeletePermanently={askToErase} onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} />
+          scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}
+          onDeletePermanently={askToErase} onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} />
       ) : (
         <>
         <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}

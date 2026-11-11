@@ -48,6 +48,16 @@ internal sealed class ScanStartEndpoints
         return response;
     }
 
+    /// <summary>POST /api/scan/stop/{instanceId}: stops that scan, keeping what it has read; 404 when it is not running.</summary>
+    public async Task<ApiResponse> StopAsync(ApiRequest req, string instanceId, CancellationToken ct)
+    {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
+        if (_runner.Stop(instanceId)) return req.CreateResponse(HttpStatusCode.NoContent);
+        var gone = req.CreateResponse(HttpStatusCode.NotFound);
+        await gone.WriteAsJsonAsync(new { error = "That scan is not running." }, ct);
+        return gone;
+    }
+
     /// <summary>What a request asks to scan; what it leaves out, or a body that is not JSON at all, means the folders set in <paramref name="defaults"/>.</summary>
     /// <param name="body">The request's body.</param>
     /// <param name="defaults">The folders to scan when none is named.</param>

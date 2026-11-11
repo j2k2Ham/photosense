@@ -15,6 +15,12 @@ public sealed class PhotoKitAccess : IPhotoAccess
         _ => PhotoAccess.Nothing,
     };
 
+    /// <summary>
+    /// Asks iOS's question of what PhotoSense may see, the first time; done once it is answered. iOS asks only once,
+    /// so after that it answers at once with what was chosen, and only Settings can change it.
+    /// </summary>
+    public Task AskAsync(CancellationToken ct) => PHPhotoLibrary.RequestAuthorizationAsync(PHAccessLevel.ReadWrite).WaitAsync(ct);
+
     /// <summary>Shows Apple's picker for choosing more photos; done once it is put away.</summary>
     public Task ChooseMoreAsync(CancellationToken ct)
     {

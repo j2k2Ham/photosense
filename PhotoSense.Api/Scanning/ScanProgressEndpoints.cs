@@ -38,7 +38,8 @@ internal sealed class ScanProgressEndpoints
             secondaryPercent = snap.SecondaryPercent,
             overallPercent = snap.OverallPercent,
             // Null until there is something to go by: this scan's own pace, or what earlier scans took.
-            secondsLeft = ScanEstimate.SecondsLeft(snap, _time.GetUtcNow().UtcDateTime)
+            secondsLeft = ScanEstimate.SecondsLeft(snap, _time.GetUtcNow().UtcDateTime),
+            recent = snap.Recent
         };
         await resp.WriteAsJsonAsync(payload, ct);
         return resp;

@@ -92,12 +92,14 @@ public sealed class ScanAndStatusEndpointsTests : IDisposable
         _progress.SetTotals("scan-1", 4, 2);
         _progress.IncrementProcessed("scan-1", primary: true);
         _progress.IncrementProcessed("scan-1", primary: false);
+        _progress.Read("scan-1", "6f1c1c1e-0000-4000-8000-000000000001");
         var function = Scans();
 
         var json = (await function.GetAsync(Http.Get("scan/progress/scan-1"), "scan-1", ct)).Json();
         await Assert.That((json.GetProperty("instanceId").GetString(), json.GetProperty("primaryTotal").GetInt32(),
             json.GetProperty("primaryProcessed").GetInt32(), json.GetProperty("secondaryTotal").GetInt32(), json.GetProperty("secondaryProcessed").GetInt32())).IsEqualTo(("scan-1", 4, 1, 2, 1));
         await Assert.That(json.GetProperty("primaryPercent").GetDouble()).IsEqualTo(25);
+        await Assert.That(json.GetProperty("recent").EnumerateArray().Single().GetString()).IsEqualTo("6f1c1c1e-0000-4000-8000-000000000001");
         await Assert.That(json.GetProperty("completedUtc").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);
         // Nothing to go by yet: no earlier scan, and too little of this one.
         await Assert.That(json.GetProperty("secondsLeft").ValueKind).IsEqualTo(System.Text.Json.JsonValueKind.Null);

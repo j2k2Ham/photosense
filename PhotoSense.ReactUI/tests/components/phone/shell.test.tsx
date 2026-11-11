@@ -1,13 +1,18 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PhoneApp } from '../../../components/phone/PhoneApp';
 import { PhoneShell } from '../../../components/phone/PhoneShell';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from '../../../components/phone/Screens';
 import { SettingsSheet } from '../../../components/phone/SettingsSheet';
 import type { Platform, TabId } from '../../../lib/phone';
 import { frame, inFrame, width } from './frame';
+
+// The phone has said PhotoSense may see everything; what comes before that is tested with the first run.
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn() }));
+vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
+beforeEach(() => api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } }));
 
 describe('a screen\'s header', () => {
   it('on an iPhone: round glass buttons over a large title, and the gear opens Settings', async () => {
@@ -187,13 +192,15 @@ describe('Settings', () => {
 });
 
 describe('PhotoSense on a phone', () => {
+  beforeEach(() => localStorage.setItem('photosense-first-run', 'done'));
+
   function App({ platform = 'ios', reviewing = false, start = 'cleanup' as TabId, onEnd = vi.fn() }: { platform?: Platform; reviewing?: boolean; start?: TabId; onEnd?: () => void }) {
     const [tab, setTab] = React.useState<TabId>(start);
     const [theme, setTheme] = React.useState<'auto' | 'dark' | 'light'>('auto');
     return (
       <PhoneApp platform={platform} tab={tab} reviewing={reviewing} cleanup={<p>the groups</p>} organize={<p>the suggestions</p>} cleanupSubtitle="Copies of the same photo or video"
         counts={{}} toasts={[]} theme={theme} version="1.4.0" errorCount={0} onTab={setTab} onEndReview={onEnd} removeToast={vi.fn()} onTheme={setTheme}
-        onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
+        scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
     );
   }
 

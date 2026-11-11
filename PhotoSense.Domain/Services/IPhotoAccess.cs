@@ -17,6 +17,12 @@ public interface IPhotoAccess
     /// <summary>What PhotoSense may see now.</summary>
     PhotoAccess Current { get; }
 
+    /// <summary>
+    /// Asks the system's own question of what PhotoSense may see; done once it is answered. A system that has been
+    /// answered already may not ask again, and then nothing is shown.
+    /// </summary>
+    Task AskAsync(CancellationToken ct);
+
     /// <summary>Shows the system's picker for choosing more photos for PhotoSense to see; done once it is put away.</summary>
     Task ChooseMoreAsync(CancellationToken ct);
 

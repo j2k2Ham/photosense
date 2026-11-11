@@ -21,6 +21,9 @@ public sealed class AndroidAccess : IPhotoAccess
         }
     }
 
+    /// <summary>Asks Android's question of what PhotoSense may see; done once it is answered. Android stops asking once the person has said no twice.</summary>
+    public Task AskAsync(CancellationToken ct) => MainActivity.AskForPhotosAgain().WaitAsync(ct);
+
     /// <summary>Asks again for the photos PhotoSense may see; done once Android's question is put away.</summary>
     public Task ChooseMoreAsync(CancellationToken ct) => MainActivity.AskForPhotosAgain().WaitAsync(ct);
 

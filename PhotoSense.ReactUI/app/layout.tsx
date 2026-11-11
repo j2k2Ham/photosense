@@ -15,7 +15,9 @@ export const metadata = {
 };
 
 // Runs before the first paint, so a page saved in the light theme, or in Auto on a light system, never flashes dark.
-const applySavedTheme = `try{var t=localStorage.getItem('${THEME_KEY}');if(t==='light'||(t==='auto'&&matchMedia('${SYSTEM_LIGHT}').matches))document.documentElement.classList.add('light')}catch(e){}`;
+// In a phone app, which it knows by the app's own bridge, it marks the page as the app's (data-app), so that nothing is
+// shown until the page has learned it is the phone app; and a theme never chosen is Auto, as it is there.
+const applySavedTheme = `try{var d=document.documentElement,w=window,app=w.PhotoSenseBars||(w.webkit&&w.webkit.messageHandlers&&w.webkit.messageHandlers.photosenseBars);if(app)d.setAttribute('data-app','');var t=localStorage.getItem('${THEME_KEY}');if(t==='light'||((t==='auto'||(app&&!t))&&matchMedia('${SYSTEM_LIGHT}').matches))d.classList.add('light')}catch(e){}`;
 
 /** The page fills a phone's whole screen, under its bars and round its corners; the phone layout keeps clear of them itself. */
 export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };

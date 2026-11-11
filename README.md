@@ -80,12 +80,14 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 | `/about/icon` | GET | The icon (`branding/app-icon.png`) |
 | `/about/{privacy\|terms\|support\|notices}` | GET | The privacy policy, the terms of use or the support page in Markdown, with `product.json`'s details filled in; or the program's third-party notices as plain text |
 | `/library/access` | GET | How much of a phone's photos PhotoSense may see: `{ access: "everything" \| "selected" \| "nothing" }`; on a computer always `everything` |
+| `/library/ask` | POST | Ask the phone's own question of what PhotoSense may see; answers once it is answered, with the access then. A phone that has been answered already may not ask again |
 | `/library/choose-more` | POST | Show the phone's own picker for choosing more photos; answers once it is put away, with the access then |
 | `/library/open-settings` | POST | Open PhotoSense's page of the phone's settings, where its access to the photos is changed; 204 |
 | `/folders?path=` | GET | The folders inside a folder of the computer the service runs on, each with its full path; without `path`, the places to start from (Pictures, the home folder, each disk) |
 | `/scan/start` | POST | Start a scan. Body `{ primaryLocation, secondaryLocation?, recursive, startOver? }`; returns `{ instanceId }`, or 400 `{ error }` when a folder is not found on the server |
+| `/scan/stop/{instanceId}` | POST | Stop that scan; what it has read stays on record, and the next scan skips it. 204, or 404 `{ error }` when it is not running |
 | `/scan/reset` | POST | Forget everything earlier scans recorded, previews included; refused while a scan is running. The photos are not touched |
-| `/scan/progress/{instanceId}` | GET | Current `ScanProgressSnapshot` |
+| `/scan/progress/{instanceId}` | GET | Current `ScanProgressSnapshot`, with `recent`: the ids of the latest pictures read that have a preview, oldest first, at most 12 |
 | `/scan/groups?mode=duplicates\|similar&page=&pageSize=&q=&hideKept=` | GET | Groups: a keeper (the best copy) and the photos matched against it |
 | `/photos/{id}/thumbnail` | GET | Small JPEG preview (cached at scan time); pictures only |
 | `/photos/{id}/image` | GET | The picture for viewing; HEIC and TIFF are converted to JPEG on the fly |
@@ -390,6 +392,8 @@ CI builds and tests the service on Windows and on macOS as well as on Linux, and
 
 On a phone or tablet the page is laid out as the phone's own apps are, in iOS 26's look on an iPhone or iPad and Material 3's on Android, dark, light or following the system (Auto): four tabs (Library, Clean up, Organize, Send) in a bar at the foot, a sidebar on an iPad or a rail on an Android tablet, with Settings under a gear. Android's Back and iOS's swipe from the edge close what was opened last. The computer's layout is unchanged (`components/phone/`).
 
+The first time, the phone shows **Welcome**, saying what PhotoSense does; **Continue** asks the phone's own question of what PhotoSense may see (`/library/ask`; the apps no longer ask as they start). Allowed all or some, it reads the whole library at once, on a screen of its own: how far it has got, how long is left, and tiles that fill with the pictures as they are read (`recent` on the progress). **Stop** ends a scan and keeps what it read (`/scan/stop`). When it finishes the phone shows its library, with a message saying what was found and **Review** to see it. Refused, it says where access is turned on, with **Open Settings** and **Ask again**; turned on and back in the app, the scan starts by itself. **Scan again** in Settings reads the whole library again. In the apps the page stays hidden until it knows it is the phone app, so the computer's layout never shows for a moment.
+
 `PhotoSense.iOS` is PhotoSense on an iPhone or iPad: the same page, in a web view that fills the screen, with every request the page makes answered inside the app by the same endpoints the service uses. There is no web server on the phone. The page's own files are handed out from the app, and its requests below `/api` go to `PhotoSenseRoutes` (`PageSchemeHandler`, through `InProcessApi` and `PageFiles` in `PhotoSense.Api/Hosting`). What the app records is kept among its own files, and the previews where the phone may clear them when it runs short of space.
 
 The first time it opens, it asks to see the photos: all of them, those picked, or none. The library is then offered as one folder, **Photo Library**, holding every picture and video once under the name it was taken with; a Live Photo is two files there, its picture and its video. Pictures taken under the same name are told apart by the start of each one's own id (`IMG_0001 (1A2B3C4D).HEIC`), so that a name never comes to stand for another picture. Pictures are decoded by the phone itself (`ImageIOAnalyzer`), since Magick.NET has no build for a phone, and measured the same way as on a computer (`ImageFingerprint`).
@@ -403,7 +407,7 @@ A scan finds copies and similar shots, and Clean up and Organize work on the pho
 - **Pictures kept in iCloud.** One kept only in iCloud is fetched first, without holding up anything else; a fetch that gets no further for a minute is given up, and the picture counts as one that could not be read (`PhotoKitLibrary.OpenAsync`).
 - **One change, one question.** Each change is handed to the phone whole (`IPhotoChangesTogether`), as one PhotoKit request: all of it happens or none does, and when iOS asks the person first, as it does before deleting, it asks once. A change the person declines leaves everything as it was, and the message says so.
 
-When only some photos were allowed, the scan screen says so, with **Choose more photos** for the phone's own picker and **Open Settings** for allowing all of them (`/library/...`, `PhotoKitAccess`). A link to anywhere outside the app (a web site, an email address) opens in Safari or Mail.
+When only some photos were allowed, Clean up's scan screen says so, with **Choose more photos** for the phone's own picker and **Open Settings** for allowing all of them (`/library/...`, `PhotoKitAccess`). A link to anywhere outside the app (a web site, an email address) opens in Safari or Mail.
 
 Only the parts that talk to Apple's frameworks are in `PhotoSense.iOS`: the photo library (`PhotoKitLibrary`), the decoder, the web view and its requests. Everything that decides anything is shared and tested with the rest (`PhotoLibraryFileSystemTests`, `InProcessApiTests`, and `PhotosOnAPhoneTests`, which runs the phone's whole stack but Apple's code on a library held in memory).
 

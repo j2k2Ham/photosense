@@ -2,7 +2,9 @@ import React, { useCallback, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
 import type { ThemeChoice } from '../../lib/theme';
-import type { Toast } from '../Toaster';
+import type { ScanProgressSnapshotDto } from '../../types';
+import type { Toast, ToastKind } from '../Toaster';
+import { useFirstRun, usePhoneScan } from './FirstRun';
 import { PhoneShell } from './PhoneShell';
 import { RootHeader, Screen } from './Screens';
 import { SettingsSheet } from './SettingsSheet';
@@ -25,11 +27,18 @@ interface Props {
   readonly theme: ThemeChoice;
   readonly version?: string;
   readonly errorCount: number;
+  /** A scan is under way. */
+  readonly scanning: boolean;
+  readonly progress?: ScanProgressSnapshotDto;
+  /** A scan has been started, under the id given. */
+  onStarted(instanceId: string): void;
+  /** Stops the scan under way. */
+  onStopScan(): void;
+  notify(message: string, kind: ToastKind): void;
   onTab(tab: TabId): void;
   onEndReview(): void;
   removeToast(id: number): void;
   onTheme(theme: ThemeChoice): void;
-  onScanAgain(): void;
   onDeletePermanently(): void;
   onErrors(): void;
   onHelp(): void;
@@ -37,11 +46,15 @@ interface Props {
 }
 
 /**
- * PhotoSense on a phone or tablet: the four tabs in the shell, each with its header and the gear that opens Settings.
- * Clean up and Organize show their screens as they are made today; Library and Send are new, and come step by step.
+ * PhotoSense on a phone or tablet: the four tabs in the shell, each with its header and the gear that opens Settings,
+ * with Welcome, the photo access screen and Scanning over them when they are called for. A phone scans its whole
+ * library, the one folder it has. Clean up and Organize show their screens as they are made today; Library and Send
+ * are new, and come step by step.
  */
 export function PhoneApp(props: Props) {
-  const { platform, tab, reviewing, cleanup, organize, cleanupSubtitle, notice, counts, toasts, theme, version, errorCount, onTab, onEndReview, removeToast } = props;
+  const { platform, tab, reviewing, cleanup, organize, cleanupSubtitle, notice, counts, toasts, theme, version, errorCount, onTab, onEndReview, removeToast, notify } = props;
+  const { starting, scan } = usePhoneScan(props.onStarted, notify);
+  const cover = useFirstRun({ scanning: props.scanning, progress: props.progress, starting, scan, onStop: props.onStopScan, notify });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const openSettings = useCallback(() => setSettingsOpen(true), []);
   const words = WORDS[platform];
@@ -52,7 +65,7 @@ export function PhoneApp(props: Props) {
 
   return (
     <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : 'tabs'} counts={counts} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
-      notice={notice}
+      notice={notice} cover={cover}
       screens={{
         library: <Screen label="Library"><RootHeader title="Library" /></Screen>,
         cleanup: <Screen label="Clean up" fixed>{!pushed && <RootHeader title="Clean up" subtitle={cleanupSubtitle} />}{cleanup}</Screen>,
@@ -62,7 +75,7 @@ export function PhoneApp(props: Props) {
         send: <Screen label="Send to computer"><RootHeader title="Send to computer" subtitle="Copy or move to PhotoSense on a Windows PC or Mac" /></Screen>,
       }}
       sheet={settingsOpen && (
-        <SettingsSheet theme={theme} version={version} errorCount={errorCount} onTheme={props.onTheme} onScanAgain={props.onScanAgain} onDeletePermanently={props.onDeletePermanently}
+        <SettingsSheet theme={theme} version={version} errorCount={errorCount} onTheme={props.onTheme} onScanAgain={() => void scan()} onDeletePermanently={props.onDeletePermanently}
           onErrors={props.onErrors} onHelp={props.onHelp} onAbout={props.onAbout} onClose={() => setSettingsOpen(false)} />
       )} />
   );

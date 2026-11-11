@@ -18,7 +18,6 @@ namespace PhotoSense.AndroidApp;
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.UiMode)]
 public sealed class MainActivity : Activity
 {
-    private const int AskForPhotos = 1;
     private static int _nextQuestion = 100;
     private static readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> Questions = new();
     private WebView? _page;
@@ -68,16 +67,14 @@ public sealed class MainActivity : Activity
         SetContentView(screen);
         if (OperatingSystem.IsAndroidVersionAtLeast(33)) OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(IOnBackInvokedDispatcher.PriorityDefault, new BackCallback(Back));
 
-        // The page waits until the person has said what PhotoSense may see; GitHub's emulator has said so already.
-        if (SelfCheck.Running || PhotoPermissions.All(p => CheckSelfPermission(p) == Permission.Granted)) page.LoadUrl(PageClient.Origin);
-        else RequestPermissions(PhotoPermissions, AskForPhotos);
+        // The page asks for the photos itself, once it has said what PhotoSense does with them (library/ask).
+        page.LoadUrl(PageClient.Origin);
     }
 
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
     {
         base.OnRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == AskForPhotos) _page?.LoadUrl(PageClient.Origin);
-        else if (Questions.TryRemove(requestCode, out var asked)) asked.TrySetResult(grantResults.Any(g => g == Permission.Granted));
+        if (Questions.TryRemove(requestCode, out var asked)) asked.TrySetResult(grantResults.Any(g => g == Permission.Granted));
     }
 
     protected override void OnActivityResult(int requestCode, Result resultCode, Intent? data)

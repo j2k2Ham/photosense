@@ -420,6 +420,22 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Test]
+    public async Task Names_The_Latest_Pictures_Read_That_Have_A_Preview_Read_Again_Or_Not(CancellationToken ct)
+    {
+        Write("a.jpg", "picture a");
+        Write("broken.heic", FakeAnalyzer.Undecodable);
+        Write("clip.mov", "a video");
+
+        await ScanAsync(ct);
+        var a = (await _repo.GetAllAsync(ct)).Single(p => p.FileName == "a.jpg").Id.ToString();
+        await Assert.That(_progress.Get("scan").Recent).IsEquivalentTo([a]);
+
+        // A picture skipped as unchanged has its preview already.
+        await ScanAsync(ct, instance: "again");
+        await Assert.That(_progress.Get("again").Recent).IsEquivalentTo([a]);
+    }
+
+    [Test]
     public async Task Reports_Progress_As_It_Goes(CancellationToken ct)
     {
         for (int i = 0; i < 100; i++) Write($"{i}.jpg", $"picture {i}");

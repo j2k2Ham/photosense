@@ -79,6 +79,8 @@ internal sealed class AboutApi(TestApi api)
     public Task<ApiResponse> BrowseAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "folders");
     /// <summary>GET /library/access.</summary>
     public Task<ApiResponse> AccessAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "library/access");
+    /// <summary>POST /library/ask.</summary>
+    public Task<ApiResponse> AskAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "library/ask");
     /// <summary>POST /library/choose-more.</summary>
     public Task<ApiResponse> ChooseMoreAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "library/choose-more");
     /// <summary>POST /library/open-settings.</summary>
@@ -113,6 +115,8 @@ internal sealed class ScanApi(TestApi api)
     public Task<ApiResponse> GetDuplicateGroupsAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "scan/groups");
     /// <summary>POST /scan/start.</summary>
     public Task<ApiResponse> StartAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "scan/start");
+    /// <summary>POST /scan/stop/{instanceId}.</summary>
+    public Task<ApiResponse> StopAsync(ApiRequest r, string instanceId, CancellationToken ct) => api.SendAsync(r, ct, $"scan/stop/{TestApi.Part(instanceId)}");
     /// <summary>POST /scan/reset.</summary>
     public Task<ApiResponse> ResetAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "scan/reset");
     /// <summary>GET /scan/progress/{instanceId}.</summary>

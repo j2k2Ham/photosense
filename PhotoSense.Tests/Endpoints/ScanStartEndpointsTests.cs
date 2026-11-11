@@ -45,7 +45,7 @@ public sealed class ScanStartEndpointsTests : IDisposable
             try
             {
                 if (Failure is not null) throw Failure;
-                await Finish.Task;
+                await Finish.Task.WaitAsync(ct);
                 return new ScanSummary(0, 0, 0, 0, 0);
             }
             finally { progress.ScanCompleted(instanceId); }
@@ -177,6 +177,56 @@ public sealed class ScanStartEndpointsTests : IDisposable
         _scans.Failure = null;
         _scans.Finish.SetResult();
         await Assert.That((await starter.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), ct)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
+        await _runner.Running;
+    }
+
+    // ---- stopping one
+
+    [Test]
+    public async Task Stop_Ends_The_Scan_Running_Keeping_What_It_Read_And_Another_Can_Start(CancellationToken ct)
+    {
+        var scans = Starter();
+        var instanceId = (await scans.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), ct)).Json().GetProperty("instanceId").GetString()!;
+
+        var stopped = await scans.StopAsync(Http.Post($"scan/stop/{instanceId}").FromClient(), instanceId, ct);
+        await _runner.Running;
+
+        await Assert.That(stopped.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That(ScanRunner.IsRunning(_progress.GetLatest())).IsFalse();
+        _log.Verify(l => l.Log(instanceId, "Info", "Scan stopped. What was read so far is kept."), Times.Once);
+        _log.Verify(l => l.Log(instanceId, "Error", It.IsAny<string>()), Times.Never);
+        await Assert.That((await scans.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), ct)).StatusCode).IsEqualTo(HttpStatusCode.Accepted);
+        _scans.Finish.SetResult();
+        await _runner.Running;
+    }
+
+    [Test]
+    public async Task Stop_Answers_Not_Found_For_A_Scan_That_Is_Not_Running(CancellationToken ct)
+    {
+        var scans = Starter();
+        var instanceId = (await scans.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), ct)).Json().GetProperty("instanceId").GetString()!;
+
+        var other = await scans.StopAsync(Http.Post("scan/stop/other").FromClient(), "other", ct);
+        _scans.Finish.SetResult();
+        await _runner.Running;
+        var finished = await scans.StopAsync(Http.Post($"scan/stop/{instanceId}").FromClient(), instanceId, ct);
+
+        foreach (var answer in new[] { other, finished })
+            await Assert.That((answer.StatusCode, answer.Json().GetProperty("error").GetString())).IsEqualTo((HttpStatusCode.NotFound, "That scan is not running."));
+        _log.Verify(l => l.Log(It.IsAny<string>(), "Info", It.IsAny<string>()), Times.Never);
+    }
+
+    [Test]
+    public async Task Only_The_Page_Can_Stop_A_Scan(CancellationToken ct)
+    {
+        var scans = Starter();
+        var instanceId = (await scans.StartAsync(Http.Post("scan/start", Body(_root.FullName)).FromClient(), ct)).Json().GetProperty("instanceId").GetString()!;
+
+        var refused = await scans.StopAsync(Http.Post($"scan/stop/{instanceId}"), instanceId, ct);
+
+        await Assert.That(refused.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That(ScanRunner.IsRunning(_progress.GetLatest())).IsTrue();
+        _scans.Finish.SetResult();
         await _runner.Running;
     }
 

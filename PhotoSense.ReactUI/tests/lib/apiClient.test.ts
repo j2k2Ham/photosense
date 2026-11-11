@@ -165,6 +165,22 @@ describe('requests that act on photos', () => {
     expect(swr.mutate).toHaveBeenCalledOnce();
   });
 
+  it('stop a scan by its id, keeping what it read', async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.stopScan('scan 7');
+    expect(lastRequest()).toEqual({ url: `${API}/scan/stop/scan%207`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+  });
+
+  it('find where a phone\'s photos are, as the one folder it lists, and say so when it lists none', async () => {
+    answering({ path: null, parent: null, folders: [{ name: 'Photo Library', path: '/Photo Library' }] });
+    const api = await load();
+    await expect(api.libraryRoot()).resolves.toBe('/Photo Library');
+    expect(lastRequest().url).toBe(`${API}/folders`);
+    answering({ path: null, parent: null, folders: [] });
+    await expect(api.libraryRoot()).rejects.toThrow('The phone did not say where its photos are.');
+  });
+
   it('start a scan and hand back its id', async () => {
     answering({ instanceId: 'scan-7' });
     const api = await load();
@@ -209,6 +225,15 @@ describe('what a phone lets PhotoSense see', () => {
     expect(swr.mutate).toHaveBeenCalledWith(`${API}/library/access`, { access: 'everything' }, { revalidate: false });
     const listings = swr.mutate.mock.calls[1][0] as (key: unknown) => boolean;
     expect([`${API}/organize/files?root=x`, `${API}/scan/groups`, 7].map(listings)).toEqual([true, false, false]);
+  });
+
+  it('asks the phone\'s own question, and answers with what it then allows', async () => {
+    answering({ access: 'selected' });
+    const api = await load();
+    await expect(api.askForPhotos()).resolves.toEqual({ access: 'selected' });
+    expect(lastRequest().url).toBe(`${API}/library/ask`);
+    expect(lastRequest().init?.method).toBe('POST');
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/library/access`, { access: 'selected' }, { revalidate: false });
   });
 
   it('opens PhotoSense\'s page of the phone\'s settings', async () => {
@@ -288,10 +313,10 @@ describe('what the page reads', () => {  it('asks for groups fifty to a page, by
     expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/status`, expect.any(Function), { refreshInterval: 5000 });
   });
 
-  it('asks afresh how many groups of each kind there are', async () => {
-    fetchMock.mockImplementation(async url => reply({ total: String(url).includes('mode=similar') ? 170 : 263 }));
+  it('asks afresh how many groups of each kind there are, and how many files are copies', async () => {
+    fetchMock.mockImplementation(async url => reply(String(url).includes('mode=similar') ? { total: 170, removableCount: 0 } : { total: 263, removableCount: 312 }));
     const api = await load();
-    await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170 });
+    await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170, copies: 312 });
     expect(fetchMock.mock.calls.map(c => c[0])).toEqual([`${API}/scan/groups?mode=duplicates&page=1&pageSize=50&hideKept=false&q=`, `${API}/scan/groups?mode=similar&page=1&pageSize=50&hideKept=false&q=`]);
   });
 

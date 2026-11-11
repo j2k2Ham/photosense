@@ -79,7 +79,8 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'On an iPhone or iPad',
         text: [
-          'The phone\'s photos are the one folder, **Photo Library**. If you let PhotoSense see only some of them, the scan screen says so: **Choose more photos** opens the phone\'s own picker, and **Open Settings** goes to where all of them can be allowed.',
+          'The first time, **Continue** asks the phone\'s own question of which photos PhotoSense may see, and then reads them all. If you said no, **Open Settings** goes to where access is turned on; come back, and the reading starts.',
+          'The phone\'s photos are the one folder, **Photo Library**, read whole: **Scan again** in Settings reads it again, and **Stop** ends a scan, keeping what it read. If you let PhotoSense see only some of them, the scan screen says so: **Choose more photos** opens the phone\'s own picker, and **Open Settings** goes to where all of them can be allowed.',
           'There, a folder is an album. Organizing a photo puts it in an album, inside a folder where the name has a \\, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied. An album left empty, by **Undo** or otherwise, stays in Photos until you delete it there.',
           'What you delete waits in an album called **PhotoSense Removed**, where **Undo** can still take it back. **Delete permanently** sends it to the phone\'s **Recently Deleted**, which keeps it for 30 days; the phone asks you first.',
         ],
@@ -87,6 +88,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'On an Android phone',
         text: [
+          'As on an iPhone, the first time **Continue** asks which photos PhotoSense may see, and then reads them all; **Scan again** in Settings reads them again.',
           'The phone\'s storage is the one folder, **Phone**, holding its own folders: **DCIM** (with the camera\'s **Camera**), **Pictures**, **Movies** and the rest. Android keeps photos only inside DCIM, Pictures or Movies, so a folder made in Organize goes inside one of those; organize **DCIM/Camera**, for instance, and its folders are made there.',
           'What you delete waits in **_PhotoSense_Removed** inside the folder it was in, where **Undo** can still take it back; what you delete from the whole phone waits in **Pictures/PhotoSense Removed**. **Delete permanently** sends it to the phone\'s bin, which keeps it for 30 days. Android asks you once before each set of photos is moved or put in the bin.',
           'A photo can be moved on the phone, not copied; to copy photos, send them to a computer.',

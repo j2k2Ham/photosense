@@ -21,6 +21,15 @@ internal sealed class LibraryEndpoints
         return resp;
     }
 
+    /// <summary>POST /api/library/ask: answered once the system's question of what PhotoSense may see is answered, with the access then.</summary>
+    public async Task<ApiResponse> AskAsync(ApiRequest req, CancellationToken ct)
+    {
+        // Only the page itself may put the system's question in front of someone.
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
+        await _access.AskAsync(ct);
+        return await AccessAsync(req, ct);
+    }
+
     /// <summary>POST /api/library/choose-more: answered once the system's picker has been put away, with the access then.</summary>
     public async Task<ApiResponse> ChooseMoreAsync(ApiRequest req, CancellationToken ct)
     {

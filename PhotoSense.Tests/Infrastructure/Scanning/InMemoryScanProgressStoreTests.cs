@@ -30,12 +30,26 @@ public class InMemoryScanProgressStoreTests
         store.SetTotals("never-started", 10, 5);
         store.Expect("never-started", 60);
         store.IncrementProcessed("never-started", primary: true);
+        store.Read("never-started", "photo");
         store.ScanCompleted("never-started");
 
         var snap = store.Get("never-started");
         await Assert.That((snap.PrimaryTotal, snap.PrimaryProcessed, snap.SecondaryTotal, snap.CompletedUtc)).IsEqualTo((0, 0, 0, (DateTime?)null));
         await Assert.That(snap.ExpectedSeconds).IsNull();
+        await Assert.That(snap.Recent).IsEmpty();
         await Assert.That(store.GetLatest().InstanceId).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task Keeps_The_Latest_Pictures_Read_Oldest_First_And_No_More_Than_Are_Shown(CancellationToken ct)
+    {
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
+        store.ScanStarted("scan");
+        await Assert.That(store.Get("scan").Recent).IsEmpty();
+
+        for (var i = 1; i <= ScanProgressSnapshot.RecentKept + 3; i++) store.Read("scan", $"photo-{i}");
+
+        await Assert.That(string.Join(",", store.Get("scan").Recent)).IsEqualTo(string.Join(",", Enumerable.Range(4, ScanProgressSnapshot.RecentKept).Select(i => $"photo-{i}")));
     }
 
     [Test]

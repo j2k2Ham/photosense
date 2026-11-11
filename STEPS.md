@@ -52,7 +52,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
   - Looking for an iPhone on a cable gives Apple's device service five seconds.
   - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
-- **Last measured:** service 821 tests at 100% of lines (3,510) and branches (1,990) (2026-11-10); page 591 tests at 100% (2026-11-10); end to end 70 tests, 56 in Playwright's Chromium and 14 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml` and `android.yml` passed on the code-health push (2026-11-09).
+- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 661 tests at 100% (2026-11-10); end to end 74 tests, 58 in Playwright's Chromium and 16 in WebKit (2026-11-10); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the shell push (4f6dc67, 2026-11-10).
 
 ## Remaining steps
 
@@ -80,8 +80,13 @@ The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and
   - Back: `useBackLayer` gives each pushed screen and sheet an entry in the history; a review of a group is pushed over Clean up's list on a phone.
   - The apps: the page draws under the bars, with iOS's safe areas and Android's insets told as CSS variables; the status bar follows the page's theme on both; Android's Back and iOS's edge swipe go back in the page's history.
   - Clean up and Organize show today's screens inside the shell until steps 5 and 6; Library and Send have only their headers until steps 4 and 7.
-  - Checked: page 642 tests at 100%; end to end 56 and 14 (the phone tests now go through the tabs); the Android app builds here with no warning; screenshots at 402 × 874, 412 × 892, 1180 × 820 and 1280 × 800, both themes, against the handoff's 11, 35 and the tablets' 02 and 05: bars, headers, gear, sidebar, rail and Settings match. Not checked: the iPhone app's build (needs GitHub's Mac), and either app on a device or emulator.
-- [ ] **3. First run and scanning** (01–04), on `SetupScreen`'s logic and the photo-access endpoints.
+  - Checked: page 642 tests at 100%; end to end 56 and 14 (the phone tests now go through the tabs); the Android app builds here with no warning; screenshots at 402 × 874, 412 × 892, 1180 × 820 and 1280 × 800, both themes, against the handoff's 11, 35 and the tablets' 02 and 05: bars, headers, gear, sidebar, rail and Settings match. On GitHub (4f6dc67) the iPhone app built and its self-check passed on the simulator, as did Android's on the emulator, and the end-to-end tests. Not checked: either app on a device.
+- [x] **3. First run and scanning** (2026-11-10), in `components/phone/FirstRun.tsx`:
+  - Welcome, the first time; **Continue** asks the phone's own question (new `POST library/ask`, Jamie's choice; the apps no longer ask as they start); allowed, the whole library is scanned at once. Refused, the photo access screen: **Open Settings**, **Ask again**; turned on and back in the app (iOS restarts it), the scan starts by itself.
+  - Scanning covers the tabs: the percentage, time left, the count, and tiles (10 a row on a phone, 16 on a tablet) that fill with the pictures read (new `recent` on `scan/progress`, Jamie's choice). **Stop** (new `POST scan/stop/{id}`, Jamie's choice) keeps what was read. When it finishes the phone shows Library, with "Found 264 duplicates and 178 groups of similar shots." and **Review**. **Scan again** in Settings scans the library again.
+  - In the apps the page is hidden until it knows it is the phone app (`data-app`, set before the first paint from the app's bridge; shown after three seconds whatever happens), which settles the computer's layout showing for a moment at launch.
+  - The iPhone's photo question now says the design's words: "PhotoSense finds copies of the same photo and sorts photos into albums. Nothing leaves this phone unless you send it to your computer."
+  - Checked: service 828 tests at 100% (3,547 lines, 2,008 branches); page 661 at 100%; end to end 58 and 16 (two new first-run tests); screenshots at 402 × 874, 412 × 892, 1180 × 820 and 1280 × 800 in both themes against the handoff's 01, 03 and 04; Stop on a real scan of Jamie's photo folder (read only, on a data folder of its own): stopped at 180 of 6,296, all 180 kept, the next scan carried on. Not checked: either app's build or a device (the iPhone app needs GitHub's Mac); the real system questions; whether Android's WebView revalidates the access on coming back from Settings.
 - [ ] **4. Library** (05–10), new: `organize/files` for the whole library, filters All, Not organized, No location, Videos, by month; select mode with Send, Add to album / Move to folder, Delete; the viewer.
 - [ ] **5. Clean up** (11–18): groups, review, full-screen compare, the delete questions; on `GroupList`, `ReviewPanel`, `Differences`, `MatchChip`.
 - [ ] **6. Organize** (19–28): suggestions, the plain map, options, preview, where it goes, name taken, moved, recently moved; on `OrganizeView`, `MovePreview`, `NameClashWindow`, `RecentMoves`.
@@ -168,6 +173,12 @@ After a review of security, the Delete permanently wording, complaints and trans
   - A phone with no theme chosen starts in **Auto**, as its own apps do; a computer still starts dark.
   - The skins use the handoff's own names, which the desktop's tokens share (`--bg`, `--t1` to `--t3`, `--stage`, `--sel`, `--keep`, `--amber`, `--ident`, `--ident-bg`, `--scrim`): on a phone the skin's values win, so the screens not yet rebuilt already take the skin's background, text and those colours. The desktop is untouched, having no skin.
   - The body text on a phone is the platform's size (17 px on iOS, 16 px on Android) instead of the desktop's 14 px.
+- **Phone and tablet design, step 3 (2026-11-10):**
+  - A phone scans its whole library, recursively, keeping earlier results; a first scan, "Scan again" and coming back with access all do the same.
+  - "Found …" counts duplicate files (the copies a bulk delete would take) and groups of similar shots, as the design does; with neither, "Found no duplicates or similar shots." and no Review. Until the files are counted the scan says "Counting your photos and videos…"; time left uses the computer's wording ("About 4 minutes left", "Less than a minute left").
+  - Ask again still refused says "PhotoSense still can't see your photos. Turn on access in Settings."
+  - Welcome says "Runs on this iPad" on an iPad, as Settings does; the handoff says "tablet".
+  - Where the first-run has got to is kept in the page's own storage (`photosense-first-run`); a phone that cannot keep it is welcomed again each time.
 - **Phone and tablet design, step 2 (2026-11-10):**
   - Tapping the tab showing goes back to its first screen. An error on a phone stays until its OK is pressed, and is listed under Errors in Settings.
   - Until Organize is rebuilt (step 6), its screen scrolls as a whole, at least 600 px tall, so that on a short phone nothing of it stays under the tab bar.
@@ -187,7 +198,6 @@ After a review of security, the Delete permanently wording, complaints and trans
 - Heavily re-compressed copies are listed as similar shots, not duplicates, on purpose.
 - The iPhone and Android apps cannot be built on Jamie's PC without admin rights, for the missing Mono pack. The Android app builds with the workaround in CLAUDE.md, and neither has an emulator or simulator here.
 - 17 react-hooks compiler warnings are known and left.
-- On a phone the page shows the computer's layout for a moment at launch, until the program has said it is the phone app; to settle in step 3, whose first screen needs a waiting state.
 - The end-to-end accessibility checks run at a phone's size but not as the phone app, so no skin has been checked for contrast by them yet; the rebuilt phone screens need checks of their own.
 - The minute's limit and iCloud fetching are tested with a stand-in clock and library; neither has met a real phone that sleeps, loses the Wi-Fi or fetches from iCloud. The iPhone's new fetch (`PhotoKitLibrary.OpenAsync`, using `RequestData` and `CancelDataRequest`) and Android's change are checked only on GitHub's simulator and emulator, where both passed with the end-to-end tests (9319afb, 2026-11-10).
 

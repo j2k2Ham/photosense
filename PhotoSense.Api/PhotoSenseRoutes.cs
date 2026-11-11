@@ -19,6 +19,7 @@ public sealed class PhotoSenseRoutes
             .Get("about/{document}", (r, v, ct) => about.TextAsync(r, v["document"], ct))
             .Get("folders", (r, _, ct) => folders.BrowseAsync(r, ct))
             .Get("library/access", (r, _, ct) => library.AccessAsync(r, ct))
+            .Post("library/ask", (r, _, ct) => library.AskAsync(r, ct))
             .Post("library/choose-more", (r, _, ct) => library.ChooseMoreAsync(r, ct))
             // Opening the settings is done at once, with nothing to wait for or stop.
             .Post("library/open-settings", (r, _, _) => Task.FromResult(library.OpenSettings(r)))
@@ -32,6 +33,7 @@ public sealed class PhotoSenseRoutes
             .Get("scan/status", (r, _, ct) => status.GetStatusAsync(r, ct))
             .Get("scan/groups", (r, _, ct) => groups.GetDuplicateGroupsAsync(r, ct))
             .Post("scan/start", (r, _, ct) => start.StartAsync(r, ct))
+            .Post("scan/stop/{instanceId}", (r, v, ct) => start.StopAsync(r, v["instanceId"], ct))
             .Post("scan/reset", (r, _, ct) => reset.ResetAsync(r, ct))
             .Get("scan/progress/{instanceId}", (r, v, ct) => progress.GetAsync(r, v["instanceId"], ct))
             .Get("scan/logs", (r, _, ct) => logs.GetPendingAsync(r, ct))

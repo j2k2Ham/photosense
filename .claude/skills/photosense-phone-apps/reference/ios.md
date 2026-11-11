@@ -4,6 +4,8 @@
 - **The web view:** a `WKWebView` on `app://photosense/`. `PageSchemeHandler` hands out `wwwroot` and sends `/api` to the router; on iOS a request's body is in `NSUrlRequest.Body`.
   - The page draws under the status bar and round the corners itself (`viewport-fit=cover`, `env(safe-area-inset-*)`), so the scroll view adjusts nothing. A swipe from the left edge goes back in the page's history (`AllowsBackForwardNavigationGestures`), closing what the page opened last.
   - The page tells the app its theme through the `photosenseBars` message handler, and the status bar's icons follow it (`PreferredStatusBarStyle`).
+  - The app does not ask for photos as it starts: the page asks after Welcome (`library/ask`, `PhotoKitAccess.AskAsync`). iOS asks once only; after that only Settings changes it, and iOS restarts the app when it does.
+  - The page knows it is in an app before it is drawn, by the `photosenseBars` handler (or Android's `PhotoSenseBars`), and stays hidden until it has its skin.
 - **LiteDB compiles expressions while it runs,** which iOS allows only through .NET's interpreter, hence `<MtouchInterpreter>-all</MtouchInterpreter>`.
 - **`PhotoKitLibrary`:**
   - Albums PhotoSense made are known by the ids kept in `albums.txt` among the app's files. The person's own albums are never shown or changed.
