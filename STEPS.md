@@ -52,7 +52,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
   - Looking for an iPhone on a cable gives Apple's device service five seconds.
   - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
-- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 727 tests at 100% (2026-11-11); end to end 78 tests, 60 in Playwright's Chromium and 18 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Library push (b22ddf0, 2026-11-11).
+- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 784 tests at 100% (2026-11-11); end to end 78 tests, 60 in Playwright's Chromium and 18 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Clean up push (193ca04, 2026-11-11).
 
 ## Remaining steps
 
@@ -99,8 +99,15 @@ The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and
   - Full screen: a tap flips between the two, or the switch; previous and next between several copies; **Delete** from there too.
   - The questions and messages as the design words them, naming the file that stays and the file that goes, each with where it is; the message by where each is when the two share a name; Undo on each.
   - Clean up's state moved from the page into the phone layout (`useCleanUp`); the computer's screens are untouched. The access note moved with the design to Library alone.
-  - Checked: page 727 tests at 100%; end to end 60 and 18 (a new Clean up test: review, full screen, delete with its question, Undo and Delete all, on the disk); screenshots at the four sizes in both themes against the handoff's 11–18 and the tablets' 02, over a scratch copy of 10 of Jamie's photos and videos with duplicates made among them. Fixed on the way: a video's preview in the list was pale in the light themes. Not checked: on a device; similar shots on real photos (the copy had none); a library of hundreds of groups.
-- [ ] **6. Organize** (19–28): suggestions, the plain map, options, preview, where it goes, name taken, moved, recently moved; on `OrganizeView`, `MovePreview`, `NameClashWindow`, `RecentMoves`.
+  - Checked: page 727 tests at 100%; end to end 60 and 18 (a new Clean up test: review, full screen, delete with its question, Undo and Delete all, on the disk); screenshots at the four sizes in both themes against the handoff's 11–18 and the tablets' 02, over a scratch copy of 10 of Jamie's photos and videos with duplicates made among them. Fixed on the way: a video's preview in the list was pale in the light themes. On GitHub (193ca04) both apps built and passed their self-checks, and the end-to-end tests passed. Not checked: on a device; similar shots on real photos (the copy had none); a library of hundreds of groups.
+- [x] **6. Organize** (2026-11-11), in `components/phone/Organize.tsx` and `lib/phoneOrganize.ts`, on Organize's own rules (`suggest`, `resolveNames`, `checkFolderName`, `mapLayout`):
+  - Only what is in no album yet is sorted (`isUnsorted`: the top of the library; on Android also DCIM/Camera), so what was moved drops out of the suggestions by itself.
+  - The list: Place / Date, Options, the options in a line; each suggestion with four of its pictures, size, dates and why it is named so, or the places inside a year; Moved on those moved; as dots on a plain map with the one picked under it; Your albums with New album; the files with no location, leading to Library's No location; Recently moved.
+  - Options: group by, nearby places within 1–50 miles, landmark or town names (Town is new in the shared rules), what is inside each album or year, and which files.
+  - The preview, pushed on a phone and beside the list on a tablet: the name, where it is made (Where it goes), what is inside, the names taken with Review each name (Going in and Already there, Add a number, another name, Leave it, or Delete either after a question naming the one that stays), the files by year, month or place, two rows and Show more, any tapped to stay; Move, with Undo; on a tablet what was done, with Undo.
+  - Organize's computer screen is no longer shown on a phone; sending starts from Library's selection, as the design has it.
+  - Fixed on the way: a pushed screen's subtitle was not shown on Android, Clean up's review included.
+  - Checked: page 784 tests at 100%; end to end 60 and 18 (a new Organize test: a name taken numbered, the move and Undo on the disk; the sending tests now start from Library); screenshots at the four sizes in both themes against the handoff's 19–28 and the tablets' 03, over a scratch copy of 60 of Jamie's photos; over Jamie's whole photo folder (read only): 6,296 files read and 88 albums suggested after 7 s (1,307 with no location), the largest, 1,582 files, ready to move 4.5 s after opening. Not checked: on a device; Android's own question before a move (26); a move on a real phone's library.
 - [ ] **7. Send** (29–34): its own tab, over `send/*` and `SendStateDto.stage`.
 - [ ] **8. Settings** (35–37): appearance (Auto, Dark, Light), photos, removed files with Delete permanently and its second question, history, errors, help and about.
 
@@ -184,6 +191,17 @@ After a review of security, the Delete permanently wording, complaints and trans
   - A phone with no theme chosen starts in **Auto**, as its own apps do; a computer still starts dark.
   - The skins use the handoff's own names, which the desktop's tokens share (`--bg`, `--t1` to `--t3`, `--stage`, `--sel`, `--keep`, `--amber`, `--ident`, `--ident-bg`, `--scrim`): on a phone the skin's values win, so the screens not yet rebuilt already take the skin's background, text and those colours. The desktop is untouched, having no skin.
   - The body text on a phone is the platform's size (17 px on iOS, 16 px on Android) instead of the desktop's 14 px.
+- **Phone and tablet design, step 6 (2026-11-11):**
+  - Distances are in miles, as on the computer; the handoff says km on some screens and miles on others, and that phones keep the computer's unit.
+  - **New album** in Organize names an album that is made, in the default place, when files are first put in it from Library: the service makes no empty album. It is offered in Library's album sheet, and forgotten when the app closes.
+  - Your albums lists only the albums named this way, as the prototype does, not every album there is.
+  - The files with no location are listed by place only: by date they go into their year.
+  - Where it goes offers, on an iPhone, the top of the library and every folder of albums made earlier; on Android, Pictures, DCIM, and the folders made inside DCIM, Pictures or Movies.
+  - Show more adds five rows at a time until a section is all shown, then Show fewer; the handoff shows five rows and then Show fewer, which would leave the rest of a large year out of reach.
+  - A move Android refuses says the service's words ("You chose not to let PhotoSense change these photos. Nothing was moved…") in place of "Nothing was moved."
+  - The names-taken card names the album and year when all are in one ("Anaconda › 2023"), otherwise the album.
+  - Undo of a move says "Put back. Every file is where it was." only when everything came back; otherwise how many could not.
+  - On Android a destination leaves the phone unsaid ("Pictures/Anaconda"), as the handoff's words table has it.
 - **Phone and tablet design, step 5 (2026-11-11):**
   - A copy marked keep cannot be deleted from its review until it is unmarked, as on the computer; the design shows its Delete button as usual.
   - Unmarking says "IMG_1.JPG is no longer marked keep."; the design says nothing. Marking a similar shot says only that it is marked keep, as Delete all is for duplicates.
@@ -207,7 +225,6 @@ After a review of security, the Delete permanently wording, complaints and trans
   - Where the first-run has got to is kept in the page's own storage (`photosense-first-run`); a phone that cannot keep it is welcomed again each time.
 - **Phone and tablet design, step 2 (2026-11-10):**
   - Tapping the tab showing goes back to its first screen. An error on a phone stays until its OK is pressed, and is listed under Errors in Settings.
-  - Until Organize is rebuilt (step 6), its screen scrolls as a whole, at least 600 px tall, so that on a short phone nothing of it stays under the tab bar.
   - Settings on a tablet says "Runs on this tablet" for Android and "Runs on this iPad" for an iPad.
 - **Page:** the light theme's faintest text (`--t3`) is a little darker (#646a6e), so it passes WCAG AA on the compare window's grey.
 - **End-to-end tests:**

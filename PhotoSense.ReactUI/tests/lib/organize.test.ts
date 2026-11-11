@@ -153,6 +153,11 @@ describe('suggested folders by place', () => {
     expect(found[1].destinationOf(files[6])).toBe(`${ROOT}\\Glacier National Park\\2022`);
   });
 
+  it('names a folder by its town alone when asked, which is no falling back', () => {
+    const found = suggest(listing(files), settings({ nameFormat: 'town' }), noChoices);
+    expect(found.map(s => [s.name, s.fallback])).toEqual([['Anaconda', false], ['West Glacier', false], ['Butte', false], ['Opportunity', false]]);
+  });
+
   it('names a folder after whichever of its places has the most files', () => {
     const more = [...files, at('p2', 4), at('p3', 4)];
     const glacier = suggest(listing(more), settings(), noChoices).find(s => s.members.length === 2)!;

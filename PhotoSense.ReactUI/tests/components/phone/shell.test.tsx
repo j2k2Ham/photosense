@@ -12,17 +12,19 @@ import { group, groupsPage, photo } from './groups';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
 // tested on its own, has one group of duplicates.
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn() }));
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})) }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
   api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } });
   api.useGroupsThrough.mockReturnValue({ data: groupsPage('duplicates', [group(photo('IMG_4299.JPG'), [photo('IMG_4299.HEIC')])]) });
 });
-// Library is tested on its own; here the library holds one photo.
+// Library and Organize are tested on their own; here the library holds two photos, one taken in Anaconda and one with no place.
 vi.mock('../../../lib/library', async importOriginal => {
   const real = await importOriginal<typeof import('../../../lib/library')>();
-  const one = { id: 'f1', name: 'IMG_1.JPG', folder: '/Photo Library', sizeBytes: 1, isVideo: false, date: '2023-12-01T00:00:00', dateFromFile: false, width: 1, height: 1 };
-  return { ...real, useLibrary: () => ({ root: '/Photo Library', files: [one], listing: { root: '/Photo Library', fromScan: true, places: [], files: [one] } }) };
+  const photo = (id: string, place?: number) => ({ id, name: `${id}.JPG`, folder: '/Photo Library', sizeBytes: 1, isVideo: false, date: '2023-12-01T00:00:00', dateFromFile: false, width: 1, height: 1, place });
+  const files = [photo('IMG_1', 0), photo('IMG_2')];
+  const places = [{ town: 'Anaconda', state: 'Montana', country: 'US', latitude: 46.1, longitude: -112.9 }];
+  return { ...real, useLibrary: () => ({ root: '/Photo Library', files, listing: { root: '/Photo Library', fromScan: true, places, files } }) };
 });
 
 describe('a screen\'s header', () => {
@@ -65,6 +67,10 @@ describe('a screen\'s header', () => {
     again(<PushedHeader title="Anaconda" onBack={back} />, frame('android'));
     expect(screen.getByRole('heading', { name: 'Anaconda' })).toHaveClass('text-[22px]', 'font-normal');
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(screen.getByRole('banner').querySelector('p')).toBeNull();
+    // Android says the subtitle under the bar.
+    again(<PushedHeader title="Anaconda" subtitle="Preview. Nothing moves until you tap Move." onBack={back} />, frame('android'));
+    expect(screen.getByText('Preview. Nothing moves until you tap Move.')).toHaveClass('px-4', 'pb-3');
   });
 
   it('of a tablet\'s detail: no back, the title on the left, and the gear', () => {
@@ -209,7 +215,7 @@ describe('PhotoSense on a phone', () => {
     const [tab, setTab] = React.useState<TabId>(start);
     const [theme, setTheme] = React.useState<'auto' | 'dark' | 'light'>('auto');
     return (
-      <PhoneApp platform={platform} tab={tab} organize={<p>the suggestions</p>} status={{ instanceId: 's', completed: '2026-11-10T16:25:00Z', totalPhotos: 2 }}
+      <PhoneApp platform={platform} tab={tab} status={{ instanceId: 's', completed: '2026-11-10T16:25:00Z', totalPhotos: 2 }}
         toasts={[]} theme={theme} version="1.4.0" errorCount={0} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
         scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
     );
@@ -223,7 +229,6 @@ describe('PhotoSense on a phone', () => {
     const tabs = screen.getByRole('navigation', { name: 'Tabs' });
     await userEvent.click(within(tabs).getByRole('button', { name: 'Organize' }));
     expect(screen.getByText('Sort Phone into folders by place and date')).toBeInTheDocument();
-    expect(screen.getByText('the suggestions')).toBeInTheDocument();
     await userEvent.click(within(tabs).getByRole('button', { name: 'Send' }));
     expect(screen.getByText('Copy or move to PhotoSense on a Windows PC or Mac')).toBeInTheDocument();
     await userEvent.click(within(tabs).getByRole('button', { name: 'Library' }));
@@ -269,10 +274,39 @@ describe('PhotoSense on a phone', () => {
     expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
   });
 
+  it('pushes a suggestion\'s preview over Organize\'s list on a phone, which Back or the tab takes back', async () => {
+    width(false);
+    render(<App start="organize" />);
+    const tabs = () => screen.getByRole('navigation', { name: 'Tabs' });
+    const open = () => userEvent.click(within(screen.getByRole('list', { name: 'Suggestions' })).getByRole('button', { name: /^Anaconda/ }));
+    await open();
+    expect(screen.getByRole('region', { name: 'Preview' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
+  });
+
+  it('from Organize shows Library\'s files with no location, and offers there the albums named in Organize', async () => {
+    width(false);
+    render(<App start="organize" />);
+    await userEvent.click(screen.getByRole('button', { name: 'New album' }));
+    await userEvent.type(screen.getByRole('textbox', { name: 'Album name' }), 'Lake{Enter}');
+    await userEvent.click(screen.getByRole('button', { name: '1 file has no location. It stays where it is.' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No location 1' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Select' }));
+    await userEvent.click(screen.getByRole('button', { name: 'IMG_2.JPG' }));
+    await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Add to album' }));
+    expect(within(screen.getByRole('dialog', { name: 'Add 1 to an album' })).getByRole('button', { name: 'Lake' })).toBeInTheDocument();
+  });
+
   it('counts the library beside its tab on an iPad, and while choosing in Library puts the selection bar in place of the tabs', async () => {
     width(true);
     const view = render(<App start="library" />);
-    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library 1' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library 2' })).toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Organize 1' })).toBeInTheDocument();
     expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Clean up 1' })).toBeInTheDocument();
     view.unmount();
     width(false);

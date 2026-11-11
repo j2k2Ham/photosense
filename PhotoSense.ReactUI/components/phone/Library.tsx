@@ -25,12 +25,18 @@ export const LIBRARY_PAGE = 240;
 
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const NO_PLACES: OrganizePlaceDto[] = [];
+const NO_ALBUMS: readonly Album[] = [];
 
 interface Props {
   readonly library: Library;
   /** Choosing files rather than opening them. */
   readonly selecting: boolean;
   onSelecting(on: boolean): void;
+  /** Which files are shown, which Organize can set too. */
+  readonly filter: LibraryFilter;
+  onFilter(filter: LibraryFilter): void;
+  /** Albums or folders named in Organize and not made yet, offered beside those there are. */
+  readonly made?: readonly Album[];
   notify: Notify;
 }
 
@@ -38,12 +44,11 @@ interface Props {
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter. Tapping one opens it;
  * Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, notify }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify }: Props) {
   const { platform, ios, words } = usePhone();
   const access = usePhotoAccess().data?.access;
   const { root, files, listing, reading } = library;
   const places = listing?.places ?? NO_PLACES;
-  const [filter, setFilter] = useState<LibraryFilter>('all');
   const [shown, setShown] = useState(LIBRARY_PAGE);
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   // The files a sheet is about: those chosen, or the one open in the viewer.
@@ -55,7 +60,11 @@ export function LibraryScreen({ library, selecting, onSelecting, notify }: Props
   const counts = useMemo(() => (root ? filterCounts(files, root, platform) : undefined), [files, root, platform]);
   const filtered = useMemo(() => (root ? files.filter(f => shows(filter, f, root, platform)) : []), [files, filter, root, platform]);
   const months = useMemo(() => byMonth(filtered.slice(0, shown)), [filtered, shown]);
-  const albums = useMemo(() => (root ? albumsOf(files, root, words) : []), [files, root, words]);
+  const albums = useMemo(() => {
+    if (!root) return [];
+    const there = albumsOf(files, root, words);
+    return [...there, ...made.filter(m => !there.some(a => a.path === m.path))];
+  }, [files, root, words, made]);
   const chosen = files.filter(f => picked.has(f.id));
   const viewed = files.find(f => f.id === viewing);
 
@@ -147,7 +156,7 @@ export function LibraryScreen({ library, selecting, onSelecting, notify }: Props
       )}
       <div role="group" aria-label="Show" className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-1">
         {LIBRARY_FILTERS.map(({ id, label }) => (
-          <Chip key={id} label={label} count={counts?.[id].toLocaleString()} on={filter === id} onClick={() => { setFilter(id); setShown(LIBRARY_PAGE); }} />
+          <Chip key={id} label={label} count={counts?.[id].toLocaleString()} on={filter === id} onClick={() => { onFilter(id); setShown(LIBRARY_PAGE); }} />
         ))}
       </div>
       {library.error !== undefined && <p role="alert" className="px-4 py-10 text-center text-[15px] text-t2">PhotoSense could not read your photos: {said(library.error)}</p>}
@@ -172,7 +181,7 @@ export function LibraryScreen({ library, selecting, onSelecting, notify }: Props
       )}
       {acting?.sheet === 'put' && (
         <PutSheet count={acting.files.length} albums={albums} busy={busy} onClose={() => setActing(undefined)}
-          onAlbum={album => void put(acting.files, { basePath: album.path, folderName: '', direct: true }, leaf(album.path))}
+          onAlbum={album => void put(acting.files, album.base ? { basePath: album.base, folderName: leaf(album.path), direct: false } : { basePath: album.path, folderName: '', direct: true }, leaf(album.path))}
           onNew={() => setActing({ ...acting, sheet: 'new' })} />
       )}
       {acting?.sheet === 'new' && (
@@ -283,8 +292,8 @@ interface NewAlbumProps {
   onClose(): void;
 }
 
-/** A new album or folder: its name, and Create, which moves the files into it. */
-function NewAlbumSheet({ base, albums, busy, onCreate, onClose }: NewAlbumProps) {
+/** A new album or folder: its name, and Create, which moves the files into it, or in Organize makes it ready for them. */
+export function NewAlbumSheet({ base, albums, busy, onCreate, onClose }: NewAlbumProps) {
   const { ios, words } = usePhone();
   const [typed, setTyped] = useState('');
   const [problem, setProblem] = useState<string>();

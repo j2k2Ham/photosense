@@ -90,10 +90,14 @@ export function PushedHeader({ title, subtitle, onBack, gear }: PushedHeaderProp
     );
   }
   return (
-    <header className="flex h-16 items-center gap-1 pl-4 pr-1">
-      {onBack && <span className="-ml-3"><IconButton label="Back" onClick={onBack}><ArrowBackIcon /></IconButton></span>}
-      <h1 className="min-w-0 flex-1 truncate font-title text-[22px] font-normal">{title}</h1>
-      {gear && <GearButton />}
+    <header>
+      <div className="flex h-16 items-center gap-1 pl-4 pr-1">
+        {onBack && <span className="-ml-3"><IconButton label="Back" onClick={onBack}><ArrowBackIcon /></IconButton></span>}
+        <h1 className="min-w-0 flex-1 truncate font-title text-[22px] font-normal">{title}</h1>
+        {gear && <GearButton />}
+      </div>
+      {/* Android says the subtitle under the bar, as it does a root screen's. */}
+      {subtitle && <p className="px-4 pb-3 text-[length:var(--fs-sub)] text-t2">{subtitle}</p>}
     </header>
   );
 }

@@ -45,7 +45,7 @@ interface AppProps {
 function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn(), onStop = vi.fn(), notify = vi.fn() }: AppProps) {
   const [tab, setTab] = React.useState<TabId>('cleanup');
   return (
-    <PhoneApp platform={platform} tab={tab} organize={null}
+    <PhoneApp platform={platform} tab={tab}
       toasts={[]} theme="dark" errorCount={0} scanning={scanning} progress={progress} onStarted={onStarted} onStopScan={onStop} notify={notify}
       onTab={setTab} removeToast={vi.fn()} onTheme={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
   );

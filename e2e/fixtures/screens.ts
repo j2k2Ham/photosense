@@ -3,12 +3,11 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import type { Photos } from './app';
 
 /** The page, with Organize already knowing which folder to show, as it does once a folder has been chosen there. */
-export async function openOrganize(page: Page, root: string, inPhoneApp = false) {
+export async function openOrganize(page: Page, root: string) {
   // Set on the first visit only: a folder chosen later is remembered over it, as it is for a person.
   await page.addInitScript(folder => { if (!localStorage.getItem('photosense-organize-root')) localStorage.setItem('photosense-organize-root', folder); }, root);
   await page.goto('/');
-  if (inPhoneApp) await phoneTab(page, 'Organize');
-  else await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
+  await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
   // Read afresh when no scan has read it: the first time, the program also loads the place names it goes by.
   await expect(page.getByLabel('Folder being organized')).toContainText(/\d+ files?/, { timeout: 60_000 });
 }

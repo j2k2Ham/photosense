@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LIBRARY_PAGE, LibraryScreen } from '../../../components/phone/Library';
-import type { Library } from '../../../lib/library';
+import type { Album, Library, LibraryFilter } from '../../../lib/library';
 import type { PhoneFrame, Platform } from '../../../lib/phone';
 import type { OrganizeApplyDto, OrganizeFileDto } from '../../../types';
 import { organizeFile, organizePlace } from '../../fixtures';
@@ -40,14 +40,15 @@ beforeEach(() => {
   api.undoChange.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
 });
 
-interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean }
+interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[] }
 
 /** Library in a phone's frame, holding whether it is choosing as PhoneApp does. */
-function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false }: ShowProps = {}) {
+function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false, made }: ShowProps = {}) {
   const notify = vi.fn(), onSelecting = vi.fn();
   function Holder() {
     const [selecting, setSelecting] = React.useState(start);
-    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} notify={notify} />;
+    const [filter, setFilter] = React.useState<LibraryFilter>('all');
+    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} />;
   }
   const view = inFrame(<Holder />, frame(platform, more));
   return { ...view, notify, onSelecting };
@@ -189,6 +190,18 @@ describe('choosing in Library', () => {
     });
     expect(notify).toHaveBeenLastCalledWith('Moved 2 items to Anaconda.', 'ok', expect.objectContaining({ label: 'Undo' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('offers the albums named in Organize, made with the first files put in them, beside those there are', async () => {
+    const made = [{ path: `${ROOT}/Lake`, label: 'Lake', base: ROOT }, { path: `${ROOT}/Anaconda`, label: 'Anaconda', base: ROOT }];
+    show({ selecting: true, made });
+    await userEvent.click(tile('IMG_9154.HEIC'));
+    await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Add to album' }));
+    const put = sheet('Add 1 to an album');
+    // An album named and since made is offered once.
+    expect(within(put).getAllByRole('button').map(b => b.textContent)).toEqual(['Done', 'Anaconda', 'Lake', '+ New album…']);
+    await userEvent.click(within(put).getByRole('button', { name: 'Lake' }));
+    expect(api.planOrganize).toHaveBeenCalledWith({ basePath: ROOT, folderName: 'Lake', direct: false }, [{ id: 'f1' }]);
   });
 
   it('makes a new album or folder for what is chosen, once it has a name no other has', async () => {

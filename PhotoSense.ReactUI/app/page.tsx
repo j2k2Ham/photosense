@@ -404,7 +404,7 @@ export default function HomePage() {
     // The height the browser shows, which on a phone leaves out its own bars.
     <div className="flex h-dvh flex-col bg-bg text-t1">
       {platform ? (
-        <PhoneApp platform={platform} tab={tab} organize={organizing && <OrganizeView startRoot={folders[0]} notify={push} />} status={status.data}
+        <PhoneApp platform={platform} tab={tab} status={status.data}
           notice={offlineNotice} toasts={toasts} removeToast={remove}
           theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} onTab={turnToTab}
           scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}

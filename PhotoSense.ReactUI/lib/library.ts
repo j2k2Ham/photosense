@@ -103,6 +103,8 @@ export interface Album {
   readonly path: string;
   /** Its name below the library: "Anaconda", "Trips › Butte", "DCIM/Camera". */
   readonly label: string;
+  /** For one named in Organize and not made yet, the folder it is made in, with the files first put in it. */
+  readonly base?: string;
 }
 
 /** The albums or folders the library's files are in, by name, apart from the top of the library itself. */

@@ -1214,7 +1214,7 @@ describe('on a phone or tablet', () => {
     expect(screen.getByText('Copies of the same photo or video')).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
     expect(screen.getByText('Sort Photo Library into albums by place and date')).toBeInTheDocument();
-    expect(screen.getByText('Organizing no folder')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
@@ -1335,8 +1335,8 @@ describe('on a phone or tablet', () => {
     statusNow = { error: new Error('down') };
     open();
     expect(screen.getByRole('alert')).toHaveTextContent('The PhotoSense service is not answering');
-    await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
-    await click('Move some');
-    expect(within(screen.getByRole('log', { name: 'Messages' })).getByText('Moved 13 files to Butte')).toBeInTheDocument();
+    api.startScan.mockRejectedValue(new Error('There is no room.'));
+    await scanAgain();
+    expect(within(messages()).getByText('The scan could not start: There is no room.')).toBeInTheDocument();
   });
 });

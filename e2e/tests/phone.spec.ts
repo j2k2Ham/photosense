@@ -1,9 +1,20 @@
 import { expect, message, test } from '../fixtures/app';
 import { Phone } from '../fixtures/phone';
-import { openOrganize, phoneSettings, phoneTab, preview, question, suggestions, tile } from '../fixtures/screens';
+import { phoneSettings, phoneTab, question } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
 const sendWindow = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Send to computer' });
+
+/** Chooses the photos named in Library, once it has read them all, and sends them. */
+async function sendFromLibrary(page: import('@playwright/test').Page, names: string[]) {
+  await page.goto('/');
+  await phoneTab(page, 'Library');
+  const library = page.getByRole('region', { name: 'Library' });
+  await expect(library.getByRole('button', { name: 'Select' })).toBeVisible({ timeout: 60_000 });
+  await library.getByRole('button', { name: 'Select' }).click();
+  for (const name of names) await library.getByRole('button', { name }).click();
+  await page.getByRole('toolbar', { name: 'What is selected' }).getByRole('button', { name: 'Send' }).click();
+}
 
 test.describe('on a phone', () => {
   test('the first time, Welcome says what PhotoSense does, and Continue asks for the photos, reads them all and says what it found @phone', async ({ page, photos }) => {
@@ -165,14 +176,39 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('dialog', { name: 'About PhotoSense' }).getByRole('article')).toContainText(/Version [\d.]+ for iPhone and iPad/);
   });
 
-  test('Organize moves photos and offers no copy, since a phone keeps a photo once @phone', async ({ page, photos }) => {
-    await new Phone().attach(page);
-    photos.picture('IMG_0001.JPG', { seed: 1, at: PLACES.butte });
-    await openOrganize(page, photos.root, true);
-    if (await page.getByRole('group', { name: 'Files or folders' }).isVisible()) await page.getByRole('group', { name: 'Files or folders' }).getByRole('button', { name: /^Folders/ }).click();
-    await suggestions(page).getByRole('button', { name: 'Preview Butte' }).click();
-    await expect(preview(page).getByRole('group', { name: 'Move or copy' })).toBeHidden();
-    await expect(preview(page)).toContainText('Each picture goes into this album and out of the other albums PhotoSense made.');
+  test('Organize suggests an album for each place, moves what is in none yet, numbering a name already taken there, and Undo puts it back @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1, at: PLACES.butte, taken: new Date(2023, 6, 4, 10, 0) });
+    photos.picture('IMG_0002.JPG', { seed: 2, at: PLACES.butte, taken: new Date(2022, 6, 4, 10, 0) });
+    // Already in an album: left out of the suggestions, and its name taken where the first is going.
+    photos.picture('Butte/2023/IMG_0001.JPG', { seed: 3, at: PLACES.butte, taken: new Date(2023, 6, 5, 10, 0) });
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Organize');
+    const list = page.getByRole('list', { name: 'Suggestions' });
+    await expect(list.getByRole('button', { name: /^Butte/ })).toContainText('2 files', { timeout: 60_000 });
+    await list.getByRole('button', { name: /^Butte/ }).click();
+    const main = page.getByRole('main');
+    await expect(main.getByText('1 name is already taken in Butte › 2023. It gets a number, as in IMG_0001 (1).JPG.')).toBeVisible();
+    await main.getByRole('button', { name: 'Review each name' }).click();
+    const names = page.getByRole('dialog', { name: 'Name taken' });
+    await expect(names).toContainText('Two different files with the same name.');
+    await names.getByRole('button', { name: 'Done' }).click();
+    await expect(message(page, '1 name reviewed. Nothing moves until you tap Move.')).toBeVisible();
+
+    await main.getByRole('button', { name: 'Move 2 files' }).click();
+    await expect(message(page, 'Moved 2 files to Butte.')).toBeVisible();
+    expect(photos.exists('Butte/2023/IMG_0001 (1).JPG')).toBe(true);
+    expect(photos.exists('Butte/2022/IMG_0002.JPG')).toBe(true);
+    expect(photos.exists('Butte/2023/IMG_0001.JPG')).toBe(true);
+    await expect(list.getByRole('button', { name: /^Butte/ })).toContainText('Moved');
+
+    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
+    await expect(message(page, 'Put back. Every file is where it was.')).toBeVisible();
+    expect(photos.exists('IMG_0001.JPG')).toBe(true);
+    expect(photos.exists('IMG_0002.JPG')).toBe(true);
+    expect(photos.exists('Butte/2023/IMG_0001 (1).JPG')).toBe(false);
   });
 
   test('photos are sent to a computer after both show one number, and Move deletes them from the phone once they are all there @phone', async ({ page, photos }) => {
@@ -180,10 +216,8 @@ test.describe('on a phone', () => {
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
-    await openOrganize(page, photos.root, true);
-    await tile(page, 'IMG_0001.JPG').click();
-    await tile(page, 'IMG_0002.JPG').click();
-    await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Send to computer' }).click();
+    phone.root = photos.root;
+    await sendFromLibrary(page, ['IMG_0001.JPG', 'IMG_0002.JPG']);
     await expect(sendWindow(page)).toContainText("Waiting for your computer. On the computer, open PhotoSense and choose Receive from phone in the menu. This phone shows there as Jamie's iPhone.");
     expect(phone.asked[0]).toMatch(/^send\/start \{"files":\["[^"]+","[^"]+"\]\}$/);
     await sendWindow(page).getByRole('group', { name: 'Copy or move' }).getByRole('button', { name: 'Move' }).click();
@@ -208,9 +242,8 @@ test.describe('on a phone', () => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
-    await openOrganize(page, photos.root, true);
-    await tile(page, 'IMG_0001.JPG').click();
-    await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Send to computer' }).click();
+    phone.root = photos.root;
+    await sendFromLibrary(page, ['IMG_0001.JPG']);
     await expect(sendWindow(page)).toContainText('The photos stay on this phone as well.');
     phone.set({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, where: 'C:\\Photos', deletable: ['IMG_0001.JPG'] });
     await expect(sendWindow(page)).toContainText('1 of 1 file is on DESKTOP-1 in C:\\Photos. They are still on this phone too.');
@@ -227,9 +260,8 @@ test.describe('on a phone', () => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
-    await openOrganize(page, photos.root, true);
-    await tile(page, 'IMG_0001.JPG').click();
-    await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Send to computer' }).click();
+    phone.root = photos.root;
+    await sendFromLibrary(page, ['IMG_0001.JPG']);
     await expect(sendWindow(page)).toContainText('Waiting for your computer');
     await page.keyboard.press('Escape');
     await expect(sendWindow(page)).toBeHidden();

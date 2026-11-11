@@ -85,3 +85,14 @@ export const ImageIcon = (p: IconProps) => (
 export const TickIcon = ({ size = 14 }: IconProps) => (
   <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
+
+/** Options: three sliders. */
+export const SlidersIcon = (p: IconProps) => (
+  <Line size={18} stroke={1.9} {...p}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></Line>
+);
+
+/** Something new: a plus. */
+export const PlusIcon = (p: IconProps) => <Line size={20} stroke={2} {...p}><path d="M12 5v14M5 12h14" /></Line>;
+
+/** Done: a tick in the colour around it. */
+export const DoneIcon = (p: IconProps) => <Line size={28} stroke={2.4} {...p}><path d="M5 12.5l4.5 4.5L19 7.5" /></Line>;

@@ -10,8 +10,8 @@ export const RADII = [1, 5, 15, 25, 50] as const;
 /** Distances are worked out in kilometres and said in miles. */
 export const KM_PER_MILE = 1.609344;
 
-/** How a place's folder is named: by the place itself, by its town and state, or the place inside a folder for its state. */
-export type NameFormat = 'area' | 'city' | 'nest';
+/** How a place's folder is named: by the place itself, by its town and state, the place inside a folder for its state, or by its town alone (a phone's choice). */
+export type NameFormat = 'area' | 'city' | 'nest' | 'town';
 
 /** How Organize sorts files into folders, as the person chose. */
 export interface OrganizeSettings {
@@ -88,6 +88,7 @@ export const placeLabel = (p: OrganizePlaceDto) => p.area || p.town;
 /** The folder name a place gives, in the chosen style. "\" in it makes a subfolder. */
 export function placeName(p: OrganizePlaceDto, format: NameFormat): string {
   if (format === 'city') return `${usable(p.town)}, ${usable(p.state)}`;
+  if (format === 'town') return usable(p.town);
   return format === 'nest' ? `${usable(p.state)}\\${usable(placeLabel(p))}` : usable(placeLabel(p));
 }
 
@@ -232,7 +233,7 @@ export function suggest(listing: OrganizeFilesDto, settings: OrganizeSettings, c
         key, name, members, dominant, subfolderOf, destinationOf, split,
         files: taken[g].filter(f => !sameFolder(f.folder, destinationOf(f))),
         merge: others.length === 0 ? '' : `Includes ${others.slice(0, NAMED_PLACES).join(', ')}${more > 0 ? ` and ${more} more` : ''}`,
-        fallback: !at.area && settings.nameFormat !== 'city' && !(key in choices.renames),
+        fallback: !at.area && settings.nameFormat !== 'city' && settings.nameFormat !== 'town' && !(key in choices.renames),
       });
     }
     return out.filter(s => s.files.length > 0).sort((a, b) => b.files.length - a.files.length);

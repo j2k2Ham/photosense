@@ -44,11 +44,13 @@ interface SegmentedProps<T extends string> {
   readonly options: readonly { readonly id: T; readonly label: string }[];
   readonly value: T;
   readonly className?: string;
+  /** Each segment as wide as its words need, sharing what is left: for labels of very different lengths. */
+  readonly fit?: boolean;
   onChange(value: T): void;
 }
 
 /** One of a few choices side by side: on an iPhone a pill sliding inside a groove, on Android outlined segments. */
-export function Segmented<T extends string>({ label, options, value, className = '', onChange }: SegmentedProps<T>) {
+export function Segmented<T extends string>({ label, options, value, className = '', fit, onChange }: SegmentedProps<T>) {
   const { ios } = usePhone();
   return (
     <div role="radiogroup" aria-label={label}
@@ -58,7 +60,7 @@ export function Segmented<T extends string>({ label, options, value, className =
         const shape = ios ? `rounded-full ${on ? 'shadow-seg' : ''}` : `${i > 0 ? 'border-l border-seg-bd' : ''} ${i === 0 ? 'rounded-l-full' : ''} ${i === options.length - 1 ? 'rounded-r-full' : ''}`;
         return (
           <button key={o.id} type="button" role="radio" aria-checked={on} onClick={() => onChange(o.id)}
-            className={`min-w-0 flex-1 truncate px-3 text-[14px] font-semibold transition ${shape} ${on ? 'bg-seg-on text-seg-on-fg' : 'text-t1'}`}>
+            className={`min-w-0 ${fit ? 'flex-auto' : 'flex-1'} truncate px-3 text-[14px] font-semibold transition ${shape} ${on ? 'bg-seg-on text-seg-on-fg' : 'text-t1'}`}>
             {o.label}
           </button>
         );
