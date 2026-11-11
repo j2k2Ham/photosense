@@ -76,6 +76,53 @@ public sealed class LiteDbPhotoRepositoryTests
     }
 
     [Test]
+    public async Task Several_Records_Are_Saved_And_Forgotten_As_One(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var repo = db.Photos();
+        var folder = Path.GetTempPath();
+        var a = new Photo { SourcePath = Path.Combine(folder, "a.jpg"), FileName = "a.jpg", ContentHash = "A" };
+        var b = new Photo { SourcePath = Path.Combine(folder, "b.jpg"), FileName = "b.jpg", ContentHash = "B" };
+        var start = repo.Version;
+        await repo.SaveAllAsync([a, b], ct);
+        await repo.SaveAllAsync([a.MovedTo(Path.Combine(folder, "Butte", "a.jpg")), b.MovedTo(Path.Combine(folder, "Butte", "b.jpg"))], ct);
+        await Assert.That((await repo.GetAllAsync(ct)).Select(p => p.SourcePath).Order()).IsEquivalentTo([Path.Combine(folder, "Butte", "a.jpg"), Path.Combine(folder, "Butte", "b.jpg")], CollectionOrdering.Matching);
+
+        await repo.DeleteAllAsync([a.Id, b.Id], ct);
+        await Assert.That(await repo.GetAllAsync(ct)).IsEmpty();
+        await repo.SaveAllAsync([], ct);
+        await repo.DeleteAllAsync([], ct);
+        await Assert.That(repo.Version - start).IsEqualTo(5);
+    }
+
+    [Test]
+    public async Task Records_Saved_As_One_Are_All_Kept_Or_None_And_A_Files_Record_Is_Never_Lost_Between_Two(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var repo = db.Photos();
+        var folder = Path.GetTempPath();
+        var a = new Photo { SourcePath = Path.Combine(folder, "a.jpg"), FileName = "a.jpg", ContentHash = "A" };
+        var b = new Photo { SourcePath = Path.Combine(folder, "b.jpg"), FileName = "b.jpg", ContentHash = "B" };
+        await repo.SaveAllAsync([a, b], ct);
+        var version = repo.Version;
+
+        // The second record cannot be kept (the database refuses an index key over 1,023 bytes), after the first was moved
+        // and after b's own record, of the same file, was taken away to make room for it.
+        var unkeepable = new Photo { SourcePath = b.SourcePath, FileName = "b.jpg", ContentHash = new string('F', 2000) };
+        await Assert.ThrowsAsync<LiteException>(() => repo.SaveAllAsync([a.MovedTo(Path.Combine(folder, "Butte", "a.jpg")), unkeepable], ct));
+        var kept = await repo.GetAllAsync(ct);
+        await Assert.That(kept.Select(p => (p.Id, p.SourcePath)).OrderBy(p => p.SourcePath)).IsEquivalentTo([(a.Id, a.SourcePath), (b.Id, b.SourcePath)], CollectionOrdering.Matching);
+        await Assert.That(repo.Version).IsEqualTo(version);
+
+        // One record alone is saved the same way: the file keeps the record it had.
+        await Assert.ThrowsAsync<LiteException>(() => repo.AddOrUpdateAsync(unkeepable, ct));
+        await Assert.That((await repo.GetByPathAsync(b.SourcePath, ct))!.Id).IsEqualTo(b.Id);
+        // And the database takes other writes afterwards.
+        await repo.DeleteAsync(a.Id, ct);
+        await Assert.That((await repo.GetAllAsync(ct)).Single().Id).IsEqualTo(b.Id);
+    }
+
+    [Test]
     public async Task Version_Changes_With_Every_Write(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());

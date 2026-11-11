@@ -8,8 +8,13 @@ public interface IPhotoRepository
 {
     /// <summary>Changes whenever a photo is added, updated or deleted; lets callers cache derived results.</summary>
     long Version { get; }
-    /// <summary>Records a photo, replacing any record with the same id.</summary>
+    /// <summary>Records a photo, replacing any record with the same id, and any other record of the same file.</summary>
     Task AddOrUpdateAsync(Photo photo, CancellationToken ct);
+    /// <summary>
+    /// Records several photos as one, each as <see cref="AddOrUpdateAsync"/> would: all of them are kept, or, should one
+    /// fail, none, so that the records of the files a change moved never follow some of them and not the rest.
+    /// </summary>
+    Task SaveAllAsync(IReadOnlyList<Photo> photos, CancellationToken ct);
     /// <summary>The record with that id, or null when there is none.</summary>
     Task<Photo?> GetAsync(PhotoId id, CancellationToken ct);
     /// <summary>The record for a file path, if that file has been scanned. One file has at most one record.</summary>
@@ -20,6 +25,8 @@ public interface IPhotoRepository
     Task<IReadOnlyList<Photo>> GetAllAsync(CancellationToken ct);
     /// <summary>Forgets one record. The file itself is not touched.</summary>
     Task DeleteAsync(PhotoId id, CancellationToken ct);
+    /// <summary>Forgets several records as one: all of them, or, should one fail, none. The files are not touched.</summary>
+    Task DeleteAllAsync(IReadOnlyList<PhotoId> ids, CancellationToken ct);
     /// <summary>Forgets every record, as though nothing had been scanned. Returns how many there were.</summary>
     Task<int> ClearAsync(CancellationToken ct);
 }

@@ -400,13 +400,14 @@ public sealed class FileChanges
         }
         if (batch.Removed)
         {
+            var missing = new List<Photo>();
             foreach (var record in await _batches.RecordsAsync(batch.Id, ct))
-                if (await _repo.GetAsync(record.Id, ct) is null) await _repo.AddOrUpdateAsync(record, ct);
+                if (await _repo.GetAsync(record.Id, ct) is null) missing.Add(record);
+            await _repo.SaveAllAsync(missing, ct);
         }
         else if (!batch.Copy)
         {
-            foreach (var item in batch.Items)
-                if (await _repo.GetByPathAsync(item.To, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.From), ct);
+            await _repo.SaveAllAsync(await MovedAsync(batch.Items.Select(i => (i.To, i.From)), ct), ct);
         }
         EmptyFolders.TakeAway(_files, batch.CreatedFolders);
         batch.State = ChangeState.Done;
@@ -429,13 +430,11 @@ public sealed class FileChanges
         if (batch.Removed)
         {
             var removed = batch.Items.Select(i => PhotoPath.Key(i.From)).ToHashSet();
-            foreach (var record in (await _batches.RecordsAsync(batch.Id, ct)).Where(r => removed.Contains(PhotoPath.Key(r.SourcePath))))
-                await _repo.DeleteAsync(record.Id, ct);
+            await _repo.DeleteAllAsync([.. (await _batches.RecordsAsync(batch.Id, ct)).Where(r => removed.Contains(PhotoPath.Key(r.SourcePath))).Select(r => r.Id)], ct);
         }
         else if (!batch.Copy)
         {
-            foreach (var item in going)
-                if (await _repo.GetByPathAsync(item.Back!, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.To), ct);
+            await _repo.SaveAllAsync(await MovedAsync(going.Select(i => (i.Back!, i.To)), ct), ct);
         }
         EmptyFolders.TakeAway(_files, batch.UndoFolders);
         EndUndo(batch);
@@ -459,12 +458,23 @@ public sealed class FileChanges
         {
             // A removed file is no longer one of the scanned pictures: the Clean up screens must not go on listing it.
             var going = batch.Items.Select(i => PhotoPath.Key(i.From)).ToHashSet();
-            foreach (var record in records.Where(r => going.Contains(PhotoPath.Key(r.SourcePath)))) await _repo.DeleteAsync(record.Id, ct);
+            await _repo.DeleteAllAsync([.. records.Where(r => going.Contains(PhotoPath.Key(r.SourcePath))).Select(r => r.Id)], ct);
             return;
         }
         // A scan's record of the file follows it, so that the Clean up screens still find it.
-        foreach (var item in batch.Items)
-            if (await _repo.GetByPathAsync(item.From, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.To), ct);
+        await _repo.SaveAllAsync(await MovedAsync(batch.Items.Select(i => (i.From, i.To)), ct), ct);
+    }
+
+    /// <summary>
+    /// What scans recorded of the files at the first path of each pair, each as moved to the second; a file no scan
+    /// recorded is left out. Every record is read before any is written, which then happens in one go.
+    /// </summary>
+    private async Task<List<Photo>> MovedAsync(IEnumerable<(string From, string To)> moves, CancellationToken ct)
+    {
+        var moved = new List<Photo>();
+        foreach (var (from, to) in moves)
+            if (await _repo.GetByPathAsync(from, ct) is { } photo) moved.Add(photo.MovedTo(to));
+        return moved;
     }
 
     /// <summary>Makes what scans recorded follow the files an undo put back: brought back for a removal, moved back for a move.</summary>
@@ -474,13 +484,14 @@ public sealed class FileChanges
         if (batch.Removed)
         {
             var records = (await _batches.RecordsAsync(batch.Id, ct)).ToDictionary(r => PhotoPath.Key(r.SourcePath));
+            var back = new List<Photo>();
             foreach (var item in going)
                 if (records.GetValueOrDefault(PhotoPath.Key(item.From)) is { } record)
-                    await _repo.AddOrUpdateAsync(PhotoPath.Comparer.Equals(item.Back, item.From) ? record : record.MovedTo(item.Back!), ct);
+                    back.Add(PhotoPath.Comparer.Equals(item.Back, item.From) ? record : record.MovedTo(item.Back!));
+            await _repo.SaveAllAsync(back, ct);
             return;
         }
-        foreach (var item in going)
-            if (await _repo.GetByPathAsync(item.To, ct) is { } photo) await _repo.AddOrUpdateAsync(photo.MovedTo(item.Back!), ct);
+        await _repo.SaveAllAsync(await MovedAsync(going.Select(i => (i.To, i.Back!)), ct), ct);
     }
 
     /// <summary>Deletes a copy an undo set aside, once the undo is through.</summary>

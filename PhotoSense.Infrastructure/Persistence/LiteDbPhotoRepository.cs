@@ -29,26 +29,39 @@ internal sealed class LiteDbPhotoRepository : IPhotoRepository
     public long Version => Interlocked.Read(ref _version);
 
     /// <inheritdoc />
-    public Task AddOrUpdateAsync(Photo photo, CancellationToken ct)
+    public Task AddOrUpdateAsync(Photo photo, CancellationToken ct) => SaveAllAsync([photo], ct);
+
+    /// <inheritdoc />
+    public Task SaveAllAsync(IReadOnlyList<Photo> photos, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var doc = PhotoDocument.From(photo);
+        var docs = photos.Select(PhotoDocument.From).ToList();
         lock (_writeLock)
         {
-            // A file has one record: a different record for the same path is replaced, not joined.
-            foreach (var other in _col.Find(x => x.PathKey == doc.PathKey).Where(x => x.Id != doc.Id).ToList())
-                _col.Delete(other.Id);
-            _col.Upsert(doc);
+            // The record a file had is taken away and its new one kept together, so that a crash between leaves neither gone.
+            _db.Together(() =>
+            {
+                foreach (var doc in docs)
+                {
+                    // A file has one record: a different record for the same path is replaced, not joined.
+                    foreach (var other in _col.Find(x => x.PathKey == doc.PathKey).Where(x => x.Id != doc.Id).ToList())
+                        _col.Delete(other.Id);
+                    _col.Upsert(doc);
+                }
+            });
         }
         Interlocked.Increment(ref _version);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc />
-    public Task DeleteAsync(PhotoId id, CancellationToken ct)
+    public Task DeleteAsync(PhotoId id, CancellationToken ct) => DeleteAllAsync([id], ct);
+
+    /// <inheritdoc />
+    public Task DeleteAllAsync(IReadOnlyList<PhotoId> ids, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        lock (_writeLock) _col.Delete(id.Value);
+        lock (_writeLock) _db.Together(() => { foreach (var id in ids) _col.Delete(id.Value); });
         Interlocked.Increment(ref _version);
         return Task.CompletedTask;
     }

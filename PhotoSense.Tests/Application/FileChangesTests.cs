@@ -272,6 +272,8 @@ public sealed class FileChangesTests : IDisposable
         var undone = await _f.Changes.UndoAsync(batch.Id, ct);
 
         await Assert.That((undone.Found, undone.Done, undone.Copies, undone.Back.Count, undone.Left.Count, undone.Problem)).IsEqualTo((true, true, false, 2, 0, (string?)null));
+        // The records of the files moved, and moved back, are each written in one go: all of them or, after a crash, none.
+        await Assert.That(_f.Repo.Together).IsEquivalentTo([("SaveAllAsync", 1), ("SaveAllAsync", 1)], CollectionOrdering.Matching);
         await Assert.That(File.Exists(a) && File.Exists(b)).IsTrue();
         await Assert.That(Directory.Exists(_f.In("There"))).IsFalse();
         await Assert.That((await _f.Repo.GetAsync(record.Id, ct))!.SourcePath).IsEqualTo(a);
@@ -372,6 +374,7 @@ public sealed class FileChangesTests : IDisposable
         var second = await _f.RecordAsync(b, ct);
         var batch = await DoneAsync(_f.Change(removed: true, moves: [(a, _f.In("_PhotoSense_Removed", "IMG_1.JPG")), (b, _f.In("_PhotoSense_Removed", "Sub", "IMG_2.JPG")), (c, _f.In("_PhotoSense_Removed", "IMG_3.JPG"))]), ct);
         await Assert.That(await _f.Repo.GetAllAsync(ct)).IsEmpty();
+        await Assert.That(_f.Repo.Together).IsEquivalentTo([("DeleteAllAsync", 2)], CollectionOrdering.Matching);
         _f.Put("Sub/IMG_2.JPG", "a new picture under the old name");
 
         await Assert.That((await _f.Changes.UndoAsync(batch.Id, ct)).Done).IsTrue();
@@ -379,6 +382,7 @@ public sealed class FileChangesTests : IDisposable
         await Assert.That((await _f.Repo.GetAsync(first.Id, ct))!.SourcePath).IsEqualTo(a);
         await Assert.That((await _f.Repo.GetAsync(second.Id, ct))!.SourcePath).IsEqualTo(_f.In("Sub", "IMG_2 (1).JPG"));
         await Assert.That((await _f.Repo.GetAllAsync(ct)).Count).IsEqualTo(2);
+        await Assert.That(_f.Repo.Together).IsEquivalentTo([("DeleteAllAsync", 2), ("SaveAllAsync", 2)], CollectionOrdering.Matching);
         await Assert.That(File.Exists(c)).IsTrue();
         await Assert.That(Directory.Exists(_f.In("_PhotoSense_Removed"))).IsFalse();
     }

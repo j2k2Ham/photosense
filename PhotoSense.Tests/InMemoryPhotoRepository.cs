@@ -16,10 +16,33 @@ internal sealed class InMemoryPhotoRepository : IPhotoRepository
     /// <inheritdoc />
     public long Version => Interlocked.Read(ref _version);
 
+    /// <summary>Calls made of <see cref="SaveAllAsync"/> and <see cref="DeleteAllAsync"/>, each with how many records it carried.</summary>
+    public List<(string Call, int Records)> Together { get; } = [];
+
     /// <inheritdoc />
     public Task AddOrUpdateAsync(Photo photo, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        Save(photo);
+        Interlocked.Increment(ref _version);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task SaveAllAsync(IReadOnlyList<Photo> photos, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_writeLock)
+        {
+            Together.Add((nameof(SaveAllAsync), photos.Count));
+            foreach (var photo in photos) Save(photo);
+        }
+        Interlocked.Increment(ref _version);
+        return Task.CompletedTask;
+    }
+
+    private void Save(Photo photo)
+    {
         var key = PhotoPath.Key(photo.SourcePath);
         lock (_writeLock)
         {
@@ -28,8 +51,6 @@ internal sealed class InMemoryPhotoRepository : IPhotoRepository
                 _store.TryRemove(other.Id, out _);
             _store[photo.Id] = photo;
         }
-        Interlocked.Increment(ref _version);
-        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -37,6 +58,19 @@ internal sealed class InMemoryPhotoRepository : IPhotoRepository
     {
         ct.ThrowIfCancellationRequested();
         _store.TryRemove(id, out _);
+        Interlocked.Increment(ref _version);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task DeleteAllAsync(IReadOnlyList<PhotoId> ids, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_writeLock)
+        {
+            Together.Add((nameof(DeleteAllAsync), ids.Count));
+            foreach (var id in ids) _store.TryRemove(id, out _);
+        }
         Interlocked.Increment(ref _version);
         return Task.CompletedTask;
     }
