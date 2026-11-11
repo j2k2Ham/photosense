@@ -7,6 +7,10 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+# The token may read the repository and nothing more: no step writes to GitHub.
+permissions:
+  contents: read
+
 env:
   BUNDLE: com.j2k2ham.photosense
   # Each release of .NET for iOS needs one Xcode, and is installed by its workload set on a matching .NET SDK; the

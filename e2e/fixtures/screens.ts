@@ -35,7 +35,7 @@ export const menu = async (page: Page, item: string | RegExp) => {
 export const gallery = (page: Page) => page.getByRole('list', { name: 'Files' });
 
 /** A file's tile in the gallery, by its name. */
-export const tile = (page: Page, name: string) => gallery(page).getByRole('button', { name: new RegExp(`(^|\\s)${name.replace(/[.()]/g, '\\$&')}(\\s|$)`) });
+export const tile = (page: Page, name: string) => gallery(page).getByRole('button', { name: new RegExp(`(^|\\s)${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s|$)`) });
 
 export const suggestions = (page: Page) => page.getByRole('complementary', { name: 'Suggested folders' });
 

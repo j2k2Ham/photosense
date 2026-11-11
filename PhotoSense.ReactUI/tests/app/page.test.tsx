@@ -93,7 +93,7 @@ const click = (name: string | RegExp) => userEvent.click(button(name));
 const tab = (name: RegExp) => screen.getByRole('tab', { name });
 const desk = () => screen.getByLabelText('Review');
 const gallery = () => screen.getByLabelText('Groups');
-const tile = (fileName: string) => within(gallery()).getByRole('button', { name: new RegExp(fileName.replace(/[.()]/g, '\\$&')) });
+const tile = (fileName: string) => within(gallery()).getByRole('button', { name: new RegExp(fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) });
 const win = () => screen.getByRole('dialog', { name: /^Compare / });
 const question = () => screen.getByRole('alertdialog');
 const toast = (name: string | RegExp) => screen.findByText(name);

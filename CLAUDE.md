@@ -50,7 +50,9 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Magick.NET on a computer, the phone's own decoder on a phone. Generic .NET advice that assumes another stack does not apply.
 - **Checks on GitHub:**
   - `ci.yml` runs on Ubuntu, Windows and macOS, for `main` and pull requests, and by hand on another branch: `gh workflow run ci.yml --ref feature/mobile-and-mac`. On Ubuntu it fails below 100% of the service's lines and branches.
-  - `iphone.yml`, `android.yml` and `e2e.yml` also run on pushes to `feature/mobile-and-mac`.
+  - `iphone.yml`, `android.yml`, `e2e.yml` and `codeql.yml` also run on pushes to `feature/mobile-and-mac`.
+  - Every workflow's token may only read the repository (`permissions: contents: read`); a job that needs more asks for it alone, as CodeQL's does to upload what it found.
+  - Security (Jamie, 2026-11-11): CodeQL from `codeql.yml` (C#, TypeScript, Python, Actions; weekly too), secret scanning with push protection, and Dependabot's alerts and updates, weekly from `.github/dependabot.yml` into `feature/mobile-and-mac` until it is merged. Found problems: `gh api repos/{owner}/{repo}/code-scanning/alerts`, `…/dependabot/alerts`, `…/secret-scanning/alerts`.
 
 ## Rules
 

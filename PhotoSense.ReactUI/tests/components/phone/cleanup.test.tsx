@@ -68,7 +68,7 @@ function show({ platform = 'ios', tablet = false, status, root = ROOT }: ShowPro
 }
 
 const rows = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button');
-const row = (name: string) => within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: new RegExp(`^${name.replace(/[().]/g, '\\$&')}`) });
+const row = (name: string) => within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
 const sheet = (name: string | RegExp) => screen.getByRole('dialog', { name });
 const toastAction = (notify: ReturnType<typeof vi.fn>) => (notify.mock.calls.at(-1)![2] as { run(): void }).run;
 const table = (name: string) => within(screen.getByRole('table', { name })).getAllByRole('row').map(r => r.textContent);

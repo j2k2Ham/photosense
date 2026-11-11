@@ -7,6 +7,10 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+# The token may read the repository and nothing more: no step writes to GitHub.
+permissions:
+  contents: read
+
 jobs:
   browsers:
     # PhotoSense as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
