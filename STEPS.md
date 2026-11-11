@@ -52,7 +52,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
   - Looking for an iPhone on a cable gives Apple's device service five seconds.
   - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
-- **Last measured:** service 828 tests at 100% of lines (3,551) and branches (2,008) (2026-11-11); page 798 tests at 100% (2026-11-11); end to end 79 tests, 61 in Playwright's Chromium and 18 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Clean up push (193ca04, 2026-11-11).
+- **Last measured:** service 828 tests at 100% of lines (3,551) and branches (2,008) (2026-11-11); page 805 tests at 100% (2026-11-11); end to end 81 tests, 62 in Playwright's Chromium and 19 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Send push (daa8b20, 2026-11-11); `e2e.yml` now waits for the machine's own apt before installing browsers, after two failures of GitHub's machine, not the tests, on the Organize push (cca4e4a), whose phone checks passed.
 
 ## Remaining steps
 
@@ -116,7 +116,10 @@ The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and
   - New in the contract (Jamie, 2026-11-11): `current` on `send/state`, the name of the file going now (`SendState.Current`).
   - The old sending window and Send in the computer Organize's selection bar (shown only on a phone) are gone.
   - Checked: service 828 tests at 100% (3,551 lines, 2,008 branches); page 798 tests at 100%; end to end 61 and 18 (the three sending tests now go through the Send tab, one new: numbers said to be different, Try again and Stop offering); screenshots at the four sizes in both themes against the handoff's 29–33 and the tablets' 04, over the scratch copy of 60 of Jamie's photos, the phone's sending stood in for. Not checked: on a device, with a real computer; the system's own question before deleting (34).
-- [ ] **8. Settings** (35–37): appearance (Auto, Dark, Light), photos, removed files with Delete permanently and its second question, history, errors, help and about.
+- [x] **8. Settings** (2026-11-11), in `components/phone/SettingsSheet.tsx`:
+  - Appearance (theme, Distances); Photos (**Photo access**: Full access or All photos and videos, Some chosen, None, opening the phone's own settings; Scan again); Removed files (**PhotoSense Removed** with how many items and their size, `GET removed` asked while the sheet shows; **Delete permanently…**, greyed when nothing waits); History (**Recently moved** with its count, opening the list with Undo; Errors); About (Help, About PhotoSense, **Privacy**, opening About at the privacy policy).
+  - Delete permanently on a phone is its own two sheets: "Delete 37 items permanently?" (where they go, for how long, and that Undo can no longer bring them back), then "Are you sure?" with the switch "Do not ask me this second time again" (the computer's setting), unless it was turned off. The message: "37 items deleted. They wait in Recently Deleted for 30 days." The computer's dialogs are no longer shown on a phone.
+  - Checked: page 805 tests at 100%; end to end 62 and 19 (a new phone test: Library's delete, Settings' count, both questions, the file erased on the disk, Settings empty after); screenshots at the four sizes in both themes against the handoff's 35–37 and the tablets' 05, PhotoSense Removed stood in for and every question cancelled. Not checked: on a device; the phone's own question before erasing.
 
 ### Security and safety (Jamie, 2026-11-10: for later)
 
@@ -202,6 +205,11 @@ After a review of security, the Delete permanently wording, complaints and trans
   - In kilometers the choices of reach are the same numbers, 1, 5, 15, 25 and 50 km, and the number chosen stays when the unit changes (5 miles becomes 5 km), rather than converted figures such as 8 km.
   - The setting is kept in the page's own storage, as the other settings are: on a phone in its web view, on a computer in each browser.
   - The service's "Near Anaconda" (more than 3 km from the town) shows no distance, so it is unchanged.
+- **Phone and tablet design, step 8 (2026-11-11):**
+  - Photo access says "Some chosen" when only some photos are allowed: the phone does not tell PhotoSense how many (the handoff shows "214 chosen").
+  - Delete permanently's first question also says how much it frees ("Everything in PhotoSense Removed (212.0 MB) goes to Recently Deleted…").
+  - Delete permanently… is greyed and does nothing while nothing waits, or before the service has said; the computer instead opens its warning, saying there is nothing to delete.
+  - Settings has a Distances row under Appearance, which the handoff does not (Jamie's request of 2026-11-11).
 - **Phone and tablet design, step 7 (2026-11-11):**
   - The computer's menu item is named as it is, "Choose **Receive from phone** in its menu.", where the handoff says "Choose Receive from a phone."
   - What was chosen in Library counts items (pictures and videos as Library shows them), as the handoff does; the other two count files, Live Photo videos included, with their size. What the phone then offers (its `total`) also counts edit files.

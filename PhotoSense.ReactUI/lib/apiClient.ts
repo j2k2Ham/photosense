@@ -311,16 +311,23 @@ export async function openOrganizeFile(id: string) {
 
 // ---- Removed files
 
+const removedUrl = (roots: readonly string[]) => `${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`;
+
 /** How much is waiting in the folders that hold removed files: inside the folders given, and wherever else the service knows of. */
 export function fetchRemoved(roots: string[]) {
-  return json<RemovedFilesDto>(`${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`);
+  return json<RemovedFilesDto>(removedUrl(roots));
+}
+
+/** How much is waiting to be erased, asked afresh each time it is shown; nothing is asked while `roots` is null. */
+export function useRemoved(roots: readonly string[] | null) {
+  return useSWR<RemovedFilesDto>(roots ? removedUrl(roots) : null, json, { revalidateOnFocus: false });
 }
 
 /** Erases everything in those folders. This cannot be taken back. */
 export async function eraseRemoved(folders: string[]) {
   const result = await json<EraseRemovedDto>(`${API_BASE}/removed/erase`, { method: 'POST', body: JSON.stringify({ folders }) });
-  // A deletion whose files are erased can no longer be undone, so it leaves the list of what can be.
-  await mutate((key: unknown) => typeof key === 'string' && key.includes('/organize/batches'));
+  // A deletion whose files are erased can no longer be undone, so it leaves the list of what can be; and nothing waits now.
+  await mutate((key: unknown) => typeof key === 'string' && (key.includes('/organize/batches') || key.includes('/removed?')));
   return result;
 }
 

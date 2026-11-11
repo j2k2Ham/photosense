@@ -5,14 +5,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PhoneApp } from '../../../components/phone/PhoneApp';
 import { PhoneShell } from '../../../components/phone/PhoneShell';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from '../../../components/phone/Screens';
-import { SettingsSheet } from '../../../components/phone/SettingsSheet';
+import { DeletePermanently, SettingsSheet } from '../../../components/phone/SettingsSheet';
 import type { Platform, TabId } from '../../../lib/phone';
+import type { AppSettings } from '../../../lib/settings';
 import { frame, inFrame, width } from './frame';
 import { group, groupsPage, photo } from './groups';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
 // tested on its own, has one group of duplicates.
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})), useSendState: vi.fn(() => ({})) }));
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})), useSendState: vi.fn(() => ({})),
+  useRemoved: vi.fn<(roots: string[] | null) => { data?: unknown }>(() => ({})), eraseRemoved: vi.fn(), openPhotoSettings: vi.fn(), undoChange: vi.fn(),
+}));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
   api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } });
@@ -173,9 +176,13 @@ describe('the shell', () => {
 });
 
 describe('Settings', () => {
+  const removed = (files: number, bytes = 212 * 1024 ** 2) => ({ files, bytes, folders: files ? [{ path: '/Photo Library/_PhotoSense_Removed', files, bytes }] : [] });
   function show(platform: Platform = 'ios', more = {}) {
-    const calls = { onTheme: vi.fn(), onUnit: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onClose: vi.fn() };
-    const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} {...calls} {...more} />, frame(platform));
+    const calls = {
+      onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
+      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(),
+    };
+    const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} access="everything" removed={removed(37)} moves={1} {...calls} {...more} />, frame(platform));
     return { calls, view };
   }
 
@@ -196,36 +203,116 @@ describe('Settings', () => {
     expect(calls.onUnit).toHaveBeenCalledWith('km');
   });
 
+  it('says what PhotoSense may see, what waits in PhotoSense Removed, and how much Undo can put back', () => {
+    const { view } = show();
+    expect(screen.getByRole('button', { name: 'Photo access Full access' })).toBeInTheDocument();
+    expect(screen.getByText('PhotoSense Removed').closest('li')).toHaveTextContent('PhotoSense Removed 37 items · 212.0 MB');
+    expect(screen.getByRole('button', { name: 'Delete permanently…' })).toBeEnabled();
+    expect(screen.getByText('Delete permanently…')).not.toHaveClass('text-t3');
+    expect(screen.getByRole('button', { name: 'Recently moved 1' })).toBeInTheDocument();
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} access="selected" removed={removed(1, 2048)} {...noCalls()} />, frame('android'));
+    expect(screen.getByRole('button', { name: 'Photo access Some chosen' })).toBeInTheDocument();
+    expect(screen.getByText('PhotoSense Removed').closest('li')).toHaveTextContent('PhotoSense Removed 1 item · 2 KB');
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} access="everything" {...noCalls()} />, frame('android'));
+    expect(screen.getByRole('button', { name: 'Photo access All photos and videos' })).toBeInTheDocument();
+  });
+
   it('puts itself away before what a row leads to opens', async () => {
     const { calls } = show();
-    for (const [row, call] of [['Scan again', calls.onScanAgain], ['Delete permanently…', calls.onDeletePermanently], ['Errors None', calls.onErrors], ['Help', calls.onHelp], ['About PhotoSense 1.4.0', calls.onAbout]] as const) {
+    const rows = [
+      ['Photo access Full access', calls.onPhotoAccess], ['Scan again', calls.onScanAgain], ['Delete permanently…', calls.onDeletePermanently], ['Recently moved 1', calls.onRecent],
+      ['Errors None', calls.onErrors], ['Help', calls.onHelp], ['About PhotoSense 1.4.0', calls.onAbout], ['Privacy', calls.onPrivacy],
+    ] as const;
+    for (const [row, call] of rows) {
       await userEvent.click(screen.getByRole('button', { name: row }));
       expect(call).toHaveBeenCalledOnce();
     }
-    expect(calls.onClose).toHaveBeenCalledTimes(5);
+    expect(calls.onClose).toHaveBeenCalledTimes(8);
   });
 
-  it('counts the errors, and says where it runs before the version is known', () => {
+  it('counts the errors, says where it runs before the version is known, and offers no deleting while nothing waits or before it is known', () => {
     const { view } = show('ios', { errorCount: 2, version: undefined });
     expect(screen.getByRole('button', { name: 'Errors 2' })).toBeInTheDocument();
     expect(screen.getByText('Runs on this phone. Nothing is uploaded.')).toBeInTheDocument();
-    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} onTheme={vi.fn()} onUnit={vi.fn()} onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onClose={vi.fn()} />, frame('ios', { tablet: true }));
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} access="nothing" removed={removed(0)} {...noCalls()} />, frame('ios', { tablet: true }));
     expect(screen.getByText('Runs on this iPad. Nothing is uploaded.')).toBeInTheDocument();
-    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} onTheme={vi.fn()} onUnit={vi.fn()} onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onClose={vi.fn()} />, frame('android', { tablet: true }));
+    expect(screen.getByRole('button', { name: 'Photo access None' })).toBeInTheDocument();
+    expect(screen.getByText('Empty')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
+    expect(screen.getByText('Delete permanently…')).toHaveClass('text-t3');
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} {...noCalls()} />, frame('android', { tablet: true }));
     expect(screen.getByText('Runs on this tablet. Nothing is uploaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Photo access' })).toBeInTheDocument();
+    expect(screen.getByText('…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Recently moved' })).toBeInTheDocument();
+  });
+});
+
+/** Every action of Settings, done by nothing. */
+function noCalls() {
+  return {
+    onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
+    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(),
+  };
+}
+
+describe('Delete permanently', () => {
+  const waiting = { files: 37, bytes: 212 * 1024 ** 2, folders: [{ path: '/Photo Library/_PhotoSense_Removed', files: 37, bytes: 212 * 1024 ** 2 }] };
+  const question = () => screen.getByRole('dialog');
+
+  it('says where everything goes, then asks once more, where it can be told not to ask again', async () => {
+    const onErase = vi.fn(), onCancel = vi.fn();
+    inFrame(<DeletePermanently removed={waiting} askTwice busy={false} onErase={onErase} onCancel={onCancel} />);
+    expect(question()).toHaveAccessibleName('Delete 37 items permanently?');
+    expect(question()).toHaveTextContent('Everything in PhotoSense Removed (212.0 MB) goes to Recently Deleted, where iOS keeps it for 30 days.');
+    expect(question()).toHaveTextContent('Undo can no longer bring these back, and they leave Recently moved.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
+    expect(onErase).not.toHaveBeenCalled();
+    expect(question()).toHaveAccessibleName('Are you sure?');
+    expect(question()).toHaveTextContent('The 37 items in PhotoSense Removed go to Recently Deleted. Undo can no longer bring them back.');
+    await userEvent.click(within(question()).getByRole('switch', { name: 'Do not ask me this second time again' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
+    expect(onErase).toHaveBeenCalledExactlyOnceWith(true);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('asks only once when told not to ask twice, in Android words, and names one as one', async () => {
+    const onErase = vi.fn();
+    const { again } = inFrame(<DeletePermanently removed={waiting} askTwice={false} busy={false} onErase={onErase} onCancel={vi.fn()} />, frame('android'));
+    expect(question()).toHaveTextContent('Everything in Pictures/PhotoSense Removed (212.0 MB) goes to the bin, where Android keeps it for 30 days.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
+    expect(onErase).toHaveBeenCalledExactlyOnceWith(false);
+    const one = { files: 1, bytes: 1024, folders: [] };
+    again(<DeletePermanently removed={one} askTwice busy onErase={onErase} onCancel={vi.fn()} />);
+    expect(question()).toHaveAccessibleName('Delete 1 item permanently?');
+    expect(within(question()).getByRole('button', { name: 'Delete 1 item' })).toBeDisabled();
+  });
+
+  it('says the one item goes, and that Undo cannot bring it back', async () => {
+    inFrame(<DeletePermanently removed={{ files: 1, bytes: 1024, folders: [] }} askTwice busy={false} onErase={vi.fn()} onCancel={vi.fn()} />);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 item' }));
+    expect(question()).toHaveTextContent('The 1 item in PhotoSense Removed goes to Recently Deleted. Undo can no longer bring it back.');
   });
 });
 
 describe('PhotoSense on a phone', () => {
-  beforeEach(() => localStorage.setItem('photosense-first-run', 'done'));
+  const notify = vi.fn(), onSettings = vi.fn(), onAbout = vi.fn();
+  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles' };
+  beforeEach(() => {
+    localStorage.setItem('photosense-first-run', 'done');
+    settings = { eraseAskTwice: true, distanceUnit: 'miles' };
+    for (const f of [notify, onSettings, onAbout]) f.mockReset();
+  });
 
   function App({ platform = 'ios', start = 'cleanup' as TabId }: { platform?: Platform; start?: TabId }) {
     const [tab, setTab] = React.useState<TabId>(start);
     const [theme, setTheme] = React.useState<'auto' | 'dark' | 'light'>('auto');
     return (
       <PhoneApp platform={platform} tab={tab} status={{ instanceId: 's', completed: '2026-11-10T16:25:00Z', totalPhotos: 2 }}
-        toasts={[]} theme={theme} version="1.4.0" errorCount={0} unit="miles" onUnit={vi.fn()} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
-        scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
+        toasts={[]} theme={theme} version="1.4.0" errorCount={0} settings={settings} onSettings={onSettings} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
+        scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={notify} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={onAbout} />
     );
   }
 
@@ -262,6 +349,93 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
     expect(screen.getByRole('radio', { name: 'What you chose in Library1 item' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('button', { name: 'Offer 1 item to a computer' })).toBeEnabled();
+  });
+
+  describe('from Settings', () => {
+    const MB = 1024 ** 2;
+    const waiting = { files: 37, bytes: 212 * MB, folders: [{ path: '/Photo Library/_PhotoSense_Removed', files: 30, bytes: 200 * MB }, { path: '/Photo Library/Trips/_PhotoSense_Removed', files: 7, bytes: 12 * MB }] };
+    const gear = async () => { await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]); return screen.getByRole('dialog', { name: 'Settings' }); };
+    const question = () => screen.getByRole('dialog');
+    beforeEach(() => {
+      width(false);
+      api.useRemoved.mockImplementation((roots: string[] | null) => ({ data: roots ? waiting : undefined }));
+      api.eraseRemoved.mockResolvedValue({ erased: 37, bytes: 212 * MB, skipped: 0, problems: [] });
+    });
+
+    it('deletes permanently after both questions, remembering not to ask twice again when told', async () => {
+      render(<App />);
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'Delete permanently…' }));
+      expect(api.useRemoved).toHaveBeenLastCalledWith(['/Photo Library']);
+      await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
+      await userEvent.click(within(question()).getByRole('switch', { name: 'Do not ask me this second time again' }));
+      await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
+      expect(api.eraseRemoved).toHaveBeenCalledExactlyOnceWith(['/Photo Library/_PhotoSense_Removed', '/Photo Library/Trips/_PhotoSense_Removed']);
+      expect(onSettings).toHaveBeenCalledExactlyOnceWith({ eraseAskTwice: false });
+      expect(notify).toHaveBeenCalledExactlyOnceWith('37 items deleted. They wait in Recently Deleted for 30 days.', 'ok');
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      // Nothing is asked of the service while no sheet needs it.
+      expect(api.useRemoved).toHaveBeenLastCalledWith(null);
+    });
+
+    it('asks once when told not to ask twice, and says what could not be deleted, that nothing was left, or what went wrong', async () => {
+      settings = { eraseAskTwice: false, distanceUnit: 'miles' };
+      api.eraseRemoved.mockClear();
+      api.eraseRemoved.mockResolvedValueOnce({ erased: 35, bytes: 1, skipped: 2, problems: ['You chose not to delete them.'] });
+      render(<App platform="android" />);
+      const once = async () => {
+        await userEvent.click(within(await gear()).getByRole('button', { name: 'Delete permanently…' }));
+        await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
+      };
+      await once();
+      expect(notify.mock.calls).toEqual([['35 items deleted. They wait in the bin for 30 days.', 'ok'], ['2 items could not be deleted. You chose not to delete them.', 'error']]);
+      api.eraseRemoved.mockResolvedValueOnce({ erased: 0, bytes: 0, skipped: 1, problems: [] });
+      await once();
+      expect(notify).toHaveBeenLastCalledWith('1 item could not be deleted.', 'error');
+      api.eraseRemoved.mockResolvedValueOnce({ erased: 0, bytes: 0, skipped: 0, problems: [] });
+      await once();
+      expect(notify).toHaveBeenLastCalledWith('There was nothing left to delete.', 'info');
+      api.eraseRemoved.mockRejectedValueOnce(new Error('Photo access was taken away.'));
+      await once();
+      expect(notify).toHaveBeenLastCalledWith('Photo access was taken away.', 'error');
+      api.eraseRemoved.mockRejectedValueOnce('no');
+      await once();
+      expect(notify).toHaveBeenLastCalledWith('no', 'error');
+      expect(onSettings).not.toHaveBeenCalled();
+      // Cancel asks nothing.
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'Delete permanently…' }));
+      await userEvent.click(within(question()).getByRole('button', { name: 'Cancel' }));
+      expect(api.eraseRemoved).toHaveBeenCalledTimes(5);
+    });
+
+    it('opens the phone\'s own settings for photo access, saying when it could not, and Recently moved with Undo, and About at Privacy', async () => {
+      api.useOrganizeBatches.mockReturnValue({ data: [{ id: 'b1', label: '/Photo Library/Butte', mode: 'move', count: 2, bytes: 10, utc: new Date().toISOString() }] });
+      api.undoChange.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
+      api.openPhotoSettings.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('No settings here.'));
+      render(<App />);
+      await userEvent.click(within(await gear()).getByRole('button', { name: /^Photo access/ }));
+      expect(api.openPhotoSettings).toHaveBeenCalledOnce();
+      await userEvent.click(within(await gear()).getByRole('button', { name: /^Photo access/ }));
+      await act(async () => {});
+      expect(notify).toHaveBeenLastCalledWith('No settings here.', 'error');
+
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'Recently moved 1' }));
+      const recent = screen.getByRole('dialog', { name: 'Recently moved' });
+      await userEvent.click(within(recent).getByRole('button', { name: 'Undo' }));
+      expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('b1');
+      expect(notify).toHaveBeenLastCalledWith('Put back. Every file is where it was.', 'ok');
+      await userEvent.click(within(recent).getByRole('button', { name: 'Done' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      api.useOrganizeBatches.mockReturnValue({});
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'Recently moved' }));
+      expect(screen.getByRole('dialog', { name: 'Recently moved' })).toHaveTextContent('Nothing to undo.');
+      await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
+
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'Privacy' }));
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'About PhotoSense 1.4.0' }));
+      expect(onAbout.mock.calls).toEqual([['privacy'], []]);
+      await userEvent.click(within(await gear()).getByRole('radio', { name: 'Kilometers' }));
+      expect(onSettings).toHaveBeenLastCalledWith({ distanceUnit: 'km' });
+    });
   });
 
   it('pushes a review over the list on a phone, without the tabs, and Back takes it back', async () => {

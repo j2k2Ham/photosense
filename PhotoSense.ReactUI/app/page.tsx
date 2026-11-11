@@ -4,7 +4,7 @@ import { AppMenu } from '../components/AppMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
-import { AboutWindow } from '../components/AboutWindow';
+import { AboutWindow, type AboutTopic } from '../components/AboutWindow';
 import { HelpWindow } from '../components/HelpWindow';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
@@ -104,7 +104,8 @@ export default function HomePage() {
   const [errorsOpen, setErrorsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
+  // About, open at the topic it was opened for.
+  const [aboutOpen, setAboutOpen] = useState<AboutTopic>();
   const [receiveOpen, setReceiveOpen] = useState(false);
   // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
@@ -406,9 +407,9 @@ export default function HomePage() {
       {platform ? (
         <PhoneApp platform={platform} tab={tab} status={status.data}
           notice={offlineNotice} toasts={toasts} removeToast={remove}
-          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} unit={settings.distanceUnit} onUnit={distanceUnit => changeSettings({ distanceUnit })} onTab={turnToTab}
+          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} settings={settings} onSettings={changeSettings} onTab={turnToTab}
           scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}
-          onDeletePermanently={askToErase} onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} />
+          onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} />
       ) : (
         <>
         <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
@@ -417,7 +418,7 @@ export default function HomePage() {
           {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
           {menuOpen && (
             <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-              onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} onDeletePermanently={askToErase}
+              onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase}
               onReceive={() => setReceiveOpen(true)} />
           )}
           {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
@@ -502,7 +503,7 @@ export default function HomePage() {
       )}
 
       {helpOpen && <HelpWindow onGo={goTo} onClose={() => setHelpOpen(false)} />}
-      {aboutOpen && <AboutWindow onClose={() => setAboutOpen(false)} />}
+      {aboutOpen && <AboutWindow start={aboutOpen} onClose={() => setAboutOpen(undefined)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
       {receiveOpen && <ReceiveWindow folder={loadOrganizeRoot() || loadLastScan().root} notify={push} onClose={() => setReceiveOpen(false)} />}
 

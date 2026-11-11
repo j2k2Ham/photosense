@@ -81,6 +81,17 @@ export const Radio = ({ on }: { readonly on: boolean }) => (
   <span aria-hidden className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-2 ${on ? 'border-acc' : 'border-t3'}`}>{on && <span className="h-3 w-3 rounded-full bg-acc" />}</span>
 );
 
+/** A switch as each platform draws one, its label beside it: on is the platform's own colour. */
+export function PhoneSwitch({ label, on, onChange }: { readonly label: string; readonly on: boolean; onChange(on: boolean): void }) {
+  return (
+    <label className="flex min-h-[52px] cursor-pointer select-none items-center gap-3 rounded-cell bg-fill px-3.5 py-2 text-[15px]">
+      <span className="min-w-0 flex-1">{label}</span>
+      <input type="checkbox" role="switch" checked={on} onChange={e => onChange(e.target.checked)} className="peer sr-only" />
+      <span aria-hidden className="relative h-[31px] w-[51px] shrink-0 rounded-full bg-sw-off transition after:absolute after:left-[2px] after:top-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow after:transition peer-checked:bg-sw-on peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-acc" />
+    </label>
+  );
+}
+
 /** A filter or a choice in a row of them, with how many it holds after its name. */
 export function Chip({ label, count, on, onClick }: ChipProps) {
   return (

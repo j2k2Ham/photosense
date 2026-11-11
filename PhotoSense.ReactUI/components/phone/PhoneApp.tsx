@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
-import type { DistanceUnit } from '../../lib/distance';
+import { eraseRemoved, openPhotoSettings, useOrganizeBatches, usePhotoAccess, useRemoved } from '../../lib/apiClient';
+import type { AppSettings } from '../../lib/settings';
+import type { AboutTopic } from '../AboutWindow';
 import type { ThemeChoice } from '../../lib/theme';
 import { useCleanUp } from '../../lib/cleanup';
 import type { ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
@@ -12,10 +14,10 @@ import { LibraryScreen } from './Library';
 import { useLibrary, type Album, type LibraryFilter } from '../../lib/library';
 import { useOrganize } from '../../lib/phoneOrganize';
 import { useSend } from '../../lib/send';
-import { OrganizeScreen } from './Organize';
+import { OrganizeScreen, RecentSheet, undoMove } from './Organize';
 import { SendScreen } from './Send';
 import { PhoneShell } from './PhoneShell';
-import { SettingsSheet } from './SettingsSheet';
+import { DeletePermanently, items, SettingsSheet } from './SettingsSheet';
 
 interface Props {
   readonly platform: Platform;
@@ -28,8 +30,8 @@ interface Props {
   readonly theme: ThemeChoice;
   readonly version?: string;
   readonly errorCount: number;
-  /** The unit distances are said in. */
-  readonly unit: DistanceUnit;
+  /** How the person has set PhotoSense to behave: the unit of distance, and whether Delete permanently asks twice. */
+  readonly settings: AppSettings;
   /** A scan is under way. */
   readonly scanning: boolean;
   readonly progress?: ScanProgressSnapshotDto;
@@ -41,12 +43,14 @@ interface Props {
   onTab(tab: TabId): void;
   removeToast(id: number): void;
   onTheme(theme: ThemeChoice): void;
-  onUnit(unit: DistanceUnit): void;
-  onDeletePermanently(): void;
+  onSettings(change: Partial<AppSettings>): void;
   onErrors(): void;
   onHelp(): void;
-  onAbout(): void;
+  /** Opens About, at PhotoSense itself or at one of its documents. */
+  onAbout(topic?: AboutTopic): void;
 }
+
+const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * PhotoSense on a phone or tablet: the four tabs in the shell, each with its header and the gear that opens Settings,
@@ -64,8 +68,10 @@ export function PhoneApp(props: Props) {
   // Albums or folders named in Organize, made once files are first put in them from Library.
   const [made, setMade] = useState<readonly Album[]>([]);
   const libraryCount = library.listing && library.files.length.toLocaleString();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  // The sheet over everything: Settings, or what a row of it leads to.
+  const [sheet, setSheet] = useState<'settings' | 'erase' | 'recent'>();
+  const openSettings = useCallback(() => setSheet('settings'), []);
+  const closeSheet = () => setSheet(undefined);
   // On a phone a review is pushed over the list, and Back, or a swipe from the edge, takes it back; a tablet shows both.
   const form = useForm();
   const cleanUp = useCleanUp(form === 'tablet');
@@ -73,7 +79,7 @@ export function PhoneApp(props: Props) {
   const endReview = () => cleanUp.review(undefined);
   useBackLayer(reviewing, endReview);
   // So is a suggestion's preview over Organize's list.
-  const organize = useOrganize(library.listing, platform, form === 'tablet', props.unit);
+  const organize = useOrganize(library.listing, platform, form === 'tablet', props.settings.distanceUnit);
   const previewing = !!organize.open && tab === 'organize' && form === 'phone';
   const endPreview = () => organize.look(undefined);
   useBackLayer(previewing, endPreview);
@@ -87,6 +93,34 @@ export function PhoneApp(props: Props) {
     props.onTab(next);
   };
   const removable = cleanUp.data?.removableCount ?? 0;
+  // What Settings says of the photos, of what waits to be erased (in the library, once it is known, and wherever else the
+  // service knows of), and of what Undo can still put back.
+  const access = usePhotoAccess().data?.access;
+  const removed = useRemoved(sheet === 'settings' || sheet === 'erase' ? [library.root].filter(root => root !== undefined) : null).data;
+  const batches = useOrganizeBatches().data;
+  const [busy, setBusy] = useState(false);
+  const bin = WORDS[platform].bin;
+
+  async function erase(askOnce: boolean) {
+    setBusy(true);
+    try {
+      if (askOnce) props.onSettings({ eraseAskTwice: false });
+      const result = await eraseRemoved(removed!.folders.map(f => f.path));
+      if (result.erased > 0) notify(`${items(result.erased)} deleted. They wait in ${bin} for 30 days.`, 'ok');
+      if (result.skipped > 0) notify(`${items(result.skipped)} could not be deleted. ${result.problems[0] ?? ''}`.trim(), 'error');
+      if (result.erased + result.skipped === 0) notify('There was nothing left to delete.', 'info');
+    } catch (e) {
+      notify(said(e), 'error');
+    } finally {
+      setBusy(false);
+      setSheet(undefined);
+    }
+  }
+  async function undo(batchId: string) {
+    setBusy(true);
+    await undoMove(batchId, organize, notify);
+    setBusy(false);
+  }
 
   return (
     <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : tab === 'library' && selecting ? 'selection' : 'tabs'} counts={{ library: libraryCount, cleanup: removable > 0 ? removable.toLocaleString() : undefined, organize: organize.toMove > 0 ? organize.toMove.toLocaleString() : undefined }} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
@@ -99,9 +133,15 @@ export function PhoneApp(props: Props) {
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
         send: <SendScreen send={send} reading={!!library.reading || !library.listing} onChoose={() => { setSelecting(true); props.onTab('library'); }} />,
       }}
-      sheet={settingsOpen && (
-        <SettingsSheet theme={theme} version={version} errorCount={errorCount} onTheme={props.onTheme} unit={props.unit} onUnit={props.onUnit} onScanAgain={() => void scan()} onDeletePermanently={props.onDeletePermanently}
-          onErrors={props.onErrors} onHelp={props.onHelp} onAbout={props.onAbout} onClose={() => setSettingsOpen(false)} />
-      )} />
+      sheet={<>
+        {sheet === 'settings' && (
+          <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
+            onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
+            onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
+            onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} />
+        )}
+        {sheet === 'erase' && removed && <DeletePermanently removed={removed} askTwice={props.settings.eraseAskTwice} busy={busy} onErase={askOnce => void erase(askOnce)} onCancel={closeSheet} />}
+        {sheet === 'recent' && <RecentSheet batches={batches ?? []} root={library.root} busy={busy} onUndo={b => void undo(b.id)} onClose={closeSheet} />}
+      </>} />
   );
 }

@@ -11,7 +11,7 @@ import { group, groupsPage, member, photo } from '../fixtures';
 const api = vi.hoisted(() => ({
   useGroups: vi.fn(), useGroupsThrough: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
-  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(),
+  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(), useRemoved: vi.fn((): { data?: unknown } => ({ data: undefined })),
   useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
@@ -1277,16 +1277,17 @@ describe('on a phone or tablet', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
   });
 
-  it('leads from Settings to scanning again, Delete permanently, the errors, help and About', async () => {
+  it('leads from Settings to the errors, help, About and the privacy policy, and offers no deleting while nothing waits', async () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
     // Nothing left to clean up: an iPad's sidebar has no count to show beside Clean up.
     groupsFor = mode => ({ data: groupsPage([], {}, mode) });
-    api.fetchRemoved.mockResolvedValue({ files: 0, bytes: 0, folders: [] });
+    api.useRemoved.mockReturnValue({ data: { files: 0, bytes: 0, folders: [] } });
     api.useAboutText.mockReturnValue({ data: 'About text' } as never);
     open();
-    await userEvent.click(within(await settings()).getByRole('button', { name: 'Delete permanently…' }));
-    expect(await screen.findByText(/There is nothing to delete/)).toBeInTheDocument();
-    await click('Cancel');
+    expect(within(await settings()).getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Privacy' }));
+    expect(within(screen.getByRole('navigation', { name: 'About' })).getByRole('button', { name: 'Privacy policy' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.keyboard('{Escape}');
     await userEvent.click(within(await settings()).getByRole('button', { name: 'Errors None' }));
     expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');

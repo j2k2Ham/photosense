@@ -57,16 +57,8 @@ export function OrganizeScreen({ organize, library, made, onMade, onNoLocation, 
 
   async function undo(batchId: string) {
     setBusy(true);
-    try {
-      const result = await undoChange(batchId);
-      organize.undone(batchId);
-      if (result.restored > 0 && result.skipped === 0) notify('Put back. Every file is where it was.', 'ok');
-      if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} could not be put back. ${result.problems[0] ?? ''}`.trim(), 'error');
-    } catch (e) {
-      notify(said(e), 'error');
-    } finally {
-      setBusy(false);
-    }
+    await undoMove(batchId, organize, notify);
+    setBusy(false);
   }
   const undoAction = (batchId: string | undefined): ToastAction | undefined => (batchId ? { label: 'Undo', run: () => void undo(batchId) } : undefined);
 
@@ -299,7 +291,20 @@ function OptionsSheet({ organize, onClose }: { readonly organize: PhoneOrganize;
 }
 
 /** What was moved or deleted lately, each with Undo. */
-function RecentSheet({ batches, root, busy, onUndo, onClose }: { readonly batches: readonly OrganizeBatchDto[]; readonly root?: string; readonly busy: boolean; onUndo(b: OrganizeBatchDto): void; onClose(): void }) {
+/** Puts back what a move or deletion moved, and says whether every file came back. It never fails: what went wrong is said. */
+export async function undoMove(batchId: string, organize: PhoneOrganize, notify: Notify) {
+  try {
+    const result = await undoChange(batchId);
+    organize.undone(batchId);
+    if (result.restored > 0 && result.skipped === 0) notify('Put back. Every file is where it was.', 'ok');
+    if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} could not be put back. ${result.problems[0] ?? ''}`.trim(), 'error');
+  } catch (e) {
+    notify(said(e), 'error');
+  }
+}
+
+/** What was moved or deleted lately, from Organize or Library, each with Undo. */
+export function RecentSheet({ batches, root, busy, onUndo, onClose }: { readonly batches: readonly OrganizeBatchDto[]; readonly root?: string; readonly busy: boolean; onUndo(b: OrganizeBatchDto): void; onClose(): void }) {
   const { words } = usePhone();
   const now = new Date();
   return (

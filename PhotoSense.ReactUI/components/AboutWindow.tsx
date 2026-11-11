@@ -4,7 +4,9 @@ import { parse, type Block, type Inline, type Question } from '../lib/markdown';
 import type { AboutDocument, AboutDto } from '../types';
 import { WindowShell } from './WindowShell';
 
-type Topic = 'about' | AboutDocument;
+/** What About shows: PhotoSense itself, or one of its documents. */
+export type AboutTopic = 'about' | AboutDocument;
+type Topic = AboutTopic;
 
 const TOPICS: { id: Topic; title: string }[] = [
   { id: 'about', title: 'PhotoSense' },
@@ -115,8 +117,8 @@ function Overview({ about }: { readonly about: AboutDto }) {
 }
 
 /** About PhotoSense: its version and maker, how to get help, the privacy policy, the terms of use, and what others made that it uses. */
-export function AboutWindow({ onClose }: { onClose(): void }) {
-  const [topic, setTopic] = useState<Topic>('about');
+export function AboutWindow({ start = 'about', onClose }: { readonly start?: AboutTopic; onClose(): void }) {
+  const [topic, setTopic] = useState<Topic>(start);
   const about = useAbout();
   const page = useRef<HTMLElement>(null);
   const title = TOPICS.find(t => t.id === topic)!.title;
