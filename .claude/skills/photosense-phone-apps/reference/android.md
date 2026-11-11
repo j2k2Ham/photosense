@@ -17,7 +17,8 @@
   - `AndroidImageAnalyzer` (`ImageDecoder`, sRGB, software allocator).
   - `NsdAdvertiser` (`NsdManager`), which keeps the screen on while offering.
   - `AndroidAccess`: Android 14's choose-some permission, and the app's settings page.
-  - Back sends Escape to the page, and leaves the app when no window is open.
+  - Back goes back in the web view's history, which closes what the page opened last (`useBackLayer`); with nothing there it sends Escape to the page, and leaves the app when no window is open.
+  - The page draws under the status and gesture bars (`SetDecorFitsSystemWindows(false)`, the bars transparent), and is told their heights as `--app-inset-top` and `--app-inset-bottom` (`UnderBars`, again on every load). The page tells the app its theme through `PhotoSenseBars.theme`, and the bars' icons follow it (`ShowTheme`).
 - **The icon** is linked from `branding/app-icon.png` with `LogicalName="mipmap\appicon.png"`, because Android takes no dash in a resource's name.
 
 ## Building on Jamie's PC

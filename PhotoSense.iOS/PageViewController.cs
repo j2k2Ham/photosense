@@ -9,6 +9,8 @@ public sealed class PageViewController : UIViewController
     // A scheme of the app's own: a web view hands such requests to the app, as it never would http or https.
     private static readonly NSUrl Start = new("app://photosense/");
     private WKWebView? _web;
+    // The page's theme, which the status bar's icons follow: light on dark, dark on light.
+    private bool _light;
 
     /// <summary>The page on screen, which the system's own pickers are shown over.</summary>
     public static PageViewController? Shown { get; private set; }
@@ -19,11 +21,16 @@ public sealed class PageViewController : UIViewController
         Shown = this;
         var config = new WKWebViewConfiguration();
         config.SetUrlSchemeHandler(new PageSchemeHandler(), "app");
+        config.UserContentController.AddScriptMessageHandler(new Bars(this), "photosenseBars");
         SelfCheck.AddTo(config);
         _web = new WKWebView(View!.Bounds, config)
         {
             AutoresizingMask = UIViewAutoresizing.FlexibleDimensions, NavigationDelegate = new Loading(), UIDelegate = new NewWindows(),
         };
+        // A swipe from the left edge goes back in the page's history, closing the screen, sheet or view it opened last.
+        _web.AllowsBackForwardNavigationGestures = true;
+        // The page draws under the status bar and round the screen's corners itself (viewport-fit=cover, env()).
+        _web.ScrollView.ContentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentBehavior.Never;
         // Lets Safari on a Mac look inside the page while the phone is plugged in.
         if (OperatingSystem.IsIOSVersionAtLeast(16, 4)) _web.Inspectable = true;
         View.AddSubview(_web);
@@ -41,6 +48,18 @@ public sealed class PageViewController : UIViewController
             Say.Line($"photo access chosen: {await PHPhotoLibrary.RequestAuthorizationAsync(PHAccessLevel.ReadWrite)}");
         _web.LoadRequest(new NSUrlRequest(Start));
         Say.Line($"loading {Start}");
+    }
+
+    public override UIStatusBarStyle PreferredStatusBarStyle() => _light ? UIStatusBarStyle.DarkContent : UIStatusBarStyle.LightContent;
+
+    // What the page says of its theme, so that the status bar's icons match it.
+    private sealed class Bars(PageViewController page) : WKScriptMessageHandler
+    {
+        public override void DidReceiveScriptMessage(WKUserContentController userContentController, WKScriptMessage message)
+        {
+            page._light = message.Body?.ToString() == "light";
+            page.SetNeedsStatusBarAppearanceUpdate();
+        }
     }
 
     private static void OpenOutside(NSUrl url) => UIApplication.SharedApplication.OpenUrl(url, new UIApplicationOpenUrlOptions(), null);

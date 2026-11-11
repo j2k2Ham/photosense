@@ -17,11 +17,20 @@ import { TopBar } from '../../components/TopBar';
 vi.mock('next/font/google', () => ({ DM_Sans: () => ({ variable: 'font-sans-var' }), DM_Mono: () => ({ variable: 'font-mono-var' }) }));
 
 describe('the page frame', () => {
-  it('carries the fonts and applies a saved light theme before anything is painted', () => {
+  it('carries the fonts and applies a saved light theme, or Auto on a light system, before anything is painted', () => {
     const html = renderToStaticMarkup(<RootLayout><p>the page itself</p></RootLayout>);
     expect(html).toMatch(/^<html lang="en" class="font-sans-var font-mono-var">/);
-    expect(html).toContain("localStorage.getItem('photosense-theme')==='light'");
     expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('the page itself'));
+    const paint = new Function(html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>')));
+    const lightBefore = (saved: string, systemLight: boolean) => {
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('photosense-theme', saved);
+      vi.stubGlobal('matchMedia', () => ({ matches: systemLight }));
+      paint();
+      return document.documentElement.classList.contains('light');
+    };
+    expect([lightBefore('light', false), lightBefore('auto', true), lightBefore('auto', false), lightBefore('dark', true)]).toEqual([true, true, false, false]);
+    document.documentElement.classList.remove('light');
     expect(metadata.title).toBe('PhotoSense');
     // The one icon every program keeps, which the program answering hands out.
     expect(metadata.icons.icon).toBe('http://localhost:7071/api/about/icon');

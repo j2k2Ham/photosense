@@ -32,6 +32,6 @@ The program the tests start is a computer's. What only a phone or another device
 ## Writing one
 
 - `test`, `expect` and `message` come from `fixtures/app.ts`: the `program`, `photos` (the test's folder, with `picture`, `livePhoto`, `movie`, `sidecar`, `copy`, `files` and `exists`) and `service` (to set a test up through the program, as `service.scan(photos.root)` does).
-- `fixtures/screens.ts` gets to the parts of the page, by the names a screen reader would read: `openOrganize`, `menu`, `tile`, `preview`, `question`, `drag`.
+- `fixtures/screens.ts` gets to the parts of the page, by the names a screen reader would read: `openOrganize`, `menu`, `tile`, `preview`, `question`, `drag`; and as the phone app, whose layout has tabs, `phoneTab` and `phoneSettings`.
 - A test says what a person sees and what is on the disk afterwards; a removal checks `_PhotoSense_Removed`, an undo that every file is back.
 - Mark it `@phone` in its name when it should also run at a phone's size.

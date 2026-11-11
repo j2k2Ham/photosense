@@ -388,6 +388,8 @@ CI builds and tests the service on Windows and on macOS as well as on Linux, and
 
 ## The iPhone app
 
+On a phone or tablet the page is laid out as the phone's own apps are, in iOS 26's look on an iPhone or iPad and Material 3's on Android, dark, light or following the system (Auto): four tabs (Library, Clean up, Organize, Send) in a bar at the foot, a sidebar on an iPad or a rail on an Android tablet, with Settings under a gear. Android's Back and iOS's swipe from the edge close what was opened last. The computer's layout is unchanged (`components/phone/`).
+
 `PhotoSense.iOS` is PhotoSense on an iPhone or iPad: the same page, in a web view that fills the screen, with every request the page makes answered inside the app by the same endpoints the service uses. There is no web server on the phone. The page's own files are handed out from the app, and its requests below `/api` go to `PhotoSenseRoutes` (`PageSchemeHandler`, through `InProcessApi` and `PageFiles` in `PhotoSense.Api/Hosting`). What the app records is kept among its own files, and the previews where the phone may clear them when it runs short of space.
 
 The first time it opens, it asks to see the photos: all of them, those picked, or none. The library is then offered as one folder, **Photo Library**, holding every picture and video once under the name it was taken with; a Live Photo is two files there, its picture and its video. Pictures taken under the same name are told apart by the start of each one's own id (`IMG_0001 (1A2B3C4D).HEIC`), so that a name never comes to stand for another picture. Pictures are decoded by the phone itself (`ImageIOAnalyzer`), since Magick.NET has no build for a phone, and measured the same way as on a computer (`ImageFingerprint`).

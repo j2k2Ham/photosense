@@ -26,6 +26,8 @@ public sealed class PageClient(Context context) : WebViewClient
     public override void OnPageFinished(WebView? view, string? url)
     {
         base.OnPageFinished(view, url);
+        // A page loaded afresh has not been told how tall the phone's bars are.
+        MainActivity.Shown?.TellInsets();
         if (SelfCheck.Starting()) view?.EvaluateJavascript(SelfCheck.Script, null);
     }
 
@@ -135,4 +137,20 @@ public sealed class BodyBridge : Java.Lang.Object
 
     /// <summary>The body kept under a number, given up once taken; null for none.</summary>
     public static byte[]? Take(string? id) => id is not null && Bodies.TryRemove(id, out var body) ? Encoding.UTF8.GetBytes(body) : null;
+}
+
+/// <summary>What the page tells the app about its theme, so that the phone's bars match it.</summary>
+public sealed class SystemBars : Java.Lang.Object
+{
+    /// <summary>What the page knows it by.</summary>
+    public const string Name = "PhotoSenseBars";
+
+    /// <summary>The page is now dark or light.</summary>
+    [JavascriptInterface]
+    [Export("theme")]
+    public void Theme(string theme)
+    {
+        if (MainActivity.Shown is not { } screen) return;
+        screen.RunOnUiThread(() => screen.ShowTheme(theme == "light"));
+    }
 }

@@ -18,6 +18,10 @@
 
 ## Traps already met
 
+- **Run Vitest from `C:\`, not `c:\`.** A shell started in a folder spelled with a small drive letter makes Vitest load itself twice, and every file fails with "Vitest failed to find the current suite" at `tests/setup.ts`. In PowerShell, `Set-Location 'C:\dev\git\photosense\PhotoSense.ReactUI'` first.
+- **A part of the phone layout** is drawn inside its frame: `inFrame(ui, frame('android', { tablet: true }))` from `tests/components/phone/frame.tsx`; `width(true)` makes the page a tablet's width for `useForm`. The test browser answers `matchMedia` with no (`tests/setup.ts`): dark, and a phone's width.
+- **The name a screen reader gives** a label and a count drawn side by side runs them together unless a space is written between them ("Errors None", not "ErrorsNone").
+
 - The test setup's `localStorage` (`tests/setup.ts`, `MemoryStorage`) has no `removeItem`. Set an empty string instead.
 - A key event a component listens for on `window` is sent with `userEvent.keyboard('{Escape}')` or `fireEvent.keyDown(window, …)`, not on a node.
 - `Scrim` closes on a `mouseDown` on its own element, not anywhere in the body.

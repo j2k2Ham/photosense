@@ -2,7 +2,7 @@ import './globals.css';
 import React from 'react';
 import { DM_Mono, DM_Sans } from 'next/font/google';
 import { appIconUrl } from '../lib/apiBase';
-import { THEME_KEY } from '../lib/themeKey';
+import { SYSTEM_LIGHT, THEME_KEY } from '../lib/themeKey';
 
 const sans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans' });
 const mono = DM_Mono({ subsets: ['latin'], weight: ['400', '500'], variable: '--font-mono' });
@@ -14,8 +14,11 @@ export const metadata = {
   icons: { icon: appIconUrl },
 };
 
-// Runs before the first paint, so a page saved in the light theme never flashes dark.
-const applySavedTheme = `try{if(localStorage.getItem('${THEME_KEY}')==='light')document.documentElement.classList.add('light')}catch(e){}`;
+// Runs before the first paint, so a page saved in the light theme, or in Auto on a light system, never flashes dark.
+const applySavedTheme = `try{var t=localStorage.getItem('${THEME_KEY}');if(t==='light'||(t==='auto'&&matchMedia('${SYSTEM_LIGHT}').matches))document.documentElement.classList.add('light')}catch(e){}`;
+
+/** The page fills a phone's whole screen, under its bars and round its corners; the phone layout keeps clear of them itself. */
+export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };
 
 /** The frame of every page: the fonts, the theme chosen before the page is drawn, and the page inside. */
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -14,21 +14,27 @@ export const TOAST_MS = 4500;
 /** How long a message that offers something to do stays up. */
 export const ACTION_TOAST_MS = 9000;
 
+/** How long a message that is not an error stays up on a phone, as its own apps keep theirs. */
+export const PHONE_TOAST_MS = 5500;
+
 /**
  * Messages for the person using the page. Every one shows as a toast; an error is also kept in a list
  * that stays until it is cleared, because a toast that has gone can no longer be read.
+ * @param lasts How long a message that is not an error, and offers nothing to do, stays up.
  */
-export function useToasts() {
+export function useToasts(lasts = TOAST_MS) {
   const [toasts, setToasts] = React.useState<Toast[]>([]);
   const [errors, setErrors] = React.useState<ErrorEntry[]>([]);
   const next = React.useRef(0);
+  const short = React.useRef(lasts);
+  React.useLayoutEffect(() => { short.current = lasts; });
 
   const remove = React.useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
   const push = React.useCallback((message: string, kind: ToastKind = 'info', action?: ToastAction) => {
     const id = ++next.current;
     setToasts(t => [...t, { id, message, kind, action }]);
     if (kind === 'error') setErrors(e => [{ id, time: new Date(), message }, ...e]);
-    else setTimeout(() => remove(id), action ? ACTION_TOAST_MS : TOAST_MS);
+    else setTimeout(() => remove(id), action ? ACTION_TOAST_MS : short.current);
   }, [remove]);
   const clearError = React.useCallback((id: number) => setErrors(e => e.filter(x => x.id !== id)), []);
   const clearErrors = React.useCallback(() => setErrors([]), []);

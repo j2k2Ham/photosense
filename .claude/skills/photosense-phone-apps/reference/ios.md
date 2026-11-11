@@ -2,6 +2,8 @@
 
 - **The project:** plain .NET for iOS (not MAUI), bundle id `com.j2k2ham.photosense`, iOS 16 or later.
 - **The web view:** a `WKWebView` on `app://photosense/`. `PageSchemeHandler` hands out `wwwroot` and sends `/api` to the router; on iOS a request's body is in `NSUrlRequest.Body`.
+  - The page draws under the status bar and round the corners itself (`viewport-fit=cover`, `env(safe-area-inset-*)`), so the scroll view adjusts nothing. A swipe from the left edge goes back in the page's history (`AllowsBackForwardNavigationGestures`), closing what the page opened last.
+  - The page tells the app its theme through the `photosenseBars` message handler, and the status bar's icons follow it (`PreferredStatusBarStyle`).
 - **LiteDB compiles expressions while it runs,** which iOS allows only through .NET's interpreter, hence `<MtouchInterpreter>-all</MtouchInterpreter>`.
 - **`PhotoKitLibrary`:**
   - Albums PhotoSense made are known by the ids kept in `albums.txt` among the app's files. The person's own albums are never shown or changed.

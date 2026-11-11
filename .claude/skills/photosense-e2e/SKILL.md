@@ -33,6 +33,7 @@ npm run typecheck
 
 - **Imports:** `test`, `expect` and `message` from `fixtures/app.ts`; helpers from `fixtures/screens.ts` (`openOrganize`, `menu`, `tile`, `preview`, `question`, `drag`, `photoFiles`); photos from `fixtures/media.ts` (`PLACES`, `picture`, `png`, `movie`, `sidecar`).
 - **Setting up:** through the program, as in `await service.scan(photos.root)`, then `page.goto('/')`. Organize needs `openOrganize(page, root)`: a scan through the service does not tell the page which folder it was.
+- **As the phone app** (`new Phone().attach(page)`), the page has tabs instead of the computer's bar and menu, but only once the program has said so: go through `phoneTab(page, 'Organize')`, `phoneSettings(page)` and `openOrganize(page, root, true)`, which wait for the tabs.
 - **Selectors:** by role and accessible name, as a screen reader reads them. To find a name, print `await page.getByRole('main').ariaSnapshot()` in a throwaway test.
 - **What to check:** what the person sees, and what is on the disk afterwards (`photos.files()`, `photos.exists()`). A removal checks `_PhotoSense_Removed`; an undo checks that every file is back.
 - **What only a phone or another device answers:** stand in for it with `fixtures/phone.ts` (`Phone`, `PhoneNearby`). Everything else stays the program's own.

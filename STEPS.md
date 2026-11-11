@@ -69,6 +69,35 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 - [x] See the main CI (`ci.yml`) pass on Linux, Windows and macOS (d5d6855, started by hand, 2026-11-10): 811 of 811 service tests on each, and on Linux 100% of lines and branches, the build tools and the page. The first run failed on one test that expected a video's time in Jamie's time zone; it now expects it in whichever zone the computer has. Linux's gate is now 100% (it was 90% and 85%).
 - [ ] Merge the branch, or open a pull request, when Jamie decides.
 
+### Phone and tablet design (Jamie, 2026-11-10)
+
+The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and iPad, Material 3 on Android), built as a second layout of `PhotoSense.ReactUI`, chosen when `about.program` is `iphone` or `android`: the phone layout below 768 px wide, the tablet layout from 768. The desktop layout and every endpoint's contract stay as they are; ask Jamie before changing a contract. Only safe areas, the status bar's colours and Android's back button go in the apps. One reviewable step at a time, each checked at 402 × 874, 412 × 892 and 1180 × 820 against the screenshots in both themes.
+
+- [x] **1. Skins** (2026-11-10): the four Native skins as CSS variables in `app/globals.css` (`data-skin` on `<html>`: `ios-native-dark`, `ios-native-light`, `and-native-dark`, `and-native-light`), with each platform's type, radii and title, button and control sizes; usable from Tailwind (`bg-cell`, `text-acc`, `rounded-cell`, `font-code`, `shadow-bar`). `useTheme` has **Auto**, following the system and changing with it, applied before the first paint too; `useSkin` sets the skin by program and theme. Checked in Chromium as each phone and tablet in both system themes: the skin, background, text, accent, font and sizes are the handoff's.
+- [x] **2. The shell** (2026-11-10), in `components/phone/`:
+  - On a phone or tablet the page is `PhoneApp`, in place of the computer's bar and menu: the iPhone's floating glass tab bar, Android's navigation bar, the iPad's sidebar (with its hidden state, floating tabs and lowered titles) and Android's rail; each tab kept as it was when another is shown; root and pushed headers; the gear opening Settings as a sheet (`SettingsSheet`: theme with Auto, scan again, Delete permanently, errors, help, about).
+  - Shared parts: buttons, the sticky footer, segmented controls, chips, grouped lists for each platform, sheets and confirm sheets, the toast (5.5 s on a phone), the photo grid with month headers, the selection bar, the line icons, the split view.
+  - Back: `useBackLayer` gives each pushed screen and sheet an entry in the history; a review of a group is pushed over Clean up's list on a phone.
+  - The apps: the page draws under the bars, with iOS's safe areas and Android's insets told as CSS variables; the status bar follows the page's theme on both; Android's Back and iOS's edge swipe go back in the page's history.
+  - Clean up and Organize show today's screens inside the shell until steps 5 and 6; Library and Send have only their headers until steps 4 and 7.
+  - Checked: page 642 tests at 100%; end to end 56 and 14 (the phone tests now go through the tabs); the Android app builds here with no warning; screenshots at 402 × 874, 412 × 892, 1180 × 820 and 1280 × 800, both themes, against the handoff's 11, 35 and the tablets' 02 and 05: bars, headers, gear, sidebar, rail and Settings match. Not checked: the iPhone app's build (needs GitHub's Mac), and either app on a device or emulator.
+- [ ] **3. First run and scanning** (01–04), on `SetupScreen`'s logic and the photo-access endpoints.
+- [ ] **4. Library** (05–10), new: `organize/files` for the whole library, filters All, Not organized, No location, Videos, by month; select mode with Send, Add to album / Move to folder, Delete; the viewer.
+- [ ] **5. Clean up** (11–18): groups, review, full-screen compare, the delete questions; on `GroupList`, `ReviewPanel`, `Differences`, `MatchChip`.
+- [ ] **6. Organize** (19–28): suggestions, the plain map, options, preview, where it goes, name taken, moved, recently moved; on `OrganizeView`, `MovePreview`, `NameClashWindow`, `RecentMoves`.
+- [ ] **7. Send** (29–34): its own tab, over `send/*` and `SendStateDto.stage`.
+- [ ] **8. Settings** (35–37): appearance (Auto, Dark, Light), photos, removed files with Delete permanently and its second question, history, errors, help and about.
+
+### Security and safety (Jamie, 2026-11-10: for later)
+
+After a review of security, the Delete permanently wording, complaints and transactions. Packages had no known vulnerabilities on 2026-11-10 (`dotnet list package --vulnerable`, `npm audit`), but nothing checks again by itself.
+
+- [ ] **Dependabot, CodeQL and secret scanning on GitHub:** Dependabot reports vulnerable packages and opens updates (NuGet, npm, GitHub Actions); CodeQL scans the C# and TypeScript; secret scanning with push protection stops a key being committed. Free while the repository is public; CodeQL and secret scanning need GitHub's paid plan once it is private.
+- [ ] **Harden the picture decoder:** Magick.NET decodes pictures from anywhere, the likeliest way in for a crafted file. Allow only the formats PhotoSense reads, refuse the rest (scripts, PostScript, SVG, files from a URL), and limit memory, area and size (`ResourceLimits` sets only one thread now), so that a bad file is only unreadable.
+- [ ] **Firmer Delete permanently wording:** the first button names the count ("Delete 312 files permanently"); the second question's title says what happens ("Erase 312 files for good?") instead of "Are you sure?"; "This cannot be undone" stays at the top of the first question, as the second can be turned off.
+- [ ] **A one-time "keep a backup" note on first launch:** "Keep a backup of photos you care about", with a link to the terms, recorded once seen. To ask Jamie: does it need a click to accept, or only to be put away?
+- [ ] **Two small transactions:** in LiteDB, around replacing a second record of the same file (`LiteDbPhotoRepository.AddOrUpdateAsync`: a delete then an upsert), and around updating the records of the photos a change moved (`FileChanges`, one at a time now). A crash between them leaves records stale until the next scan; no file is affected. Moving files stays with the journal, which no database transaction can cover.
+
 ### Trying the apps on real devices (by hand, as Jamie agreed)
 
 - [ ] **iPhone:**
@@ -135,6 +164,14 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - An error nothing expected ends a send with "Sending stopped. Try again." or "Receiving stopped. Try again.", without its own words.
   - Arriving files are written through to the disk as they arrive (`FileOptions.WriteThrough`); not measured on a slow external disk.
   - On Android, a question still up when the app's screen is closed for good counts as no, so nothing it asked about changes; a screen only redrawn still gets the answer.
+- **Phone and tablet design, step 1 (2026-11-10):**
+  - A phone with no theme chosen starts in **Auto**, as its own apps do; a computer still starts dark.
+  - The skins use the handoff's own names, which the desktop's tokens share (`--bg`, `--t1` to `--t3`, `--stage`, `--sel`, `--keep`, `--amber`, `--ident`, `--ident-bg`, `--scrim`): on a phone the skin's values win, so the screens not yet rebuilt already take the skin's background, text and those colours. The desktop is untouched, having no skin.
+  - The body text on a phone is the platform's size (17 px on iOS, 16 px on Android) instead of the desktop's 14 px.
+- **Phone and tablet design, step 2 (2026-11-10):**
+  - Tapping the tab showing goes back to its first screen. An error on a phone stays until its OK is pressed, and is listed under Errors in Settings.
+  - Until Organize is rebuilt (step 6), its screen scrolls as a whole, at least 600 px tall, so that on a short phone nothing of it stays under the tab bar.
+  - Settings on a tablet says "Runs on this tablet" for Android and "Runs on this iPad" for an iPad.
 - **Page:** the light theme's faintest text (`--t3`) is a little darker (#646a6e), so it passes WCAG AA on the compare window's grey.
 - **End-to-end tests:**
   - What only a phone or another device answers is stood in for in the browser: being the phone app, its photo access, a phone on the network, sending.
@@ -150,7 +187,9 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
 - Heavily re-compressed copies are listed as similar shots, not duplicates, on purpose.
 - The iPhone and Android apps cannot be built on Jamie's PC without admin rights, for the missing Mono pack. The Android app builds with the workaround in CLAUDE.md, and neither has an emulator or simulator here.
 - 17 react-hooks compiler warnings are known and left.
-- The minute's limit and iCloud fetching are tested with a stand-in clock and library; neither has met a real phone that sleeps, loses the Wi-Fi or fetches from iCloud. The iPhone's new fetch (`PhotoKitLibrary.OpenAsync`, using `RequestData` and `CancelDataRequest`) and Android's change compile only on GitHub's checks.
+- On a phone the page shows the computer's layout for a moment at launch, until the program has said it is the phone app; to settle in step 3, whose first screen needs a waiting state.
+- The end-to-end accessibility checks run at a phone's size but not as the phone app, so no skin has been checked for contrast by them yet; the rebuilt phone screens need checks of their own.
+- The minute's limit and iCloud fetching are tested with a stand-in clock and library; neither has met a real phone that sleeps, loses the Wi-Fi or fetches from iCloud. The iPhone's new fetch (`PhotoKitLibrary.OpenAsync`, using `RequestData` and `CancelDataRequest`) and Android's change are checked only on GitHub's simulator and emulator, where both passed with the end-to-end tests (9319afb, 2026-11-10).
 
 ## For later
 

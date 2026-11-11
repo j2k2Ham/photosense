@@ -3,13 +3,29 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import type { Photos } from './app';
 
 /** The page, with Organize already knowing which folder to show, as it does once a folder has been chosen there. */
-export async function openOrganize(page: Page, root: string) {
+export async function openOrganize(page: Page, root: string, inPhoneApp = false) {
   // Set on the first visit only: a folder chosen later is remembered over it, as it is for a person.
   await page.addInitScript(folder => { if (!localStorage.getItem('photosense-organize-root')) localStorage.setItem('photosense-organize-root', folder); }, root);
   await page.goto('/');
-  await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
+  if (inPhoneApp) await phoneTab(page, 'Organize');
+  else await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
   // Read afresh when no scan has read it: the first time, the program also loads the place names it goes by.
   await expect(page.getByLabel('Folder being organized')).toContainText(/\d+ files?/, { timeout: 60_000 });
+}
+
+/**
+ * In the phone app, the tab of that name. The page is laid out as a computer's until the program has said it is the
+ * phone app, so the tabs are waited for.
+ */
+export async function phoneTab(page: Page, name: string) {
+  await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name, exact: true }).click();
+}
+
+/** In the phone app, Settings, from the gear of the screen showing. */
+export async function phoneSettings(page: Page) {
+  await page.getByRole('navigation', { name: 'Tabs' }).waitFor();
+  await page.getByRole('button', { name: 'Settings' }).first().click();
+  return page.getByRole('dialog', { name: 'Settings' });
 }
 
 export const menu = async (page: Page, item: string | RegExp) => {

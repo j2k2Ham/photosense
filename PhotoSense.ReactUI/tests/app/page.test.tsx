@@ -1,7 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import HomePage from '../../app/page';
 import { saveLastScan, saveOrganizeRoot } from '../../lib/lastScan';
 import type { EraseRemovedDto, GroupMode, GroupsPageDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
@@ -899,10 +899,10 @@ describe('receiving from a phone', () => {
     expect(receiving()).toHaveTextContent('Into D:\Scanned');
   });
 
-  it('is not in the menu of a phone, which sends them', async () => {
+  it('is not offered on a phone, which sends them, and whose layout has no menu', () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
     open();
-    await click('Menu');
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Receive from phone' })).not.toBeInTheDocument();
   });
 });
@@ -1183,5 +1183,95 @@ describe('the two areas', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Change folders or rescan' }));
     expect(area('Clean up')).toHaveAttribute('aria-pressed', 'true');
     expect(setupHeading()).toBeInTheDocument();
+  });
+});
+
+describe('on a phone or tablet', () => {
+  const tabs = () => screen.getByRole('navigation', { name: 'Tabs' });
+  const settings = async () => {
+    await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    return screen.getByRole('dialog', { name: 'Settings' });
+  };
+  afterEach(() => { document.documentElement.classList.remove('light'); delete document.documentElement.dataset.skin; });
+
+  it('is laid out as the phone\'s own apps are: tabs, a header for each, and no bar or menu of the computer\'s', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    open();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    expect(within(tabs()).getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByText('Copies of the same photo or video')).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
+    expect(screen.getByText('Sort Photo Library into albums by place and date')).toBeInTheDocument();
+    expect(screen.getByText('Organizing no folder')).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
+    await userEvent.click(tab(/Similar/));
+    expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
+    // Tapping the tab already showing keeps it, on its first screen.
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+  });
+
+  it('wears its own platform\'s skin, in Auto until another theme is chosen in Settings; a computer wears none', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'android' } } as never);
+    const page = open();
+    expect(document.documentElement.dataset.skin).toBe('and-native-dark');
+    const sheet = await settings();
+    expect(within(sheet).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(sheet).getByRole('radio', { name: 'Light' }));
+    expect(document.documentElement.dataset.skin).toBe('and-native-light');
+
+    api.useAbout.mockReturnValue({ data: { program: 'server' } } as never);
+    page.refresh();
+    expect(document.documentElement).not.toHaveAttribute('data-skin');
+  });
+
+  it('reviews a group on a screen of its own, which the tab, or Back, takes back to the list', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    open();
+    await userEvent.click(tile('IMG_4198.JPG'));
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Clean up' })).not.toBeInTheDocument();
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+
+    await userEvent.click(tile('IMG_4198.JPG'));
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    await click('All groups');
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+  });
+
+  it('leads from Settings to scanning again, Delete permanently, the errors, help and About', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    // Nothing left to clean up: an iPad's sidebar has no count to show beside Clean up.
+    groupsFor = mode => ({ data: groupsPage([], {}, mode) });
+    api.fetchRemoved.mockResolvedValue({ files: 0, bytes: 0, folders: [] });
+    api.useAboutText.mockReturnValue({ data: 'About text' } as never);
+    open();
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Scan again' }));
+    expect(setupHeading()).toBeInTheDocument();
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Delete permanently…' }));
+    expect(await screen.findByText(/There is nothing to delete/)).toBeInTheDocument();
+    await click('Cancel');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Errors None' }));
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Help' }));
+    expect(screen.getByRole('dialog', { name: 'Help' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'About PhotoSense 1.4.0' }));
+    expect(screen.getByRole('dialog', { name: /About/ })).toBeInTheDocument();
+  });
+
+  it('says its messages in the phone\'s own way, and the service not answering above every screen', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'android' } } as never);
+    statusNow = { error: new Error('down') };
+    open();
+    expect(screen.getByRole('alert')).toHaveTextContent('The PhotoSense service is not answering');
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
+    await click('Move some');
+    expect(within(screen.getByRole('log', { name: 'Messages' })).getByText('Moved 13 files to Butte')).toBeInTheDocument();
   });
 });

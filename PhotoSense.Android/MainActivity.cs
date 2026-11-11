@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using Android;
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
+using Android.Graphics;
 using Android.OS;
 using Android.Views;
 using Android.Webkit;
@@ -11,7 +13,7 @@ using Android.Widget;
 
 namespace PhotoSense.AndroidApp;
 
-/// <summary>The one screen: the page, the whole of it, between the phone's own bars.</summary>
+/// <summary>The one screen: the page, the whole of it, under the phone's own bars, which the page keeps clear of.</summary>
 [Activity(Name = "com.j2k2ham.photosense.MainActivity", Label = "PhotoSense", MainLauncher = true, Exported = true, Theme = "@android:style/Theme.DeviceDefault.NoActionBar",
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.UiMode)]
 public sealed class MainActivity : Activity
@@ -20,6 +22,8 @@ public sealed class MainActivity : Activity
     private static int _nextQuestion = 100;
     private static readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> Questions = new();
     private WebView? _page;
+    // The heights of the status bar and the gesture or button bar, in the page's pixels, as the page is told them.
+    private (float Top, float Bottom) _insets;
 
     /// <summary>The screen while it is there, for what Android shows over it.</summary>
     public static MainActivity? Shown { get; private set; }
@@ -49,10 +53,18 @@ public sealed class MainActivity : Activity
         page.Settings.MediaPlaybackRequiresUserGesture = true;
         page.SetWebViewClient(new PageClient(ApplicationContext!));
         page.AddJavascriptInterface(new BodyBridge(), BodyBridge.Name);
-        // The page fills the screen between the status bar and the bar of buttons, which Android draws over it.
+        page.AddJavascriptInterface(new SystemBars(), SystemBars.Name);
+        // The page fills the screen, under the status bar and the bar of buttons, painting what shows through them
+        // itself; it is told how tall they are, as the web view does not say.
+#pragma warning disable CA1422 // Before Android 15 the page is not drawn under the bars, and they have colours of their own that would hide it.
+        Window!.SetDecorFitsSystemWindows(false);
+        Window.SetStatusBarColor(Color.Transparent);
+        Window.SetNavigationBarColor(Color.Transparent);
+#pragma warning restore CA1422
+        Window.NavigationBarContrastEnforced = false;
         var screen = new FrameLayout(this);
         screen.AddView(page, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
-        screen.SetOnApplyWindowInsetsListener(new BetweenBars());
+        screen.SetOnApplyWindowInsetsListener(new UnderBars(this));
         SetContentView(screen);
         if (OperatingSystem.IsAndroidVersionAtLeast(33)) OnBackInvokedDispatcher.RegisterOnBackInvokedCallback(IOnBackInvokedDispatcher.PriorityDefault, new BackCallback(Back));
 
@@ -74,10 +86,27 @@ public sealed class MainActivity : Activity
         if (Questions.TryRemove(requestCode, out var asked)) asked.TrySetResult(resultCode == Result.Ok);
     }
 
-    // Back puts away the window on top of the page, as Esc does on a computer; with none open, it leaves the app.
-    private void Back() => _page?.EvaluateJavascript(
-        "(() => { const open = document.querySelector('[role=dialog], [role=alertdialog], [role=menu]'); if (open) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return !!open; })()",
-        new Answered(put => { if (!put) RunOnUiThread(Finish); }));
+    // Back goes back in the page's history, which closes the screen, sheet or view it opened last. With nothing left
+    // there it puts away a window the page has open, as Esc does on a computer; with none open, it leaves the app.
+    private void Back()
+    {
+        if (_page is null) return;
+        if (_page.CanGoBack()) { _page.GoBack(); return; }
+        _page.EvaluateJavascript(
+            "(() => { const open = document.querySelector('[role=dialog], [role=alertdialog], [role=menu]'); if (open) window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); return !!open; })()",
+            new Answered(put => { if (!put) RunOnUiThread(Finish); }));
+    }
+
+    /// <summary>Tells the page how tall the phone's bars are, as it draws under them; again whenever the page has loaded.</summary>
+    public void TellInsets() => _page?.EvaluateJavascript(string.Create(CultureInfo.InvariantCulture,
+        $"document.documentElement.style.setProperty('--app-inset-top','{_insets.Top}px');document.documentElement.style.setProperty('--app-inset-bottom','{_insets.Bottom}px')"), null);
+
+    /// <summary>Draws the bars' icons dark on a light page and light on a dark one.</summary>
+    public void ShowTheme(bool light)
+    {
+        const int both = (int)(WindowInsetsControllerAppearance.LightStatusBars | WindowInsetsControllerAppearance.LightNavigationBars);
+        Window?.InsetsController?.SetSystemBarsAppearance(light ? both : 0, both);
+    }
 
 #pragma warning disable CA1422 // Before Android 13, the only way to hear the back button.
     public override void OnBackPressed() => Back();
@@ -146,13 +175,16 @@ public sealed class MainActivity : Activity
         });
     }
 
-    private sealed class BetweenBars : Java.Lang.Object, View.IOnApplyWindowInsetsListener
+    private sealed class UnderBars(MainActivity screen) : Java.Lang.Object, View.IOnApplyWindowInsetsListener
     {
-        /// <summary>Keeps the page clear of the phone's bars.</summary>
+        /// <summary>Lets the page under the bars at the top and foot, telling it how tall they are; keeps it clear of those at the sides.</summary>
         public WindowInsets OnApplyWindowInsets(View view, WindowInsets insets)
         {
             var bars = insets.GetInsets(WindowInsets.Type.SystemBars() | WindowInsets.Type.DisplayCutout());
-            view.SetPadding(bars.Left, bars.Top, bars.Right, bars.Bottom);
+            var density = view.Resources!.DisplayMetrics!.Density;
+            view.SetPadding(bars.Left, 0, bars.Right, 0);
+            screen._insets = (bars.Top / density, bars.Bottom / density);
+            screen.TellInsets();
             return WindowInsets.Consumed;
         }
     }

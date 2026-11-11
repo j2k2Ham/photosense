@@ -12,6 +12,13 @@ class MemoryStorage {
 }
 Object.defineProperty(globalThis, 'localStorage', { value: new MemoryStorage(), configurable: true, writable: true });
 
+// The test browser cannot be asked whether its system is set to light, which the Auto theme follows: it says dark.
+// A test of the theme stands in its own answer with vi.stubGlobal('matchMedia', …).
+Object.defineProperty(window, 'matchMedia', {
+  configurable: true, writable: true,
+  value: (query: string) => ({ media: query, matches: false, addEventListener() {}, removeEventListener() {} }),
+});
+
 afterEach(() => {
   localStorage.clear();
   cleanup();

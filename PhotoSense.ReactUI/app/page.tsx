@@ -8,12 +8,13 @@ import { AboutWindow } from '../components/AboutWindow';
 import { HelpWindow } from '../components/HelpWindow';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
+import { PhoneApp } from '../components/phone/PhoneApp';
 import { PhotoWindow } from '../components/PhotoWindow';
 import { ReceiveWindow } from '../components/ReceiveWindow';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { SettingsWindow } from '../components/SettingsWindow';
 import { SetupScreen } from '../components/SetupScreen';
-import { Toaster, useToasts, type ToastAction } from '../components/Toaster';
+import { PHONE_TOAST_MS, Toaster, TOAST_MS, useToasts, type ToastAction } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
 import {
   clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, undoChange, useGroups,
@@ -23,6 +24,9 @@ import { formatBytes, linkedFiles } from '../lib/format';
 import type { GuidePlace } from '../lib/guide';
 import { loadLastScan, loadOrganizeRoot } from '../lib/lastScan';
 import { useAppSettings } from '../lib/settings';
+import { platformOf, type TabId } from '../lib/phone';
+import { useSkin } from '../lib/skin';
+import { tellSystemBars } from '../lib/systemBars';
 import { useTheme } from '../lib/theme';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, RemovedFilesDto } from '../types';
 
@@ -48,19 +52,32 @@ const files = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'
 const NAMED = 4;
 const groupsOf = (n: number, kind: string) => `${n.toLocaleString()} ${kind} ${n === 1 ? 'group' : 'groups'}`;
 const messageOf = (e: unknown) => (e instanceof Error ? e.message : String(e));
-/** The programs that run on a phone. */
-const PHONES = new Set(['iphone', 'android']);
-
 /** PhotoSense's one page: Clean up and Organize, the bar and menu over them, and every window they open. */
 export default function HomePage() {
-  const [theme, setTheme] = useTheme();
+  const about = useAbout().data;
+  const program = about?.program;
+  // On a phone or tablet the page is laid out as its own apps are, with tabs; on a computer, as it always was.
+  const platform = platformOf(program);
+  const onPhone = platform !== undefined;
+  // A phone follows its system's light or dark until told otherwise, as its own apps do; a computer starts dark.
+  const [theme, setTheme, themeChoice] = useTheme(onPhone ? 'auto' : 'dark');
+  useSkin(program, theme);
+  useEffect(() => { if (onPhone) tellSystemBars(theme); }, [onPhone, theme]);
   const [settings, changeSettings] = useAppSettings();
-  const { toasts, errors, push, remove, clearError, clearErrors } = useToasts();
+  const { toasts, errors, push, remove, clearError, clearErrors } = useToasts(onPhone ? PHONE_TOAST_MS : TOAST_MS);
 
   // Clean up or Organize. Organize is made the first time it is turned to and then kept, with all that was arranged in it.
   const [area, setArea] = useState<Area>('clean');
   const [organizing, setOrganizing] = useState(false);
-  const turnTo = (next: Area) => { setArea(next); if (next === 'organize') setOrganizing(true); };
+  const turnTo = (next: Area) => { setArea(next); setTab(next === 'organize' ? 'organize' : 'cleanup'); if (next === 'organize') setOrganizing(true); };
+  // On a phone, the tab showing. Clean up and Organize are the two areas; turning to the tab showing goes back to its first screen.
+  const [tab, setTab] = useState<TabId>('cleanup');
+  const turnToTab = (next: TabId) => {
+    if (next === tab) { setReviewing(false); return; }
+    if (next === 'cleanup') turnTo('clean');
+    else if (next === 'organize') turnTo('organize');
+    else setTab(next);
+  };
   const [instanceId, setInstanceId] = useState<string>();
   // Where the person chose to be; until they choose, the screen follows whether there is anything to show.
   const [chosen, setChosen] = useState<'setup' | 'results'>();
@@ -82,8 +99,6 @@ export default function HomePage() {
   const [helpOpen, setHelpOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [receiveOpen, setReceiveOpen] = useState(false);
-  // A computer receives photos from a phone; a phone sends them, from Organize.
-  const onPhone = PHONES.has(useAbout().data?.program ?? '');
   // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
   // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
@@ -271,14 +286,14 @@ export default function HomePage() {
   }
 
   // Scanning is part of Clean up, wherever it is asked for from.
-  const changeFolders = () => { setArea('clean'); setChosen('setup'); };
+  const changeFolders = () => { turnTo('clean'); setChosen('setup'); };
   // The guide is put away, and what it was describing is shown.
   function goTo(place: GuidePlace) {
     setHelpOpen(false);
     if (place === 'scan') changeFolders();
     else if (place === 'organize') turnTo('organize');
     else if (place === 'settings') setSettingsOpen(true);
-    else { setArea('clean'); setChosen('results'); if (mode !== place) switchMode(place); }
+    else { turnTo('clean'); setChosen('results'); if (mode !== place) switchMode(place); }
   }
   const offline = !!(groups.error || status.error);
   const cancel = () => setPending(undefined);
@@ -287,33 +302,13 @@ export default function HomePage() {
   // Once there is no group left to review, a narrow screen goes back to the list.
   const showReview = reviewing && selected !== undefined;
 
-  return (
-    // The height the browser shows, which on a phone leaves out its own bars.
-    <div className="flex h-dvh flex-col bg-bg text-t1">
-      <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
-        errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
-        onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
-        {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
-        {menuOpen && (
-          <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-            onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} onDeletePermanently={askToErase}
-            onReceive={onPhone ? undefined : () => setReceiveOpen(true)} />
-        )}
-        {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
-
-      {offline && (
+  const offlineNotice = offline && (
         <div role="alert" className="flex items-center gap-4 border-b border-rose-line bg-rose-bg px-4 py-2.5 text-[14px] text-rose-t sm:px-6">
           <span className="flex-1">The PhotoSense service is not answering, so what is shown here may be out of date.</span>
           <button type="button" onClick={() => void retryNow()} className="pill-rose-outline h-8 px-4 text-[13px]">Retry</button>
         </div>
-      )}
-
-      <main className="flex min-h-0 flex-1 flex-col">
-        {organizing && (
-          <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} notify={push} /></div>
-        )}
-
-        {area === 'organize' ? null : screen === 'setup' ? (
+  );
+  const cleanScreen = screen === 'setup' ? (
           <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
         ) : (
           <>
@@ -380,8 +375,42 @@ export default function HomePage() {
                 onDeleteGroup={group => setPending({ scope: 'group', group })} />
             </div>
           </>
-        )}
-      </main>
+        );
+
+  return (
+    // The height the browser shows, which on a phone leaves out its own bars.
+    <div className="flex h-dvh flex-col bg-bg text-t1">
+      {platform ? (
+        <PhoneApp platform={platform} tab={tab} reviewing={showReview} cleanup={cleanScreen} organize={organizing && <OrganizeView startRoot={folders[0]} notify={push} />}
+          cleanupSubtitle={mode === 'duplicates' ? 'Copies of the same photo or video' : 'Shots that look alike'} notice={offlineNotice}
+          counts={{ cleanup: removable > 0 ? removable.toLocaleString() : undefined }} toasts={toasts} removeToast={remove}
+          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} onTab={turnToTab} onEndReview={() => setReviewing(false)}
+          onScanAgain={changeFolders} onDeletePermanently={askToErase} onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} />
+      ) : (
+        <>
+        <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
+          errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
+          onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
+          {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
+          {menuOpen && (
+            <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
+              onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} onDeletePermanently={askToErase}
+              onReceive={() => setReceiveOpen(true)} />
+          )}
+          {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
+
+        {offlineNotice}
+
+        <main className="flex min-h-0 flex-1 flex-col">
+          {organizing && (
+            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} notify={push} /></div>
+          )}
+
+          {area === 'organize' ? null : cleanScreen}
+        </main>
+        </>
+      )}
+      {platform && errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}
 
       {compared && (
         <PhotoWindow key={compared.key} original={compared.keeper} member={compared.members[comparedIndex]} index={comparedIndex} count={compared.members.length} mode={mode} busy={busy}
@@ -454,7 +483,7 @@ export default function HomePage() {
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
       {receiveOpen && <ReceiveWindow folder={loadOrganizeRoot() || loadLastScan().root} notify={push} onClose={() => setReceiveOpen(false)} />}
 
-      <Toaster toasts={toasts} remove={remove} />
+      {!platform && <Toaster toasts={toasts} remove={remove} />}
     </div>
   );
 }

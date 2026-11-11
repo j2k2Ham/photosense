@@ -1,6 +1,6 @@
 import { expect, message, test } from '../fixtures/app';
 import { Phone } from '../fixtures/phone';
-import { openOrganize, preview, question, suggestions, tile } from '../fixtures/screens';
+import { openOrganize, phoneSettings, preview, question, suggestions, tile } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
 const sendWindow = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Send to computer' });
@@ -18,19 +18,19 @@ test.describe('on a phone', () => {
     expect(phone.asked).toContain('library/choose-more');
   });
 
-  test('About names the phone app @phone', async ({ page }) => {
+  test('About, from Settings, names the phone app, which has no menu and receives nothing @phone', async ({ page }) => {
     await new Phone().attach(page);
     await page.goto('/');
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Receive from phone' })).toBeHidden();
-    await page.getByRole('menuitem', { name: 'About PhotoSense' }).click();
+    const settings = await phoneSettings(page);
+    await expect(page.getByRole('button', { name: 'Menu' })).toBeHidden();
+    await settings.getByRole('button', { name: /^About PhotoSense/ }).click();
     await expect(page.getByRole('dialog', { name: 'About PhotoSense' }).getByRole('article')).toContainText(/Version [\d.]+ for iPhone and iPad/);
   });
 
   test('Organize moves photos and offers no copy, since a phone keeps a photo once @phone', async ({ page, photos }) => {
     await new Phone().attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1, at: PLACES.butte });
-    await openOrganize(page, photos.root);
+    await openOrganize(page, photos.root, true);
     if (await page.getByRole('group', { name: 'Files or folders' }).isVisible()) await page.getByRole('group', { name: 'Files or folders' }).getByRole('button', { name: /^Folders/ }).click();
     await suggestions(page).getByRole('button', { name: 'Preview Butte' }).click();
     await expect(preview(page).getByRole('group', { name: 'Move or copy' })).toBeHidden();
@@ -42,7 +42,7 @@ test.describe('on a phone', () => {
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
-    await openOrganize(page, photos.root);
+    await openOrganize(page, photos.root, true);
     await tile(page, 'IMG_0001.JPG').click();
     await tile(page, 'IMG_0002.JPG').click();
     await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Send to computer' }).click();
@@ -70,7 +70,7 @@ test.describe('on a phone', () => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
-    await openOrganize(page, photos.root);
+    await openOrganize(page, photos.root, true);
     await tile(page, 'IMG_0001.JPG').click();
     await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Send to computer' }).click();
     await expect(sendWindow(page)).toContainText('The photos stay on this phone as well.');
@@ -89,7 +89,7 @@ test.describe('on a phone', () => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
-    await openOrganize(page, photos.root);
+    await openOrganize(page, photos.root, true);
     await tile(page, 'IMG_0001.JPG').click();
     await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Send to computer' }).click();
     await expect(sendWindow(page)).toContainText('Waiting for your computer');
