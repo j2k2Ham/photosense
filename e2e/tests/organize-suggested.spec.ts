@@ -1,6 +1,6 @@
 import { expect, message, test, type Photos } from '../fixtures/app';
 import { PLACES } from '../fixtures/media';
-import { openOrganize, photoFiles, preview, suggestions, tile } from '../fixtures/screens';
+import { menu, openOrganize, photoFiles, preview, suggestions, tile } from '../fixtures/screens';
 import type { Page } from '@playwright/test';
 
 // Two pictures taken in Butte in 2022, one in Anaconda in 2023, and one that says nowhere.
@@ -34,6 +34,29 @@ test.describe('Organize: suggested folders', () => {
     await suggestions(page).getByRole('button', { name: 'Show the files with no location' }).click();
     await expect(tile(page, 'IMG_0004.JPG')).toBeVisible();
     await expect(tile(page, 'IMG_0001.JPG')).toBeHidden();
+  });
+
+  test('distances are in miles until Settings says kilometers, which changes which places share a folder', async ({ page, photos }) => {
+    trip(photos);
+    await openOrganize(page, photos.root);
+    // Butte and Anaconda are some 21 miles (34 km) apart: within 25 miles, but not 25 km.
+    const reach = suggestions(page).getByRole('group', { name: 'Combine places within' });
+    await reach.getByRole('button', { name: '25', exact: true }).click();
+    await expect(card(page, 'Butte')).toContainText(/Includes Anaconda \(\d+ mi away\)/);
+    await expect(card(page, 'Anaconda')).toBeHidden();
+    await expect(suggestions(page)).toContainText('Places within 25 miles of each other share a folder.');
+
+    await menu(page, 'Settings');
+    const settings = page.getByRole('dialog', { name: 'Settings' });
+    await settings.getByRole('group', { name: 'Distances' }).getByRole('button', { name: 'Kilometers' }).click();
+    await settings.getByRole('button', { name: 'Done' }).click();
+    await expect(card(page, 'Anaconda')).toContainText('1 file');
+    await expect(suggestions(page)).toContainText('Places within 25 km of each other share a folder.');
+    await expect(reach.getByRole('button', { name: '50 km' })).toBeVisible();
+    // Kept for the next visit.
+    await page.reload();
+    await openOrganize(page, photos.root);
+    await expect(suggestions(page)).toContainText('Places within 5 km of each other share a folder.');
   });
 
   test('a suggested folder is previewed and moved, and Undo in Recently moved puts every file back', async ({ page, photos }) => {

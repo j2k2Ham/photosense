@@ -1,15 +1,12 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReceiveWindow } from '../../components/ReceiveWindow';
-import { photosAndVideos, SendWindow, someNames } from '../../components/SendWindow';
 import { Progress, TransferWindow } from '../../components/TransferParts';
-import type { FoundPhoneDto, ReceiveStateDto, SendStateDto } from '../../types';
-import { deferred } from '../deferred';
+import type { FoundPhoneDto, ReceiveStateDto } from '../../types';
 
 const api = vi.hoisted(() => ({
-  useSendState: vi.fn(), startSending: vi.fn(), confirmSending: vi.fn(), stopSending: vi.fn(), deleteSent: vi.fn(),
   usePhones: vi.fn(), useReceiveState: vi.fn(), startReceiving: vi.fn(), confirmReceiving: vi.fn(), stopReceiving: vi.fn(),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
@@ -24,13 +21,9 @@ vi.mock('../../components/FolderPicker', () => ({
 
 const notify = vi.fn();
 const onClose = vi.fn();
-let sendState: SendStateDto | undefined;
 let receiveState: ReceiveStateDto | undefined;
 let phones: FoundPhoneDto[] | undefined;
 
-const sending = (changes: Partial<SendStateDto> = {}): SendStateDto => ({
-  stage: 'waiting', code: null, computer: null, done: 0, total: 2, bytes: 0, totalBytes: 2_000_000, deletable: [], where: null, phone: "Jamie's iPhone", problem: null, ...changes,
-});
 const receiving = (changes: Partial<ReceiveStateDto> = {}): ReceiveStateDto => ({
   stage: 'connecting', code: null, phone: "Jamie's iPhone", done: 0, total: 0, bytes: 0, totalBytes: 0, alreadyThere: 0, folder: 'C:\\Photos', problem: null, ...changes,
 });
@@ -39,13 +32,8 @@ const IPAD: FoundPhoneDto = { key: 'usb:3', name: 'iPhone or iPad on the cable',
 
 beforeEach(() => {
   for (const mock of [...Object.values(api), notify, onClose]) mock.mockReset();
-  sendState = sending();
   receiveState = undefined;
   phones = [IPHONE];
-  api.useSendState.mockImplementation(() => ({ data: sendState }));
-  api.startSending.mockImplementation(async () => sendState);
-  api.confirmSending.mockImplementation(async () => sendState);
-  api.stopSending.mockImplementation(async () => sendState);
   api.usePhones.mockImplementation((looking: boolean) => ({ data: looking && phones ? { phones } : undefined }));
   api.useReceiveState.mockImplementation((on: boolean) => ({ data: on ? receiveState : undefined }));
   api.startReceiving.mockImplementation(async () => receiveState);
@@ -55,204 +43,6 @@ beforeEach(() => {
 
 const dialog = (name: string) => screen.getByRole('dialog', { name });
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
-
-describe('sending from the phone', () => {
-  async function send(files: string[] = ['f1', 'f2']) {
-    const view = render(<SendWindow files={files} notify={notify} onClose={onClose} />);
-    await waitFor(() => expect(screen.queryByText('Getting ready…')).not.toBeInTheDocument());
-    return { ...view, redraw: () => view.rerender(<SendWindow files={files} notify={notify} onClose={onClose} />) };
-  }
-
-  it('offers the chosen files at once, says how the computer finds the phone, and stops offering when closed', async () => {
-    const started = deferred<SendStateDto>();
-    api.startSending.mockReturnValueOnce(started.promise);
-    render(<SendWindow files={['f1', 'f2']} notify={notify} onClose={onClose} />);
-    expect(dialog('Send to computer')).toHaveTextContent('Getting ready…');
-    expect(api.startSending).toHaveBeenCalledExactlyOnceWith(['f1', 'f2']);
-    await act(async () => started.resolve(sendState!));
-    expect(dialog('Send to computer')).toHaveTextContent("Waiting for your computer. On the computer, open PhotoSense and choose Receive from phone in the menu. This phone shows there as Jamie's iPhone.");
-    expect(dialog('Send to computer')).toHaveTextContent('2 files are offered, with any Live Photo videos and edits.');
-    await userEvent.click(button('Stop'));
-    expect(api.stopSending).toHaveBeenCalledOnce();
-    expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it('stops offering on Escape too, and says one file as one', async () => {
-    sendState = sending({ total: 1 });
-    api.stopSending.mockRejectedValue(new Error('gone'));
-    await send(['f1']);
-    expect(dialog('Send to computer')).toHaveTextContent('1 file is offered');
-    await userEvent.keyboard('{Escape}');
-    expect([api.stopSending.mock.calls.length, onClose.mock.calls.length]).toEqual([1, 1]);
-  });
-
-  it('asks whether the computer shows the same number, gives the answer, and says when it could not', async () => {
-    sendState = sending({ stage: 'comparing', code: '482 917', computer: 'DESKTOP-1' });
-    await send();
-    expect(dialog('Send to computer')).toHaveTextContent('Does DESKTOP-1 show this number?482 917');
-    await userEvent.click(button('They match'));
-    expect(api.confirmSending).toHaveBeenLastCalledWith(true);
-    api.confirmSending.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    await userEvent.click(button('They don’t match'));
-    expect(api.confirmSending).toHaveBeenLastCalledWith(false);
-    expect(notify).toHaveBeenLastCalledWith('Cannot reach the PhotoSense server.', 'error');
-  });
-
-  it('shows how far sending has got, and Stop stops it', async () => {
-    sendState = sending({ stage: 'sending', computer: 'DESKTOP-1', done: 1, total: 3, bytes: 1_000_000, totalBytes: 4_000_000 });
-    await send();
-    expect(screen.getByRole('progressbar', { name: 'Sending to DESKTOP-1' })).toHaveAttribute('aria-valuenow', '25');
-    expect(dialog('Send to computer')).toHaveTextContent('1 of 3 files · 977 KB of 3.8 MB');
-    await userEvent.click(button('Stop'));
-    expect([api.stopSending.mock.calls.length, onClose.mock.calls.length]).toEqual([1, 1]);
-  });
-
-  it('once sent, says where the files are and deletes them from the phone only after asking, naming what goes and what stays', async () => {
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3, where: 'C:\\Photos\\Phone', deletable: ['IMG_0001.JPG', 'IMG_0002.MOV'] });
-    api.deleteSent.mockResolvedValue({ deleted: 2 });
-    await send();
-    expect(dialog('Send to computer')).toHaveTextContent('3 of 3 files are on DESKTOP-1 in C:\\Photos\\Phone. They are still on this phone too.');
-    await userEvent.click(button('Delete 1 photo and 1 video from this phone'));
-    const asked = screen.getByRole('alertdialog', { name: 'Delete 1 photo and 1 video from this phone?' });
-    expect(asked).toHaveTextContent('IMG_0001.JPG and IMG_0002.MOV will go to Recently Deleted on this phone, with any Live Photo videos and edits. The phone keeps them there for 30 days, and asks you first.');
-    expect(asked).toHaveTextContent('The copies on DESKTOP-1 in C:\\Photos\\Phone stay.');
-    // Escape puts the question away, not the window under it.
-    await userEvent.keyboard('{Escape}');
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    expect(onClose).not.toHaveBeenCalled();
-
-    await userEvent.click(button('Delete 1 photo and 1 video from this phone'));
-    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete 1 photo and 1 video' }));
-    expect(api.deleteSent).toHaveBeenCalledOnce();
-    expect(notify).toHaveBeenLastCalledWith('Deleted 1 photo and 1 video from this phone. They are in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.', 'ok');
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
-    // Sent is sent: closing stops nothing.
-    await userEvent.click(button('Close'));
-    expect(onClose).toHaveBeenCalledOnce();
-    expect(api.stopSending).not.toHaveBeenCalled();
-  });
-
-  it('names one photo by its name, says when there was nothing left, and keeps asking when the phone would not delete', async () => {
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, deletable: ['IMG_0001.JPG'] });
-    api.deleteSent.mockRejectedValueOnce(new Error('You chose not to delete these photos.')).mockResolvedValueOnce({ deleted: 0 }).mockResolvedValueOnce({ deleted: 1 });
-    await send();
-    expect(dialog('Send to computer')).toHaveTextContent('1 of 1 file is on DESKTOP-1. They are still on this phone too.');
-    await userEvent.click(button('Delete 1 photo from this phone'));
-    const asked = screen.getByRole('alertdialog', { name: 'Delete IMG_0001.JPG from this phone?' });
-    expect(asked).toHaveTextContent('The copies on DESKTOP-1 stay.');
-    await userEvent.click(within(asked).getByRole('button', { name: 'Delete 1 photo' }));
-    expect(notify).toHaveBeenLastCalledWith('You chose not to delete these photos.', 'error');
-    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
-    await userEvent.click(within(asked).getByRole('button', { name: 'Delete 1 photo' }));
-    expect(notify).toHaveBeenLastCalledWith('There was nothing left to delete.', 'info');
-    await userEvent.click(button('Delete 1 photo from this phone'));
-    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete 1 photo' }));
-    expect(notify).toHaveBeenLastCalledWith('Deleted 1 photo from this phone. It is in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.', 'ok');
-  });
-
-  it('offers nothing to delete until something is safely on the computer, nor once it was deleted', async () => {
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 2, total: 2 });
-    await send();
-    expect(dialog('Send to computer')).toHaveTextContent(/^Send to computer2 of 2 files are on DESKTOP-1\.Close$/);
-    expect(screen.queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument();
-  });
-
-  it('offers to copy the photos to the computer or to move them there, and says what each does', async () => {
-    const { redraw } = await send();
-    const choice = () => screen.getByRole('group', { name: 'Copy or move' });
-    expect(within(choice()).getByRole('button', { name: 'Copy' })).toHaveAttribute('aria-pressed', 'true');
-    expect(dialog('Send to computer')).toHaveTextContent('The photos stay on this phone as well.');
-    await userEvent.click(within(choice()).getByRole('button', { name: 'Move' }));
-    expect(dialog('Send to computer')).toHaveTextContent('Once all of each photo is safely on the computer, it is deleted from this phone, into Recently Deleted for 30 days. The phone asks you first.');
-    // It can still be changed while the photos go.
-    sendState = sending({ stage: 'sending', computer: 'DESKTOP-1', done: 1, total: 3 });
-    redraw();
-    expect(within(choice()).getByRole('button', { name: 'Move' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(within(choice()).getByRole('button', { name: 'Copy' }));
-    // Copied, nothing is deleted by itself.
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3, deletable: ['IMG_0001.JPG'] });
-    redraw();
-    expect(api.deleteSent).not.toHaveBeenCalled();
-    expect(button('Delete 1 photo from this phone')).toBeInTheDocument();
-  });
-
-  it('moving, deletes them from the phone by itself once all of them are on the computer, once, and says what went where', async () => {
-    api.deleteSent.mockResolvedValue({ deleted: 2 });
-    const { redraw } = await send();
-    await userEvent.click(button('Move'));
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3, deletable: ['IMG_0001.JPG', 'IMG_0001.MOV'] });
-    redraw();
-    expect(dialog('Send to computer')).toHaveTextContent('All 3 files are on DESKTOP-1. Deleting them from this phone; the phone asks you first.');
-    await waitFor(() => expect(notify).toHaveBeenLastCalledWith('Moved 1 photo and 1 video to DESKTOP-1. They are in Recently Deleted on this phone for 30 days.', 'ok'));
-    redraw();
-    expect(api.deleteSent).toHaveBeenCalledOnce();
-    // Gone from the phone: there is nothing more to delete.
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 3, total: 3 });
-    redraw();
-    expect(dialog('Send to computer')).toHaveTextContent('3 of 3 files are on DESKTOP-1.Close');
-    expect(api.deleteSent).toHaveBeenCalledOnce();
-  });
-
-  it('moving one, names it as one; and when the phone was told no, says so and leaves the button to try again', async () => {
-    api.deleteSent.mockRejectedValueOnce(new Error('You chose not to let PhotoSense make this change to your photos.')).mockResolvedValueOnce({ deleted: 1 });
-    const { redraw } = await send(['f1']);
-    await userEvent.click(button('Move'));
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, deletable: ['IMG_0001.JPG'] });
-    redraw();
-    expect(dialog('Send to computer')).toHaveTextContent('All 1 file is on DESKTOP-1.');
-    await waitFor(() => expect(notify).toHaveBeenLastCalledWith('You chose not to let PhotoSense make this change to your photos.', 'error'));
-    await userEvent.click(button('Delete 1 photo from this phone'));
-    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete 1 photo' }));
-    expect(notify).toHaveBeenLastCalledWith('Deleted 1 photo from this phone. It is in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.', 'ok');
-    expect(api.deleteSent).toHaveBeenCalledTimes(2);
-  });
-
-  it('moving what is no longer there to delete, says there was nothing left', async () => {
-    api.deleteSent.mockResolvedValue({ deleted: 0 });
-    const { redraw } = await send(['f2']);
-    await userEvent.click(button('Move'));
-    sendState = sending({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, deletable: ['IMG_0002.JPG'] });
-    redraw();
-    await waitFor(() => expect(notify).toHaveBeenLastCalledWith('There was nothing left to delete.', 'info'));
-  });
-
-  it('says why it could not offer the photos, or why sending failed, and tries again', async () => {
-    api.startSending.mockRejectedValueOnce(new Error('None of those files is there to send any more.')).mockRejectedValueOnce('odd');
-    render(<SendWindow files={['f1']} notify={notify} onClose={onClose} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('None of those files is there to send any more.');
-    await userEvent.click(button('Try again'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('odd');
-    await userEvent.click(button('Try again'));
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-    expect(api.startSending).toHaveBeenCalledTimes(3);
-    await userEvent.click(button('Stop'));
-    expect(onClose).toHaveBeenCalledOnce();
-  });
-
-  it('after a failure or a stop, says so and offers the files again', async () => {
-    sendState = sending({ stage: 'failed', problem: 'The other device stopped answering.' });
-    const { redraw } = await send();
-    expect(screen.getByRole('alert')).toHaveTextContent('The other device stopped answering.');
-    await userEvent.click(button('Try again'));
-    expect(api.startSending).toHaveBeenCalledTimes(2);
-    sendState = sending({ stage: 'idle' });
-    redraw();
-    expect(dialog('Send to computer')).toHaveTextContent('This phone is not offering photos now.');
-    await userEvent.click(button('Offer them again'));
-    expect(api.startSending).toHaveBeenCalledTimes(3);
-    await userEvent.click(button('Close'));
-    expect(api.stopSending).not.toHaveBeenCalled();
-    sendState = sending({ stage: 'failed', problem: 'x' });
-    redraw();
-    await userEvent.click(button('Close'));
-    expect(onClose).toHaveBeenCalledTimes(2);
-  });
-
-  it('counts photos and videos by their names, and names a few of them', () => {
-    expect([[], ['a.jpg'], ['a.jpg', 'b.HEIC'], ['a.MOV'], ['a.mov', 'b.MP4', 'c.jpg']].map(photosAndVideos)).toEqual(['', '1 photo', '2 photos', '1 video', '1 photo and 2 videos']);
-    expect([[], ['a'], ['a', 'b'], ['a', 'b', 'c'], ['a', 'b', 'c', 'd', 'e']].map(someNames)).toEqual(['', 'a', 'a and b', 'a, b and c', 'a, b, c and 2 more']);
-  });
-});
 
 describe('receiving on the computer', () => {
   function receive(folder?: string) {
@@ -352,6 +142,12 @@ describe('receiving on the computer', () => {
     const { rerender } = receive('C:\\Photos');
     await userEvent.click(button('Receive into Photos'));
     expect(screen.getByRole('alert')).toHaveTextContent('That phone is no longer offering photos. Look for it again.');
+    api.startReceiving.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await userEvent.click(button('Receive into Photos'));
+    expect(screen.getByRole('alert')).toHaveTextContent('Cannot reach the PhotoSense server.');
+    api.startReceiving.mockRejectedValueOnce('The phone said no.');
+    await userEvent.click(button('Receive into Photos'));
+    expect(screen.getByRole('alert')).toHaveTextContent('The phone said no.');
 
     receiveState = receiving({ stage: 'failed', problem: 'The phone is already sending to another computer.' });
     await userEvent.click(button('Receive into Photos'));

@@ -320,7 +320,7 @@ describe('ConfirmDialog', () => {
 describe('the settings window', () => {
   it('shows each setting as it is, changes it at once, and closes on Done, Escape or a press outside', async () => {
     const onChange = vi.fn(), onClose = vi.fn();
-    const { container, rerender, unmount } = render(<SettingsWindow settings={{ eraseAskTwice: true }} onChange={onChange} onClose={onClose} />);
+    const { container, rerender, unmount } = render(<SettingsWindow settings={{ eraseAskTwice: true, distanceUnit: 'miles' }} onChange={onChange} onClose={onClose} />);
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
     expect(dialog).toHaveTextContent('After the warning, Delete permanently asks “Are you sure?” once more. Turned off, the files are erased as soon as the warning is confirmed.');
     expect(dialog).toHaveTextContent('Settings are kept in this browser.');
@@ -328,7 +328,7 @@ describe('the settings window', () => {
     expect(ask).toBeChecked();
     await userEvent.click(ask);
     expect(onChange).toHaveBeenLastCalledWith({ eraseAskTwice: false });
-    rerender(<SettingsWindow settings={{ eraseAskTwice: false }} onChange={onChange} onClose={onClose} />);
+    rerender(<SettingsWindow settings={{ eraseAskTwice: false, distanceUnit: 'miles' }} onChange={onChange} onClose={onClose} />);
     expect(ask).not.toBeChecked();
     await userEvent.click(ask);
     expect(onChange).toHaveBeenLastCalledWith({ eraseAskTwice: true });
@@ -336,6 +336,10 @@ describe('the settings window', () => {
     fireEvent.keyDown(window, { key: 'Enter' });
     fireEvent.mouseDown(dialog);
     expect(onClose).not.toHaveBeenCalled();
+    const units = within(dialog).getByRole('group', { name: 'Distances' });
+    expect(within(units).getByRole('button', { name: 'Miles' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(units).getByRole('button', { name: 'Kilometers' }));
+    expect(onChange).toHaveBeenLastCalledWith({ distanceUnit: 'km' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
     fireEvent.keyDown(window, { key: 'Escape' });
     fireEvent.mouseDown(container.firstElementChild!);

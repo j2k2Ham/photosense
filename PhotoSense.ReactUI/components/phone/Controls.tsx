@@ -76,6 +76,11 @@ interface ChipProps {
   onClick(): void;
 }
 
+/** The ring of a choice in a list of them, filled when it is the one chosen. */
+export const Radio = ({ on }: { readonly on: boolean }) => (
+  <span aria-hidden className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-2 ${on ? 'border-acc' : 'border-t3'}`}>{on && <span className="h-3 w-3 rounded-full bg-acc" />}</span>
+);
+
 /** A filter or a choice in a row of them, with how many it holds after its name. */
 export function Chip({ label, count, on, onClick }: ChipProps) {
   return (

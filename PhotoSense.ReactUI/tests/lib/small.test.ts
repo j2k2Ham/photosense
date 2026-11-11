@@ -121,31 +121,31 @@ describe('the skin', () => {
 describe('the settings', () => {
   it('ask twice before deleting permanently until told not to, and the change is remembered', () => {
     const { result } = renderHook(() => useAppSettings());
-    expect(result.current[0]).toEqual({ eraseAskTwice: true });
+    expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles' });
 
     act(() => result.current[1]({ eraseAskTwice: false }));
-    expect(result.current[0]).toEqual({ eraseAskTwice: false });
-    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles' });
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles' });
     // The next visit starts from what was left.
-    expect(renderHook(() => useAppSettings()).result.current[0]).toEqual({ eraseAskTwice: false });
+    expect(renderHook(() => useAppSettings()).result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles' });
     // A change that names nothing leaves everything as it is.
     act(() => result.current[1]({}));
-    expect(result.current[0]).toEqual({ eraseAskTwice: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles' });
   });
 
   it('have their defaults for anything not saved, or saved in a way that cannot be read', () => {
     localStorage.setItem('photosense-settings', '{"somethingOlder":1}');
-    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, somethingOlder: 1 });
+    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', somethingOlder: 1 });
     localStorage.setItem('photosense-settings', 'not json');
-    expect(loadAppSettings()).toEqual({ eraseAskTwice: true });
+    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles' });
   });
 
   it('still work for this visit where the browser refuses to remember them', () => {
     refuseStorage();
     const { result } = renderHook(() => useAppSettings());
-    expect(result.current[0]).toEqual({ eraseAskTwice: true });
+    expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles' });
     act(() => result.current[1]({ eraseAskTwice: false }));
-    expect(result.current[0]).toEqual({ eraseAskTwice: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles' });
   });
 });
 

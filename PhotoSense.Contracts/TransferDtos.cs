@@ -41,6 +41,8 @@ public sealed class SendStateDto
     [JsonPropertyName("phone")] public string Phone { get; init; } = string.Empty;
     /// <summary>Why it stopped, when it failed.</summary>
     [JsonPropertyName("problem")] public string? Problem { get; init; }
+    /// <summary>The name of the file going to the computer now; none between files.</summary>
+    [JsonPropertyName("current")] public string? Current { get; init; }
 }
 
 /// <summary>How many pictures and videos were deleted from the phone.</summary>

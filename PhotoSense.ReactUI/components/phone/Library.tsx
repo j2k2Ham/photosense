@@ -10,7 +10,6 @@ import {
 import { checkFolderName, placeInFull, resolveNames } from '../../lib/organize';
 import { usePhone } from '../../lib/phone';
 import type { OrganizeDestination, OrganizeFileDto, OrganizePlaceDto } from '../../types';
-import { SendWindow } from '../SendWindow';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton } from './Controls';
 import { AddToFolderIcon, ChevronBackIcon, FolderIcon, SendIcon, TrashIcon } from './Icons';
@@ -38,13 +37,15 @@ interface Props {
   /** Albums or folders named in Organize and not made yet, offered beside those there are. */
   readonly made?: readonly Album[];
   notify: Notify;
+  /** Takes these pictures and videos, by their ids, to Send, chosen to be sent. */
+  onSend(ids: string[]): void;
 }
 
 /**
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter. Tapping one opens it;
  * Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend }: Props) {
   const { platform, ios, words } = usePhone();
   const access = usePhotoAccess().data?.access;
   const { root, files, listing, reading } = library;
@@ -54,7 +55,6 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   // The files a sheet is about: those chosen, or the one open in the viewer.
   const [acting, setActing] = useState<{ files: OrganizeFileDto[]; sheet: 'put' | 'new' | 'delete' }>();
   const [viewing, setViewing] = useState<string>();
-  const [sending, setSending] = useState<string[]>();
   const [busy, setBusy] = useState(false);
 
   const counts = useMemo(() => (root ? filterCounts(files, root, platform) : undefined), [files, root, platform]);
@@ -172,12 +172,12 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       ))}
       <div ref={end} />
 
-      {selecting && <SelectionBar count={chosen.length} onSend={() => { setSending(chosen.map(f => f.id)); stopSelecting(); }} onPut={() => act('put', chosen)} onDelete={() => act('delete', chosen)} />}
+      {selecting && <SelectionBar count={chosen.length} onSend={() => { onSend(chosen.map(f => f.id)); stopSelecting(); }} onPut={() => act('put', chosen)} onDelete={() => act('delete', chosen)} />}
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
       {viewed && (
         <Viewer file={viewed} places={places} root={root!} onClose={() => setViewing(undefined)}
-          onSend={() => { setSending([viewed.id]); setViewing(undefined); }} onPut={() => act('put', [viewed])} onDelete={() => act('delete', [viewed])} />
+          onSend={() => { onSend([viewed.id]); setViewing(undefined); }} onPut={() => act('put', [viewed])} onDelete={() => act('delete', [viewed])} />
       )}
       {acting?.sheet === 'put' && (
         <PutSheet count={acting.files.length} albums={albums} busy={busy} onClose={() => setActing(undefined)}
@@ -192,7 +192,6 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
         const q = deleteQuestion(acting.files.map(f => f.name), words);
         return <ConfirmSheet title={q.title} lines={q.lines} confirmLabel={q.button} busy={busy} onConfirm={() => void remove(acting.files)} onCancel={() => setActing(undefined)} />;
       })()}
-      {sending && <SendWindow files={sending} notify={notify} onClose={() => setSending(undefined)} />}
       </>, document.body)}
     </Screen>
   );

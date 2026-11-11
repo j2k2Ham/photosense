@@ -52,7 +52,7 @@ Everything is on branch `feature/mobile-and-mac`, which has not been merged and 
   - Android answers no to a question of its own still up when the app's screen goes for good. Its blocking wait for that answer (`MainActivity.Ask`) is a named exception to rule 10, as `PageClient.Ask` is (Jamie, 2026-11-10).
   - Looking for an iPhone on a cable gives Apple's device service five seconds.
   - Consistency before availability held already: every change journaled and put back if cut short, removal checked against the scan, the phone deleting only what the computer confirmed by SHA-256. No circuit breakers: there is no shared remote service to protect.
-- **Last measured:** service 828 tests at 100% of lines (3,547) and branches (2,008) (2026-11-10); page 784 tests at 100% (2026-11-11); end to end 78 tests, 60 in Playwright's Chromium and 18 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Clean up push (193ca04, 2026-11-11).
+- **Last measured:** service 828 tests at 100% of lines (3,551) and branches (2,008) (2026-11-11); page 798 tests at 100% (2026-11-11); end to end 79 tests, 61 in Playwright's Chromium and 18 in WebKit (2026-11-11); build tools 37 tests at 100%. On GitHub, `iphone.yml`, `android.yml` and `e2e.yml` passed on the Clean up push (193ca04, 2026-11-11).
 
 ## Remaining steps
 
@@ -108,7 +108,14 @@ The Native look of `docs/design_handoff_photosense_mobile` (iOS 26 on iPhone and
   - Organize's computer screen is no longer shown on a phone; sending starts from Library's selection, as the design has it.
   - Fixed on the way: a pushed screen's subtitle was not shown on Android, Clean up's review included.
   - Checked: page 784 tests at 100%; end to end 60 and 18 (a new Organize test: a name taken numbered, the move and Undo on the disk; the sending tests now start from Library); screenshots at the four sizes in both themes against the handoff's 19–28 and the tablets' 03, over a scratch copy of 60 of Jamie's photos; over Jamie's whole photo folder (read only): 6,296 files read and 88 albums suggested after 7 s (1,307 with no location), the largest, 1,582 files, ready to move 4.5 s after opening. Not checked: on a device; Android's own question before a move (26); a move on a real phone's library.
-- [ ] **7. Send** (29–34): its own tab, over `send/*` and `SendStateDto.stage`.
+- [x] **Distances in miles or kilometers** (Jamie, 2026-11-11: "always default to miles", with a setting used throughout, computer and phone): **Distances** in the computer's Settings window and the phone's Settings sheet, one setting (`distanceUnit` in `lib/settings.ts`, default miles); Organize's reach, its choices, the "Includes … (N km away)" notes and the map's scale all follow it (`lib/distance.ts`). Checked: page 791 tests at 100%; end to end, a new test in each layout (kilometers chosen in Settings regroups Organize and changes its words, and is kept); screenshots of Settings at the four sizes in both themes.
+- [x] **7. Send** (2026-11-11), in `components/phone/Send.tsx` and `lib/send.ts`:
+  - Its own tab: what to send (everything not in an album or folder yet, what was chosen in Library, or everything, each with how many files and their size, Live Photo videos with their pictures), Copy or move with what each does, how the computer finds the phone, and **Offer N files to a computer**. "Nothing chosen yet. Tap to choose." opens Library choosing; Library's Send (selection bar and viewer) comes back to Send with the choice.
+  - Waiting for a computer (the pulse, what to do on the computer, **Stop offering**); the number (**It's the same number**, **It's different**); sending (the percentage, files and bytes, where they go, the file going now, **Stop sending**); sent (how many are on the computer, where, checked; with Copy **Delete N from this phone** after a question naming what goes and that the copies stay; with Move deleted by itself; **Done**); stopped (nothing sent or how many were, why, **Try again**).
+  - The offer is held in PhoneApp (`useSend`), so it stands, and a move finishes, while other tabs show; the phone's state is asked every second only while Send shows or an offer stands.
+  - New in the contract (Jamie, 2026-11-11): `current` on `send/state`, the name of the file going now (`SendState.Current`).
+  - The old sending window and Send in the computer Organize's selection bar (shown only on a phone) are gone.
+  - Checked: service 828 tests at 100% (3,551 lines, 2,008 branches); page 798 tests at 100%; end to end 61 and 18 (the three sending tests now go through the Send tab, one new: numbers said to be different, Try again and Stop offering); screenshots at the four sizes in both themes against the handoff's 29–33 and the tablets' 04, over the scratch copy of 60 of Jamie's photos, the phone's sending stood in for. Not checked: on a device, with a real computer; the system's own question before deleting (34).
 - [ ] **8. Settings** (35–37): appearance (Auto, Dark, Light), photos, removed files with Delete permanently and its second question, history, errors, help and about.
 
 ### Security and safety (Jamie, 2026-11-10: for later)
@@ -191,8 +198,18 @@ After a review of security, the Delete permanently wording, complaints and trans
   - A phone with no theme chosen starts in **Auto**, as its own apps do; a computer still starts dark.
   - The skins use the handoff's own names, which the desktop's tokens share (`--bg`, `--t1` to `--t3`, `--stage`, `--sel`, `--keep`, `--amber`, `--ident`, `--ident-bg`, `--scrim`): on a phone the skin's values win, so the screens not yet rebuilt already take the skin's background, text and those colours. The desktop is untouched, having no skin.
   - The body text on a phone is the platform's size (17 px on iOS, 16 px on Android) instead of the desktop's 14 px.
+- **Distances (2026-11-11):**
+  - In kilometers the choices of reach are the same numbers, 1, 5, 15, 25 and 50 km, and the number chosen stays when the unit changes (5 miles becomes 5 km), rather than converted figures such as 8 km.
+  - The setting is kept in the page's own storage, as the other settings are: on a phone in its web view, on a computer in each browser.
+  - The service's "Near Anaconda" (more than 3 km from the town) shows no distance, so it is unchanged.
+- **Phone and tablet design, step 7 (2026-11-11):**
+  - The computer's menu item is named as it is, "Choose **Receive from phone** in its menu.", where the handoff says "Choose Receive from a phone."
+  - What was chosen in Library counts items (pictures and videos as Library shows them), as the handoff does; the other two count files, Live Photo videos included, with their size. What the phone then offers (its `total`) also counts edit files.
+  - The question before deleting after Copy is titled by what goes ("Delete 58 photos and 2 videos from this phone?", or the file's name when one) and lists up to three names; its button says "Delete 58 photos and 2 videos". The card's button is the handoff's "Delete 60 from this phone".
+  - "Stopped" says how many are on the computer when some were sent; the handoff's "The numbers did not match. Check that you picked this phone on the computer, then try again." is said when the person said they were different, and otherwise the phone's own reason. **Done** is offered beside **Try again**.
+  - Sizes are written as the rest of the app writes them ("18.40 GB", where the handoff has "18.4 GB").
+  - **Stop sending** forgets what was sent so far; what is on the computer stays there, and nothing is deleted from the phone.
 - **Phone and tablet design, step 6 (2026-11-11):**
-  - Distances are in miles, as on the computer; the handoff says km on some screens and miles on others, and that phones keep the computer's unit.
   - **New album** in Organize names an album that is made, in the default place, when files are first put in it from Library: the service makes no empty album. It is offered in Library's album sheet, and forgotten when the app closes.
   - Your albums lists only the albums named this way, as the prototype does, not every album there is.
   - The files with no location are listed by place only: by date they go into their year.

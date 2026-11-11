@@ -94,6 +94,10 @@ body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.
 /* The bar that sweeps across while something of unknown length is under way. */
 @keyframes reading-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 .reading-sweep { animation: reading-sweep 1.4s ease-in-out infinite; }
+/* Send's waiting: two rings going out from the computer, the second half a beat behind. */
+@keyframes send-pulse { from { transform: scale(.6); opacity: .6; } to { transform: scale(1.45); opacity: 0; } }
+.send-pulse { animation: send-pulse 2.2s ease-out infinite; }
+.send-pulse-late { animation: send-pulse 2.2s ease-out 1.1s infinite; }
 
 @layer components {
   /* Every button is a pill. */

@@ -491,9 +491,12 @@ public sealed class TransferTests : IDisposable
             var computer = Receiving(new OnThisComputer(_advertiser), clock: HurriedClock.Minute);
             await computer.FindAsync(ct);
             computer.Start($"wifi:{_advertiser.Telling!.Value.Id}", _folder);
+            // While it comes from the cloud, the phone says which file is going.
+            await Until(() => Task.FromResult(phone.State.Current == "IMG_0001.JPG"), "the first file going");
             var ended = await Ended(computer);
             await Assert.That((ended.Stage, ended.Done, ended.Problem)).IsEqualTo((ReceiveStage.Done, 3, (string?)null));
             await Until(() => Task.FromResult(phone.State.Stage == SendStage.Sent), "sent");
+            await Assert.That(phone.State.Current).IsNull();
         }
         finally { phone.Stop(); }
     }
@@ -506,7 +509,8 @@ public sealed class TransferTests : IDisposable
         var (channel, _) = await SentToComputerAsync(ct);
         _library.Fetching = _ => accessTakenAway ? throw new UnauthorizedAccessException("PhotoSense may no longer see your photos.") : throw new InvalidOperationException("Something PhotoSense did not expect.");
         await channel.SendAsync(new JsonObject { ["t"] = "get", ["id"] = "f1" }, CancellationToken.None);
-        await Assert.That((await SendingProblemAsync(ct)).GetProperty("problem").GetString()).IsEqualTo(problem);
+        var stopped = await SendingProblemAsync(ct);
+        await Assert.That((stopped.GetProperty("problem").GetString(), stopped.GetProperty("current").ValueKind)).IsEqualTo((problem, JsonValueKind.Null));
         await Assert.ThrowsAsync<TransferException>(() => channel.ReceiveAsync(CancellationToken.None, "file"));
     }
 

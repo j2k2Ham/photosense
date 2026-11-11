@@ -13,10 +13,6 @@ const api = vi.hoisted(() => ({
   usePhotoAccess: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), chooseMorePhotos: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
-// Sending is tested on its own; here it says what it was given.
-vi.mock('../../../components/SendWindow', () => ({
-  SendWindow: ({ files, onClose }: { files: string[]; onClose(): void }) => <div role="dialog" aria-label="Send to computer">Sending {files.join(', ')}<button type="button" onClick={onClose}>Close sending</button></div>,
-}));
 
 const ROOT = '/Photo Library';
 const applied = (more: Partial<OrganizeApplyDto> = {}): OrganizeApplyDto => ({ batchId: 'b1', done: 2, bytes: 0, companions: 0, renamed: 0, skipped: 0, problems: [], items: [], ...more });
@@ -44,14 +40,14 @@ interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFr
 
 /** Library in a phone's frame, holding whether it is choosing as PhoneApp does. */
 function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false, made }: ShowProps = {}) {
-  const notify = vi.fn(), onSelecting = vi.fn();
+  const notify = vi.fn(), onSelecting = vi.fn(), onSend = vi.fn();
   function Holder() {
     const [selecting, setSelecting] = React.useState(start);
     const [filter, setFilter] = React.useState<LibraryFilter>('all');
-    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} />;
+    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} onSend={onSend} />;
   }
   const view = inFrame(<Holder />, frame(platform, more));
-  return { ...view, notify, onSelecting };
+  return { ...view, notify, onSelecting, onSend };
 }
 
 const tile = (name: string) => screen.getByRole('button', { name });
@@ -267,14 +263,12 @@ describe('choosing in Library', () => {
     expect(notify).toHaveBeenLastCalledWith('no undo', 'error');
   });
 
-  it('sends what is chosen to a computer', async () => {
-    show({ selecting: true });
+  it('takes what is chosen to Send, and stops choosing', async () => {
+    const { onSend } = show({ selecting: true });
     await userEvent.click(tile('IMG_9154.HEIC'));
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
-    expect(sheet('Send to computer')).toHaveTextContent('Sending f1');
+    expect(onSend).toHaveBeenCalledExactlyOnceWith(['f1']);
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Close sending' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
@@ -301,7 +295,7 @@ describe('the viewer', () => {
   });
 
   it('says a video is not played, with how long it is, and acts on the one file shown', async () => {
-    const { notify } = show();
+    const { notify, onSend } = show();
     await userEvent.click(tile('IMG_9080.MOV'));
     const viewer = sheet('IMG_9080.MOV');
     expect(viewer).toHaveTextContent('PhotoSense cannot play videos yet.');
@@ -316,6 +310,7 @@ describe('the viewer', () => {
     await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Add to album' }));
     await userEvent.click(within(sheet('Add 1 to an album')).getByRole('button', { name: 'Done' }));
     await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Send' }));
-    expect(sheet('Send to computer')).toHaveTextContent('Sending f1');
+    expect(onSend).toHaveBeenCalledExactlyOnceWith(['f1']);
+    expect(screen.queryByRole('dialog', { name: 'IMG_9154.HEIC' })).not.toBeInTheDocument();
   });
 });

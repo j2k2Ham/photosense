@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
-import { useForm, type Platform, type TabId } from '../../lib/phone';
+import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
+import type { DistanceUnit } from '../../lib/distance';
 import type { ThemeChoice } from '../../lib/theme';
 import { useCleanUp } from '../../lib/cleanup';
 import type { ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
@@ -10,9 +11,10 @@ import { useFirstRun, usePhoneScan } from './FirstRun';
 import { LibraryScreen } from './Library';
 import { useLibrary, type Album, type LibraryFilter } from '../../lib/library';
 import { useOrganize } from '../../lib/phoneOrganize';
+import { useSend } from '../../lib/send';
 import { OrganizeScreen } from './Organize';
+import { SendScreen } from './Send';
 import { PhoneShell } from './PhoneShell';
-import { RootHeader, Screen } from './Screens';
 import { SettingsSheet } from './SettingsSheet';
 
 interface Props {
@@ -26,6 +28,8 @@ interface Props {
   readonly theme: ThemeChoice;
   readonly version?: string;
   readonly errorCount: number;
+  /** The unit distances are said in. */
+  readonly unit: DistanceUnit;
   /** A scan is under way. */
   readonly scanning: boolean;
   readonly progress?: ScanProgressSnapshotDto;
@@ -37,6 +41,7 @@ interface Props {
   onTab(tab: TabId): void;
   removeToast(id: number): void;
   onTheme(theme: ThemeChoice): void;
+  onUnit(unit: DistanceUnit): void;
   onDeletePermanently(): void;
   onErrors(): void;
   onHelp(): void;
@@ -46,7 +51,7 @@ interface Props {
 /**
  * PhotoSense on a phone or tablet: the four tabs in the shell, each with its header and the gear that opens Settings,
  * with Welcome, the photo access screen and Scanning over them when they are called for. A phone scans its whole
- * library, the one folder it has. Send is still to come.
+ * library, the one folder it has.
  */
 export function PhoneApp(props: Props) {
   const { platform, tab, status, notice, toasts, theme, version, errorCount, removeToast, notify } = props;
@@ -68,11 +73,13 @@ export function PhoneApp(props: Props) {
   const endReview = () => cleanUp.review(undefined);
   useBackLayer(reviewing, endReview);
   // So is a suggestion's preview over Organize's list.
-  const organize = useOrganize(library.listing, platform, form === 'tablet');
+  const organize = useOrganize(library.listing, platform, form === 'tablet', props.unit);
   const previewing = !!organize.open && tab === 'organize' && form === 'phone';
   const endPreview = () => organize.look(undefined);
   useBackLayer(previewing, endPreview);
   const pushed = reviewing || previewing;
+  // Send keeps its offer while other tabs show, so that a move finishes wherever the person is.
+  const send = useSend(library, platform, tab === 'send', notify, WORDS[platform].bin);
   // Tapping the tab showing goes back to its first screen.
   const onTab = (next: TabId) => {
     if (next === tab && next === 'cleanup') endReview();
@@ -85,14 +92,15 @@ export function PhoneApp(props: Props) {
     <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : tab === 'library' && selecting ? 'selection' : 'tabs'} counts={{ library: libraryCount, cleanup: removable > 0 ? removable.toLocaleString() : undefined, organize: organize.toMove > 0 ? organize.toMove.toLocaleString() : undefined }} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
       notice={notice} cover={cover}
       screens={{
-        library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify} />,
+        library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
+          onSend={ids => { send.choose(ids); props.onTab('send'); }} />,
         cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
-        send: <Screen label="Send to computer"><RootHeader title="Send to computer" subtitle="Copy or move to PhotoSense on a Windows PC or Mac" /></Screen>,
+        send: <SendScreen send={send} reading={!!library.reading || !library.listing} onChoose={() => { setSelecting(true); props.onTab('library'); }} />,
       }}
       sheet={settingsOpen && (
-        <SettingsSheet theme={theme} version={version} errorCount={errorCount} onTheme={props.onTheme} onScanAgain={() => void scan()} onDeletePermanently={props.onDeletePermanently}
+        <SettingsSheet theme={theme} version={version} errorCount={errorCount} onTheme={props.onTheme} unit={props.unit} onUnit={props.onUnit} onScanAgain={() => void scan()} onDeletePermanently={props.onDeletePermanently}
           onErrors={props.onErrors} onHelp={props.onHelp} onAbout={props.onAbout} onClose={() => setSettingsOpen(false)} />
       )} />
   );

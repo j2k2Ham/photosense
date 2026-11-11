@@ -127,7 +127,7 @@ internal sealed class TransferEndpoints
         await resp.WriteAsJsonAsync(new SendStateDto
         {
             Stage = state.Stage.ToString().ToLowerInvariant(), Code = state.Code, Computer = state.Computer, Done = state.Done, Total = state.Total, Bytes = state.Bytes,
-            TotalBytes = state.TotalBytes, Deletable = [.. state.Deletable], Where = state.Where, Phone = _sending!.Name, Problem = state.Problem,
+            TotalBytes = state.TotalBytes, Deletable = [.. state.Deletable], Where = state.Where, Phone = _sending!.Name, Problem = state.Problem, Current = state.Current,
         }, ct);
         return resp;
     }

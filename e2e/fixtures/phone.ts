@@ -7,7 +7,7 @@ const json = (route: Route, body: unknown) => route.fulfill({ status: 200, conte
 export interface SendState {
   stage: 'idle' | 'waiting' | 'comparing' | 'sending' | 'sent' | 'failed';
   code: string | null; computer: string | null; done: number; total: number; bytes: number; totalBytes: number;
-  deletable: string[]; where: string | null; phone: string; problem: string | null;
+  deletable: string[]; where: string | null; phone: string; problem: string | null; current: string | null;
 }
 
 /**
@@ -22,7 +22,7 @@ export class Phone {
   root?: string;
   /** Whether this is the phone's first run, with Welcome; otherwise it has been through it already. */
   firstRun = false;
-  state: SendState = { stage: 'idle', code: null, computer: null, done: 0, total: 0, bytes: 0, totalBytes: 0, deletable: [], where: null, phone: "Jamie's iPhone", problem: null };
+  state: SendState = { stage: 'idle', code: null, computer: null, done: 0, total: 0, bytes: 0, totalBytes: 0, deletable: [], where: null, phone: "Jamie's iPhone", problem: null, current: null };
   /** What the page asked of the phone, but where sending has got to. */
   readonly asked: string[] = [];
 
@@ -51,6 +51,8 @@ export class Phone {
       if (what !== 'state') this.asked.push(`send/${what} ${route.request().postData() ?? ''}`.trim());
       if (what === 'start') this.set({ stage: 'waiting', total: (JSON.parse(route.request().postData() ?? '{}').files ?? []).length });
       if (what === 'stop') this.set({ stage: 'idle' });
+      // Numbers said to be different stop it, as the phone does.
+      if (what === 'confirm' && !JSON.parse(route.request().postData() ?? '{}').same) this.set({ stage: 'failed', code: null, problem: 'The numbers did not match, so nothing was sent. Try again, and look that both show the same number.' });
       if (what === 'delete-sent') {
         const deleted = this.state.deletable.length;
         this.set({ deletable: [] });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { shortDistance } from '../../lib/distance';
 import type { MapLayout } from '../../lib/organize';
 import { EnlargeIcon } from './shared';
 
@@ -47,7 +48,7 @@ export function ClusterMap({ map, focus, note, large = false, onFocus, onEnlarge
           );
         })}
         <span aria-hidden style={{ width: `${map.scale.percent}%` }} className="absolute bottom-3 left-3 flex flex-col gap-1 text-[11px] text-t3">
-          <span className="h-1 border border-t-0 border-t3" />{map.scale.miles} mi
+          <span className="h-1 border border-t-0 border-t3" />{shortDistance(map.scale.distance, map.scale.unit)}
         </span>
         {onEnlarge && (
           <button type="button" aria-label="Enlarge the map" title="Enlarge the map" onClick={onEnlarge}

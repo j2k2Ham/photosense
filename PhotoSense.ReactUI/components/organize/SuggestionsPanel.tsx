@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { RADII, type MapLayout, type NameFormat, type OrganizeSettings, type Suggestion } from '../../lib/organize';
+import { longDistance, shortDistance } from '../../lib/distance';
 import { useDismiss } from '../../lib/useDismiss';
 import type { OrganizeBatchDto } from '../../types';
 import { Segmented } from '../ModeSwitch';
@@ -139,7 +140,7 @@ export function SuggestionsPanel(p: Props) {
                   {s.near === 'combine' && (
                     <span className="flex shrink-0 items-center gap-2">
                       <span className="text-t3">within</span>
-                      <Segmented label="Combine places within" value={s.radiusMiles} onChange={radiusMiles => p.onSettings({ radiusMiles })} options={RADII.map(r => ({ value: r, name: r === 50 ? '50 mi' : String(r) }))} />
+                      <Segmented label="Combine places within" value={s.radius} onChange={radius => p.onSettings({ radius })} options={RADII.map(r => ({ value: r, name: r === 50 ? shortDistance(r, s.unit) : String(r) }))} />
                     </span>
                   )}
                 </div>
@@ -163,7 +164,7 @@ export function SuggestionsPanel(p: Props) {
       <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto px-5 pb-7 pt-4">
         {byPlace && p.showMap && p.map && (
           <FolderMap map={p.map} focus={p.focus?.kind === 'suggested' ? p.focus.key : undefined} onFocus={key => p.onFocus(key ? { kind: 'suggested', key } : undefined)}
-            note={s.near === 'combine' ? `Places within ${s.radiusMiles === 1 ? '1 mile' : `${s.radiusMiles} miles`} of each other share a folder.` : 'Every place gets its own folder.'} />
+            note={s.near === 'combine' ? `Places within ${longDistance(s.radius, s.unit)} of each other share a folder.` : 'Every place gets its own folder.'} />
         )}
         {suggestions.map(x => (
           <SuggestionCard key={x.key} suggestion={x} on={focusOf('suggested', x.key)} onFocus={() => p.onFocus(focusOf('suggested', x.key) ? undefined : { kind: 'suggested', key: x.key })}

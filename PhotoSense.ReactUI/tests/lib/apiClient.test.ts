@@ -536,13 +536,19 @@ describe('the log stream', () => {
 
 describe('sending photos from a phone to a computer', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
-  const state = { stage: 'waiting', code: null, computer: null, done: 0, total: 2, bytes: 0, totalBytes: 900, deletable: [], where: null, phone: 'iPhone', problem: null };
+  const state = { stage: 'waiting', code: null, computer: null, done: 0, total: 2, bytes: 0, totalBytes: 900, deletable: [], where: null, phone: 'iPhone', problem: null, current: null };
 
-  it('follows the phone every second, and shows each answer of the phone at once', async () => {
+  it('follows the phone every second while watched or while an offer stands, and shows each answer of the phone at once', async () => {
     swr.useSWR.mockReturnValue({ data: state });
     const api = await load();
-    expect(api.useSendState()).toEqual({ data: state });
-    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/send/state`, expect.any(Function), { refreshInterval: 1000 });
+    expect(api.useSendState(true)).toEqual({ data: state });
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect([every(undefined), every({ stage: 'idle' })]).toEqual([1000, 1000]);
+    api.useSendState(false);
+    const unwatched = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect(['waiting', 'comparing', 'sending', 'sent', 'failed', 'idle'].map(stage => unwatched({ stage }))).toEqual([1000, 1000, 1000, 0, 0, 0]);
+    expect(unwatched(undefined)).toBe(0);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/send/state`, expect.any(Function), { refreshInterval: expect.any(Function) });
 
     answering(state);
     await expect(api.startSending(['f1', 'f2'])).resolves.toEqual(state);

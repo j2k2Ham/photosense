@@ -328,10 +328,12 @@ export async function eraseRemoved(folders: string[]) {
 
 const sendStateUrl = `${API_BASE}/send/state`;
 
-/** Where sending from this phone has got to, asked every second while it is shown. */
-export function useSendState() {
-  return useSWR<SendStateDto>(sendStateUrl, json, { refreshInterval: 1000 });
+/** Where sending from this phone has got to: asked every second while it is watched, or while an offer stands. */
+export function useSendState(watching: boolean) {
+  return useSWR<SendStateDto>(sendStateUrl, json, { refreshInterval: latest => (watching || (latest !== undefined && LIVE_SEND.has(latest.stage)) ? 1000 : 0) });
 }
+// The stages in which the phone is waiting for the computer, comparing numbers with it, or sending.
+const LIVE_SEND = new Set<SendStateDto['stage']>(['waiting', 'comparing', 'sending']);
 
 async function sending(path: string, body?: object) {
   const state = await json<SendStateDto>(`${API_BASE}/send/${path}`, { method: 'POST', body: body && JSON.stringify(body) });

@@ -12,7 +12,7 @@ import { group, groupsPage, photo } from './groups';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
 // tested on its own, has one group of duplicates.
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})) }));
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})), useSendState: vi.fn(() => ({})) }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
   api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } });
@@ -174,8 +174,8 @@ describe('the shell', () => {
 
 describe('Settings', () => {
   function show(platform: Platform = 'ios', more = {}) {
-    const calls = { onTheme: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onClose: vi.fn() };
-    const view = inFrame(<SettingsSheet theme="auto" version="1.4.0" errorCount={0} {...calls} {...more} />, frame(platform));
+    const calls = { onTheme: vi.fn(), onUnit: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onClose: vi.fn() };
+    const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} {...calls} {...more} />, frame(platform));
     return { calls, view };
   }
 
@@ -186,6 +186,14 @@ describe('Settings', () => {
     await userEvent.click(within(themes).getByRole('radio', { name: 'Light' }));
     expect(calls.onTheme).toHaveBeenCalledWith('light');
     expect(screen.getByText('PhotoSense 1.4.0 · Runs on this phone. Nothing is uploaded.')).toBeInTheDocument();
+  });
+
+  it('chooses miles or kilometers for distances', async () => {
+    const { calls } = show();
+    const units = screen.getByRole('radiogroup', { name: 'Distances' });
+    expect(within(units).getByRole('radio', { name: 'Miles' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(units).getByRole('radio', { name: 'Kilometers' }));
+    expect(calls.onUnit).toHaveBeenCalledWith('km');
   });
 
   it('puts itself away before what a row leads to opens', async () => {
@@ -201,9 +209,9 @@ describe('Settings', () => {
     const { view } = show('ios', { errorCount: 2, version: undefined });
     expect(screen.getByRole('button', { name: 'Errors 2' })).toBeInTheDocument();
     expect(screen.getByText('Runs on this phone. Nothing is uploaded.')).toBeInTheDocument();
-    view.again(<SettingsSheet theme="dark" errorCount={0} onTheme={vi.fn()} onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onClose={vi.fn()} />, frame('ios', { tablet: true }));
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} onTheme={vi.fn()} onUnit={vi.fn()} onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onClose={vi.fn()} />, frame('ios', { tablet: true }));
     expect(screen.getByText('Runs on this iPad. Nothing is uploaded.')).toBeInTheDocument();
-    view.again(<SettingsSheet theme="dark" errorCount={0} onTheme={vi.fn()} onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onClose={vi.fn()} />, frame('android', { tablet: true }));
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} onTheme={vi.fn()} onUnit={vi.fn()} onScanAgain={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onClose={vi.fn()} />, frame('android', { tablet: true }));
     expect(screen.getByText('Runs on this tablet. Nothing is uploaded.')).toBeInTheDocument();
   });
 });
@@ -216,7 +224,7 @@ describe('PhotoSense on a phone', () => {
     const [theme, setTheme] = React.useState<'auto' | 'dark' | 'light'>('auto');
     return (
       <PhoneApp platform={platform} tab={tab} status={{ instanceId: 's', completed: '2026-11-10T16:25:00Z', totalPhotos: 2 }}
-        toasts={[]} theme={theme} version="1.4.0" errorCount={0} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
+        toasts={[]} theme={theme} version="1.4.0" errorCount={0} unit="miles" onUnit={vi.fn()} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
         scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={vi.fn()} onDeletePermanently={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
     );
   }
@@ -240,6 +248,20 @@ describe('PhotoSense on a phone', () => {
     expect(within(settings).getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(within(settings).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it('sends what is chosen in Library: Send opens Library choosing, and Send in Library comes back with the choice', async () => {
+    width(false);
+    render(<App />);
+    const tabs = () => screen.getByRole('navigation', { name: 'Tabs' });
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Send' }));
+    await userEvent.click(screen.getByRole('radio', { name: /^What you chose in LibraryNothing chosen yet/ }));
+    // Library, choosing: its selection bar in place of the tabs.
+    expect(screen.getByRole('toolbar')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'IMG_1.JPG' }));
+    await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
+    expect(screen.getByRole('radio', { name: 'What you chose in Library1 item' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { name: 'Offer 1 item to a computer' })).toBeEnabled();
   });
 
   it('pushes a review over the list on a phone, without the tabs, and Back takes it back', async () => {

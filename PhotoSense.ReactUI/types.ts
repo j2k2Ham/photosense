@@ -355,6 +355,8 @@ export interface SendStateDto {
   /** What this phone is called, as the computer shows it. */
   phone: string;
   problem: string | null;
+  /** The name of the file going to the computer now; none between files. */
+  current: string | null;
 }
 /** How many pictures and videos were deleted from the phone. */
 export interface DeleteSentDto {

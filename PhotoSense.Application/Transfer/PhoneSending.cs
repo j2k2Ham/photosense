@@ -35,7 +35,8 @@ public enum SendStage
 /// <param name="Deletable">The names of the pictures and videos every file of which is safely on the computer, and that can be deleted from the phone.</param>
 /// <param name="Where">The folder on the computer the files went to, when they all went to one.</param>
 /// <param name="Problem">Why it stopped, when it failed.</param>
-public sealed record SendState(SendStage Stage, string? Code, string? Computer, int Done, int Total, long Bytes, long TotalBytes, IReadOnlyList<string> Deletable, string? Where, string? Problem);
+/// <param name="Current">The name of the file going to the computer now, from the moment the phone starts reading it until its last byte is sent.</param>
+public sealed record SendState(SendStage Stage, string? Code, string? Computer, int Done, int Total, long Bytes, long TotalBytes, IReadOnlyList<string> Deletable, string? Where, string? Problem, string? Current);
 
 /// <summary>
 /// A phone offering photos to a computer, while the person has it offering them: it waits for a computer to connect,
@@ -55,7 +56,7 @@ public sealed class PhoneSending
     private readonly string _name;
     private readonly TimeProvider _clock;
     private readonly object _lock = new();
-    private SendState _state = new(SendStage.Idle, null, null, 0, 0, 0, 0, [], null, null);
+    private SendState _state = new(SendStage.Idle, null, null, 0, 0, 0, 0, [], null, null, null);
     private List<Offered> _offer = [];
     private readonly Dictionary<string, string> _sent = [];
     private readonly Dictionary<string, string> _safe = [];
@@ -122,7 +123,7 @@ public sealed class PhoneSending
             _offer = offer;
             _sent.Clear();
             _safe.Clear();
-            _state = new SendState(SendStage.Waiting, null, null, 0, offer.Count, 0, offer.Sum(f => f.Size), [], null, null);
+            _state = new SendState(SendStage.Waiting, null, null, 0, offer.Count, 0, offer.Sum(f => f.Size), [], null, null, null);
             _offering = true;
         }
         var port = _listener.Start(ServeAsync);
@@ -142,7 +143,7 @@ public sealed class PhoneSending
         lock (_lock)
         {
             _offering = false;
-            if (_state.Stage is not (SendStage.Idle or SendStage.Sent)) _state = _state with { Stage = SendStage.Idle, Code = null };
+            if (_state.Stage is not (SendStage.Idle or SendStage.Sent)) _state = _state with { Stage = SendStage.Idle, Code = null, Current = null };
         }
     }
 
@@ -218,7 +219,7 @@ public sealed class PhoneSending
             {
                 _serving = false;
                 // However it ended, sending is no longer said to be going on; a connection ended by stopping is no failure.
-                if (problem is not null && _offering) _state = _state with { Stage = SendStage.Failed, Code = null, Problem = problem };
+                if (problem is not null && _offering) _state = _state with { Stage = SendStage.Failed, Code = null, Problem = problem, Current = null };
             }
         }
     }
@@ -264,6 +265,7 @@ public sealed class PhoneSending
 
     private async Task SendFileAsync(SecureChannel channel, Offered file, CancellationToken ct)
     {
+        Set(s => s with { Current = Path.GetFileName(file.Path) });
         // A picture kept only in the cloud is fetched first, which can take a while; the computer is told of it.
         await using var read = await channel.MeanwhileAsync(stop => _files.OpenReadAsync(file.Path, stop), _clock, ct);
         await channel.SendAsync(new JsonObject { ["t"] = "file", ["id"] = file.Id, ["size"] = read.Length }, ct);
@@ -276,7 +278,11 @@ public sealed class PhoneSending
             Set(s => s with { Bytes = s.Bytes + n });
         }
         var check = Convert.ToHexStringLower(hash.GetHashAndReset());
-        lock (_lock) _sent[file.Id] = check;
+        lock (_lock)
+        {
+            _sent[file.Id] = check;
+            _state = _state with { Current = null };
+        }
         await channel.SendAsync(new JsonObject { ["t"] = "end", ["id"] = file.Id, ["sha256"] = check }, ct);
     }
 }

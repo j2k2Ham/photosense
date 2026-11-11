@@ -191,7 +191,7 @@ export const GUIDE: GuideTopic[] = [
           'Switch to **Organize**. It starts with the folder you last scanned; **Choose root folder** takes any other. No scan is needed.',
           'Wait while the folder is read. Only the date and the place of each file are read. A large folder takes minutes the first time, and the files appear as they are read; after that it is quick.',
           'Choose how to group, on the right: **Group by** Place or Date, and **Then by** what each folder is split by inside. Place then Year gives folders such as Butte\\2022; Date then Place gives 2022\\Butte.',
-          'For places, **Nearby places** decides whether places within 1, 5, 15, 25 or 50 miles of each other share a folder, and **Folder names** how a place’s folder is named.',
+          'For places, **Nearby places** decides whether places within 1, 5, 15, 25 or 50 miles of each other share a folder, and **Folder names** how a place’s folder is named. Choose kilometers instead under **Distances** in Settings.',
           'Each card is a folder that would be made. Click a card to see its files alone.',
         ],
       },
@@ -322,9 +322,9 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Sending',
         steps: [
-          'On the phone, open **Organize**, select the photos and choose **Send to computer**. Their Live Photo videos and edits go with them. Choose **Copy** to keep them on the phone as well, or **Move** to have them deleted from the phone once they are on the computer. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
+          'On the phone, open **Send**. Choose what to send: everything not in an album yet, what you chose in **Library**, or everything; their Live Photo videos and edits go with them. To send only some, select them in Library and choose **Send**. Choose **Copy** to keep them on the phone as well, or **Move** to have them deleted from the phone once they are on the computer, and press **Offer**. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
           'On the computer, choose **Receive from phone** in the menu. Pick the phone, and the folder the photos go to with **Change**, then press **Receive into** that folder.',
-          'The first time, the phone and the computer each show a six-digit number. If they are the same, press **They match** on both. If not, press **They don’t match**: something else may be trying to connect. After that the two know each other and do not ask again.',
+          'The first time, the phone and the computer each show a six-digit number. If they are the same, press **It’s the same number** on the phone and **They match** on the computer. If not, press **It’s different** and **They don’t match**: something else may be trying to connect. After that the two know each other and do not ask again.',
           'The photos arrive. Each is checked, and only a photo that arrived whole is kept. One the very same as a file already in the folder is not copied again, and one whose name is taken there arrives under a new name: nothing on the computer is replaced.',
         ],
       },
@@ -332,7 +332,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Copy or move',
         tips: [
           'With **Move**, once they have all arrived the phone deletes them from itself, and says what went where.',
-          'With **Copy**, the phone offers afterwards to **Delete** them **from this phone**, naming what goes and saying the copies on the computer stay. Close the window instead to keep them on the phone too.',
+          'With **Copy**, the phone offers afterwards to **Delete** them **from this phone**, naming what goes and saying the copies on the computer stay. Press **Done** instead to keep them on the phone too.',
           'Either way, only photos that are safely on the computer, with every file that belongs to them, are deleted. They go to **Recently Deleted** on the phone, where they stay for 30 days, and the phone asks you first.',
           'Photos are copied to a computer, never onto the phone: in Organize on a phone, photos are moved between albums only.',
         ],
@@ -391,7 +391,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           '**Theme** switches between dark and light.',
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
-          '**Settings** has the switch for the second question before deleting permanently. Settings are kept in this browser.',
+          '**Settings** has the switch for the second question before deleting permanently, and **Distances**: miles, or kilometers, for Organize and its map. Settings are kept in this browser.',
           '**Receive from phone**, on a computer, takes in photos a phone with PhotoSense sends.',
           '**Help** opens this guide.',
           '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',

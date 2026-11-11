@@ -1,17 +1,22 @@
 import React from 'react';
+import { DISTANCE_UNITS, type DistanceUnit } from '../../lib/distance';
 import { deviceName, usePhone } from '../../lib/phone';
 import type { ThemeChoice } from '../../lib/theme';
 import { ListGroup, ListRow, Segmented } from './Controls';
 import { Sheet } from './Sheet';
 
+const UNITS = DISTANCE_UNITS.map(u => ({ id: u.value, label: u.name }));
 const THEMES = [{ id: 'auto', label: 'Auto' }, { id: 'dark', label: 'Dark' }, { id: 'light', label: 'Light' }] as const;
 
 interface Props {
   readonly theme: ThemeChoice;
+  /** The unit distances are said in. */
+  readonly unit: DistanceUnit;
   /** The program's version, once known. */
   readonly version?: string;
   readonly errorCount: number;
   onTheme(theme: ThemeChoice): void;
+  onUnit(unit: DistanceUnit): void;
   onScanAgain(): void;
   onDeletePermanently(): void;
   onErrors(): void;
@@ -20,8 +25,8 @@ interface Props {
   onClose(): void;
 }
 
-/** Settings, from the gear: the theme, scanning again, Delete permanently, the errors, and help and about. */
-export function SettingsSheet({ theme, version, errorCount, onTheme, onScanAgain, onDeletePermanently, onErrors, onHelp, onAbout, onClose }: Props) {
+/** Settings, from the gear: the theme, the unit of distance, scanning again, Delete permanently, the errors, and help and about. */
+export function SettingsSheet({ theme, unit, version, errorCount, onTheme, onUnit, onScanAgain, onDeletePermanently, onErrors, onHelp, onAbout, onClose }: Props) {
   const { platform, tablet } = usePhone();
   const device = deviceName(platform, tablet);
   // What a row leads to opens over the screen once the sheet has gone.
@@ -31,6 +36,7 @@ export function SettingsSheet({ theme, version, errorCount, onTheme, onScanAgain
       <div className="flex flex-col gap-5 px-4 pb-3 pt-2">
         <ListGroup header="Appearance" inSheet>
           <ListRow detail={<Segmented<ThemeChoice> label="Theme" options={THEMES} value={theme} onChange={onTheme} className="w-[220px]" />}>Theme</ListRow>
+          <ListRow detail={<Segmented<DistanceUnit> label="Distances" options={UNITS} value={unit} onChange={onUnit} className="w-[220px]" />}>Distances</ListRow>
         </ListGroup>
         <ListGroup header="Photos" inSheet>
           <ListRow onClick={then(onScanAgain)}><span className="text-acc">Scan again</span></ListRow>

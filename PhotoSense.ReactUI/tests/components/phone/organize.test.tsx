@@ -1,6 +1,7 @@
 import { act, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
+import type { DistanceUnit } from '../../../lib/distance';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizeScreen } from '../../../components/phone/Organize';
 import type { Album, Library } from '../../../lib/library';
@@ -63,17 +64,17 @@ beforeEach(() => {
   api.undoChange.mockResolvedValue({ restored: 4, skipped: 0, problems: [] });
 });
 
-interface ShowProps { platform?: Platform; tablet?: boolean; made?: Album[] }
+interface ShowProps { platform?: Platform; tablet?: boolean; made?: Album[]; unit?: DistanceUnit }
 
 /** Organize in a phone's or tablet's frame, holding its state as PhoneApp does. */
-function show({ platform = 'ios', tablet = false, made = [] }: ShowProps = {}) {
+function show({ platform = 'ios', tablet = false, made = [], unit = 'miles' }: ShowProps = {}) {
   const notify = vi.fn(), onMade = vi.fn(), onNoLocation = vi.fn();
   const root = platform === 'ios' ? ROOT : '/Phone';
   function Holder() {
     useVersion();
     const listing = { root, fromScan: true, places, files };
     const library: Library = { root, files, listing, reading };
-    const organize = useOrganize(listing, platform, tablet);
+    const organize = useOrganize(listing, platform, tablet, unit);
     return <OrganizeScreen organize={organize} library={library} made={made} onMade={onMade} onNoLocation={onNoLocation} notify={notify} />;
   }
   const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }));
@@ -190,6 +191,7 @@ describe('Organize\'s options', () => {
     await userEvent.click(within(options).getByRole('radio', { name: 'Photos' }));
     expect(options).toHaveTextContent('Only the kind shown is sorted. A Live Photo\'s video always goes with its picture.');
     expect(screen.getByText('Within 15 mi · Town · Place › Month · Photos only')).toBeInTheDocument();
+    expect(within(options).getAllByRole('button', { name: / mi$/ })).toHaveLength(5);
     await userEvent.click(within(options).getByRole('radio', { name: 'Date' }));
     await userEvent.click(within(options).getByRole('radio', { name: 'Nothing' }));
     expect(screen.getByText('By year · Year · Photos only')).toBeInTheDocument();
@@ -201,6 +203,13 @@ describe('Organize\'s options', () => {
     show({ platform: 'android' });
     await userEvent.click(screen.getByRole('button', { name: 'Options' }));
     expect(sheet('Folder options')).toHaveTextContent('Folders are made in Pictures. Files already in one of your folders are left out.');
+  });
+
+  it('says distances in kilometers when they were chosen in Settings', async () => {
+    show({ unit: 'km' });
+    expect(screen.getByText('Within 5 km · Landmark or area · Place › Year')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Options' }));
+    expect(within(sheet('Album options')).getAllByRole('button', { name: / km$/ }).map(b => b.textContent)).toEqual(['1 km', '5 km', '15 km', '25 km', '50 km']);
   });
 });
 

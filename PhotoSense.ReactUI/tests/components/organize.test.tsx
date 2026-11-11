@@ -292,13 +292,6 @@ describe('the selection bar', () => {
     expect([onSelectAll, onNewFolder, onClear].map(f => f.mock.calls.length)).toEqual([1, 1, 1]);
   });
 
-  it('on a phone, offers to send the selected files to a computer', async () => {
-    const onSend = vi.fn();
-    show({ onSend });
-    await userEvent.click(within(bar()).getByRole('button', { name: 'Send to computer' }));
-    expect(onSend).toHaveBeenCalledOnce();
-  });
-
   it('is drawn over the pictures it floats above, so that none of them covers its edge', () => {
     show();
     expect(bar()).toHaveClass('relative', 'z-10');
@@ -365,7 +358,7 @@ describe('the suggested folders panel', () => {
     await userEvent.click(choice('Combine places within', '50 mi'));
     await userEvent.click(choice('Then by', 'Month'));
     await userEvent.click(choice('Then by', 'Nothing'));
-    expect(onSettings.mock.calls.map(c => c[0])).toEqual([{ group: 'date' }, { near: 'separate' }, { radiusMiles: 50 }, { placeThen: 'month' }, { placeThen: 'none' }]);
+    expect(onSettings.mock.calls.map(c => c[0])).toEqual([{ group: 'date' }, { near: 'separate' }, { radius: 50 }, { placeThen: 'month' }, { placeThen: 'none' }]);
     await userEvent.click(within(panel()).getByRole('switch'));
     expect(onShowMap).toHaveBeenCalledExactlyOnceWith(true);
   });
@@ -477,8 +470,15 @@ describe('the suggested folders panel', () => {
   });
 
   it('says a reach of one mile as one mile', () => {
-    show({ showMap: true }, { radiusMiles: 1 });
+    show({ showMap: true }, { radius: 1 });
     expect(panel()).toHaveTextContent('Places within 1 mile of each other share a folder.');
+  });
+
+  it('says the reach, its choices and the scale in kilometres when they were chosen', async () => {
+    show({ showMap: true }, { radius: 15, unit: 'km' });
+    expect(panel()).toHaveTextContent('Places within 15 km of each other share a folder.');
+    expect(within(screen.getByRole('group', { name: 'Combine places within' })).getAllByRole('button').map(b => b.textContent)).toEqual(['1', '5', '15', '25', '50 km']);
+    expect(panel()).toHaveTextContent(/\d+ km/);
   });
 
   it('marks the picked folder on the map, and lets it go from there too', async () => {

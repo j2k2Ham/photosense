@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { applyOrganize, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, useOrganizeBatches } from '../../lib/apiClient';
+import { shortDistance } from '../../lib/distance';
 import { formatBytes, formatDuration } from '../../lib/format';
 import { newAlbumBase, whereIs, type Album, type Library } from '../../lib/library';
 import {
@@ -12,7 +13,7 @@ import {
 } from '../../lib/phoneOrganize';
 import type { OrganizeBatchDto, OrganizeFileDto, OrganizePlanDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
-import { Chip, IconButton, ListGroup, ListRow, PhoneButton, Segmented, StickyFooter } from './Controls';
+import { Chip, IconButton, ListGroup, ListRow, PhoneButton, Radio, Segmented, StickyFooter } from './Controls';
 import { ChevronIcon, DoneIcon, ListIcon, MapIcon, PlusIcon, SlidersIcon, TrashIcon } from './Icons';
 import { NewAlbumSheet } from './Library';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
@@ -270,7 +271,7 @@ function OptionsSheet({ organize, onClose }: { readonly organize: PhoneOrganize;
             {s.near === 'combine' && (
               <Choice label="Within">
                 <div role="group" aria-label="Within" className="flex flex-wrap gap-2">
-                  {RADII.map(r => <Chip key={r} label={`${r} mi`} on={s.radiusMiles === r} onClick={() => change({ radiusMiles: r })} />)}
+                  {RADII.map(r => <Chip key={r} label={shortDistance(r, s.unit)} on={s.radius === r} onClick={() => change({ radius: r })} />)}
                 </div>
               </Choice>
             )}
@@ -531,10 +532,6 @@ function WhereSheet({ places, value, onPick, onClose }: { readonly places: Retur
     </Sheet>
   );
 }
-
-const Radio = ({ on }: { readonly on: boolean }) => (
-  <span aria-hidden className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-2 ${on ? 'border-acc' : 'border-t3'}`}>{on && <span className="h-3 w-3 rounded-full bg-acc" />}</span>
-);
 
 interface NamesProps {
   readonly clashes: readonly Clash[];

@@ -40,7 +40,7 @@ const LIBRARY = { Map: FakeMap, LatLngBounds: FakeBounds, marker: { AdvancedMark
 const look = (m: FakeMarker) => ({ size: m.options.content.style.width, fill: m.options.content.style.background, edge: m.options.content.style.border });
 
 const dot = (key: string, latitude: number, longitude: number, size = 14): MapDot => ({ key, x: 40, y: 60, size, label: key, labelled: true, labelSide: 'right', tip: `${key} · 3 files`, latitude, longitude });
-const layout = (...dots: MapDot[]): MapLayout => ({ dots, rings: [], merged: [], aspect: 1, scale: { miles: 5, percent: 20 } });
+const layout = (...dots: MapDot[]): MapLayout => ({ dots, rings: [], merged: [], aspect: 1, scale: { distance: 5, unit: 'miles', percent: 20 } });
 const BUTTE = dot('Butte', 46.0038, -112.5348, 20), GLACIER = dot('Glacier', 48.495, -113.9819);
 const NOTE = 'Places within 5 miles of each other share a folder.';
 // The markers on a map now: one that was taken off is no longer on any.

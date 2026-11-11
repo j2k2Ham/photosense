@@ -1,4 +1,6 @@
 import React, { useEffect, useId } from 'react';
+import { DISTANCE_UNITS } from '../lib/distance';
+import { Segmented } from './ModeSwitch';
 import { Scrim } from './Scrim';
 import type { AppSettings } from '../lib/settings';
 
@@ -40,6 +42,13 @@ export function SettingsWindow({ settings, onChange, onClose }: Props) {
           <div className="label-caps">Deleting permanently</div>
           <Switch title="Ask a second time before deleting permanently" on={settings.eraseAskTwice} onChange={eraseAskTwice => onChange({ eraseAskTwice })}
             about="After the warning, Delete permanently asks “Are you sure?” once more. Turned off, the files are erased as soon as the warning is confirmed." />
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="label-caps">Distances</div>
+          <div className="flex flex-wrap items-center gap-4">
+            <p className="min-w-0 flex-1 text-[13px] text-t2">How far apart places are, in Organize and on its map.</p>
+            <Segmented label="Distances" value={settings.distanceUnit} onChange={distanceUnit => onChange({ distanceUnit })} options={DISTANCE_UNITS} size="medium" />
+          </div>
         </div>
         <div className="flex items-center gap-3 pt-1">
           <p className="flex-1 text-[12.5px] text-t3">Settings are kept in this browser.</p>

@@ -3,9 +3,9 @@ import { Phone } from '../fixtures/phone';
 import { phoneSettings, phoneTab, question } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
-const sendWindow = (page: import('@playwright/test').Page) => page.getByRole('dialog', { name: 'Send to computer' });
+const sendScreen = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Send to computer' });
 
-/** Chooses the photos named in Library, once it has read them all, and sends them. */
+/** Chooses the photos named in Library, once it has read them all, and takes them to Send. */
 async function sendFromLibrary(page: import('@playwright/test').Page, names: string[]) {
   await page.goto('/');
   await phoneTab(page, 'Library');
@@ -209,6 +209,13 @@ test.describe('on a phone', () => {
     expect(photos.exists('IMG_0001.JPG')).toBe(true);
     expect(photos.exists('IMG_0002.JPG')).toBe(true);
     expect(photos.exists('Butte/2023/IMG_0001 (1).JPG')).toBe(false);
+
+    // Distances follow Settings: miles until kilometers are chosen there.
+    await expect(page.getByText(/^Within 5 mi · /)).toBeVisible();
+    const settings = await phoneSettings(page);
+    await settings.getByRole('radiogroup', { name: 'Distances' }).getByRole('radio', { name: 'Kilometers' }).click();
+    await settings.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByText(/^Within 5 km · /)).toBeVisible();
   });
 
   test('photos are sent to a computer after both show one number, and Move deletes them from the phone once they are all there @phone', async ({ page, photos }) => {
@@ -218,23 +225,31 @@ test.describe('on a phone', () => {
     photos.picture('IMG_0002.JPG', { seed: 2 });
     phone.root = photos.root;
     await sendFromLibrary(page, ['IMG_0001.JPG', 'IMG_0002.JPG']);
-    await expect(sendWindow(page)).toContainText("Waiting for your computer. On the computer, open PhotoSense and choose Receive from phone in the menu. This phone shows there as Jamie's iPhone.");
+    const send = sendScreen(page);
+    await expect(send.getByRole('radio', { name: /^What you chose in Library\s*2 items$/ })).toHaveAttribute('aria-checked', 'true');
+    await send.getByRole('radiogroup', { name: 'Copy or move' }).getByRole('radio', { name: 'Move' }).click();
+    await expect(send).toContainText('Each photo is deleted from this phone once the computer has checked every file of it. It goes to Recently Deleted.');
+    await send.getByRole('button', { name: 'Offer 2 items to a computer' }).click();
+    await expect(send).toContainText("Jamie's iPhone is offering 2 files. Keep PhotoSense open on this screen.");
     expect(phone.asked[0]).toMatch(/^send\/start \{"files":\["[^"]+","[^"]+"\]\}$/);
-    await sendWindow(page).getByRole('group', { name: 'Copy or move' }).getByRole('button', { name: 'Move' }).click();
 
     phone.set({ stage: 'comparing', code: '482 917', computer: 'DESKTOP-1' });
-    await expect(sendWindow(page)).toContainText('Does DESKTOP-1 show this number?482 917');
-    await sendWindow(page).getByRole('button', { name: 'They match' }).click();
+    await expect(send.getByRole('heading', { name: 'Does DESKTOP-1 show this number?' })).toBeVisible();
+    await expect(send.getByLabel('The number: 482 917')).toBeVisible();
+    await send.getByRole('button', { name: "It's the same number" }).click();
     expect(phone.asked).toContain('send/confirm {"same":true}');
 
-    phone.set({ stage: 'sending', done: 1, total: 2, bytes: 1_000_000, totalBytes: 2_000_000 });
-    await expect(sendWindow(page).getByRole('progressbar', { name: 'Sending to DESKTOP-1' })).toHaveAttribute('aria-valuenow', '50');
+    phone.set({ stage: 'sending', done: 1, bytes: 1_000_000, totalBytes: 2_000_000, current: 'IMG_0002.JPG' });
+    await expect(send.getByRole('progressbar', { name: 'Sending to DESKTOP-1' })).toHaveAttribute('aria-valuenow', '50');
+    await expect(send).toContainText('IMG_0002.JPG');
 
-    phone.set({ stage: 'sent', done: 2, bytes: 2_000_000, where: 'C:\\Users\\jamie\\Pictures\\From the phone', deletable: ['IMG_0001.JPG', 'IMG_0002.JPG'] });
+    phone.set({ stage: 'sent', done: 2, bytes: 2_000_000, current: null, where: 'C:\\Users\\jamie\\Pictures\\From the phone', deletable: ['IMG_0001.JPG', 'IMG_0002.JPG'] });
     await expect(message(page, 'Moved 2 photos to DESKTOP-1. They are in Recently Deleted on this phone for 30 days.')).toBeVisible();
+    await expect(send.getByRole('heading', { name: '2 files are on DESKTOP-1' })).toBeVisible();
+    await expect(send).toContainText('Deleted from this phone. They wait in Recently Deleted for 30 days.');
     expect(phone.asked.filter(a => a === 'send/delete-sent')).toHaveLength(1);
-    await sendWindow(page).getByRole('button', { name: 'Close' }).click();
-    await expect(sendWindow(page)).toBeHidden();
+    await send.getByRole('button', { name: 'Done' }).click();
+    await expect(send.getByRole('radiogroup', { name: 'What to send' })).toBeVisible();
     expect(phone.asked).not.toContain('send/stop');
   });
 
@@ -244,27 +259,40 @@ test.describe('on a phone', () => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     phone.root = photos.root;
     await sendFromLibrary(page, ['IMG_0001.JPG']);
-    await expect(sendWindow(page)).toContainText('The photos stay on this phone as well.');
+    const send = sendScreen(page);
+    await expect(send).toContainText('The photos stay on this phone. Once the computer has them all, you can delete them here.');
+    await send.getByRole('button', { name: 'Offer 1 item to a computer' }).click();
     phone.set({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, where: 'C:\\Photos', deletable: ['IMG_0001.JPG'] });
-    await expect(sendWindow(page)).toContainText('1 of 1 file is on DESKTOP-1 in C:\\Photos. They are still on this phone too.');
+    await expect(send.getByRole('heading', { name: '1 file is on DESKTOP-1' })).toBeVisible();
+    await expect(send).toContainText('Free up space on this phone');
     expect(phone.asked).not.toContain('send/delete-sent');
 
-    await sendWindow(page).getByRole('button', { name: 'Delete 1 photo from this phone' }).click();
-    await expect(question(page)).toHaveAccessibleName('Delete IMG_0001.JPG from this phone?');
-    await expect(question(page)).toContainText('The copies on DESKTOP-1 in C:\\Photos stay.');
-    await question(page).getByRole('button', { name: 'Delete 1 photo' }).click();
+    await send.getByRole('button', { name: 'Delete 1 from this phone' }).click();
+    const asked = page.getByRole('dialog', { name: 'Delete IMG_0001.JPG from this phone?' });
+    await expect(asked).toContainText('IMG_0001.JPG goes to Recently Deleted on this phone, with any Live Photo videos and edits.');
+    await expect(asked).toContainText('The copies on DESKTOP-1 stay, in C:\\Photos.');
+    await asked.getByRole('button', { name: 'Delete 1 photo' }).click();
     await expect(message(page, 'Deleted 1 photo from this phone. It is in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.')).toBeVisible();
+    await expect(send).toContainText('Deleted from this phone. They wait in Recently Deleted for 30 days.');
   });
 
-  test('closing the window while the phone waits stops offering the photos @phone', async ({ page, photos }) => {
+  test('numbers said to be different stop it with nothing sent; Try again offers again, and Stop offering stops @phone', async ({ page, photos }) => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
     phone.root = photos.root;
     await sendFromLibrary(page, ['IMG_0001.JPG']);
-    await expect(sendWindow(page)).toContainText('Waiting for your computer');
-    await page.keyboard.press('Escape');
-    await expect(sendWindow(page)).toBeHidden();
+    const send = sendScreen(page);
+    await send.getByRole('button', { name: 'Offer 1 item to a computer' }).click();
+    phone.set({ stage: 'comparing', code: '482 917', computer: 'DESKTOP-1' });
+    await send.getByRole('button', { name: "It's different" }).click();
+    await expect(send.getByRole('heading', { name: 'Stopped. Nothing was sent.' })).toBeVisible();
+    await expect(send.getByRole('alert')).toHaveText('The numbers did not match. Check that you picked this phone on the computer, then try again.');
+    await send.getByRole('button', { name: 'Try again' }).click();
+    await expect(send.getByRole('heading', { name: 'Waiting for a computer' })).toBeVisible();
+    expect(phone.asked.filter(a => a.startsWith('send/start'))).toHaveLength(2);
+    await send.getByRole('button', { name: 'Stop offering' }).click();
+    await expect(send.getByRole('radiogroup', { name: 'What to send' })).toBeVisible();
     await expect.poll(() => phone.asked).toContain('send/stop');
   });
 });

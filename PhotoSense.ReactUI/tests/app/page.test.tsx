@@ -17,9 +17,10 @@ const api = vi.hoisted(() => ({
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
 vi.mock('../../components/organize/OrganizeView', () => ({
-  OrganizeView: ({ startRoot, notify }: { startRoot?: string; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => (
+  OrganizeView: ({ startRoot, unit, notify }: { startRoot?: string; unit: string; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => (
     <section aria-label="Organize">
       Organizing {startRoot ?? 'no folder'}
+      <span>Distances in {unit}</span>
       <button type="button" onClick={() => notify('Moved 13 files to Butte', 'ok', { label: 'Undo', run: () => notify('Moved 13 files back', 'ok') })}>Move some</button>
     </section>
   ),
@@ -1058,7 +1059,7 @@ describe('deleting permanently', () => {
     expect(sure()).toHaveTextContent('It can be turned back on under Settings in the menu.');
     await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
     expect(await toast('Deleted 2 files (2 KB) permanently.')).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false });
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles' });
 
     // Now the warning is all there is.
     await confirm();
@@ -1178,6 +1179,17 @@ describe('the two areas', () => {
     expect(screen.queryByText('Moved 13 files to Butte')).not.toBeInTheDocument();
   });
 
+  it('say distances in miles until kilometers are chosen in Settings, which is remembered', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    expect(organize()).toHaveTextContent('Distances in miles');
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    await userEvent.click(within(screen.getByRole('group', { name: 'Distances' })).getByRole('button', { name: 'Kilometers' }));
+    expect(organize()).toHaveTextContent('Distances in km');
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toMatchObject({ distanceUnit: 'km' });
+  });
+
   it('go back to Clean up when the folders are to be changed or scanned again', async () => {
     open();
     await userEvent.click(area('Organize'));
@@ -1237,6 +1249,16 @@ describe('on a phone or tablet', () => {
     api.useAbout.mockReturnValue({ data: { program: 'server' } } as never);
     page.refresh();
     expect(document.documentElement).not.toHaveAttribute('data-skin');
+  });
+
+  it('says distances in the unit chosen in Settings, the same setting a computer has', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    open();
+    const units = within(await settings()).getByRole('radiogroup', { name: 'Distances' });
+    expect(within(units).getByRole('radio', { name: 'Miles' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(units).getByRole('radio', { name: 'Kilometers' }));
+    expect(within(units).getByRole('radio', { name: 'Kilometers' })).toHaveAttribute('aria-checked', 'true');
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toMatchObject({ distanceUnit: 'km' });
   });
 
   it('reviews a group on a screen of its own, which Back, on the phone or on the screen, takes back to the list', async () => {

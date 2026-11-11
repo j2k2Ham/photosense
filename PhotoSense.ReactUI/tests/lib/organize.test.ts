@@ -165,13 +165,22 @@ describe('suggested folders by place', () => {
   });
 
   it('combines more as the distance grows, and nothing when places are kept separate', () => {
-    const wide = suggest(listing(files), settings({ radiusMiles: 10 }), noChoices);
+    const wide = suggest(listing(files), settings({ radius: 10 }), noChoices);
     expect(wide.map(s => [s.name, s.files.length, s.merge])).toEqual([
       ['Anaconda', 4, 'Includes Opportunity (6 mi away)'], ['Glacier National Park', 3, 'Includes Apgar Village, Glacier National Park (2 mi away)'], ['Uptown Butte', 2, ''],
     ]);
-    const apart = suggest(listing(files), settings({ near: 'separate', radiusMiles: 50 }), noChoices);
+    const apart = suggest(listing(files), settings({ near: 'separate', radius: 50 }), noChoices);
     expect(apart.map(s => s.name)).toEqual(['Anaconda', 'Uptown Butte', 'Glacier National Park', 'Opportunity', 'Apgar Village, Glacier National Park']);
     expect(apart.every(s => s.merge === '')).toBe(true);
+  });
+
+  it('combines within kilometres and says how far in them, when kilometres were chosen', () => {
+    const km = suggest(listing(files), settings({ radius: 15, unit: 'km' }), noChoices);
+    expect(km.map(s => [s.name, s.merge])).toEqual([
+      ['Anaconda', 'Includes Opportunity (10 km away)'], ['Glacier National Park', 'Includes Apgar Village, Glacier National Park (4 km away)'], ['Uptown Butte', ''],
+    ]);
+    // Five kilometres is too short for Anaconda and Opportunity, which five miles takes in.
+    expect(suggest(listing(files), settings({ radius: 5, unit: 'km' }), noChoices).find(s => s.name === 'Anaconda')!.merge).toBe('');
   });
 
   it('names at most three of the places a folder takes in, and says a place right beside another is 1 mile away', () => {
@@ -425,12 +434,12 @@ describe('the map', () => {
     expect(map.merged).toHaveLength(2);
     expect(map.rings).toHaveLength(4);
     // Five miles, against a map whose width the scale gives in miles.
-    expect(map.rings[0].diameter).toBeCloseTo(5 / (map.scale.miles / map.scale.percent * 100) * 100, 5);
+    expect(map.rings[0].diameter).toBeCloseTo(5 / (map.scale.distance / map.scale.percent * 100) * 100, 5);
     // Each dot also says where on the earth it is, for a map that is drawn from that.
     expect([anacondaDot.latitude, anacondaDot.longitude]).toEqual([anaconda.latitude, anaconda.longitude]);
     expect(glacierDot.latitude).toBeCloseTo(westGlacier.latitude + (apgar.latitude - westGlacier.latitude) / 3, 6);
     expect(map.aspect).toBeGreaterThan(1);
-    expect(map.scale.miles).toBe(50);
+    expect(map.scale.distance).toBe(50);
   });
 
   it('draws no reach when places are kept separate, and labels only the six largest folders', () => {
@@ -452,13 +461,17 @@ describe('the map', () => {
     const map = mapLayout(found, PLACES, settings())!;
     expect(map.dots[0].x).toBeCloseTo(50, 6);
     expect(map.dots[0].y).toBeCloseTo(50, 6);
-    expect(map.scale.miles).toBe(5);
+    expect(map.scale.distance).toBe(5);
     expect(map.aspect).toBe(1);
   });
 
   it('still has a scale on the smallest map', () => {
     const map = mapLayout(suggest(listing([at('a', 0)]), settings({ near: 'separate' }), noChoices), PLACES, settings({ near: 'separate' }))!;
     // Some sixteen miles across: two miles is the longest round distance that fits a quarter of it.
-    expect(map.scale.miles).toBe(2);
+    expect(map.scale.distance).toBe(2);
+    expect(map.scale.unit).toBe('miles');
+    // The same map in kilometres: some 26 km across, so five fits a quarter of it.
+    const km = settings({ near: 'separate', unit: 'km' });
+    expect(mapLayout(suggest(listing([at('a', 0)]), km, noChoices), PLACES, km)!.scale).toMatchObject({ distance: 5, unit: 'km' });
   });
 });

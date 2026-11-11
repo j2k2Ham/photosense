@@ -24,24 +24,24 @@ const listing = (files: OrganizeFileDto[] = all, root = ROOT): OrganizeFilesDto 
 
 describe('Organize on a phone', () => {
   it('suggests albums only for what is in none yet, largest first, and counts what has no location', () => {
-    const { result } = renderHook(() => useOrganize(listing(), 'ios', false));
+    const { result } = renderHook(() => useOrganize(listing(), 'ios', false, 'miles'));
     const o = result.current;
     expect(o.rows.map(r => [r.suggestion!.name, r.suggestion!.files.map(f => f.id)])).toEqual([['Anaconda', ['a1', 'a2', 'o1', 'v1', 'lp']], ['Uptown Butte', ['b1']]]);
     expect([o.unplaced, o.toMove, o.open, o.view, o.kinds]).toEqual([1, 6, undefined, 'list', 'both']);
   });
 
   it('on Android also sorts what is still where the camera put it', () => {
-    const { result } = renderHook(() => useOrganize(listing([at('c1', { place: 1, folder: '/Phone/DCIM/Camera' }), at('p1', { place: 1, folder: '/Phone/Pictures/Old' })], '/Phone'), 'android', false));
+    const { result } = renderHook(() => useOrganize(listing([at('c1', { place: 1, folder: '/Phone/DCIM/Camera' }), at('p1', { place: 1, folder: '/Phone/Pictures/Old' })], '/Phone'), 'android', false, 'miles'));
     expect(result.current.rows.map(r => r.suggestion!.files.map(f => f.id))).toEqual([['c1']]);
   });
 
   it('shows nothing before the library has been read', () => {
-    const { result } = renderHook(() => useOrganize(undefined, 'ios', true));
+    const { result } = renderHook(() => useOrganize(undefined, 'ios', true, 'miles'));
     expect([result.current.rows, result.current.unplaced, result.current.toMove, result.current.open]).toEqual([[], 0, 0, undefined]);
   });
 
   it('sorts only the kind shown, a Live Photo\'s video never on its own', () => {
-    const { result } = renderHook(() => useOrganize(listing(), 'ios', false));
+    const { result } = renderHook(() => useOrganize(listing(), 'ios', false, 'miles'));
     act(() => result.current.setKinds('videos'));
     expect(result.current.rows.map(r => r.suggestion!.files.map(f => f.id))).toEqual([['v1']]);
     act(() => result.current.setKinds('photos'));
@@ -49,7 +49,7 @@ describe('Organize on a phone', () => {
   });
 
   it('by date gives each year an album with places inside, the latest first, and by place each place years inside', () => {
-    const { result } = renderHook(() => useOrganize(listing(), 'ios', true));
+    const { result } = renderHook(() => useOrganize(listing(), 'ios', true, 'miles'));
     act(() => result.current.look('p:x'));
     act(() => result.current.change({ group: 'date' }));
     expect(result.current.settings).toMatchObject({ group: 'date', dateThen: 'place' });
@@ -61,12 +61,12 @@ describe('Organize on a phone', () => {
     expect(result.current.settings.dateThen).toBe('place');
     act(() => result.current.change({ group: 'place' }));
     expect(result.current.settings).toMatchObject({ group: 'place', placeThen: 'year' });
-    act(() => result.current.change({ radiusMiles: 1 }));
+    act(() => result.current.change({ radius: 1 }));
     expect(result.current.rows.map(r => r.suggestion!.name)).toEqual(['Anaconda', 'Uptown Butte', 'Opportunity']);
   });
 
   it('renames a suggestion until the way of naming changes', () => {
-    const { result } = renderHook(() => useOrganize(listing(), 'ios', false));
+    const { result } = renderHook(() => useOrganize(listing(), 'ios', false, 'miles'));
     const key = result.current.rows[0].key;
     act(() => result.current.rename(key, 'Home'));
     expect(result.current.rows[0].suggestion!.name).toBe('Home');
@@ -76,7 +76,7 @@ describe('Organize on a phone', () => {
 
   it('keeps a moved suggestion as a row, looks at it on a tablet, and forgets it once undone', () => {
     let files = all;
-    const phone = renderHook(() => useOrganize(listing(files), 'ios', false));
+    const phone = renderHook(() => useOrganize(listing(files), 'ios', false, 'miles'));
     const key = phone.result.current.rows[0].key;
     act(() => phone.result.current.look(key));
     expect(phone.result.current.open?.key).toBe(key);
@@ -90,7 +90,7 @@ describe('Organize on a phone', () => {
     act(() => phone.result.current.undone('b1'));
     expect(phone.result.current.rows).toHaveLength(1);
 
-    const tablet = renderHook(() => useOrganize(listing(files), 'ios', true));
+    const tablet = renderHook(() => useOrganize(listing(files), 'ios', true, 'miles'));
     act(() => tablet.result.current.moved('p:gone', { name: 'Gone', count: 1, bytes: 1, range: 'x', path: 'p' }));
     expect(tablet.result.current.open?.moved?.name).toBe('Gone');
     // By date the moved rows go by their key with the rest.
@@ -99,7 +99,7 @@ describe('Organize on a phone', () => {
   });
 
   it('switches between the list and the map', () => {
-    const { result } = renderHook(() => useOrganize(listing(), 'ios', false));
+    const { result } = renderHook(() => useOrganize(listing(), 'ios', false, 'miles'));
     act(() => result.current.setView('map'));
     expect(result.current.view).toBe('map');
   });

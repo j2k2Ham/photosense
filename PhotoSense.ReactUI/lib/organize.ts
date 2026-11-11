@@ -1,14 +1,13 @@
 import type { OrganizeExistingDto, OrganizeFileDto, OrganizeFilesDto, OrganizePlaceDto, OrganizePlanDto } from '../types';
+import { kmPer, shortDistance, type DistanceUnit } from './distance';
 import { formatBytes, formatDuration, sameFolder } from './format';
 
 /** Files on one page of the Organize gallery, and of the preview. */
 export const GALLERY_PAGE = 60;
 /** How many files the preview of a plan shows at a time. */
 export const PREVIEW_PAGE = 100;
-/** The distances, in miles, within which nearby places can share a folder. */
+/** The distances, in the person's unit, within which nearby places can share a folder. */
 export const RADII = [1, 5, 15, 25, 50] as const;
-/** Distances are worked out in kilometres and said in miles. */
-export const KM_PER_MILE = 1.609344;
 
 /** How a place's folder is named: by the place itself, by its town and state, the place inside a folder for its state, or by its town alone (a phone's choice). */
 export type NameFormat = 'area' | 'city' | 'nest' | 'town';
@@ -18,7 +17,10 @@ export interface OrganizeSettings {
   /** What the folders are made by first. */
   group: 'place' | 'date';
   near: 'combine' | 'separate';
-  radiusMiles: number;
+  /** How far apart places can be and still share a folder, in `unit`. */
+  radius: number;
+  /** The unit distances are chosen and said in: the one chosen in Settings. */
+  unit: DistanceUnit;
   nameFormat: NameFormat;
   /** What a folder for a place is split by inside: Place \ Year, Place \ Month, or not at all. */
   placeThen: 'year' | 'month' | 'none';
@@ -28,7 +30,7 @@ export interface OrganizeSettings {
 }
 
 /** How Organize sorts files until the person chooses otherwise. */
-export const defaultSettings: OrganizeSettings = { group: 'place', near: 'combine', radiusMiles: 5, nameFormat: 'area', placeThen: 'year', dateGrain: 'year', dateThen: 'none' };
+export const defaultSettings: OrganizeSettings = { group: 'place', near: 'combine', radius: 5, unit: 'miles', nameFormat: 'area', placeThen: 'year', dateGrain: 'year', dateThen: 'none' };
 
 /** Where a file went in this sitting. */
 export interface OrganizedMark { label: string; copied: boolean; }
@@ -201,7 +203,7 @@ export function suggest(listing: OrganizeFilesDto, settings: OrganizeSettings, c
 
   // Places are gathered whether they come first or second; left alone when the folders are by date only.
   const byPlace = settings.group === 'place', placed = byPlace || settings.dateThen === 'place';
-  const groups = !placed ? [] : settings.near === 'combine' ? clusterPlaces(places, settings.radiusMiles * KM_PER_MILE) : places.map((_, i) => [i]);
+  const groups = !placed ? [] : settings.near === 'combine' ? clusterPlaces(places, settings.radius * kmPer(settings.unit)) : places.map((_, i) => [i]);
   const count = places.map(() => 0);
   for (const f of files) if (f.place != null) count[f.place]++;
   const groupOfPlace = new Map(groups.flatMap((members, g) => members.map(i => [i, g] as const)));
@@ -227,7 +229,7 @@ export function suggest(listing: OrganizeFilesDto, settings: OrganizeSettings, c
       const name = named(key, placeName(at, settings.nameFormat));
       const destinationOf = (f: OrganizeFileDto) => joinPath(root, name, subfolderOf(f));
       const others = members.filter(i => i !== dominant)
-        .map(i => `${placeLabel(places[i])} (${Math.max(1, Math.round(haversineKm(at, places[i]) / KM_PER_MILE))} mi away)`);
+        .map(i => `${placeLabel(places[i])} (${shortDistance(Math.max(1, Math.round(haversineKm(at, places[i]) / kmPer(settings.unit))), settings.unit)} away)`);
       const more = others.length - NAMED_PLACES;
       out.push({
         key, name, members, dominant, subfolderOf, destinationOf, split,
@@ -424,7 +426,7 @@ export interface MapLayout {
   /** Height over width that keeps distances true in both directions. */
   aspect: number;
   /** A round distance and how much of the width it covers, for the scale. */
-  scale: { miles: number; percent: number };
+  scale: { distance: number; unit: DistanceUnit; percent: number };
 }
 
 /** The largest folders are labelled on the map; the rest say what they are on hover. */
@@ -445,16 +447,16 @@ export function mapLayout(suggestions: readonly Suggestion[], places: readonly O
   const east = (lon: number) => lon * kmPerDegree * shrink, north = (lat: number) => lat * kmPerDegree;
   // At least 20 km (some 12 miles) across, so that a single town is not blown up to fill the map.
   const spanX = Math.max(20, east(Math.max(...lons)) - east(Math.min(...lons))), spanY = Math.max(20, north(Math.max(...lats)) - north(Math.min(...lats)));
-  const radiusKm = settings.radiusMiles * KM_PER_MILE;
+  const unitKm = kmPer(settings.unit), radiusKm = settings.radius * unitKm;
   const margin = 0.14 * Math.max(spanX, spanY) + (settings.near === 'combine' ? radiusKm / 2 : 0);
   const width = spanX + 2 * margin, height = spanY + 2 * margin;
   const left = (east(Math.min(...lons)) + east(Math.max(...lons))) / 2 - width / 2, top = (north(Math.min(...lats)) + north(Math.max(...lats))) / 2 + height / 2;
   const x = (p: Point) => (east(p.longitude) - left) / width * 100, y = (p: Point) => (top - north(p.latitude)) / height * 100;
 
-  const layout: MapLayout = { dots: [], rings: [], merged: [], aspect: height / width, scale: { miles: 0, percent: 0 } };
+  const layout: MapLayout = { dots: [], rings: [], merged: [], aspect: height / width, scale: { distance: 0, unit: settings.unit, percent: 0 } };
   // The map is never less than some 16 miles across, so there is always a scale that fits a quarter of it.
-  const miles = SCALES.filter(s => s <= width / KM_PER_MILE / 4).pop()!;
-  layout.scale = { miles, percent: miles * KM_PER_MILE / width * 100 };
+  const distance = SCALES.filter(s => s <= width / unitKm / 4).pop()!;
+  layout.scale = { distance, unit: settings.unit, percent: distance * unitKm / width * 100 };
   shown.forEach((s, rank) => {
     // The dot sits at the middle of the suggestion's files, not of its places.
     const counts = new Map<number, number>();

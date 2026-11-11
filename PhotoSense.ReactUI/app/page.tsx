@@ -406,7 +406,7 @@ export default function HomePage() {
       {platform ? (
         <PhoneApp platform={platform} tab={tab} status={status.data}
           notice={offlineNotice} toasts={toasts} removeToast={remove}
-          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} onTab={turnToTab}
+          theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} unit={settings.distanceUnit} onUnit={distanceUnit => changeSettings({ distanceUnit })} onTab={turnToTab}
           scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}
           onDeletePermanently={askToErase} onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen(true)} />
       ) : (
@@ -426,7 +426,7 @@ export default function HomePage() {
 
         <main className="flex min-h-0 flex-1 flex-col">
           {organizing && (
-            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} notify={push} /></div>
+            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} unit={settings.distanceUnit} notify={push} /></div>
           )}
 
           {area === 'organize' ? null : cleanScreen}

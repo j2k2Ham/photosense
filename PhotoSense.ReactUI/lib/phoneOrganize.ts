@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { OrganizeBatchDto, OrganizeFileDto, OrganizeFilesDto } from '../types';
 import { leaf, sameFolder } from './format';
+import { shortDistance, type DistanceUnit } from './distance';
 import { isUnsorted, whereIs } from './library';
 import { dateRange, defaultSettings, joinPath, MONTHS, relativeFolder, totalBytes, type OrganizeSettings, type Suggestion, suggest, noChoices } from './organize';
 import type { Platform, Words } from './phone';
@@ -59,8 +60,9 @@ export interface PhoneOrganize {
  * Organize's state on a phone or tablet. Only what is in no album yet is sorted (`isUnsorted`), so what was moved is
  * left out by itself, and only the kind of file shown. A Live Photo's video goes with its picture, never on its own.
  */
-export function useOrganize(listing: OrganizeFilesDto | undefined, platform: Platform, tablet: boolean): PhoneOrganize {
-  const [settings, setSettings] = useState<OrganizeSettings>(defaultSettings);
+export function useOrganize(listing: OrganizeFilesDto | undefined, platform: Platform, tablet: boolean, unit: DistanceUnit): PhoneOrganize {
+  const [chosen, setSettings] = useState<OrganizeSettings>(defaultSettings);
+  const settings = useMemo(() => ({ ...chosen, unit }), [chosen, unit]);
   const [kinds, setKinds] = useState<FileKinds>('both');
   const [view, setView] = useState<'list' | 'map'>('list');
   const [renames, setRenames] = useState<Readonly<Record<string, string>>>({});
@@ -108,7 +110,7 @@ export function useOrganize(listing: OrganizeFilesDto | undefined, platform: Pla
 export function optionsLine(s: OrganizeSettings, kinds: FileKinds, words: Words): string {
   const sep = words.separator;
   const parts = s.group === 'place'
-    ? [s.near === 'combine' ? `Within ${s.radiusMiles} mi` : 'Keep separate', s.nameFormat === 'town' ? 'Town' : 'Landmark or area', insideLine(s, words)]
+    ? [s.near === 'combine' ? `Within ${shortDistance(s.radius, s.unit)}` : 'Keep separate', s.nameFormat === 'town' ? 'Town' : 'Landmark or area', insideLine(s, words)]
     : ['By year', s.dateThen === 'place' ? `Year${sep}Place` : 'Year'];
   if (kinds !== 'both') parts.push(kinds === 'photos' ? 'Photos only' : 'Videos only');
   return parts.join(' · ');

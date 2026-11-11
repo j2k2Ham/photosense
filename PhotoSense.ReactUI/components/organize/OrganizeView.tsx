@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
 import { formatBytes, leaf, sameFolder } from '../../lib/format';
+import type { DistanceUnit } from '../../lib/distance';
 import {
   GALLERY_PAGE, defaultSettings, fileTag, joinPath, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
   type FileRef, type OrganizeChoices, type OrganizeSettings, type OrganizedMark,
@@ -11,7 +12,6 @@ import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto } from '..
 import { ConfirmDialog } from '../ConfirmDialog';
 import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
-import { SendWindow } from '../SendWindow';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { FileGallery, type FileFilter, type FileKind } from './FileGallery';
 import { FolderDialog, type FolderPlace } from './FolderDialog';
@@ -24,6 +24,8 @@ import { countFiles } from './shared';
 interface Props {
   /** The folder to begin with when none was chosen here before: the one last scanned. */
   readonly startRoot?: string;
+  /** The unit distances are said in, from Settings. */
+  readonly unit: DistanceUnit;
   notify(message: string, kind?: ToastKind, action?: ToastAction): void;
 }
 
@@ -47,7 +49,7 @@ const Named = ({ children }: { readonly children: string }) => <span className="
 const Where = ({ children }: { readonly children: string }) => <span className="font-mono text-[13.5px] [overflow-wrap:anywhere]">{children}</span>;
 
 /** Organize: every file of a folder, the folders it could be sorted into, and the way to look before anything moves. */
-export function OrganizeView({ startRoot, notify }: Props) {
+export function OrganizeView({ startRoot, unit, notify }: Props) {
   const [chosen, setChosen] = useState<string>();
   // What this browser remembers is read once the page is in the browser.
   useEffect(() => setChosen(c => c ?? (loadOrganizeRoot() || undefined)), []);
@@ -57,7 +59,8 @@ export function OrganizeView({ startRoot, notify }: Props) {
   // A phone keeps each picture once, in one of PhotoSense's albums at a time: there it can be moved, not copied.
   const onPhone = PHONES.has(useAbout().data?.program ?? '');
 
-  const [settings, setSettings] = useState<OrganizeSettings>(defaultSettings);
+  const [organizing, setSettings] = useState<OrganizeSettings>(defaultSettings);
+  const settings = useMemo(() => ({ ...organizing, unit }), [organizing, unit]);
   const [showMap, setShowMap] = useState(true);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FileFilter>('all');
@@ -72,7 +75,6 @@ export function OrganizeView({ startRoot, notify }: Props) {
   // Which folder the selected files go in is being asked.
   const [making, setMaking] = useState(false);
   // The files being offered to a computer, by their ids, while the window that does it is open.
-  const [sending, setSending] = useState<string[]>();
   const [dragging, setDragging] = useState<string[]>([]);
   const [preview, setPreview] = useState<Target>();
   const [mode, setMode] = useState<'move' | 'copy'>('move');
@@ -364,7 +366,7 @@ export function OrganizeView({ startRoot, notify }: Props) {
               onPick={pick} onOpen={open} onDragStart={f => setDragging(picked.has(f.id) ? [...picked] : [f.id])} onDragEnd={() => setDragging([])} />
             {picked.size > 0 && (
               <SelectionBar count={picked.size} shown={shown.length} hint={folders.length > 0 ? 'or add them to one of your folders' : ''}
-                onSelectAll={() => setPicked(new Set(shown.map(f => f.id)))} onNewFolder={() => setMaking(true)} onSend={onPhone ? () => setSending([...picked]) : undefined} onDelete={askToDelete} onClear={clearPicks} />
+                onSelectAll={() => setPicked(new Set(shown.map(f => f.id)))} onNewFolder={() => setMaking(true)} onDelete={askToDelete} onClear={clearPicks} />
             )}
           </section>
           <SuggestionsPanel className={pane === 'folders' ? 'flex' : 'hidden lg:flex'} settings={settings} showMap={showMap} suggestions={suggestions} map={map} focus={focus} unplaced={noPlace.length} folders={own} picked={picked.size}
@@ -398,7 +400,6 @@ export function OrganizeView({ startRoot, notify }: Props) {
         <FolderDialog count={picked.size} root={root} taken={own.map(f => f.path!)} onDone={createFolder} onCancel={() => setMaking(false)} />
       )}
       {browsing && <FolderPicker title="Choose a folder to organize" startAt={root} onPick={chooseRoot} onCancel={() => setBrowsing(false)} />}
-      {sending && <SendWindow files={sending} notify={notify} onClose={() => setSending(undefined)} />}
     </>
   );
 }

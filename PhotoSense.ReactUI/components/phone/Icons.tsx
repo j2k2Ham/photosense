@@ -96,3 +96,13 @@ export const PlusIcon = (p: IconProps) => <Line size={20} stroke={2} {...p}><pat
 
 /** Done: a tick in the colour around it. */
 export const DoneIcon = (p: IconProps) => <Line size={28} stroke={2.4} {...p}><path d="M5 12.5l4.5 4.5L19 7.5" /></Line>;
+
+/** A computer: a laptop, open. */
+export const LaptopIcon = (p: IconProps) => (
+  <Line size={34} stroke={1.9} {...p}><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5" /><path d="M2.5 18.5h19" /></Line>
+);
+
+/** Wi-Fi: three arcs over a dot. */
+export const WifiIcon = (p: IconProps) => (
+  <Line size={22} stroke={1.9} {...p}><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0" /><path d="M12 19.5h.01" strokeWidth={3} /></Line>
+);
