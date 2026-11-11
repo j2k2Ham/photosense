@@ -110,7 +110,7 @@ public sealed class ExifMediaDetailsReaderTests : IDisposable
         if (orientation is { } turn) exif.SetValue(ExifTag.Orientation, turn);
         image.SetProfile(exif);
         // Set on the picture as well: written from the profile alone, the tag is put back to "as recorded".
-        if (orientation is { } turned) image.Orientation = (OrientationType)turned;
+        if (orientation is { } turned) image.Orientation = (Orientation)turned;
         image.Format = MagickFormat.Jpeg;
         return image.ToByteArray();
     }

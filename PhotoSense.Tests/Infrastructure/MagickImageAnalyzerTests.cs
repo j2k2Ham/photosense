@@ -103,7 +103,7 @@ public class MagickImageAnalyzerTests
         var exif = new ExifProfile();
         exif.SetValue(ExifTag.Orientation, (ushort)6);
         sideways.SetProfile(exif);
-        sideways.Orientation = OrientationType.RightTop;
+        sideways.Orientation = Orientation.RightTop;
         var tagged = await _analyzer.AnalyzeAsync(Encode(sideways, MagickFormat.Jpeg), ct);
 
         await Assert.That((tagged.Width, tagged.Height)).IsEqualTo((800, 600));

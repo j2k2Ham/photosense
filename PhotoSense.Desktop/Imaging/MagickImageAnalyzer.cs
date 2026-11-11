@@ -41,7 +41,7 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
     {
         using var image = Load(imageStream, ImageFingerprint.WorkEdge);
         // A JPEG is decoded at reduced size for speed, so its true size comes from the header.
-        var sideways = image.Orientation is OrientationType.LeftTop or OrientationType.RightTop or OrientationType.RightBottom or OrientationType.LeftBottom;
+        var sideways = image.Orientation is Orientation.LeftTop or Orientation.RightTop or Orientation.RightBottom or Orientation.LeftBottom;
         int width = (int)(sideways ? image.BaseHeight : image.BaseWidth), height = (int)(sideways ? image.BaseWidth : image.BaseHeight);
         var format = image.Format.ToString().ToUpperInvariant();
         int? quality = image.Format is MagickFormat.Jpeg or MagickFormat.Jpg && image.Quality > 0 ? (int)image.Quality : null;

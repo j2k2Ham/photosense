@@ -215,10 +215,10 @@ SOFTWARE
 .NET for Android (MIT)
 LiteDB 5.0.21 (MIT)
 MetadataExtractor 2.8.1 (Apache-2.0)
-Microsoft.Extensions.DependencyInjection 10.0.12 (MIT)
-Microsoft.Extensions.DependencyInjection.Abstractions 10.0.12 (MIT)
-Microsoft.Extensions.Options 10.0.12 (MIT)
-Microsoft.Extensions.Primitives 10.0.12 (MIT)
+Microsoft.Extensions.DependencyInjection 11.0.0 (MIT)
+Microsoft.Extensions.DependencyInjection.Abstractions 11.0.0 (MIT)
+Microsoft.Extensions.Options 11.0.0 (MIT)
+Microsoft.Extensions.Primitives 11.0.0 (MIT)
 XmpCore 6.1.10.1 (BSD-3-Clause)
 @next/env 16.4.3 (MIT)
 @swc/helpers 0.5.23 (Apache-2.0)
@@ -382,7 +382,7 @@ If the Work includes a "NOTICE" text file as part of its distribution, then any 
 END OF TERMS AND CONDITIONS
 
 ------------------------------------------------------------------------
-Microsoft.Extensions.DependencyInjection 10.0.12 (MIT)
+Microsoft.Extensions.DependencyInjection 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 MIT License
@@ -408,7 +408,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ------------------------------------------------------------------------
-Microsoft.Extensions.DependencyInjection.Abstractions 10.0.12 (MIT)
+Microsoft.Extensions.DependencyInjection.Abstractions 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 MIT License
@@ -434,7 +434,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ------------------------------------------------------------------------
-Microsoft.Extensions.Options 10.0.12 (MIT)
+Microsoft.Extensions.Options 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 MIT License
@@ -460,7 +460,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ------------------------------------------------------------------------
-Microsoft.Extensions.Primitives 10.0.12 (MIT)
+Microsoft.Extensions.Primitives 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 MIT License
