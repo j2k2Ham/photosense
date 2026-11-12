@@ -80,7 +80,7 @@ test.describe('Organize: folders of your own', () => {
     await tile(page, 'IMG_0001.JPG').click();
     await newFolder(page, 'Best');
     await drag(page, tile(page, 'IMG_0002.JPG'), suggestions(page).getByRole('button', { name: 'Show the files for Best' }));
-    await expect(suggestions(page).getByRole('button', { name: 'Show the files for Best' })).toContainText('2 files');
+    await expect(suggestions(page).getByRole('button', { name: 'Show the files for Best' }).locator('..')).toContainText('2 files');
     await tile(page, 'IMG_0003.JPG').click();
     await suggestions(page).getByRole('button', { name: 'Add 1 here' }).click();
     await yours(page, 'Best').click();

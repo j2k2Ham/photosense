@@ -337,14 +337,14 @@ describe('the suggested folders panel', () => {
     show();
     expect(within(panel()).getByRole('heading', { name: 'Suggested folders' }).parentElement).toHaveTextContent('Suggested folders2 · 8 files');
     const cards = within(panel()).getAllByRole('button', { name: /^Show the files for / });
-    expect(cards.map(c => c.textContent)).toEqual([
+    expect(cards.map(c => c.parentElement!.textContent)).toEqual([
       'Anaconda5 files · 29.1 MBJul 2022Inside: a folder for each yearNo landmark known here, so it is named after the town',
       'Glacier National Park3 files · 17.4 MBJul 2022Inside: a folder for each yearIncludes Apgar Village (2 mi away)',
     ]);
     // Four pictures to a card, with an empty square where the folder has fewer.
-    expect(cards[0].querySelectorAll('img')).toHaveLength(3);
-    expect(cards[1].querySelectorAll('img')).toHaveLength(3);
-    expect(cards[1].querySelectorAll('.bg-s3:not(img)')).toHaveLength(1);
+    expect(cards[0].closest('div')!.querySelectorAll('img')).toHaveLength(3);
+    expect(cards[1].closest('div')!.querySelectorAll('img')).toHaveLength(3);
+    expect(cards[1].closest('div')!.querySelectorAll('.bg-s3:not(img)')).toHaveLength(1);
     expect(panel()).toHaveTextContent('Folders are made inside Phone Pictures unless you choose another place. Files already in the right folder are left alone, and nothing is ever replaced: if a name is taken, (1) is added.');
   });
 
@@ -373,7 +373,7 @@ describe('the suggested folders panel', () => {
 
   it('offers the ways of naming a folder, each with an example', async () => {
     const { onSettings } = show();
-    const opener = within(panel()).getByRole('button', { name: 'Folder names' });
+    const opener = within(panel()).getByRole('button', { name: /^Folder names/ });
     expect(opener).toHaveTextContent('Landmark or area');
     await userEvent.click(opener);
     const options = within(screen.getByRole('listbox', { name: 'Folder names' })).getAllByRole('option');
@@ -400,7 +400,7 @@ describe('the suggested folders panel', () => {
     expect(choice('One folder per', 'Year')).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(choice('One folder per', 'Month'));
     expect(onSettings).toHaveBeenCalledExactlyOnceWith({ dateGrain: 'month' });
-    expect(within(panel()).getByRole('button', { name: 'Show the files for 2022' })).toHaveTextContent(/^20229 files · 52\.3 MBJul 2022$/);
+    expect(within(panel()).getByRole('button', { name: 'Show the files for 2022' }).parentElement).toHaveTextContent(/^20229 files · 52\.3 MBJul 2022$/);
     // A year or month can be split by place inside, or by nothing.
     expect(within(group('Then by')).getAllByRole('button').map(b => [b.textContent, b.getAttribute('aria-pressed')])).toEqual([['Place', 'false'], ['Nothing', 'true']]);
     await userEvent.click(choice('Then by', 'Place'));
@@ -411,8 +411,8 @@ describe('the suggested folders panel', () => {
     const { onSettings } = show({ showMap: true }, { group: 'date', dateThen: 'place' });
     expect([choice('Group by', 'Date'), choice('One folder per', 'Year'), choice('Then by', 'Place'), choice('Nearby places', 'Combine'), choice('Combine places within', '5')].map(b => b.getAttribute('aria-pressed')))
       .toEqual(['true', 'true', 'true', 'true', 'true']);
-    expect(within(panel()).getByRole('button', { name: 'Folder names' })).toHaveTextContent('Landmark or area');
-    expect(within(panel()).getByRole('button', { name: 'Show the files for 2022' })).toHaveTextContent('20229 files · 52.3 MBJul 2022Inside: a folder for each place');
+    expect(within(panel()).getByRole('button', { name: 'Folder names: Landmark or area' })).toHaveTextContent('Landmark or area');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for 2022' }).parentElement).toHaveTextContent('20229 files · 52.3 MBJul 2022Inside: a folder for each place');
     // The map is of folders by place; these are folders by year.
     expect(within(panel()).queryByRole('switch')).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Map of the suggested folders' })).not.toBeInTheDocument();
@@ -428,7 +428,7 @@ describe('the suggested folders panel', () => {
     await userEvent.click(within(panel()).getByRole('button', { name: 'Preview Anaconda' }));
     expect(onPreview).toHaveBeenCalledExactlyOnceWith({ kind: 'suggested', key });
 
-    const card = within(panel()).getByRole('button', { name: 'Show the files for Anaconda' }).parentElement!;
+    const card = within(panel()).getByRole('button', { name: 'Show the files for Anaconda' }).closest('div')!;
     expect(card).toHaveClass('border-line');
     fireEvent.dragOver(card);
     expect(card).toHaveClass('border-brand', 'bg-sel');
@@ -446,7 +446,7 @@ describe('the suggested folders panel', () => {
     const { onFocus } = show({ focus: { kind: 'suggested', key } });
     const card = screen.getAllByRole('button', { name: 'Show the files for Anaconda' })[1];
     expect(card).toHaveAttribute('aria-pressed', 'true');
-    expect(card.parentElement).toHaveClass('border-brand');
+    expect(card.closest('div')).toHaveClass('border-brand');
     await userEvent.click(card);
     expect(onFocus).toHaveBeenCalledExactlyOnceWith(undefined);
   });
@@ -551,8 +551,8 @@ describe('the suggested folders panel', () => {
     const empty = own({ id: 'own-2', name: 'Empty one', files: [] });
     const { onFocus, onAddPicked, onPreview, onRemoveFolder, onDrop } = show({ folders: [own(), empty], picked: 3 });
     const card = within(panel()).getByRole('button', { name: 'Show the files for Trips\\Glacier 2022' });
-    expect(card).toHaveTextContent('Trips\\Glacier 20222 files · 11.6 MB · not moved yet');
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Empty one' })).toHaveTextContent('Empty oneEmpty. Select or drag files onto it.');
+    expect(card.parentElement).toHaveTextContent('Trips\\Glacier 20222 files · 11.6 MB · not moved yet');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Empty one' }).parentElement).toHaveTextContent('Empty oneEmpty. Select or drag files onto it.');
     expect(within(panel()).getByRole('button', { name: 'Preview Empty one' })).toBeDisabled();
     expect(panel()).not.toHaveTextContent('Make a folder of your own');
 
@@ -571,9 +571,9 @@ describe('the suggested folders panel', () => {
   it('says where a folder is when it is not a new one in the folder being organized, its whole path on hover', () => {
     show({ folders: [own({ name: 'Trips', where: 'Already there', path: 'C:\\Users\\jamie\\Phone Pictures\\Trips' }), own({ id: 'own-2', name: 'Glacier', where: 'In D:\\Archive', path: 'D:\\Archive\\Glacier' })] });
     const trips = within(panel()).getByRole('button', { name: 'Show the files for Trips' });
-    expect(trips).toHaveTextContent('TripsAlready there2 files · 11.6 MB · not moved yet');
-    expect(within(trips).getByText('Already there')).toHaveAttribute('title', 'C:\\Users\\jamie\\Phone Pictures\\Trips');
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Glacier' })).toHaveTextContent('GlacierIn D:\\Archive2 files');
+    expect(trips.parentElement).toHaveTextContent('TripsAlready there2 files · 11.6 MB · not moved yet');
+    expect(trips).toHaveAttribute('title', 'C:\\Users\\jamie\\Phone Pictures\\Trips');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Glacier' }).parentElement).toHaveTextContent('GlacierIn D:\\Archive2 files');
     expect(within(panel()).getByText('Glacier')).toHaveAttribute('title', 'D:\\Archive\\Glacier');
   });
 
@@ -581,7 +581,7 @@ describe('the suggested folders panel', () => {
     const { onFocus } = show({ folders: [own()], focus: { kind: 'own', key: 'own-1' } });
     expect(within(panel()).queryByRole('button', { name: /^Add / })).not.toBeInTheDocument();
     const card = within(panel()).getByRole('button', { name: 'Show the files for Trips\\Glacier 2022' });
-    expect(card.parentElement).toHaveClass('border-brand');
+    expect(card.closest('div')).toHaveClass('border-brand');
     await userEvent.click(card);
     expect(onFocus).toHaveBeenCalledExactlyOnceWith(undefined);
   });

@@ -28,13 +28,20 @@ export function useToasts(lasts = TOAST_MS) {
   const next = React.useRef(0);
   const short = React.useRef(lasts);
   React.useLayoutEffect(() => { short.current = lasts; });
+  // A message's timer is let go when the page goes, so that it does not fire into a page that is no longer there.
+  const timers = React.useRef(new Set<ReturnType<typeof setTimeout>>());
+  React.useEffect(() => {
+    const pending = timers.current;
+    return () => { pending.forEach(clearTimeout); pending.clear(); };
+  }, []);
 
   const remove = React.useCallback((id: number) => setToasts(t => t.filter(x => x.id !== id)), []);
   const push = React.useCallback((message: string, kind: ToastKind = 'info', action?: ToastAction) => {
     const id = ++next.current;
     setToasts(t => [...t, { id, message, kind, action }]);
-    if (kind === 'error') setErrors(e => [{ id, time: new Date(), message }, ...e]);
-    else setTimeout(() => remove(id), action ? ACTION_TOAST_MS : short.current);
+    if (kind === 'error') { setErrors(e => [{ id, time: new Date(), message }, ...e]); return; }
+    const timer = setTimeout(() => { timers.current.delete(timer); remove(id); }, action ? ACTION_TOAST_MS : short.current);
+    timers.current.add(timer);
   }, [remove]);
   const clearError = React.useCallback((id: number) => setErrors(e => e.filter(x => x.id !== id)), []);
   const clearErrors = React.useCallback(() => setErrors([]), []);

@@ -65,7 +65,8 @@ function FormatMenu({ value, onChange }: { readonly value: NameFormat; onChange(
   const ref = useDismiss<HTMLDivElement>(() => setOpen(false));
   return (
     <div ref={ref} className="relative shrink-0">
-      <button type="button" aria-haspopup="listbox" aria-expanded={open} aria-label="Folder names" onClick={() => setOpen(o => !o)}
+      {/* Named with the choice it shows, so that saying what is on it reaches it (WCAG 2.5.3). */}
+      <button type="button" aria-haspopup="listbox" aria-expanded={open} aria-label={`Folder names: ${FORMATS.find(f => f.value === value)!.name}`} onClick={() => setOpen(o => !o)}
         className="pill h-[34px] gap-2.5 border border-line bg-bg px-3.5 text-[13px] font-medium hover:bg-s2">
         {FORMATS.find(f => f.value === value)!.name}<span aria-hidden className="text-[9px] text-t3">▼</span>
       </button>

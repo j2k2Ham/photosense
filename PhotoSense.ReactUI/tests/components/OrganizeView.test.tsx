@@ -62,7 +62,7 @@ const tile = (name: string) => within(gallery()).getByRole('button', { name: new
 const nameOf = (t: HTMLElement) => t.querySelector('.truncate.font-medium')!.textContent;
 const shownNames = () => tiles().map(nameOf);
 const panel = () => screen.getByRole('complementary', { name: 'Suggested folders' });
-const cards = () => within(panel()).getAllByRole('button', { name: /^Show the files for / }).map(c => c.textContent);
+const cards = () => within(panel()).getAllByRole('button', { name: /^Show the files for / }).map(c => c.parentElement!.textContent);
 const bar = () => screen.getByRole('region', { name: 'Selection' });
 const preview = () => screen.getByRole('dialog', { name: 'Preview' });
 const moveButton = () => within(preview()).getByRole('button', { name: /^(Move|Copy) [\d,]+ files?$|^(Moving|Copying)…$/ });
@@ -378,7 +378,7 @@ describe('looking through the files', () => {
     // How the folders are laid out inside does not change which folders there are: the one picked stays picked.
     await userEvent.click(within(within(panel()).getByRole('group', { name: 'Then by' })).getByRole('button', { name: 'Nothing' }));
     expect(screen.getByText('Suggested: Anaconda')).toBeInTheDocument();
-    await userEvent.click(within(panel()).getByRole('button', { name: 'Folder names' }));
+    await userEvent.click(within(panel()).getByRole('button', { name: /^Folder names/ }));
     await userEvent.click(screen.getByRole('option', { name: /^Town, state/ }));
     expect(cards().map(c => c!.slice(0, 17))).toEqual(['Anaconda, Montana', 'Butte, Montana2 f']);
     expect(screen.getByText('Suggested: Anaconda, Montana')).toBeInTheDocument();
@@ -444,7 +444,7 @@ describe('selecting files and making folders', () => {
     expect(said()).toEqual([['Made Trips\\Glacier 2022 with 2 files. Preview it when you are ready.', 'ok']]);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Selection' })).not.toBeInTheDocument();
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips\\Glacier 2022' })).toHaveTextContent('2 files · 11.6 MB · not moved yet');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips\\Glacier 2022' }).parentElement).toHaveTextContent('2 files · 11.6 MB · not moved yet');
     expect(tile('a1.JPG')).toHaveTextContent('For Trips\\Glacier 2022');
     expect(cards().slice(0, 2)).toEqual([
       'Anaconda2 files · 11.6 MBJul 2022Inside: a folder for each yearNo landmark known here, so it is named after the town', 'Uptown Butte1 file · 5.8 MBJul 2022Inside: a folder for each year',
@@ -517,8 +517,8 @@ describe('selecting files and making folders', () => {
 
     expect(said()).toEqual([['Made Glacier with 1 file. Preview it when you are ready.', 'ok']]);
     const card = within(panel()).getByRole('button', { name: 'Show the files for Glacier' });
-    expect(card).toHaveTextContent(`GlacierIn ${OTHER}1 file`);
-    expect(within(card).getByText('Glacier')).toHaveAttribute('title', `${OTHER}\\Glacier`);
+    expect(card.parentElement).toHaveTextContent(`GlacierIn ${OTHER}1 file`);
+    expect(card).toHaveAttribute('title', `${OTHER}\\Glacier`);
     await userEvent.click(within(panel()).getByRole('button', { name: 'Preview Glacier' }));
     await waitFor(() => expect(moveButton()).toBeEnabled());
     expect(api.planOrganize).toHaveBeenLastCalledWith({ basePath: OTHER, folderName: 'Glacier', direct: false }, [{ id: 'a1', subfolder: undefined }]);
@@ -538,7 +538,7 @@ describe('selecting files and making folders', () => {
     await userEvent.click(within(folderDialog()).getByRole('button', { name: 'Use Trips' }));
 
     expect(said()).toEqual([['2 files will go into Trips. Preview it when you are ready.', 'ok']]);
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' })).toHaveTextContent('TripsAlready there2 files · 11.6 MB · not moved yet');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' }).parentElement).toHaveTextContent('TripsAlready there2 files · 11.6 MB · not moved yet');
     expect(tile('a1.JPG')).toHaveTextContent('For Trips');
     await userEvent.click(within(panel()).getByRole('button', { name: 'Preview Trips' }));
     await waitFor(() => expect(moveButton()).toBeEnabled());
@@ -595,7 +595,7 @@ describe('dragging files', () => {
   it('puts one file, or the whole selection, into the folder it is dropped on', async () => {
     open();
     await makeFolder('Trips');
-    const folder = () => within(panel()).getByRole('button', { name: 'Show the files for Trips' }).parentElement!;
+    const folder = () => within(panel()).getByRole('button', { name: 'Show the files for Trips' }).closest('div')!;
 
     // A file that is not part of the selection goes alone.
     await userEvent.click(tile('a1.JPG'));
@@ -620,11 +620,11 @@ describe('dragging files', () => {
     await userEvent.click(tile('n1.JPG'));
     await makeFolder('Trips', 'bar');
     fireEvent.dragStart(tile('n1.JPG'), dragged());
-    fireEvent.drop(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement!);
+    fireEvent.drop(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).closest('div')!);
     expect(said()[1]).toEqual(['Added 1 file to the suggested folder Uptown Butte', 'ok']);
     expect(tile('n1.JPG')).toHaveTextContent('For Uptown Butte');
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte3 files/);
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' })).toHaveTextContent('Empty. Select or drag files onto it.');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement).toHaveTextContent(/^Uptown Butte3 files/);
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' }).parentElement).toHaveTextContent('Empty. Select or drag files onto it.');
   });
 
   it('starts a new folder from what is dropped on "New folder", and forgets a drag that ends nowhere', async () => {
@@ -894,7 +894,7 @@ describe('moving, copying and undoing', () => {
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     }
     // Both kinds: the suggestion takes the pictures and the videos.
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte4 files/);
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement).toHaveTextContent(/^Uptown Butte4 files/);
 
     // One of the person's own folders, with a picture and a video in it.
     await userEvent.click(tile('a1.JPG'));
@@ -902,7 +902,7 @@ describe('moving, copying and undoing', () => {
     await makeFolder('Trips', 'bar');
 
     await userEvent.click(type(/^Photos\d/));
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' })).toHaveTextContent('1 file');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips' }).parentElement).toHaveTextContent('1 file');
     await move('Uptown Butte');
     expect(going()).toEqual(['b1', 'b2']);
     await move('Trips');
@@ -910,7 +910,7 @@ describe('moving, copying and undoing', () => {
 
     // The videos wait for their turn, in the suggestion and in the person's folder; the Live Photo's video is not among them.
     await userEvent.click(type(/^Videos/));
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte1 file/);
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement).toHaveTextContent(/^Uptown Butte1 file/);
     await move('Uptown Butte');
     expect(going()).toEqual(['b3']);
     await move('Trips');
@@ -923,7 +923,7 @@ describe('moving, copying and undoing', () => {
     const { refresh } = open();
     // One of the two had been put in a folder of the person's own, then dropped on the suggestion with the other.
     fireEvent.dragStart(tile('n1.JPG'), dragged());
-    fireEvent.drop(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement!);
+    fireEvent.drop(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).closest('div')!);
     await previewOf('Uptown Butte');
     api.applyOrganize.mockImplementation(async (request: OrganizeApplyRequest) => applied({ done: 3, bytes: 18_279_000, items: request.files.map(f => ({ id: f.id, path: `${ROOT}\\Uptown Butte\\2022\\${f.name}` })) }));
     await userEvent.click(moveButton());
@@ -936,7 +936,7 @@ describe('moving, copying and undoing', () => {
     refresh();
     expect(tile('b1.JPG')).not.toHaveTextContent('In Uptown Butte');
     expect(tile('n1.JPG')).toHaveTextContent('For Uptown Butte');
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' })).toHaveTextContent(/^Uptown Butte3 files/);
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Uptown Butte' }).parentElement).toHaveTextContent(/^Uptown Butte3 files/);
   });
 
   it('only moves on a phone, which keeps each picture once, even when a copy was chosen before', async () => {
@@ -980,7 +980,7 @@ describe('moving, copying and undoing', () => {
     expect(notify).toHaveBeenLastCalledWith('Copied 1 file (5.8 MB) to Trips 2022, with 2 Live Photo and edit files. 1 renamed so nothing was replaced', 'ok', expect.anything());
     // A copy leaves the file where it was: it is tagged there, and no longer waits in the folder it was put in.
     expect(tile('a1.JPG')).toHaveTextContent('Copied to Trips 2022');
-    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips 2022' })).toHaveTextContent('Empty.');
+    expect(within(panel()).getByRole('button', { name: 'Show the files for Trips 2022' }).parentElement).toHaveTextContent('Empty.');
     expect(within(panel()).getByRole('button', { name: 'Show the files for Family' })).toBeInTheDocument();
 
     batches = [{ id: 'b7', label: 'Trips 2022', mode: 'copy', count: 1, bytes: 6_093_000, utc: '2026-10-08T18:20:35Z' }];

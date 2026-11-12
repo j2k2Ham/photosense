@@ -11,7 +11,10 @@ function trip(photos: Photos) {
   photos.picture('Trips/IMG_0004.JPG', { seed: 4, taken: new Date(2023, 1, 3, 9, 0, 0) });
 }
 
+/** A suggested folder's button, holding its name and reaching over its card. */
 const card = (page: Page, name: string) => suggestions(page).getByRole('button', { name: `Show the files for ${name}` });
+/** A suggested folder's name and what is said of it: its files, size, dates and the places it includes. */
+const details = (page: Page, name: string) => card(page, name).locator('..');
 
 async function undoLatest(page: Page) {
   await suggestions(page).getByRole('button', { name: /^Recently moved/ }).click();
@@ -22,8 +25,8 @@ test.describe('Organize: suggested folders', () => {
   test('pictures are suggested folders by where they were taken, split by year, and those with no place are set apart', async ({ page, photos }) => {
     trip(photos);
     await openOrganize(page, photos.root);
-    await expect(card(page, 'Butte')).toContainText('2 files');
-    await expect(card(page, 'Anaconda')).toContainText('1 file');
+    await expect(details(page, 'Butte')).toContainText('2 files');
+    await expect(details(page, 'Anaconda')).toContainText('1 file');
     await expect(suggestions(page)).toContainText('No location · 1 file');
     await expect(suggestions(page).getByRole('group', { name: 'Map of the suggested folders' }).getByRole('button', { name: /^Butte · 2 files$/ })).toBeVisible();
 
@@ -42,7 +45,7 @@ test.describe('Organize: suggested folders', () => {
     // Butte and Anaconda are some 21 miles (34 km) apart: within 25 miles, but not 25 km.
     const reach = suggestions(page).getByRole('group', { name: 'Combine places within' });
     await reach.getByRole('button', { name: '25', exact: true }).click();
-    await expect(card(page, 'Butte')).toContainText(/Includes Anaconda \(\d+ mi away\)/);
+    await expect(details(page, 'Butte')).toContainText(/Includes Anaconda \(\d+ mi away\)/);
     await expect(card(page, 'Anaconda')).toBeHidden();
     await expect(suggestions(page)).toContainText('Places within 25 miles of each other share a folder.');
 
@@ -50,7 +53,7 @@ test.describe('Organize: suggested folders', () => {
     const settings = page.getByRole('dialog', { name: 'Settings' });
     await settings.getByRole('group', { name: 'Distances' }).getByRole('button', { name: 'Kilometers' }).click();
     await settings.getByRole('button', { name: 'Done' }).click();
-    await expect(card(page, 'Anaconda')).toContainText('1 file');
+    await expect(details(page, 'Anaconda')).toContainText('1 file');
     await expect(suggestions(page)).toContainText('Places within 25 km of each other share a folder.');
     await expect(reach.getByRole('button', { name: '50 km' })).toBeVisible();
     // Kept for the next visit.
@@ -80,8 +83,8 @@ test.describe('Organize: suggested folders', () => {
     trip(photos);
     await openOrganize(page, photos.root);
     await suggestions(page).getByRole('group', { name: 'Group by' }).getByRole('button', { name: 'Date' }).click();
-    await expect(card(page, '2022')).toContainText('2 files');
-    await expect(card(page, '2023')).toContainText('2 files');
+    await expect(details(page, '2022')).toContainText('2 files');
+    await expect(details(page, '2023')).toContainText('2 files');
     await suggestions(page).getByRole('button', { name: 'Preview 2023' }).click();
     await preview(page).getByRole('button', { name: 'Move 2 files' }).click();
     await expect(message(page, /^Moved 2 files/)).toBeVisible();

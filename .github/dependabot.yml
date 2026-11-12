@@ -24,6 +24,11 @@ updates:
     target-branch: feature/mobile-and-mac
     schedule:
       interval: weekly
+    ignore:
+      # The page's lint (typescript-eslint, through eslint-config-next) refuses TypeScript 7.0; see
+      # https://github.com/typescript-eslint/typescript-eslint/issues/10940. Take this out once it supports 7.
+      - dependency-name: typescript
+        update-types: [ "version-update:semver-major" ]
     groups:
       npm:
         update-types: [ minor, patch ]

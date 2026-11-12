@@ -8,6 +8,13 @@ import { Facts } from '../HoverCard';
 /** "1 file", "4,212 files". */
 export const countFiles = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'}`;
 
+/**
+ * A card's button, holding only the name shown on it and reaching over the whole card (the card is `relative`, and
+ * its other buttons `relative z-[1]`). The name alone is inside, so that what the button is called contains all it
+ * shows (WCAG 2.5.3); the counts and dates beside it are read as text. Its focus ring is drawn round the card.
+ */
+export const cardWide = 'block w-full truncate text-left after:absolute after:inset-0 after:rounded-[14px] focus-visible:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-brand';
+
 const VIDEO_TILE = 'bg-[#1c2124]';
 
 /** A file's picture, small: its preview, or a dark tile with a play mark for a video (videos are never decoded). */

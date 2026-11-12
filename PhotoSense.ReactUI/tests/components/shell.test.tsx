@@ -397,6 +397,18 @@ describe('messages', () => {
     expect(remove).toHaveBeenCalledExactlyOnceWith(3);
   });
 
+  it('stop waiting to go when the page goes, leaving no timer behind', () => {
+    vi.useFakeTimers();
+    const { result, unmount } = renderHook(() => useToasts());
+    act(() => {
+      result.current.push('Scan started');
+      result.current.push('Moved 13 files to Butte', 'ok', { label: 'Undo', run: vi.fn() });
+    });
+    expect(vi.getTimerCount()).toBe(2);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('show as pills, the newest four, with errors marked as kept', async () => {
     const remove = vi.fn();
     const toasts = [1, 2, 3, 4, 5].map(id => ({ id, message: `message ${id}`, kind: 'info' as const }));
