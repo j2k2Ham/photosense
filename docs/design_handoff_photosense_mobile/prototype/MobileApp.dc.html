@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+[data-skin] *::-webkit-scrollbar{display:none}[data-skin] *{scrollbar-width:none}[data-skin] input{font:inherit;color:inherit;background:none;border:0;outline:0;min-width:0}[data-skin] a{color:var(--acc)}[data-skin] a:hover{color:var(--t1)}
+[data-skin^="ios-native"]{--ff:-apple-system,"SF Pro Text",Inter,system-ui,sans-serif;--ffh:-apple-system,"SF Pro Display",Inter,system-ui,sans-serif;--ffm:ui-monospace,"SF Mono","DM Mono",monospace;--r-cell:24px;--r-btn:999px;--r-sheet:36px;--r-thumb:0px;--gap-grid:2px;--grid-px:0px;--h1:34px;--h1w:700;--h1ls:.01em;--btn-h:50px;--btn-fs:17px;--btn-fw:600;--fs-body:17px;--fs-sub:15px;--seg-h:34px;--seg-p:2px;--seg-ir:999px;--seg-div:none;--chip-r:999px;--list-bg:var(--cell);--item-bg:transparent;--s-list-bg:var(--sheet-cell);--s-item-bg:transparent;--list-bd:none;--item-r:0px;--list-gap:0px;--item-sep:.5px solid var(--sep);--ib:44px;--sh-fs:13px;--sh-fw:600;--sh-tt:uppercase;--sh-ls:.02em;--sh-fg:var(--t2);--grab-w:36px;--r-toast:22px;--r-dlg:30px}
+[data-skin^="and-native"]{--ff:Roboto,system-ui,sans-serif;--ffh:Roboto,system-ui,sans-serif;--ffm:"DM Mono",monospace;--r-cell:20px;--r-btn:999px;--r-sheet:28px;--r-thumb:0px;--gap-grid:2px;--grid-px:0px;--h1:24px;--h1w:400;--h1ls:0;--btn-h:52px;--btn-fs:16px;--btn-fw:500;--fs-body:16px;--fs-sub:14px;--seg-h:40px;--seg-p:0px;--seg-ir:0px;--seg-div:1px solid var(--seg-bd);--seg-sh:none;--chip-r:8px;--list-bg:transparent;--item-bg:var(--cell);--s-list-bg:transparent;--s-item-bg:var(--sheet-cell);--list-bd:none;--item-r:4px;--list-gap:2px;--item-sep:none;--ib:48px;--ib-bg:transparent;--ib-bd:none;--ib-sh:none;--sh-fs:14px;--sh-fw:500;--sh-tt:none;--sh-ls:0;--sh-fg:var(--acc);--grab-w:32px;--r-toast:8px;--r-dlg:28px;--bar-bd:none;--bar-sh:none;--seg-bg:transparent;--chip-bg:transparent;--stage:#000}
+[data-skin^="brand"]{--ff:'DM Sans',system-ui,sans-serif;--ffh:'DM Sans',system-ui,sans-serif;--ffm:'DM Mono',monospace;--r-cell:16px;--r-btn:999px;--r-sheet:24px;--r-thumb:8px;--gap-grid:4px;--grid-px:12px;--h1:30px;--h1w:600;--h1ls:-.02em;--btn-h:50px;--btn-fs:15.5px;--btn-fw:600;--fs-body:15.5px;--fs-sub:14px;--seg-h:36px;--seg-p:3px;--seg-ir:999px;--seg-div:none;--seg-sh:none;--chip-r:999px;--list-bg:var(--cell);--item-bg:transparent;--s-list-bg:var(--sheet-cell);--s-item-bg:transparent;--list-bd:1px solid var(--sep);--item-r:0px;--list-gap:0px;--item-sep:1px solid var(--sep);--ib:40px;--ib-sh:none;--sh-fs:12px;--sh-fw:600;--sh-tt:uppercase;--sh-ls:.08em;--sh-fg:var(--t3);--grab-w:36px;--r-toast:14px;--r-dlg:22px}
+[data-skin="ios-native-dark"]{color-scheme:dark;--bg:#000;--cell:#1C1C1E;--fill:rgba(118,118,128,.24);--fill2:#3A3A3C;--t1:#fff;--t2:rgba(235,235,245,.66);--t3:rgba(235,235,245,.5);--sep:rgba(84,84,88,.55);--acc:oklch(0.76 0.11 205);--on-acc:#00242b;--acc-soft:oklch(0.76 0.11 205 / .17);--on-acc-soft:oklch(0.87 0.08 205);--danger:#FF453A;--on-danger:#fff;--danger-t:#FF6961;--danger-soft:rgba(255,69,58,.16);--keep:#30D158;--on-keep:#04170c;--keep-soft:rgba(48,209,88,.16);--amber:#FFD60A;--amber-soft:rgba(255,214,10,.13);--ident:oklch(0.86 0.09 210);--ident-bg:oklch(0.74 0.11 210 / .2);--sel:rgba(118,118,128,.32);--bar:rgba(30,30,32,.62);--bar-bd:.5px solid rgba(255,255,255,.14);--bar-sh:0 10px 30px rgba(0,0,0,.5);--bar-hi:rgba(255,255,255,.13);--bar-on:oklch(0.80 0.11 205);--bar-off:#fff;--bar-bt:none;--rail:#000;--side:rgba(30,30,32,.7);--sheet:#1C1C1E;--sheet-cell:#2C2C2E;--scrim:rgba(0,0,0,.5);--toast:rgba(48,48,50,.94);--on-toast:#fff;--toast-act:oklch(0.82 0.11 205);--btn2-bg:rgba(118,118,128,.24);--btn2-fg:#fff;--seg-bg:rgba(118,118,128,.24);--seg-bd:transparent;--seg-on:#5A5A5E;--seg-on-fg:#fff;--seg-sh:0 2px 6px rgba(0,0,0,.25);--chip-bg:rgba(118,118,128,.24);--chip-bd:transparent;--chip-on-bg:#fff;--chip-on-fg:#000;--ib-bg:rgba(120,120,128,.3);--ib-bd:.5px solid rgba(255,255,255,.14);--ib-sh:0 2px 8px rgba(0,0,0,.3);--tb-fg:#fff;--grab:rgba(235,235,245,.3);--sw-on:#30D158;--sw-off:rgba(120,120,128,.32);--map:#161d21;--map-line:rgba(255,255,255,.045);--thL:.45;--thL2:.41;--thC:.07;--stage:#000;--input:#2C2C2E;--alert:rgba(40,40,42,.96)}
+[data-skin="ios-native-light"]{color-scheme:light;--bg:#F2F2F7;--cell:#fff;--fill:rgba(118,118,128,.12);--fill2:#E5E5EA;--t1:#000;--t2:rgba(60,60,67,.78);--t3:rgba(60,60,67,.62);--sep:rgba(60,60,67,.18);--acc:oklch(0.50 0.10 215);--on-acc:#fff;--acc-soft:oklch(0.50 0.10 215 / .1);--on-acc-soft:oklch(0.40 0.09 215);--danger:#E0342A;--on-danger:#fff;--danger-t:#D70015;--danger-soft:rgba(255,59,48,.1);--keep:#1F7A35;--on-keep:#fff;--keep-soft:rgba(52,199,89,.14);--amber:#8A5A00;--amber-soft:rgba(255,204,0,.16);--ident:oklch(0.42 0.09 215);--ident-bg:oklch(0.94 0.035 210);--sel:rgba(0,0,0,.06);--bar:rgba(255,255,255,.72);--bar-bd:.5px solid rgba(0,0,0,.06);--bar-sh:0 6px 24px rgba(0,0,0,.12);--bar-hi:rgba(0,0,0,.065);--bar-on:oklch(0.50 0.10 215);--bar-off:#1c1c1e;--bar-bt:none;--rail:#F2F2F7;--side:rgba(255,255,255,.78);--sheet:#F2F2F7;--sheet-cell:#fff;--scrim:rgba(0,0,0,.28);--toast:rgba(28,28,30,.92);--on-toast:#fff;--toast-act:oklch(0.82 0.10 205);--btn2-bg:rgba(118,118,128,.12);--btn2-fg:#000;--seg-bg:rgba(118,118,128,.12);--seg-bd:transparent;--seg-on:#fff;--seg-on-fg:#000;--seg-sh:0 2px 6px rgba(0,0,0,.12);--chip-bg:rgba(118,118,128,.12);--chip-bd:transparent;--chip-on-bg:#000;--chip-on-fg:#fff;--ib-bg:rgba(255,255,255,.78);--ib-bd:.5px solid rgba(0,0,0,.06);--ib-sh:0 1px 6px rgba(0,0,0,.1);--tb-fg:#000;--grab:rgba(60,60,67,.3);--sw-on:#34C759;--sw-off:rgba(120,120,128,.16);--map:#E6EBEA;--map-line:rgba(0,0,0,.045);--thL:.86;--thL2:.82;--thC:.05;--stage:#000;--input:#fff;--alert:rgba(250,250,252,.96)}
+[data-skin="and-native-dark"]{color-scheme:dark;--bg:#0F1415;--cell:#1B2122;--fill:#252B2C;--fill2:#303637;--t1:#DEE3E5;--t2:#BFC8CA;--t3:#99A2A4;--sep:#3F484A;--acc:#82D3E0;--on-acc:#00363D;--acc-soft:#004F58;--on-acc-soft:#9EEFFD;--danger:#FFB4AB;--on-danger:#690005;--danger-t:#FFB4AB;--danger-soft:rgba(255,180,171,.12);--keep:#8BD6A0;--on-keep:#00391A;--keep-soft:rgba(139,214,160,.14);--amber:#E9C46A;--amber-soft:rgba(233,196,106,.13);--ident:#9EEFFD;--ident-bg:#004F58;--sel:#334B4F;--bar:#1B2122;--bar-hi:#334B4F;--bar-on:#CDE7EC;--bar-off:#BFC8CA;--bar-bt:none;--rail:#0F1415;--side:#0F1415;--sheet:#1B2122;--sheet-cell:#252B2C;--scrim:rgba(0,0,0,.45);--toast:#DEE3E5;--on-toast:#2B3133;--toast-act:#006874;--btn2-bg:#334B4F;--btn2-fg:#CDE7EC;--seg-bd:#899294;--seg-on:#334B4F;--seg-on-fg:#CDE7EC;--chip-bd:#899294;--chip-on-bg:#334B4F;--chip-on-fg:#CDE7EC;--tb-fg:#82D3E0;--grab:#899294;--sw-on:#82D3E0;--sw-off:#3F484A;--map:#172022;--map-line:rgba(255,255,255,.04);--thL:.45;--thL2:.41;--thC:.07;--input:#252B2C;--alert:#252B2C}
+[data-skin="and-native-light"]{color-scheme:light;--bg:#F5FAFB;--cell:#E7EDEE;--fill:#DEE4E5;--fill2:#D3DADB;--t1:#171D1E;--t2:#3F484A;--t3:#556062;--sep:#BFC8CA;--acc:#006874;--on-acc:#fff;--acc-soft:#CDEFF4;--on-acc-soft:#001F24;--danger:#BA1A1A;--on-danger:#fff;--danger-t:#BA1A1A;--danger-soft:#FFDAD6;--keep:#1E6B38;--on-keep:#fff;--keep-soft:#C8EFD0;--amber:#7A5900;--amber-soft:#FFEFC2;--ident:#004F58;--ident-bg:#CDE7EC;--sel:#CDE7EC;--bar:#E9EFF0;--bar-hi:#CDE7EC;--bar-on:#051F23;--bar-off:#3F484A;--bar-bt:none;--rail:#F5FAFB;--side:#F5FAFB;--sheet:#EFF5F6;--sheet-cell:#E3E9EA;--scrim:rgba(0,0,0,.32);--toast:#2B3133;--on-toast:#ECF2F3;--toast-act:#82D3E0;--btn2-bg:#CDE7EC;--btn2-fg:#051F23;--seg-bd:#6F797A;--seg-on:#CDE7EC;--seg-on-fg:#051F23;--chip-bd:#6F797A;--chip-on-bg:#CDE7EC;--chip-on-fg:#051F23;--tb-fg:#006874;--grab:#6F797A;--sw-on:#006874;--sw-off:#DEE4E5;--map:#E2E9E8;--map-line:rgba(0,0,0,.045);--thL:.86;--thL2:.82;--thC:.05;--input:#fff;--alert:#E3E9EA}
+[data-skin="brand-dark"]{color-scheme:dark;--bg:oklch(0.165 0.006 240);--cell:oklch(0.205 0.007 240);--fill:oklch(0.235 0.008 240);--fill2:oklch(0.28 0.009 240);--t1:oklch(0.96 0.004 240);--t2:oklch(0.76 0.01 240);--t3:oklch(0.66 0.01 240);--sep:oklch(1 0 0 / .08);--acc:oklch(0.74 0.11 200);--on-acc:oklch(0.18 0.02 200);--acc-soft:oklch(0.74 0.11 200 / .15);--on-acc-soft:oklch(0.86 0.08 210);--danger:oklch(0.58 0.19 18);--on-danger:#fff;--danger-t:oklch(0.80 0.12 18);--danger-soft:oklch(0.62 0.19 18 / .13);--keep:oklch(0.80 0.13 160);--on-keep:oklch(0.20 0.04 160);--keep-soft:oklch(0.80 0.13 160 / .14);--amber:oklch(0.84 0.13 80);--amber-soft:oklch(0.82 0.13 78 / .12);--ident:oklch(0.84 0.09 210);--ident-bg:oklch(0.74 0.11 210 / .16);--sel:oklch(0.27 0.016 215);--bar:oklch(0.205 0.007 240 / .92);--bar-bd:1px solid oklch(1 0 0 / .08);--bar-sh:0 12px 30px oklch(0 0 0 / .45);--bar-hi:oklch(0.31 0.012 240);--bar-on:oklch(0.96 0.004 240);--bar-off:oklch(0.70 0.01 240);--bar-bt:1px solid oklch(1 0 0 / .08);--rail:oklch(0.185 0.007 240);--side:oklch(0.195 0.007 240);--sheet:oklch(0.20 0.007 240);--sheet-cell:oklch(0.235 0.008 240);--scrim:oklch(0.06 0.005 240 / .66);--toast:oklch(0.30 0.01 240);--on-toast:oklch(0.96 0.004 240);--toast-act:oklch(0.82 0.10 200);--btn2-bg:oklch(0.26 0.009 240);--btn2-fg:oklch(0.96 0.004 240);--seg-bg:oklch(0.235 0.008 240);--seg-bd:oklch(1 0 0 / .08);--seg-on:oklch(0.34 0.012 240);--seg-on-fg:oklch(0.97 0.004 240);--chip-bg:oklch(0.235 0.008 240);--chip-bd:oklch(1 0 0 / .08);--chip-on-bg:oklch(0.96 0.004 240);--chip-on-fg:oklch(0.18 0.01 240);--ib-bg:oklch(0.235 0.008 240);--ib-bd:1px solid oklch(1 0 0 / .08);--tb-fg:oklch(0.96 0.004 240);--grab:oklch(1 0 0 / .2);--sw-on:oklch(0.74 0.11 200);--sw-off:oklch(0.32 0.01 240);--map:oklch(0.20 0.012 220);--map-line:oklch(1 0 0 / .04);--thL:.45;--thL2:.41;--thC:.07;--stage:oklch(0.125 0.005 240);--input:oklch(0.235 0.008 240);--alert:oklch(0.23 0.008 240)}
+[data-skin="brand-light"]{color-scheme:light;--bg:oklch(0.975 0.003 240);--cell:oklch(0.997 0.002 240);--fill:oklch(0.955 0.004 240);--fill2:oklch(0.91 0.006 240);--t1:oklch(0.22 0.01 240);--t2:oklch(0.45 0.01 240);--t3:oklch(0.50 0.01 240);--sep:oklch(0.25 0.01 240 / .11);--acc:oklch(0.50 0.10 210);--on-acc:#fff;--acc-soft:oklch(0.94 0.025 210);--on-acc-soft:oklch(0.38 0.09 215);--danger:oklch(0.54 0.19 20);--on-danger:#fff;--danger-t:oklch(0.48 0.18 20);--danger-soft:oklch(0.96 0.03 20);--keep:oklch(0.46 0.11 160);--on-keep:#fff;--keep-soft:oklch(0.94 0.05 160);--amber:oklch(0.50 0.11 70);--amber-soft:oklch(0.95 0.06 88);--ident:oklch(0.42 0.09 215);--ident-bg:oklch(0.94 0.035 210);--sel:oklch(0.94 0.025 210);--bar:oklch(0.997 0.002 240 / .92);--bar-bd:1px solid oklch(0.25 0.01 240 / .1);--bar-sh:0 10px 30px oklch(0.25 0.02 240 / .14);--bar-hi:oklch(0.93 0.006 240);--bar-on:oklch(0.22 0.01 240);--bar-off:oklch(0.45 0.01 240);--bar-bt:1px solid oklch(0.25 0.01 240 / .1);--rail:oklch(0.965 0.003 240);--side:oklch(0.99 0.002 240);--sheet:oklch(0.975 0.003 240);--sheet-cell:oklch(0.997 0.002 240);--scrim:oklch(0.25 0.01 240 / .36);--toast:oklch(0.24 0.01 240);--on-toast:oklch(0.97 0.003 240);--toast-act:oklch(0.82 0.10 200);--btn2-bg:oklch(0.93 0.006 240);--btn2-fg:oklch(0.22 0.01 240);--seg-bg:oklch(0.945 0.005 240);--seg-bd:oklch(0.25 0.01 240 / .08);--seg-on:oklch(1 0 0);--seg-on-fg:oklch(0.22 0.01 240);--seg-sh:0 1px 4px oklch(0.25 0.02 240 / .12);--chip-bg:oklch(0.945 0.005 240);--chip-bd:oklch(0.25 0.01 240 / .08);--chip-on-bg:oklch(0.22 0.01 240);--chip-on-fg:#fff;--ib-bg:oklch(0.997 0.002 240);--ib-bd:1px solid oklch(0.25 0.01 240 / .1);--tb-fg:oklch(0.22 0.01 240);--grab:oklch(0.25 0.01 240 / .2);--sw-on:oklch(0.50 0.10 210);--sw-off:oklch(0.88 0.006 240);--map:oklch(0.94 0.01 200);--map-line:oklch(0.25 0.01 240 / .05);--thL:.86;--thL2:.82;--thC:.05;--stage:oklch(0.16 0.006 240);--input:#fff;--alert:#fff}
+[data-dev="iphone"]{--safe-t:50px;--safe-b:34px;--tabpad:120px;--sh-al:flex-end;--sh-w:100%;--sh-rad:var(--r-sheet) var(--r-sheet) 0 0;--sh-pad:0px;--sh-pb:34px;--sh-mh:calc(100% - 56px)}
+[data-dev="aphone"]{--safe-t:0px;--safe-b:0px;--tabpad:104px;--sh-al:flex-end;--sh-w:100%;--sh-rad:var(--r-sheet) var(--r-sheet) 0 0;--sh-pad:0px;--sh-pb:16px;--sh-mh:calc(100% - 24px)}
+[data-dev="ipad"]{--safe-t:30px;--safe-b:20px;--tabpad:40px;--sh-al:center;--sh-w:560px;--sh-rad:28px;--sh-pad:40px;--sh-pb:14px;--sh-mh:calc(100% - 40px)}
+[data-dev="atab"]{--safe-t:0px;--safe-b:0px;--tabpad:40px;--sh-al:center;--sh-w:560px;--sh-rad:28px;--sh-pad:40px;--sh-pb:14px;--sh-mh:calc(100% - 40px)}
+[data-plat="ios"]{--chkT:auto;--chkB:6px;--chkL:auto;--chkR:6px}[data-plat="and"]{--chkT:6px;--chkB:auto;--chkL:6px;--chkR:auto}
+@keyframes psUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes psIn{from{transform:translateX(44px);opacity:.3}to{transform:none;opacity:1}}
+@keyframes psFade{from{opacity:0}to{opacity:1}}
+@keyframes psPop{from{transform:scale(1.06);opacity:0}to{transform:none;opacity:1}}
+@keyframes psPulse{0%{transform:scale(.6);opacity:.6}100%{transform:scale(1.45);opacity:0}}
+</style>
+</helmet>
+<div data-skin="{{ skin }}" data-dev="{{ dev }}" data-plat="{{ plat }}" style="width:{{ devW }}px;height:{{ devH }}px;position:relative;flex:none">
+<x-import component-from-global-scope="{{ frameName }}" from="./ios-frame.jsx ./android-frame.jsx" width="{{ devW }}" height="{{ devH }}" dark="{{ isDark }}" tablet="{{ isTablet }}" bg="var(--bg)" nav-bg="{{ navBg }}" hint-size="100%,100%">
+<div style="position:absolute;inset:0;display:flex;background:var(--bg);color:var(--t1);font-family:var(--ff);font-size:var(--fs-body);line-height:1.35;overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none">
+<sc-if value="{{ ipadSide }}" hint-placeholder-val="{{ false }}">
+<div style="width:300px;flex:none;box-sizing:border-box;padding:calc(var(--safe-t) + 6px) 0 14px 14px;display:flex;animation:psFade .2s">
+<div style="flex:1;border-radius:26px;background:var(--side);border:var(--bar-bd);box-shadow:var(--bar-sh);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);padding:10px;display:flex;flex-direction:column;gap:2px">
+<div style="height:50px;display:flex;align-items:center;gap:10px;padding:0 2px 6px 10px"><img src="./app-icon.png" alt="" style="width:28px;height:28px;border-radius:8px"><div style="flex:1;font-family:var(--ffh);font-weight:700;font-size:19px">PhotoSense</div><div onClick="{{ toggleSidebar }}" title="Hide sidebar" style="width:40px;height:40px;border-radius:50%;display:grid;place-items:center;color:var(--t1);cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"></rect><path d="M9 4.5v15"></path></svg></div></div>
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.go }}" style="height:46px;display:flex;align-items:center;gap:12px;padding:0 14px;border-radius:999px;background:{{ t.bg }};color:{{ t.fg }};font-weight:{{ t.fw2 }};font-size:16px;cursor:pointer">
+<sc-if value="{{ t.isLib }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect></svg></sc-if>
+<sc-if value="{{ t.isCu }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"></rect><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"></path></svg></sc-if>
+<sc-if value="{{ t.isOrg }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg></sc-if>
+<sc-if value="{{ t.isSend }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg></sc-if>
+<div style="flex:1">{{ t.label }}</div><div style="font-size:13px;color:var(--t2);font-variant-numeric:tabular-nums">{{ t.badge }}</div>
+</div>
+</sc-for>
+<div style="flex:1"></div>
+<div style="padding:10px 14px;font-size:13px;color:var(--t2);line-height:1.4">Runs on this iPad. Nothing is uploaded.</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ isAtab }}" hint-placeholder-val="{{ false }}">
+<div style="width:96px;flex:none;display:flex;flex-direction:column;align-items:center;gap:14px;padding-top:24px;background:var(--rail);border-right:var(--bar-bt)">
+<img src="./app-icon.png" alt="" style="width:36px;height:36px;border-radius:10px;margin-bottom:16px">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.go }}" style="width:80px;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer">
+<div style="width:56px;height:32px;border-radius:16px;display:grid;place-items:center;background:{{ t.ind }};color:{{ t.fg }}">
+<sc-if value="{{ t.isLib }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect></svg></sc-if>
+<sc-if value="{{ t.isCu }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"></rect><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"></path></svg></sc-if>
+<sc-if value="{{ t.isOrg }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg></sc-if>
+<sc-if value="{{ t.isSend }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg></sc-if>
+</div>
+<div style="font-size:12px;font-weight:{{ t.fw }};color:{{ t.lc }}">{{ t.label }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<div style="flex:1;min-width:0;position:relative;display:flex">
+<sc-if value="{{ ipadTop }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ toggleSidebar }}" title="Show sidebar" style="position:absolute;z-index:22;top:calc(var(--safe-t) + 8px);left:16px;width:44px;height:44px;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--bar);border:var(--bar-bd);box-shadow:var(--bar-sh);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);color:var(--t1);cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="15" rx="3"></rect><path d="M9 4.5v15"></path></svg></div>
+<div style="position:absolute;z-index:22;top:calc(var(--safe-t) + 8px);left:50%;transform:translateX(-50%);height:44px;padding:4px;box-sizing:border-box;display:flex;gap:2px;border-radius:999px;background:var(--bar);border:var(--bar-bd);box-shadow:var(--bar-sh);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px)">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4"><div onClick="{{ t.go }}" style="height:36px;padding:0 18px;display:flex;align-items:center;border-radius:999px;background:{{ t.bg }};color:{{ t.fg }};font-weight:600;font-size:15px;cursor:pointer;white-space:nowrap">{{ t.label }}</div></sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ showList }}" hint-placeholder-val="{{ true }}">
+<div style="width:{{ L.w }};flex:{{ L.flex }};min-width:0;height:100%;overflow-y:auto;position:relative;border-right:{{ L.br }};box-sizing:border-box">
+<sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}">
+<div style="padding:{{ hdrTop }} 16px 12px;display:flex;flex-direction:column;gap:2px">
+<div style="height:50px;display:flex;align-items:center;justify-content:flex-end;gap:8px">
+<sc-if value="{{ hdr.hasAct }}" hint-placeholder-val="{{ false }}"><div onClick="{{ hdr.onAct }}" style="height:var(--ib);padding:0 18px;box-sizing:border-box;border-radius:999px;display:flex;align-items:center;background:var(--ib-bg);border:var(--ib-bd);box-shadow:var(--ib-sh);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--tb-fg);font-weight:600;font-size:16px;cursor:pointer">{{ hdr.act }}</div></sc-if>
+<sc-if value="{{ hdr.hasMap }}" hint-placeholder-val="{{ false }}"><div onClick="{{ hdr.toggleMap }}" title="Map or list" style="width:var(--ib);height:var(--ib);box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--ib-bg);border:var(--ib-bd);box-shadow:var(--ib-sh);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--t1);cursor:pointer"><sc-if value="{{ hdr.listOn }}" hint-placeholder-val="{{ true }}"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"></path><path d="M9 4.5v13M15 6.5v13"></path></svg></sc-if><sc-if value="{{ hdr.mapOn }}" hint-placeholder-val="{{ false }}"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"></path><circle cx="4.5" cy="6.5" r=".8"></circle><circle cx="4.5" cy="12" r=".8"></circle><circle cx="4.5" cy="17.5" r=".8"></circle></svg></sc-if></div></sc-if>
+<sc-if value="{{ hdr.showGear }}" hint-placeholder-val="{{ true }}"><div onClick="{{ openSettings }}" title="Settings" style="width:var(--ib);height:var(--ib);box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--ib-bg);border:var(--ib-bd);box-shadow:var(--ib-sh);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--t1);cursor:pointer"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div></sc-if>
+</div>
+<div style="font-family:var(--ffh);font-size:var(--h1);font-weight:var(--h1w);letter-spacing:var(--h1ls);line-height:1.15">{{ hdr.title }}</div>
+<sc-if value="{{ hdr.hasSub }}" hint-placeholder-val="{{ true }}"><div style="font-size:var(--fs-sub);color:var(--t2);text-wrap:pretty">{{ hdr.sub }}</div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ isAnd }}" hint-placeholder-val="{{ false }}">
+<div style="height:64px;display:flex;align-items:center;gap:2px;padding:0 4px 0 16px">
+<sc-if value="{{ hdr.closeLead }}" hint-placeholder-val="{{ false }}"><div onClick="{{ hdr.onAct }}" title="Stop selecting" style="width:48px;height:48px;margin-left:-12px;border-radius:50%;display:grid;place-items:center;color:var(--t1);cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></div></sc-if>
+<div style="flex:1;min-width:0;font-family:var(--ffh);font-size:var(--h1);font-weight:var(--h1w);letter-spacing:var(--h1ls);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ hdr.title }}</div>
+<sc-if value="{{ hdr.hasActA }}" hint-placeholder-val="{{ false }}"><div onClick="{{ hdr.onAct }}" style="height:40px;padding:0 14px;border-radius:999px;display:flex;align-items:center;color:var(--tb-fg);font-weight:500;font-size:14.5px;cursor:pointer;background:var(--ib-bg);border:var(--ib-bd)">{{ hdr.act }}</div></sc-if>
+<sc-if value="{{ hdr.hasMap }}" hint-placeholder-val="{{ false }}"><div onClick="{{ hdr.toggleMap }}" title="Map or list" style="width:48px;height:48px;border-radius:50%;display:grid;place-items:center;color:var(--t1);cursor:pointer"><sc-if value="{{ hdr.listOn }}" hint-placeholder-val="{{ true }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"></path><path d="M9 4.5v13M15 6.5v13"></path></svg></sc-if><sc-if value="{{ hdr.mapOn }}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6.5h11M9 12h11M9 17.5h11"></path><circle cx="4.5" cy="6.5" r=".8"></circle><circle cx="4.5" cy="12" r=".8"></circle><circle cx="4.5" cy="17.5" r=".8"></circle></svg></sc-if></div></sc-if>
+<sc-if value="{{ hdr.showGear }}" hint-placeholder-val="{{ true }}"><div onClick="{{ openSettings }}" title="Settings" style="width:var(--ib);height:var(--ib);box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--ib-bg);border:var(--ib-bd);color:var(--t1);cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div></sc-if>
+</div>
+<sc-if value="{{ hdr.hasSub }}" hint-placeholder-val="{{ true }}"><div style="padding:0 16px 12px;font-size:var(--fs-sub);color:var(--t2);text-wrap:pretty">{{ hdr.sub }}</div></sc-if>
+</sc-if>
+<sc-if value="{{ isLib }}" hint-placeholder-val="{{ true }}">
+<sc-if value="{{ limited }}" hint-placeholder-val="{{ false }}">
+<div style="margin:0 16px 12px;padding:14px 16px;border-radius:var(--r-cell);background:var(--acc-soft);color:var(--on-acc-soft);display:flex;align-items:center;gap:12px">
+<div style="flex:1;font-size:14px;line-height:1.4;text-wrap:pretty">PhotoSense can see only the 214 photos you chose. Copies among the rest are not found.</div>
+<div onClick="{{ chooseMore }}" style="height:36px;padding:0 14px;border-radius:999px;display:flex;align-items:center;background:var(--acc);color:var(--on-acc);font-weight:600;font-size:14px;white-space:nowrap;cursor:pointer">Choose more</div>
+</div>
+</sc-if>
+<div style="display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto">
+<sc-for list="{{ libChips }}" as="ch" hint-placeholder-count="4"><div onClick="{{ ch.go }}" style="height:34px;padding:0 14px;display:flex;align-items:center;gap:7px;border-radius:var(--chip-r);background:{{ ch.bg }};color:{{ ch.fg }};border:{{ ch.bd }};box-sizing:border-box;font-size:14px;font-weight:500;white-space:nowrap;flex:none;cursor:pointer">{{ ch.label }}<span style="font-size:12.5px;color:{{ ch.nc }};font-variant-numeric:tabular-nums">{{ ch.n }}</span></div></sc-for>
+</div>
+<sc-for list="{{ libMonths }}" as="m" hint-placeholder-count="2">
+<div style="padding:14px 16px 8px;display:flex;align-items:baseline;justify-content:space-between;gap:12px"><div style="font-family:var(--ffh);font-weight:600;font-size:17px">{{ m.label }}</div><div style="font-size:13px;color:var(--t2)">{{ m.count }}</div></div>
+<div style="display:grid;grid-template-columns:repeat({{ m.cols }},minmax(0,1fr));gap:var(--gap-grid);padding:0 var(--grid-px)">
+<sc-for list="{{ m.items }}" as="p" hint-placeholder-count="9">
+<div onClick="{{ p.tap }}" style="aspect-ratio:1;position:relative;border-radius:var(--r-thumb);overflow:hidden;cursor:pointer;background:var(--fill)">
+<div style="position:absolute;inset:{{ p.inset }};border-radius:{{ p.rad }};background:{{ p.bg }};transition:inset .15s,border-radius .15s"></div>
+<sc-if value="{{ p.vid }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:7px;bottom:6px;font-size:12px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)">{{ p.dur }}</div></sc-if>
+<sc-if value="{{ p.sel }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:var(--chkT);left:var(--chkL);right:var(--chkR);bottom:var(--chkB);width:24px;height:24px;box-sizing:border-box;border-radius:50%;border:1.5px solid #fff;background:{{ p.chkBg }};display:grid;place-items:center;box-shadow:0 1px 4px rgba(0,0,0,.3)"><sc-if value="{{ p.on }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></sc-if></div></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-for>
+<sc-if value="{{ libEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:48px 32px;text-align:center;color:var(--t2);font-size:15px">Nothing here with this filter.</div></sc-if>
+<div style="height:var(--tabpad)"></div>
+</sc-if>
+<sc-if value="{{ isCU }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:16px">
+<sc-if value="{{ cu.showSummary }}" hint-placeholder-val="{{ true }}">
+<div style="padding:18px;border-radius:var(--r-cell);background:var(--cell);border:var(--list-bd);display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font-family:var(--ffh);font-weight:700;font-size:26px;letter-spacing:-0.01em;font-variant-numeric:tabular-nums">{{ cu.dupN }}</div><div style="font-size:var(--fs-sub);color:var(--t2);text-wrap:pretty">{{ cu.dupSub }}</div></div>
+<div onClick="{{ askDelAll }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--danger);color:var(--on-danger);font-family:var(--ff);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Delete all duplicates</div>
+</div>
+</sc-if>
+<div style="display:flex;height:var(--seg-h);padding:var(--seg-p);border-radius:999px;background:var(--seg-bg);border:1px solid var(--seg-bd);box-sizing:border-box;overflow:hidden"><sc-for list="{{ cuSeg }}" as="s" hint-placeholder-count="2"><div onClick="{{ s.go }}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:var(--seg-ir);border-left:{{ s.bl }};background:{{ s.bg }};color:{{ s.fg }};box-shadow:{{ s.sh }};font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer">{{ s.label }}</div></sc-for></div>
+<sc-if value="{{ hasGroups }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ cuGroups }}" as="g" hint-placeholder-count="6">
+<div onClick="{{ g.open }}" style="display:flex;align-items:center;gap:14px;padding:10px 14px;background:{{ g.bg }};border-top:{{ g.sep }};border-radius:var(--item-r);cursor:pointer">
+<div style="position:relative;width:58px;height:58px;flex:none"><div style="position:absolute;right:0;top:0;width:46px;height:46px;border-radius:9px;background:{{ g.th2 }};opacity:.6"></div><div style="position:absolute;left:0;bottom:0;width:46px;height:46px;border-radius:9px;background:{{ g.th }};box-shadow:0 0 0 2px var(--cell);display:grid;place-items:center"><sc-if value="{{ g.vid }}" hint-placeholder-val="{{ false }}"><svg width="16" height="16" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="#fff"></path></svg></sc-if></div></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--ffm);font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ g.name }}</div><div style="font-size:13.5px;color:{{ g.subC }}">{{ g.sub }}</div></div>
+<div style="height:24px;min-width:24px;padding:0 8px;box-sizing:border-box;border-radius:999px;background:var(--fill);font-size:12.5px;font-weight:600;display:flex;align-items:center;justify-content:center">{{ g.badge }}</div>
+<sc-if value="{{ g.chev }}" hint-placeholder-val="{{ true }}"><svg width="9" height="15" viewBox="0 0 8 14" style="flex:none"><path d="M1 1l6 6-6 6" stroke="var(--t3)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ noGroups }}" hint-placeholder-val="{{ false }}"><div style="padding:36px 20px;text-align:center;color:var(--t2);font-size:15px;text-wrap:pretty">{{ cu.emptyText }}</div></sc-if>
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--t2);padding:0 4px">{{ cu.scanLine }}<span onClick="{{ scanAgain }}" style="color:var(--acc);font-weight:600;cursor:pointer">Scan again</span></div>
+</div>
+<div style="height:var(--tabpad)"></div>
+</sc-if>
+<sc-if value="{{ isOrg }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;gap:10px;align-items:center">
+<div style="flex:1;display:flex;height:var(--seg-h);padding:var(--seg-p);border-radius:999px;background:var(--seg-bg);border:1px solid var(--seg-bd);box-sizing:border-box;overflow:hidden"><sc-for list="{{ orgSeg }}" as="s" hint-placeholder-count="2"><div onClick="{{ s.go }}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:var(--seg-ir);border-left:{{ s.bl }};background:{{ s.bg }};color:{{ s.fg }};box-shadow:{{ s.sh }};font-size:14px;font-weight:600;white-space:nowrap;cursor:pointer">{{ s.label }}</div></sc-for></div>
+<div onClick="{{ openOptions }}" title="Options" style="height:var(--seg-h);padding:0 14px;box-sizing:border-box;border-radius:999px;display:flex;align-items:center;gap:6px;background:var(--btn2-bg);color:var(--btn2-fg);font-size:14px;font-weight:600;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"></path><circle cx="16" cy="7" r="2"></circle><circle cx="10" cy="17" r="2"></circle></svg>Options</div>
+</div>
+<div style="font-size:13px;color:var(--t2);padding:0 4px">{{ org.optSum }}</div>
+</div>
+<sc-if value="{{ orgMap }}" hint-placeholder-val="{{ false }}">
+<div style="height:{{ mapH }};border-radius:var(--r-cell);position:relative;overflow:hidden;background-color:var(--map);background-image:linear-gradient(var(--map-line) 1px,transparent 1px),linear-gradient(90deg,var(--map-line) 1px,transparent 1px);background-size:40px 40px;border:var(--list-bd)">
+<sc-for list="{{ mapDots }}" as="d" hint-placeholder-count="6"><div onClick="{{ d.pick }}" style="position:absolute;left:{{ d.x }};top:{{ d.y }};z-index:{{ d.z }};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer"><div style="width:{{ d.s }};height:{{ d.s }};box-sizing:border-box;border-radius:50%;background:{{ d.bg }};color:{{ d.fg }};border:{{ d.bd }};display:grid;place-items:center;font-size:12px;font-weight:700;font-variant-numeric:tabular-nums;box-shadow:0 3px 10px rgba(0,0,0,.25)">{{ d.n }}</div><sc-if value="{{ d.hasLbl }}" hint-placeholder-val="{{ false }}"><div style="padding:3px 9px;border-radius:999px;background:var(--cell);font-size:12.5px;font-weight:600;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2)">{{ d.lbl }}</div></sc-if></div></sc-for>
+<div style="position:absolute;left:12px;bottom:10px;right:12px;font-size:11.5px;color:var(--t2)">{{ org.mapNote }}</div>
+</div>
+<div onClick="{{ pickedOpen }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--cell);border:var(--list-bd);border-radius:var(--r-cell);cursor:pointer">
+<div style="width:60px;height:60px;flex:none;display:grid;grid-template-columns:1fr 1fr;gap:2px;border-radius:12px;overflow:hidden"><sc-for list="{{ picked.mosaic }}" as="mm" hint-placeholder-count="4"><div style="background:{{ mm.bg }}"></div></sc-for></div>
+<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ picked.name }}</div><div style="font-size:13.5px;color:var(--t2)">{{ picked.meta }}</div><div style="font-size:13px;color:var(--t2)">{{ picked.range }}</div></div>
+<div style="height:36px;padding:0 16px;border-radius:999px;display:flex;align-items:center;background:var(--acc);color:var(--on-acc);font-weight:600;font-size:14px">Preview</div>
+</div>
+</sc-if>
+<sc-if value="{{ orgList }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="display:flex;justify-content:space-between;padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)"><span>{{ org.secTitle }}</span><span>{{ org.secCount }}</span></div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ orgCards }}" as="cd" hint-placeholder-count="5">
+<div onClick="{{ cd.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:{{ cd.bg }};border-top:{{ cd.sep }};border-radius:var(--item-r);cursor:pointer">
+<div style="width:60px;height:60px;flex:none;display:grid;grid-template-columns:1fr 1fr;gap:2px;border-radius:12px;overflow:hidden"><sc-for list="{{ cd.mosaic }}" as="mm" hint-placeholder-count="4"><div style="background:{{ mm.bg }}"></div></sc-for></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+<div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="font-weight:600;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cd.name }}</div><sc-if value="{{ cd.moved }}" hint-placeholder-val="{{ false }}"><div style="flex:none;height:20px;padding:0 8px;border-radius:999px;background:var(--keep-soft);color:var(--keep);font-size:11.5px;font-weight:700;display:flex;align-items:center">Moved</div></sc-if></div>
+<div style="font-size:13.5px;color:var(--t2)">{{ cd.meta }}</div>
+<div style="font-size:13px;color:var(--t2)">{{ cd.range }}</div>
+<sc-if value="{{ cd.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;color:var(--t2);text-wrap:pretty">{{ cd.note }}</div></sc-if>
+</div>
+<sc-if value="{{ cd.chev }}" hint-placeholder-val="{{ true }}"><svg width="9" height="15" viewBox="0 0 8 14" style="flex:none"><path d="M1 1l6 6-6 6" stroke="var(--t3)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">Your {{ w.albums }}</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ myAlbums }}" as="a" hint-placeholder-count="0"><div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:10px 14px;box-sizing:border-box;background:var(--item-bg);border-top:{{ a.sep }};border-radius:var(--item-r)"><div style="width:36px;height:36px;border-radius:10px;background:var(--fill);display:grid;place-items:center;color:var(--t2);flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg></div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:15.5px">{{ a.name }}</div><div style="font-size:13px;color:var(--t2)">{{ a.sub }}</div></div></div></sc-for>
+<div onClick="{{ newAlbum }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 14px;box-sizing:border-box;background:var(--item-bg);border-radius:var(--item-r);color:var(--acc);font-weight:600;cursor:pointer"><div style="width:36px;height:36px;border-radius:10px;background:var(--acc-soft);display:grid;place-items:center;flex:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></div>{{ newLbl }}</div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<div onClick="{{ goNoLoc }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:10px 14px;box-sizing:border-box;background:var(--item-bg);border-radius:var(--item-r);cursor:pointer"><div style="flex:1;font-size:14.5px;color:var(--t2);text-wrap:pretty">{{ org.noLoc }}</div><svg width="9" height="15" viewBox="0 0 8 14" style="flex:none"><path d="M1 1l6 6-6 6" stroke="var(--t3)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+<div onClick="{{ openRecent }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:10px 14px;box-sizing:border-box;background:var(--item-bg);border-top:var(--item-sep);border-radius:var(--item-r);cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg><div style="flex:1;font-size:15.5px">Recently moved</div><div style="font-size:14px;color:var(--t2)">{{ org.recentN }}</div><svg width="9" height="15" viewBox="0 0 8 14" style="flex:none"><path d="M1 1l6 6-6 6" stroke="var(--t3)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></div>
+</div>
+</div>
+<div style="height:var(--tabpad)"></div>
+</sc-if>
+<sc-if value="{{ isSend }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:18px;max-width:560px;margin:0 auto;box-sizing:border-box;width:100%">
+<sc-if value="{{ sd.idle }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">What to send</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ sdWhat }}" as="x" hint-placeholder-count="3"><div onClick="{{ x.go }}" style="display:flex;align-items:center;gap:14px;min-height:60px;padding:10px 16px;box-sizing:border-box;background:var(--item-bg);border-top:{{ x.sep }};border-radius:var(--item-r);cursor:pointer"><div style="width:22px;height:22px;flex:none;box-sizing:border-box;border-radius:50%;border:2px solid {{ x.ring }};display:grid;place-items:center"><sc-if value="{{ x.on }}" hint-placeholder-val="{{ false }}"><div style="width:11px;height:11px;border-radius:50%;background:var(--acc)"></div></sc-if></div><div style="flex:1;min-width:0"><div style="font-size:15.5px;font-weight:500">{{ x.label }}</div><div style="font-size:13px;color:var(--t2)">{{ x.meta }}</div></div></div></sc-for>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">Copy or move</div>
+<div style="display:flex;height:var(--seg-h);padding:var(--seg-p);border-radius:999px;background:var(--seg-bg);border:1px solid var(--seg-bd);box-sizing:border-box;overflow:hidden"><sc-for list="{{ sdModeSeg }}" as="s" hint-placeholder-count="2"><div onClick="{{ s.go }}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:var(--seg-ir);border-left:{{ s.bl }};background:{{ s.bg }};color:{{ s.fg }};box-shadow:{{ s.sh }};font-size:14px;font-weight:600;cursor:pointer">{{ s.label }}</div></sc-for></div>
+<div style="padding:0 4px;font-size:13.5px;color:var(--t2);text-wrap:pretty">{{ sd.modeNote }}</div>
+</div>
+<div style="display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:var(--r-cell);background:var(--acc-soft);color:var(--on-acc-soft)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" style="flex:none;margin-top:1px"><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0"></path><circle cx="12" cy="19.2" r=".9" fill="currentColor"></circle></svg><div style="font-size:14px;line-height:1.4;text-wrap:pretty">{{ sd.via }}</div></div>
+<div onClick="{{ sdStart }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;opacity:{{ sd.startOp }};cursor:pointer">{{ sd.startLabel }}</div>
+</sc-if>
+<sc-if value="{{ sd.waiting }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 0 4px;text-align:center">
+<div style="position:relative;width:150px;height:150px;display:grid;place-items:center"><div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--acc);opacity:{{ pulseOp }};animation:{{ pulseA }}"></div><div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--acc);opacity:{{ pulseOp }};animation:{{ pulseB }}"></div><div style="width:84px;height:84px;border-radius:50%;background:var(--acc);color:var(--on-acc);display:grid;place-items:center"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path></svg></div></div>
+<div style="font-family:var(--ffh);font-weight:700;font-size:24px">Waiting for a computer</div>
+<div style="font-size:var(--fs-sub);color:var(--t2);max-width:320px;text-wrap:pretty">{{ sd.waitSub }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden"><sc-for list="{{ sd.steps }}" as="s" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:14px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--item-bg);border-top:var(--item-sep);border-radius:var(--item-r)"><div style="width:26px;height:26px;flex:none;border-radius:50%;background:var(--fill);display:grid;place-items:center;font-size:13px;font-weight:700">{{ s.n }}</div><div style="font-size:15px">{{ s.t }}</div></div></sc-for></div>
+<div onClick="{{ sdStop }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Stop offering</div>
+</sc-if>
+<sc-if value="{{ sd.code }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:28px 0 4px;text-align:center">
+<div style="font-family:var(--ffh);font-weight:700;font-size:24px;max-width:320px;text-wrap:balance">Does {{ sd.comp }} show this number?</div>
+<div style="padding:18px 28px;border-radius:var(--r-cell);background:var(--cell);border:var(--list-bd);font-family:var(--ffm);font-size:44px;font-weight:500;letter-spacing:.06em;font-variant-numeric:tabular-nums">{{ sd.codeNum }}</div>
+<div style="font-size:var(--fs-sub);color:var(--t2);max-width:320px;text-wrap:pretty">You compare it once for each computer. After that, everything sent between them is encrypted.</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div onClick="{{ sdSame }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">It's the same number</div>
+<div onClick="{{ sdDiff }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">It's different</div>
+</div>
+</sc-if>
+<sc-if value="{{ sd.sending }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:14px;padding:20px 0 4px">
+<div style="font-family:var(--ffh);font-weight:700;font-size:56px;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1">{{ sd.pctLabel }}</div>
+<div style="height:8px;border-radius:999px;background:var(--fill);overflow:hidden"><div style="height:100%;width:{{ sd.prog }};border-radius:999px;background:var(--acc);transition:width .15s linear"></div></div>
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:15.5px;font-variant-numeric:tabular-nums">{{ sd.line1 }}</div><div style="font-size:14px;color:var(--t2)">{{ sd.line2 }}</div><div style="font-family:var(--ffm);font-size:13px;color:var(--t2)">{{ sd.file }}</div></div>
+<div style="padding:14px 16px;border-radius:var(--r-cell);background:var(--cell);border:var(--list-bd);font-size:14px;color:var(--t2);text-wrap:pretty">Keep PhotoSense open and the screen on until it finishes. Nothing is deleted from this phone while sending.</div>
+</div>
+<div onClick="{{ sdStop }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Stop sending</div>
+</sc-if>
+<sc-if value="{{ sd.sent }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 0 4px;text-align:center">
+<div style="width:68px;height:68px;border-radius:50%;background:var(--keep-soft);color:var(--keep);display:grid;place-items:center"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+<div style="font-family:var(--ffh);font-weight:700;font-size:24px;text-wrap:balance">{{ sd.sentTitle }}</div>
+<div style="font-size:var(--fs-sub);color:var(--t2);max-width:320px;text-wrap:pretty">{{ sd.sentSub }}</div>
+</div>
+<sc-if value="{{ sd.copyMode }}" hint-placeholder-val="{{ true }}">
+<div style="padding:16px;border-radius:var(--r-cell);background:var(--cell);border:var(--list-bd);display:flex;flex-direction:column;gap:12px"><div style="font-weight:600;font-size:16px">Free up space on this phone</div><div style="font-size:14px;color:var(--t2);text-wrap:pretty">{{ sd.deleteNote }}</div><div onClick="{{ sdAskDelete }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--danger);color:var(--on-danger);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">{{ sd.deleteLabel }}</div></div>
+</sc-if>
+<sc-if value="{{ sd.isDeleted }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 16px;border-radius:var(--r-cell);background:var(--keep-soft);color:var(--keep);font-size:14.5px;font-weight:600;text-wrap:pretty">{{ sd.deletedMsg }}</div></sc-if>
+<div onClick="{{ sdDone }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Done</div>
+</sc-if>
+<sc-if value="{{ sd.failed }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:28px 0 4px;text-align:center">
+<div style="width:68px;height:68px;border-radius:50%;background:var(--danger-soft);color:var(--danger-t);display:grid;place-items:center"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></div>
+<div style="font-family:var(--ffh);font-weight:700;font-size:24px">Stopped. Nothing was sent.</div>
+<div style="font-size:var(--fs-sub);color:var(--t2);max-width:320px;text-wrap:pretty">The numbers did not match. Check that you picked this phone on the computer, then try again.</div>
+</div>
+<div onClick="{{ sdRetry }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Try again</div>
+</sc-if>
+</div>
+<div style="height:var(--tabpad)"></div>
+</sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ showDetail }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-width:0;height:100%;overflow-y:auto;position:relative;background:var(--bg);animation:{{ D.anim }}">
+<div style="min-height:100%;display:flex;flex-direction:column">
+<sc-if value="{{ isIOS }}" hint-placeholder-val="{{ true }}">
+<div style="padding:{{ hdrTop }} 12px 8px 16px;display:flex;align-items:center;gap:10px;min-height:50px;box-sizing:content-box">
+<sc-if value="{{ dhShowBack }}" hint-placeholder-val="{{ false }}"><div onClick="{{ goBack }}" title="Back" style="width:var(--ib);height:var(--ib);margin-left:-4px;flex:none;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--ib-bg);border:var(--ib-bd);box-shadow:var(--ib-sh);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--t1);cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg></div></sc-if>
+<div style="flex:1;min-width:0;text-align:{{ dhAlign }}"><div style="font-family:var(--ffh);font-size:{{ dhSize }};font-weight:{{ dhWeight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ dh.title }}</div><div style="font-size:13px;color:var(--t2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ dh.sub }}</div></div>
+<sc-if value="{{ dhSpacer }}" hint-placeholder-val="{{ false }}"><div style="width:var(--ib);flex:none"></div></sc-if>
+<sc-if value="{{ dhShowGear }}" hint-placeholder-val="{{ false }}"><div onClick="{{ openSettings }}" title="Settings" style="width:var(--ib);height:var(--ib);flex:none;box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--ib-bg);border:var(--ib-bd);box-shadow:var(--ib-sh);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);color:var(--t1);cursor:pointer"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.830 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ isAnd }}" hint-placeholder-val="{{ false }}">
+<div style="height:64px;display:flex;align-items:center;gap:4px;padding:0 4px 0 16px">
+<sc-if value="{{ dhShowBack }}" hint-placeholder-val="{{ false }}"><div onClick="{{ goBack }}" title="Back" style="width:48px;height:48px;margin-left:-12px;flex:none;border-radius:50%;display:grid;place-items:center;color:var(--t1);cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H5M11 6l-6 6 6 6"></path></svg></div></sc-if>
+<div style="flex:1;min-width:0"><div style="font-family:var(--ffh);font-size:22px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ dh.title }}</div></div>
+<sc-if value="{{ dhShowGear }}" hint-placeholder-val="{{ false }}"><div onClick="{{ openSettings }}" title="Settings" style="width:var(--ib);height:var(--ib);box-sizing:border-box;border-radius:50%;display:grid;place-items:center;background:var(--ib-bg);border:var(--ib-bd);color:var(--t1);cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></div></sc-if>
+</div>
+<sc-if value="{{ dh.hasSub }}" hint-placeholder-val="{{ false }}"><div style="padding:0 16px 8px;font-size:14px;color:var(--t2)">{{ dh.sub }}</div></sc-if>
+</sc-if>
+<sc-if value="{{ detailEmpty }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:grid;place-items:center;padding:40px;text-align:center;color:var(--t2);font-size:15px;text-wrap:pretty">{{ emptyText }}</div></sc-if>
+<sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+<div style="padding:6px 16px 8px;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px"><div style="height:24px;padding:0 10px;display:flex;align-items:center;border-radius:999px;background:var(--ident-bg);color:var(--ident);font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">{{ rv.tier }}</div><div style="font-size:14px;color:var(--t2)">{{ rv.note }}</div></div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+<div onClick="{{ openCompareOrig }}" style="display:flex;flex-direction:column;gap:8px;min-width:0;cursor:pointer">
+<div style="aspect-ratio:{{ rv.ar }};border-radius:16px;background:{{ rv.th }};position:relative;overflow:hidden;box-shadow:inset 0 0 0 2.5px var(--keep)">
+<div style="position:absolute;top:8px;left:8px;height:24px;padding:0 10px;border-radius:999px;background:var(--keep);color:var(--on-keep);font-size:12px;font-weight:700;display:flex;align-items:center">{{ rv.keepLbl }}</div>
+<sc-if value="{{ rv.vid }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="#fff"></path></svg></div></div></sc-if>
+<div style="position:absolute;right:8px;bottom:8px;padding:3px 8px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11.5px;font-weight:600">{{ rv.kBadge }}</div>
+</div>
+<div style="min-width:0"><div style="font-family:var(--ffm);font-size:12.5px;overflow-wrap:anywhere">{{ rv.kName }}</div><div style="font-size:12.5px;color:var(--keep);margin-top:2px">{{ rv.kAlbum }}</div></div>
+</div>
+<div onClick="{{ openCompare }}" style="display:flex;flex-direction:column;gap:8px;min-width:0;cursor:pointer">
+<div style="aspect-ratio:{{ rv.ar }};border-radius:16px;background:{{ rv.th }};position:relative;overflow:hidden">
+<div style="position:absolute;top:8px;left:8px;height:24px;padding:0 10px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center">{{ rv.copyLbl }}</div>
+<sc-if value="{{ rv.vid }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;display:grid;place-items:center"><div style="width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center"><svg width="18" height="18" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="#fff"></path></svg></div></div></sc-if>
+<div style="position:absolute;right:8px;bottom:8px;padding:3px 8px;border-radius:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11.5px;font-weight:600">{{ rv.cBadge }}</div>
+</div>
+<div style="min-width:0"><div style="font-family:var(--ffm);font-size:12.5px;overflow-wrap:anywhere">{{ rv.cName }}</div><div style="font-size:12.5px;color:var(--t2);margin-top:2px">{{ rv.cAlbum }}</div></div>
+</div>
+</div>
+<sc-if value="{{ rv.multi }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ rvCopies }}" as="x" hint-placeholder-count="2"><div onClick="{{ x.go }}" style="height:32px;padding:0 14px;display:flex;align-items:center;border-radius:var(--chip-r);background:{{ x.bg }};color:{{ x.fg }};border:{{ x.bd }};box-sizing:border-box;font-size:13.5px;font-weight:500;cursor:pointer">{{ x.label }}</div></sc-for></div></sc-if>
+<sc-if value="{{ rv.hasDiff }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">What differs</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<div style="display:grid;grid-template-columns:78px minmax(0,1fr) minmax(0,1fr);gap:10px;padding:10px 14px 6px;background:var(--item-bg);border-radius:var(--item-r);font-size:12px;font-weight:600;color:var(--t2)"><div></div><div>{{ rv.keepLbl }}</div><div>{{ rv.copyCol }}</div></div>
+<sc-for list="{{ rvDiff }}" as="r" hint-placeholder-count="2"><div style="display:grid;grid-template-columns:78px minmax(0,1fr) minmax(0,1fr);gap:10px;padding:10px 14px;background:var(--item-bg);border-top:var(--item-sep);border-radius:var(--item-r);align-items:baseline"><div style="font-size:13px;color:var(--t2);display:flex;align-items:center;gap:6px"><div style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex:none"></div>{{ r.label }}</div><div style="font-family:{{ r.ff }};font-size:{{ r.fs }};overflow-wrap:anywhere">{{ r.o }}</div><div style="font-family:{{ r.ff }};font-size:{{ r.fs }};overflow-wrap:anywhere;color:var(--amber)">{{ r.v }}</div></div></sc-for>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">The same in both</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ rvSame }}" as="r" hint-placeholder-count="3"><div style="display:grid;grid-template-columns:78px minmax(0,1fr);gap:10px;padding:10px 14px;background:var(--item-bg);border-top:{{ r.sep }};border-radius:var(--item-r);align-items:baseline"><div style="font-size:13px;color:var(--t2)">{{ r.label }}</div><div style="font-family:{{ r.ff }};font-size:{{ r.fs }};overflow-wrap:anywhere">{{ r.o }}</div></div></sc-for>
+</div>
+</div>
+<div style="font-size:13px;color:var(--t2);padding:0 4px">Tap either picture to see it full screen and flip between them.</div>
+</div>
+<div style="flex:1"></div>
+<div style="position:sticky;bottom:0;padding:16px 16px calc(var(--safe-b) + 12px);background:linear-gradient(to bottom,transparent,var(--bg) 26%);display:flex;flex-direction:column;gap:4px">
+<div onClick="{{ askDelCopy }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--danger);color:var(--on-danger);font-family:var(--ff);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;padding:0 16px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ rv.delLabel }}</div>
+<div onClick="{{ keepCopy }}" style="height:44px;display:flex;align-items:center;justify-content:center;color:var(--acc);font-weight:600;font-size:var(--fs-sub);cursor:pointer">{{ rv.keepLabel }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ isPreview }}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{ pv.done }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:40px 24px;text-align:center">
+<div style="width:64px;height:64px;border-radius:50%;background:var(--keep-soft);color:var(--keep);display:grid;place-items:center"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg></div>
+<div style="font-family:var(--ffh);font-size:22px;font-weight:700">{{ pv.doneTitle }}</div>
+<div style="font-size:14px;color:var(--t2);font-family:var(--ffm)">{{ pv.doneSub }}</div>
+<div onClick="{{ undoMove }}" style="height:44px;padding:0 20px;border-radius:999px;display:flex;align-items:center;gap:8px;background:var(--btn2-bg);color:var(--btn2-fg);font-weight:600;font-size:15px;cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"></path><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"></path></svg>Undo</div>
+</div>
+</sc-if>
+<sc-if value="{{ pv.notDone }}" hint-placeholder-val="{{ true }}">
+<div style="padding:4px 16px 0;display:flex;flex-direction:column;gap:14px">
+<div style="font-size:var(--fs-sub);color:var(--t2);text-wrap:pretty">{{ pv.sub }}</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--item-bg);border-radius:var(--item-r)"><div style="width:96px;flex:none;font-size:15px;color:var(--t2)">{{ w.Album }} name</div><input value="{{ pv.name }}" onInput="{{ pvNameInput }}" style="flex:1;font-size:16px;font-weight:600;height:36px"></div>
+<div onClick="{{ openDest }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--item-bg);border-top:var(--item-sep);border-radius:var(--item-r);cursor:pointer"><div style="width:96px;flex:none;font-size:15px;color:var(--t2)">Made inside</div><div style="flex:1;font-size:15.5px">{{ pv.dest }}</div><div style="font-size:14px;color:var(--acc);font-weight:600">Change</div></div>
+<div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--item-bg);border-top:var(--item-sep);border-radius:var(--item-r)"><div style="width:96px;flex:none;font-size:15px;color:var(--t2)">Inside it</div><div style="flex:1;font-size:15.5px">{{ pv.path }}</div></div>
+</div>
+<sc-if value="{{ pv.taken }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 16px;border-radius:var(--r-cell);background:var(--amber-soft);display:flex;flex-direction:column;gap:10px"><div style="font-size:14px;line-height:1.4;text-wrap:pretty">{{ pv.takenText }}</div><div onClick="{{ openNT }}" style="align-self:flex-start;height:36px;padding:0 16px;border-radius:999px;display:flex;align-items:center;background:var(--t1);color:var(--bg);font-weight:600;font-size:14px;cursor:pointer">Review each name</div></div></sc-if>
+<sc-if value="{{ pv.reviewed }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 16px;border-radius:var(--r-cell);background:var(--keep-soft);color:var(--keep);font-size:14px;font-weight:600">3 names reviewed.</div></sc-if>
+</div>
+<sc-for list="{{ pvSections }}" as="sec" hint-placeholder-count="2">
+<div style="padding:20px 16px 8px;display:flex;align-items:baseline;gap:10px"><div style="flex:1;font-family:var(--ffh);font-weight:600;font-size:17px">{{ sec.title }}</div><div style="font-size:13px;color:var(--t2)">{{ sec.meta }}</div></div>
+<div style="display:grid;grid-template-columns:repeat({{ sec.cols }},minmax(0,1fr));gap:var(--gap-grid);padding:0 var(--grid-px)">
+<sc-for list="{{ sec.items }}" as="f" hint-placeholder-count="8"><div onClick="{{ f.tap }}" style="aspect-ratio:1;position:relative;border-radius:var(--r-thumb);overflow:hidden;cursor:pointer;background:{{ f.bg }}"><sc-if value="{{ f.vid }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:6px;bottom:5px;font-size:11.5px;font-weight:600;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6)">0:12</div></sc-if><sc-if value="{{ f.out }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;background:var(--bg);opacity:.74"></div><div style="position:absolute;left:6px;bottom:6px;height:22px;padding:0 9px;border-radius:999px;background:var(--t1);color:var(--bg);font-size:11.5px;font-weight:700;display:flex;align-items:center">Stays</div></sc-if></div></sc-for>
+</div>
+<sc-if value="{{ sec.more }}" hint-placeholder-val="{{ false }}"><div onClick="{{ sec.expand }}" style="padding:10px 16px 0;color:var(--acc);font-weight:600;font-size:14px;cursor:pointer">{{ sec.moreLabel }}</div></sc-if>
+</sc-for>
+<div style="flex:1;min-height:24px"></div>
+<div style="position:sticky;bottom:0;padding:16px 16px calc(var(--safe-b) + 12px);background:linear-gradient(to bottom,transparent,var(--bg) 26%);display:flex;flex-direction:column;gap:8px">
+<div onClick="{{ doMove }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-family:var(--ff);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">{{ pv.moveLabel }}</div>
+<div style="text-align:center;font-size:12.5px;color:var(--t2)">{{ pv.foot }}</div>
+</div>
+</sc-if>
+</sc-if>
+<!--DETAIL-->
+</div>
+</div>
+</sc-if>
+</div>
+<sc-if value="{{ tabIOS }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:16px;right:16px;bottom:22px;height:64px;z-index:20;box-sizing:border-box;padding:4px;border-radius:999px;background:var(--bar);border:var(--bar-bd);box-shadow:var(--bar-sh);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);display:grid;grid-template-columns:repeat(4,minmax(0,1fr))">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.go }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border-radius:999px;background:{{ t.bg }};color:{{ t.fg }};cursor:pointer;transition:background .2s">
+<sc-if value="{{ t.isLib }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect></svg></sc-if>
+<sc-if value="{{ t.isCu }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"></rect><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"></path></svg></sc-if>
+<sc-if value="{{ t.isOrg }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg></sc-if>
+<sc-if value="{{ t.isSend }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg></sc-if>
+<div style="font-size:10.5px;font-weight:600;white-space:nowrap">{{ t.label }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ tabAnd }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:0;right:0;bottom:0;height:80px;z-index:20;box-sizing:border-box;padding-top:12px;background:var(--bar);border-top:var(--bar-bt);display:grid;grid-template-columns:repeat(4,minmax(0,1fr))">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+<div onClick="{{ t.go }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer">
+<div style="width:56px;height:32px;border-radius:16px;display:grid;place-items:center;background:{{ t.ind }};color:{{ t.fg }};transition:background .2s">
+<sc-if value="{{ t.isLib }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"></rect><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"></rect><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"></rect></svg></sc-if>
+<sc-if value="{{ t.isCu }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"></rect><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"></path></svg></sc-if>
+<sc-if value="{{ t.isOrg }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg></sc-if>
+<sc-if value="{{ t.isSend }}" hint-placeholder-val="{{ false }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg></sc-if>
+</div>
+<div style="font-size:12px;font-weight:{{ t.fw }};color:{{ t.lc }}">{{ t.label }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ selFloat }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;z-index:20;bottom:{{ selB }};left:{{ selL }};right:{{ selR }};height:var(--selbar-h,64px);box-sizing:border-box;padding:4px;border-radius:{{ selRad }};background:var(--bar);border:var(--bar-bd);border-top:var(--bar-bt);box-shadow:var(--bar-sh);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));opacity:1;animation:psUp .22s ease;max-width:{{ selMax }};margin:0 auto">
+<div onClick="{{ selSend }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:999px;color:var(--t1);opacity:{{ selOp }};cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg><div style="font-size:11.5px;font-weight:600">Send</div></div>
+<div onClick="{{ selAlbum }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:999px;color:var(--t1);opacity:{{ selOp }};cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path><path d="M12 11.5v5M9.5 14h5"></path></svg><div style="font-size:11.5px;font-weight:600">{{ putLbl }}</div></div>
+<div onClick="{{ selDelete }}" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:999px;color:var(--danger-t);opacity:{{ selOp }};cursor:pointer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6.5 7l.8 11.6A2 2 0 0 0 9.3 20.5h5.4a2 2 0 0 0 2-1.9L17.5 7"></path></svg><div style="font-size:11.5px;font-weight:600">Delete</div></div>
+</div>
+</sc-if>
+<sc-if value="{{ viewerOn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:40;background:var(--stage);color:#fff;display:flex;flex-direction:column;animation:psFade .2s">
+<div style="padding:calc(var(--safe-t) + 4px) 12px 6px;display:flex;align-items:center;gap:10px;min-height:52px">
+<div onClick="{{ closeViewer }}" title="Close" style="width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg></div>
+<div style="flex:1;min-width:0;text-align:center"><div style="font-family:var(--ffm);font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ v.name }}</div><div style="font-size:12.5px;color:rgba(255,255,255,.72)">{{ v.date }}</div></div>
+<div style="width:44px;flex:none"></div>
+</div>
+<div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px 0"><div style="width:100%;max-width:{{ vMax }};max-height:100%;aspect-ratio:{{ v.ar }};background:{{ v.bg }};position:relative;display:grid;place-items:center"><sc-if value="{{ v.vid }}" hint-placeholder-val="{{ false }}"><div style="width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center"><svg width="26" height="26" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="#fff"></path></svg></div></sc-if></div></div>
+<div style="padding:4px 20px 8px;display:flex;flex-direction:column;gap:3px;max-width:560px;width:100%;margin:0 auto;box-sizing:border-box;font-size:13.5px;color:rgba(255,255,255,.78)"><div style="color:#fff;font-size:15px">{{ v.place }}</div><div>{{ v.album }}</div><div>{{ v.size }}</div></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);padding:6px 16px calc(var(--safe-b) + 8px);max-width:560px;width:100%;margin:0 auto;box-sizing:border-box">
+<div onClick="{{ vSend }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg><div style="font-size:12px;font-weight:600">Send</div></div>
+<div onClick="{{ vAlbum }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path><path d="M12 11.5v5M9.5 14h5"></path></svg><div style="font-size:12px;font-weight:600">{{ putLbl }}</div></div>
+<div onClick="{{ vDelete }}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;cursor:pointer;color:#FF6961"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6.5 7l.8 11.6A2 2 0 0 0 9.3 20.5h5.4a2 2 0 0 0 2-1.9L17.5 7"></path></svg><div style="font-size:12px;font-weight:600">Delete</div></div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ cmpOn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:41;background:var(--stage);color:#fff;display:flex;flex-direction:column;animation:psFade .2s">
+<div style="padding:calc(var(--safe-t) + 4px) 12px 6px;display:flex;align-items:center;gap:10px;min-height:52px">
+<div onClick="{{ closeCompare }}" title="Close" style="width:44px;height:44px;flex:none;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></div>
+<div style="flex:1;min-width:0;text-align:center"><div style="font-family:var(--ffm);font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ cmp.name }}</div><div style="font-size:12.5px;color:rgba(255,255,255,.72)">{{ cmp.where }}</div></div>
+<div style="width:44px;flex:none"></div>
+</div>
+<div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:8px 16px;position:relative">
+<div onClick="{{ flip }}" style="width:100%;max-width:{{ vMax }};max-height:100%;aspect-ratio:{{ cmp.ar }};border-radius:14px;background:{{ cmp.th }};position:relative;cursor:pointer">
+<div style="position:absolute;top:10px;left:10px;height:28px;padding:0 12px;border-radius:999px;background:{{ cmp.lblBg }};color:{{ cmp.lblFg }};font-size:13px;font-weight:700;display:flex;align-items:center;backdrop-filter:blur(10px)">{{ cmp.label }}</div>
+<div style="position:absolute;right:10px;bottom:10px;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.55);font-size:12.5px;font-weight:600">{{ cmp.badge }}</div>
+</div>
+<sc-if value="{{ cmp.multi }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ cmpPrev }}" title="Previous copy" style="position:absolute;left:22px;top:50%;margin-top:-22px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45);cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"></path></svg></div>
+<div onClick="{{ cmpNext }}" title="Next copy" style="position:absolute;right:22px;top:50%;margin-top:-22px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.45);cursor:pointer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"></path></svg></div>
+</sc-if>
+</div>
+<div style="padding:8px 16px calc(var(--safe-b) + 10px);display:flex;flex-direction:column;gap:12px;max-width:520px;width:100%;margin:0 auto;box-sizing:border-box">
+<div style="display:flex;height:38px;padding:3px;border-radius:999px;background:rgba(255,255,255,.12);box-sizing:border-box"><sc-for list="{{ cmpSeg }}" as="s" hint-placeholder-count="2"><div onClick="{{ s.go }}" style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:999px;background:{{ s.bg }};font-size:14px;font-weight:600;cursor:pointer">{{ s.label }}</div></sc-for></div>
+<div style="text-align:center;font-size:13px;color:rgba(255,255,255,.72)">Tap the picture to flip between them.</div>
+<div onClick="{{ askDelCopy }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--danger);color:var(--on-danger);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;padding:0 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer">{{ cmp.delLabel }}</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ sheetOn }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;z-index:45;background:var(--scrim);animation:psFade .2s"></div>
+<div style="position:absolute;inset:0;z-index:46;display:flex;align-items:var(--sh-al);justify-content:center;pointer-events:none;padding:var(--sh-pad);box-sizing:border-box">
+<div style="pointer-events:auto;width:var(--sh-w);max-height:var(--sh-mh);overflow-y:auto;background:var(--sheet);border-radius:var(--sh-rad);box-shadow:0 -8px 40px rgba(0,0,0,.25);animation:psUp .3s cubic-bezier(.2,.8,.2,1);padding-bottom:var(--sh-pb);box-sizing:border-box">
+<sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}"><div style="display:flex;justify-content:center;padding-top:8px"><div style="width:var(--grab-w);height:5px;border-radius:3px;background:var(--grab)"></div></div></sc-if>
+<sc-if value="{{ sh.hasHead }}" hint-placeholder-val="{{ true }}"><div style="display:flex;align-items:center;gap:8px;padding:12px 16px 8px 20px"><div style="flex:1;min-width:0;font-family:var(--ffh);font-size:20px;font-weight:700">{{ sh.title }}</div><div onClick="{{ closeSheet }}" style="height:36px;padding:0 14px;border-radius:999px;display:flex;align-items:center;background:var(--btn2-bg);color:var(--btn2-fg);font-weight:600;font-size:15px;cursor:pointer">{{ sh.done }}</div></div></sc-if>
+<sc-if value="{{ sh.isSettings }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:20px;padding:8px 16px 12px">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">Appearance</div>
+<div style="display:flex;align-items:center;gap:12px;min-height:56px;padding:8px 12px 8px 16px;box-sizing:border-box;background:var(--sheet-cell);border:var(--list-bd);border-radius:var(--r-cell)"><div style="flex:1;font-size:16px">Theme</div><div style="width:220px;display:flex;height:var(--seg-h);padding:var(--seg-p);border-radius:999px;background:var(--seg-bg);border:1px solid var(--seg-bd);box-sizing:border-box;overflow:hidden"><sc-for list="{{ themeSeg }}" as="s" hint-placeholder-count="3"><div onClick="{{ s.go }}" style="flex:1;display:flex;align-items:center;justify-content:center;border-radius:var(--seg-ir);border-left:{{ s.bl }};background:{{ s.bg }};color:{{ s.fg }};box-shadow:{{ s.sh }};font-size:13.5px;font-weight:600;cursor:pointer">{{ s.label }}</div></sc-for></div></div></div>
+<sc-for list="{{ setGroups }}" as="sg" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:8px"><div style="padding:0 4px;font-size:var(--sh-fs);font-weight:var(--sh-fw);text-transform:var(--sh-tt);letter-spacing:var(--sh-ls);color:var(--sh-fg)">{{ sg.title }}</div>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--s-list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ sg.rows }}" as="r" hint-placeholder-count="2"><div onClick="{{ r.tap }}" style="display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--s-item-bg);border-top:{{ r.sep }};border-radius:var(--item-r);cursor:pointer"><div style="flex:1;min-width:0;font-size:16px;color:{{ r.fg }}">{{ r.label }}</div><div style="font-size:15px;color:var(--t2)">{{ r.value }}</div><sc-if value="{{ r.chev }}" hint-placeholder-val="{{ false }}"><svg width="8" height="14" viewBox="0 0 8 14" style="flex:none"><path d="M1 1l6 6-6 6" stroke="var(--t3)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if></div></sc-for>
+</div></div>
+</sc-for>
+<div style="text-align:center;font-size:12.5px;color:var(--t2)">PhotoSense 1.4.0 · {{ setFoot }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isOptions }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:18px;padding:8px 20px 12px">
+<sc-for list="{{ optRows }}" as="or" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:14px;font-weight:600;color:var(--t2)">{{ or.label }}</div>
+<sc-if value="{{ or.isSeg }}" hint-placeholder-val="{{ true }}"><div style="display:flex;height:var(--seg-h);padding:var(--seg-p);border-radius:999px;background:var(--seg-bg);border:1px solid var(--seg-bd);box-sizing:border-box;overflow:hidden"><sc-for list="{{ or.seg }}" as="s" hint-placeholder-count="2"><div onClick="{{ s.go }}" style="flex:1;min-width:0;display:flex;align-items:center;justify-content:center;border-radius:var(--seg-ir);border-left:{{ s.bl }};background:{{ s.bg }};color:{{ s.fg }};box-shadow:{{ s.sh }};font-size:13.5px;font-weight:600;white-space:nowrap;cursor:pointer">{{ s.label }}</div></sc-for></div></sc-if>
+<sc-if value="{{ or.isChips }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ or.chips }}" as="ch" hint-placeholder-count="5"><div onClick="{{ ch.go }}" style="height:34px;padding:0 14px;display:flex;align-items:center;border-radius:var(--chip-r);background:{{ ch.bg }};color:{{ ch.fg }};border:{{ ch.bd }};box-sizing:border-box;font-size:14px;font-weight:500;white-space:nowrap;flex:none;cursor:pointer">{{ ch.label }}</div></sc-for></div></sc-if>
+<sc-if value="{{ or.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px;color:var(--t2);text-wrap:pretty">{{ or.note }}</div></sc-if>
+</div>
+</sc-for>
+<div style="padding:12px 14px;border-radius:14px;background:var(--sheet-cell);font-size:13px;color:var(--t2);text-wrap:pretty">{{ optFoot }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isConfirm }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 20px 8px;display:flex;flex-direction:column;gap:14px">
+<div style="font-family:var(--ffh);font-size:21px;font-weight:700;overflow-wrap:anywhere;text-wrap:pretty">{{ cf.title }}</div>
+<div style="display:flex;flex-direction:column;gap:8px"><sc-for list="{{ cf.lines }}" as="l" hint-placeholder-count="2"><div style="font-size:15px;color:var(--t2);line-height:1.45;overflow-wrap:anywhere;text-wrap:pretty">{{ l.t }}</div></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:8px;padding-top:6px"><div onClick="{{ cfOk }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--danger);color:var(--on-danger);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;padding:0 16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer">{{ cf.btn }}</div><div onClick="{{ closeSheet }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Cancel</div></div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isPerm2 }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 20px 8px;display:flex;flex-direction:column;gap:14px">
+<div style="font-family:var(--ffh);font-size:21px;font-weight:700">Are you sure?</div>
+<div style="font-size:15px;color:var(--t2);line-height:1.45;text-wrap:pretty">{{ p2.text }}</div>
+<div onClick="{{ toggleDontAsk }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 14px;box-sizing:border-box;border-radius:14px;background:var(--sheet-cell);cursor:pointer"><div style="flex:1;font-size:15px">Do not ask me this second time again</div><div style="width:51px;height:31px;flex:none;border-radius:999px;background:{{ dontAskBg }};position:relative;transition:background .2s"><div style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transform:translateX({{ dontAskX }});transition:transform .2s"></div></div></div>
+<div style="display:flex;flex-direction:column;gap:8px;padding-top:4px"><div onClick="{{ p2Ok }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--danger);color:var(--on-danger);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Delete 37 items</div><div onClick="{{ closeSheet }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Cancel</div></div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isRecent }}" hint-placeholder-val="{{ false }}">
+<div style="padding:8px 16px 12px;display:flex;flex-direction:column;gap:12px">
+<sc-if value="{{ hasRecent }}" hint-placeholder-val="{{ true }}"><div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--s-list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden"><sc-for list="{{ recentRows }}" as="r" hint-placeholder-count="2"><div style="display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 12px 10px 16px;box-sizing:border-box;background:var(--s-item-bg);border-top:{{ r.sep }};border-radius:var(--item-r)"><div style="flex:1;min-width:0"><div style="font-size:15px;text-wrap:pretty">{{ r.text }}</div><div style="font-size:13px;color:var(--t2)">{{ r.when }}</div></div><div onClick="{{ r.undo }}" style="height:34px;padding:0 14px;border-radius:999px;display:flex;align-items:center;gap:6px;background:var(--btn2-bg);color:var(--btn2-fg);font-weight:600;font-size:14px;cursor:pointer;flex:none">Undo</div></div></sc-for></div></sc-if>
+<sc-if value="{{ noRecent }}" hint-placeholder-val="{{ false }}"><div style="padding:28px;text-align:center;color:var(--t2)">Nothing to undo.</div></sc-if>
+<div style="padding:0 4px;font-size:13px;color:var(--t2);text-wrap:pretty">Undo puts files back under the names they had. What was deleted permanently can't be put back.</div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isDest }}" hint-placeholder-val="{{ false }}">
+<div style="padding:8px 16px 12px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--s-list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden"><sc-for list="{{ destRows }}" as="x" hint-placeholder-count="3"><div onClick="{{ x.go }}" style="display:flex;align-items:center;gap:14px;min-height:60px;padding:10px 16px;box-sizing:border-box;background:var(--s-item-bg);border-top:{{ x.sep }};border-radius:var(--item-r);cursor:pointer"><div style="width:22px;height:22px;flex:none;box-sizing:border-box;border-radius:50%;border:2px solid {{ x.ring }};display:grid;place-items:center"><sc-if value="{{ x.on }}" hint-placeholder-val="{{ false }}"><div style="width:11px;height:11px;border-radius:50%;background:var(--acc)"></div></sc-if></div><div style="flex:1"><div style="font-size:16px">{{ x.label }}</div><div style="font-size:13px;color:var(--t2)">{{ x.sub }}</div></div></div></sc-for></div>
+<div style="padding:0 4px;font-size:13px;color:var(--t2);text-wrap:pretty">{{ destNote }}</div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isAlbum }}" hint-placeholder-val="{{ false }}">
+<div style="padding:8px 16px 12px;display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--s-list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden">
+<sc-for list="{{ albumRows }}" as="a" hint-placeholder-count="4"><div onClick="{{ a.go }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--s-item-bg);border-top:{{ a.sep }};border-radius:var(--item-r);cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="1.8" stroke-linejoin="round" style="flex:none"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg><div style="flex:1;font-size:16px">{{ a.name }}</div></div></sc-for>
+<div onClick="{{ albumNew }}" style="display:flex;align-items:center;gap:12px;min-height:52px;padding:8px 16px;box-sizing:border-box;background:var(--s-item-bg);border-top:var(--item-sep);border-radius:var(--item-r);color:var(--acc);font-weight:600;cursor:pointer"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="flex:none"><path d="M12 5v14M5 12h14"></path></svg>{{ newAlbumLbl }}</div>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isNew }}" hint-placeholder-val="{{ false }}">
+<div style="padding:8px 16px 12px;display:flex;flex-direction:column;gap:14px">
+<div style="display:flex;align-items:center;min-height:54px;padding:0 16px;border-radius:14px;background:var(--input);border:1px solid var(--sep)"><input value="{{ newName }}" onInput="{{ newNameInput }}" placeholder="{{ newPh }}" style="flex:1;font-size:17px;height:44px"></div>
+<div onClick="{{ createAlbum }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;opacity:{{ createOp }};cursor:pointer">Create</div>
+</div>
+</sc-if>
+<sc-if value="{{ sh.isNT }}" hint-placeholder-val="{{ false }}">
+<div style="padding:4px 16px 12px;display:flex;flex-direction:column;gap:16px">
+<div style="font-size:14px;color:var(--t2)">{{ nt.pos }} · The file going in and the one already there</div>
+<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t2)">Going in</div><div style="aspect-ratio:1;border-radius:14px;background:{{ nt.a.bg }}"></div><div style="font-family:var(--ffm);font-size:12.5px;overflow-wrap:anywhere">{{ nt.a.name }}</div><div style="font-size:12.5px;color:var(--t2)">From {{ nt.a.from }}</div><div style="font-size:12.5px;color:var(--t2)">{{ nt.a.meta }}</div><div onClick="{{ ntBinA }}" style="align-self:flex-start;height:32px;padding:0 12px;border-radius:999px;display:flex;align-items:center;gap:6px;background:var(--danger-soft);color:var(--danger-t);font-size:13px;font-weight:600;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6.5 7l.8 11.6A2 2 0 0 0 9.3 20.5h5.4a2 2 0 0 0 2-1.9L17.5 7"></path></svg>Delete</div></div>
+<div style="display:flex;flex-direction:column;gap:6px;min-width:0"><div style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t2)">Already there</div><div style="aspect-ratio:1;border-radius:14px;background:{{ nt.b.bg }}"></div><div style="font-family:var(--ffm);font-size:12.5px;overflow-wrap:anywhere">{{ nt.b.name }}</div><div style="font-size:12.5px;color:var(--t2)">In {{ nt.b.from }}</div><div style="font-size:12.5px;color:var(--t2)">{{ nt.b.meta }}</div><div onClick="{{ ntBinB }}" style="align-self:flex-start;height:32px;padding:0 12px;border-radius:999px;display:flex;align-items:center;gap:6px;background:var(--danger-soft);color:var(--danger-t);font-size:13px;font-weight:600;cursor:pointer"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6.5 7l.8 11.6A2 2 0 0 0 9.3 20.5h5.4a2 2 0 0 0 2-1.9L17.5 7"></path></svg>Delete</div></div>
+</div>
+<sc-if value="{{ nt.same }}" hint-placeholder-val="{{ true }}"><div style="padding:10px 14px;border-radius:12px;background:var(--ident-bg);color:var(--ident);font-size:14px;font-weight:600">Byte for byte the same file.</div></sc-if>
+<sc-if value="{{ nt.diff }}" hint-placeholder-val="{{ false }}"><div style="padding:10px 14px;border-radius:12px;background:var(--amber-soft);color:var(--amber);font-size:14px;font-weight:600">Two different files with the same name.</div></sc-if>
+<sc-if value="{{ nt.binOn }}" hint-placeholder-val="{{ false }}"><div style="padding:14px;border-radius:14px;background:var(--danger-soft);display:flex;flex-direction:column;gap:10px"><div style="font-size:14.5px;overflow-wrap:anywhere;text-wrap:pretty">{{ nt.binText }}</div><div style="display:flex;gap:8px;justify-content:flex-end"><div onClick="{{ ntBinCancel }}" style="height:36px;padding:0 16px;border-radius:999px;display:flex;align-items:center;background:var(--btn2-bg);color:var(--btn2-fg);font-weight:600;font-size:14px;cursor:pointer">Cancel</div><div onClick="{{ ntBinOk }}" style="height:36px;padding:0 16px;border-radius:999px;display:flex;align-items:center;background:var(--danger);color:var(--on-danger);font-weight:600;font-size:14px;cursor:pointer">Delete</div></div></div></sc-if>
+<div style="display:flex;flex-direction:column;gap:var(--list-gap);background:var(--s-list-bg);border:var(--list-bd);border-radius:var(--r-cell);overflow:hidden"><sc-for list="{{ ntChoices }}" as="x" hint-placeholder-count="3"><div onClick="{{ x.go }}" style="display:flex;align-items:center;gap:14px;min-height:58px;padding:8px 16px;box-sizing:border-box;background:var(--s-item-bg);border-top:{{ x.sep }};border-radius:var(--item-r);cursor:pointer"><div style="width:22px;height:22px;flex:none;box-sizing:border-box;border-radius:50%;border:2px solid {{ x.ring }};display:grid;place-items:center"><sc-if value="{{ x.on }}" hint-placeholder-val="{{ false }}"><div style="width:11px;height:11px;border-radius:50%;background:var(--acc)"></div></sc-if></div><div style="flex:1;min-width:0"><div style="font-size:15.5px">{{ x.label }}</div><div style="font-size:13px;color:var(--t2);font-family:var(--ffm);overflow-wrap:anywhere">{{ x.sub }}</div></div></div></sc-for></div>
+<sc-if value="{{ nt.renameOn }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;min-height:52px;padding:0 16px;border-radius:14px;background:var(--input);border:1px solid var(--sep)"><input value="{{ nt.renameVal }}" onInput="{{ ntRenameInput }}" style="flex:1;font-family:var(--ffm);font-size:15px;height:44px"></div></sc-if>
+<div onClick="{{ ntNext }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">{{ nt.nextLabel }}</div>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:12px;right:12px;max-width:440px;margin:0 auto;bottom:{{ toastB }};z-index:44;display:flex;align-items:center;gap:8px;padding:8px 6px 8px 16px;min-height:50px;box-sizing:border-box;border-radius:var(--r-toast);background:var(--toast);color:var(--on-toast);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 8px 24px rgba(0,0,0,.25);animation:psUp .25s cubic-bezier(.2,.8,.2,1)">
+<div style="flex:1;font-size:14px;line-height:1.35;text-wrap:pretty">{{ toast.text }}</div>
+<sc-if value="{{ toast.hasAct }}" hint-placeholder-val="{{ false }}"><div onClick="{{ toastAct }}" style="padding:8px 12px;font-weight:600;font-size:14.5px;color:var(--toast-act);cursor:pointer;white-space:nowrap">{{ toast.act }}</div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ obOn }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:50;background:var(--bg);display:flex;justify-content:center;padding:calc(var(--safe-t) + 28px) 24px calc(var(--safe-b) + 20px);box-sizing:border-box;animation:psFade .25s">
+<div style="width:100%;max-width:440px;display:flex;flex-direction:column">
+<sc-if value="{{ ob.welcome }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:32px">
+<div style="display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center"><img src="./app-icon.png" alt="" style="width:88px;height:88px;border-radius:22px"><div style="font-family:var(--ffh);font-size:30px;font-weight:700;letter-spacing:-0.01em">Welcome to PhotoSense</div></div>
+<div style="display:flex;flex-direction:column;gap:22px">
+<div style="display:flex;gap:16px;align-items:flex-start"><div style="width:40px;height:40px;flex:none;border-radius:12px;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8.5" y="8.5" width="12" height="12" rx="2.5"></rect><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"></path></svg></div><div><div style="font-weight:600;font-size:16.5px">Find copies</div><div style="font-size:14.5px;color:var(--t2);text-wrap:pretty">The same photo saved twice is kept once. You see what goes and what stays before anything is deleted.</div></div></div>
+<div style="display:flex;gap:16px;align-items:flex-start"><div style="width:40px;height:40px;flex:none;border-radius:12px;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"></path></svg></div><div><div style="font-weight:600;font-size:16.5px">Sort by place and date</div><div style="font-size:14.5px;color:var(--t2);text-wrap:pretty">Suggested {{ w.albums }} for each place and year, with a preview before anything moves.</div></div></div>
+<div style="display:flex;gap:16px;align-items:flex-start"><div style="width:40px;height:40px;flex:none;border-radius:12px;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5"></path><path d="M2.5 18.5h19"></path><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2"></path></svg></div><div><div style="font-weight:600;font-size:16.5px">Send to your computer</div><div style="font-size:14.5px;color:var(--t2);text-wrap:pretty">Over Wi-Fi to PhotoSense on a PC or Mac. Each file is checked before anything is deleted here.</div></div></div>
+</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;align-items:stretch"><div style="text-align:center;font-size:13px;color:var(--t2)">{{ welcomeFoot }}</div><div onClick="{{ obContinue }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Continue</div></div>
+</sc-if>
+<sc-if value="{{ ob.denied }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center"><div style="width:72px;height:72px;border-radius:22px;background:var(--fill);color:var(--t2);display:grid;place-items:center"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3"></rect><path d="m3.5 16 4.5-4.5 4 4 3-3 5.5 5.5"></path><circle cx="15.5" cy="8.5" r="1.5"></circle></svg></div><div style="font-family:var(--ffh);font-size:26px;font-weight:700">PhotoSense can't see your photos</div><div style="font-size:15px;color:var(--t2);max-width:340px;text-wrap:pretty">{{ deniedText }}</div></div>
+<div style="display:flex;flex-direction:column;gap:10px"><div onClick="{{ obSettings }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--acc);color:var(--on-acc);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Open Settings</div><div onClick="{{ obContinue }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Ask again</div></div>
+</sc-if>
+<sc-if value="{{ ob.scanning }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px">
+<div style="font-family:var(--ffh);font-size:26px;font-weight:700">Reading your photos</div>
+<div style="display:flex;align-items:baseline;gap:14px"><div style="font-family:var(--ffh);font-size:56px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1">{{ scan.pct }}</div><div style="font-size:14px;color:var(--t2)">{{ scan.left }}</div></div>
+<div style="height:8px;border-radius:999px;background:var(--fill);overflow:hidden"><div style="height:100%;width:{{ scan.prog }};border-radius:999px;background:var(--acc)"></div></div>
+<div style="font-size:15px;font-variant-numeric:tabular-nums">{{ scan.line }}</div>
+<div style="display:grid;grid-template-columns:repeat({{ scan.cols }},minmax(0,1fr));gap:4px"><sc-for list="{{ scan.tiles }}" as="tl" hint-placeholder-count="80"><div style="aspect-ratio:1;border-radius:4px;background:{{ tl.bg }};transition:background .3s"></div></sc-for></div>
+<div style="font-size:13.5px;color:var(--t2);text-wrap:pretty">Keep PhotoSense open until it finishes. Later scans skip photos already read, so they take seconds.</div>
+</div>
+<div onClick="{{ stopScan }}" style="height:var(--btn-h);border-radius:var(--r-btn);background:var(--btn2-bg);color:var(--btn2-fg);font-weight:var(--btn-fw);font-size:var(--btn-fs);display:flex;align-items:center;justify-content:center;cursor:pointer">Stop</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+<sc-if value="{{ sysOn }}" hint-placeholder-val="{{ false }}">
+<div data-skin="{{ sysSkin }}" style="position:absolute;inset:0;z-index:80;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;animation:psFade .15s;font-family:var(--ff);color:var(--t1)">
+<sc-if value="{{ sys.ios }}" hint-placeholder-val="{{ true }}">
+<div style="width:300px;border-radius:30px;background:var(--alert);backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);padding:22px 16px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);animation:psPop .2s">
+<div style="display:flex;flex-direction:column;gap:6px;text-align:center;padding:0 6px"><div style="font-size:17px;font-weight:600;line-height:1.3">{{ sys.title }}</div><sc-if value="{{ sys.hasMsg }}" hint-placeholder-val="{{ true }}"><div style="font-size:14px;line-height:1.35">{{ sys.msg }}</div></sc-if></div>
+<sc-if value="{{ sys.isPhotos }}" hint-placeholder-val="{{ false }}"><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;border-radius:12px;overflow:hidden"><sc-for list="{{ sysStrip }}" as="s" hint-placeholder-count="4"><div style="aspect-ratio:1;background:{{ s.bg }}"></div></sc-for></div></sc-if>
+<div style="display:flex;flex-direction:column;gap:8px"><sc-for list="{{ sysBtns }}" as="b" hint-placeholder-count="2"><div onClick="{{ b.go }}" style="height:48px;border-radius:999px;background:var(--fill);color:{{ b.fg }};font-weight:{{ b.fw }};font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer">{{ b.label }}</div></sc-for></div>
+</div>
+</sc-if>
+<sc-if value="{{ sys.and }}" hint-placeholder-val="{{ false }}">
+<div style="width:312px;border-radius:28px;background:var(--alert);padding:24px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;box-shadow:0 12px 40px rgba(0,0,0,.3);animation:psPop .2s">
+<div style="display:flex;justify-content:center;color:var(--acc)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="3"></rect><path d="m3.5 16 4.5-4.5 4 4 3-3 5.5 5.5"></path><circle cx="15.5" cy="8.5" r="1.5"></circle></svg></div>
+<div style="font-size:22px;line-height:1.3;text-align:center;text-wrap:pretty">{{ sys.title }}</div>
+<sc-if value="{{ sys.hasMsg }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px;color:var(--t2);text-align:center">{{ sys.msg }}</div></sc-if>
+<sc-if value="{{ sys.stacked }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:2px"><sc-for list="{{ sysBtns }}" as="b" hint-placeholder-count="3"><div onClick="{{ b.go }}" style="min-height:52px;padding:0 16px;border-radius:{{ b.rad }};background:var(--bg);color:var(--acc);font-weight:500;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer">{{ b.label }}</div></sc-for></div></sc-if>
+<sc-if value="{{ sys.inline }}" hint-placeholder-val="{{ false }}"><div style="display:flex;justify-content:flex-end;gap:8px"><sc-for list="{{ sysBtns }}" as="b" hint-placeholder-count="2"><div onClick="{{ b.go }}" style="height:40px;padding:0 14px;border-radius:999px;color:var(--acc);font-weight:500;font-size:14.5px;display:flex;align-items:center;cursor:pointer">{{ b.label }}</div></sc-for></div></sc-if>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;440px&quot;,&quot;height&quot;:&quot;920px&quot;},&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;android&quot;],&quot;default&quot;:&quot;ios&quot;,&quot;tsType&quot;:&quot;'ios'|'android'&quot;},&quot;form&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;tablet&quot;],&quot;default&quot;:&quot;phone&quot;,&quot;tsType&quot;:&quot;'phone'|'tablet'&quot;},&quot;look&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;native&quot;,&quot;brand&quot;],&quot;default&quot;:&quot;native&quot;,&quot;tsType&quot;:&quot;'native'|'brand'&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark'|'light'&quot;},&quot;start&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;still&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;epoch&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;}}">
+const HUES=[200,152,28,88,262,330,60,180,12,232];
+function th(h,s){s=s||7;return 'repeating-linear-gradient(135deg,oklch(var(--thL) var(--thC) '+h+') 0 '+s+'px,oklch(var(--thL2) var(--thC) '+h+') '+s+'px '+(2*s)+'px)';}
+const fmtN=n=>Math.round(n).toLocaleString('en-US');
+const MONTHS=[['December 2023','Dec',15,31],['November 2023','Nov',12,30],['October 2023','Oct',9,31],['September 2023','Sep',9,30]];
+const LPL=['Apgar','Anaconda','West Glacier','Uptown Butte','Missoula','Big Sky','Bozeman','Caras Park'];
+const LIB=[];(function(){let k=0;MONTHS.forEach(function(m){for(let i=0;i<m[2];i++){const vid=k%7===3;LIB.push({id:'p'+k,month:m[0],name:'IMG_'+(9191-k*37)+(vid?'.MOV':(k%3?'.HEIC':'.JPG')),hue:HUES[(k*7+Math.floor(k/3))%10],vid:vid,dur:vid?('0:'+String(8+(k*13)%50).padStart(2,'0')):'',noLoc:k%9===4,org:k%5===1,date:m[1]+' '+Math.max(1,m[3]-i*2)+', 2023',time:(1+(k*5)%11)+':'+String((k*17)%60).padStart(2,'0')+' PM',place:LPL[k%8],size:(1.4+((k*7)%30)/10).toFixed(1)+' MB'});k++;}});})();
+function mkGroups(R){
+  const K=o=>Object.assign({album:R,taken:'Apr 29, 2022, 5:34 PM',place:'Near Anaconda, Montana',px:'4032 × 3024'},o);
+  return [
+    {id:'g1',kind:'dup',hue:200,tier:'Same picture',note:'The JPEG was made from the HEIC.',mb:12,keeper:K({name:'IMG_4299.JPG',fmt:'JPEG',size:'24.0 MB'}),copies:[{name:'IMG_4299.HEIC',fmt:'HEIC',size:'12.0 MB'}]},
+    {id:'g2',kind:'dup',hue:152,tier:'Identical file',note:'Same bytes, saved twice.',mb:14.8,keeper:K({name:'IMG_0377.JPG',fmt:'JPEG',size:'14.8 MB',taken:'Mar 3, 2022, 11:02 AM',place:'Caras Park, Missoula'}),copies:[{name:'IMG_0377 (2C9F41A0).JPG',album:'Butte › 2022'}]},
+    {id:'g3',kind:'dup',hue:262,vid:true,tier:'Identical file',note:'Same bytes, saved three times.',mb:9,keeper:K({name:'DLWL2718.MP4',fmt:'MP4',size:'4.5 MB',taken:'Jul 4, 2021, 9:41 PM',place:'Uptown Butte',px:'1920 × 1080'}),copies:[{name:'DLWL2718 (8E01B7C2).MP4'},{name:'DLWL2718 (F3A9D054).MP4',album:'Trips › 2021'}]},
+    {id:'g4',kind:'dup',hue:330,keepAll:true,tier:'Identical file',note:'Both copies are marked keep.',mb:0,keeper:K({name:'IMG_0712.JPG',fmt:'JPEG',size:'3.1 MB',taken:'Aug 9, 2021, 2:15 PM',place:'Glacier National Park'}),copies:[{name:'IMG_0712 (77B1C2E0).JPG',kept:true},{name:'IMG_0712 (0A4F9D3B).JPG',kept:true,album:'Montana'}]},
+    {id:'g5',kind:'dup',hue:28,tier:'Same picture',note:'Converted and resized.',mb:1.6,keeper:K({name:'IMG_1000.JPG',fmt:'JPEG',size:'2.4 MB',taken:'Jan 14, 2023, 8:20 AM',place:'Bozeman'}),copies:[{name:'IMG_1000.HEIC',fmt:'HEIC',size:'0.9 MB'},{name:'IMG_1000 (5D2A9E11).JPG',size:'0.7 MB',px:'2048 × 1536'}]},
+    {id:'g6',kind:'dup',hue:88,tier:'Identical file',note:'Same bytes, saved twice.',mb:2.6,keeper:K({name:'IMG_1131.JPG',fmt:'JPEG',size:'2.6 MB',taken:'Feb 2, 2023, 4:48 PM',place:'Big Sky'}),copies:[{name:'IMG_1131 (C04E2B19).JPG'}]},
+    {id:'g7',kind:'dup',hue:180,tier:'Same picture',note:'Saved again at a lower quality.',mb:3.1,keeper:K({name:'IMG_2204.HEIC',fmt:'HEIC',size:'3.4 MB',taken:'May 21, 2023, 6:05 PM'}),copies:[{name:'IMG_2204.JPG',fmt:'JPEG',size:'3.1 MB'}]},
+    {id:'g8',kind:'dup',hue:232,tier:'Identical file',note:'Same bytes, saved four times.',mb:8.4,keeper:K({name:'IMG_3318.JPG',fmt:'JPEG',size:'2.8 MB',taken:'Jun 30, 2023, 7:12 PM',place:'Rehoboth Beach'}),copies:[{name:'IMG_3318 (91D0A6F2).JPG'},{name:'IMG_3318 (3B7E10C4).JPG'},{name:'IMG_3318 (E2C85F07).JPG',album:'Trips › 2023'}]},
+    {id:'s1',kind:'sim',hue:60,tier:'Similar',note:'Burst frames, a second apart.',mb:0,keeper:K({name:'IMG_5101.HEIC',fmt:'HEIC',size:'2.9 MB',taken:'Sep 12, 2023, 10:31:04 AM',place:'Glacier National Park'}),copies:[{name:'IMG_5102.HEIC',size:'2.8 MB',taken:'Sep 12, 2023, 10:31:05 AM'},{name:'IMG_5103.HEIC',taken:'Sep 12, 2023, 10:31:05 AM'},{name:'IMG_5104.HEIC',size:'2.7 MB',taken:'Sep 12, 2023, 10:31:06 AM'}]},
+    {id:'s2',kind:'sim',hue:12,tier:'Similar',note:'An edited version of the same shot.',mb:0,keeper:K({name:'IMG_E5230.HEIC',fmt:'HEIC',size:'3.3 MB',taken:'Sep 18, 2023, 5:50 PM',place:'Bozeman'}),copies:[{name:'IMG_5230.HEIC',size:'3.1 MB'}]},
+    {id:'s3',kind:'sim',hue:152,tier:'Similar',note:'Two shots of the same view.',mb:0,keeper:K({name:'IMG_4410.HEIC',fmt:'HEIC',size:'3.0 MB',taken:'Jul 2, 2023, 1:12 PM',place:'Caras Park, Missoula'}),copies:[{name:'IMG_4411.HEIC',size:'2.9 MB',taken:'Jul 2, 2023, 1:12 PM'}]},
+    {id:'s4',kind:'sim',hue:262,tier:'Similar',note:'Burst frames, a second apart.',mb:0,keeper:K({name:'IMG_3902.HEIC',fmt:'HEIC',size:'2.6 MB',taken:'Jun 8, 2023, 8:40 PM',place:'Big Sky'}),copies:[{name:'IMG_3903.HEIC',taken:'Jun 8, 2023, 8:40 PM'},{name:'IMG_3904.HEIC',taken:'Jun 8, 2023, 8:40 PM'}]}
+  ];
+}
+const PLACES=[
+  {id:'anaconda',name:'Anaconda',n:724,gb:'5.1 GB',range:'Jan 2021 – Dec 2023',note:'No landmark known here, so it is named after the town.',hues:[200,152,28,200],x:30,y:56,years:[[2021,212],[2022,301],[2023,211]],taken:3},
+  {id:'caras',name:'Caras Park',town:'Missoula',n:652,gb:'4.5 GB',range:'Jan 2021 – Dec 2023',hues:[88,330,200,60],x:44,y:36,years:[[2021,198],[2022,240],[2023,214]]},
+  {id:'uptown',name:'Uptown Butte',town:'Butte',n:566,gb:'3.9 GB',range:'Feb 2021 – Nov 2023',hues:[28,262,152,12],x:38,y:64,years:[[2021,150],[2022,210],[2023,206]]},
+  {id:'glacier',name:'Glacier National Park',town:'West Glacier',n:550,gb:'4.0 GB',range:'Jun 2021 – Sep 2023',note:'Includes Apgar, 6 km away.',hues:[152,200,180,88],x:34,y:15,years:[[2021,120],[2022,190],[2023,240]]},
+  {id:'bozeman',name:'Bozeman',n:431,gb:'2.8 GB',range:'Mar 2021 – Dec 2023',hues:[262,28,330,200],x:63,y:62,years:[[2021,101],[2022,160],[2023,170]]},
+  {id:'bigsky',name:'Big Sky',n:302,gb:'2.2 GB',range:'Dec 2021 – Feb 2023',hues:[232,180,60,152],x:57,y:80,years:[[2021,40],[2022,180],[2023,82]]},
+  {id:'grant',name:'Grant-Kohrs Ranch',town:'Deer Lodge',n:188,gb:'1.3 GB',range:'Jul 2022 – Jul 2023',hues:[60,28,88,12],x:20,y:44,years:[[2022,96],[2023,92]]},
+  {id:'rehoboth',name:'Rehoboth Beach',n:120,gb:'0.9 GB',range:'Jun 2023',hues:[200,232,180,262],x:88,y:40,years:[[2023,120]]}
+];
+const YEARS=[
+  {id:'y2023',name:'2023',n:1402,gb:'9.8 GB',range:'8 places inside',hues:[60,152,232,200],secs:[['Glacier National Park',240],['Caras Park',214],['Anaconda',211],['Uptown Butte',206],['Bozeman',170],['Rehoboth Beach',120],['Grant-Kohrs Ranch',92],['Big Sky',82]],taken:0},
+  {id:'y2022',name:'2022',n:1288,gb:'9.1 GB',range:'7 places inside',hues:[28,200,88,330],secs:[['Anaconda',301],['Caras Park',240],['Uptown Butte',210],['Glacier National Park',190],['Big Sky',180],['Bozeman',160],['Grant-Kohrs Ranch',96]],taken:3},
+  {id:'y2021',name:'2021',n:821,gb:'5.6 GB',range:'6 places inside',hues:[262,12,152,180],secs:[['Anaconda',212],['Caras Park',198],['Uptown Butte',150],['Glacier National Park',120],['Bozeman',101],['Big Sky',40]],taken:0},
+  {id:'y2020',name:'2020',n:579,gb:'3.7 GB',range:'No location on most',hues:[330,60,28,232],secs:[['Anaconda',214],['Uptown Butte',190],['Bozeman',175]],taken:0}
+];
+class Component extends DCLogic {
+  state = this.seed(this.props && this.props.start);
+  seed(start){
+    const s={seededFrom:start||'',themeOv:null,ob:null,access:'full',sys:null,tab:'library',libFilter:'all',selecting:false,sel:{},libGone:{},viewer:null,
+      cuMode:'dup',cuGroup:'g1',cuPushed:false,copyIdx:0,compare:false,cmpSide:'copy',removed:{},kept:{},
+      orgMode:'place',orgView:'list',orgPick:'anaconda',orgPushed:false,leftOut:{},moved:{},names:{},expanded:{},dest:'root',ntDone:{},
+      opts:{combine:true,within:5,names:'landmark',inside:'year',kind:'both'},
+      sheet:null,confirm:null,ntIdx:0,ntChoice:{},ntBin:null,newName:'',newCtx:'org',myAlbums:[],
+      send:{stage:'idle',what:'unorg',mode:'copy',pct:0,deleted:false},
+      scanPct:0,toast:null,sidebar:true,dontAsk:false,permDone:false,
+      hist:[{id:'h0',text:'Moved 96 files to Grant-Kohrs Ranch',when:'Yesterday, 6:12 PM',patch:{}}]};
+    const S=o=>Object.assign(s,o), SD=o=>Object.assign(s.send,o), sel3={p1:1,p3:1,p4:1};
+    switch(start){
+      case 'welcome':S({ob:'welcome'});break;
+      case 'access':S({ob:'welcome',sys:'photos'});break;
+      case 'denied':S({ob:'denied'});break;
+      case 'scanning':S({ob:'scanning',scanPct:38});break;
+      case 'limited':S({access:'limited'});break;
+      case 'select':S({selecting:true,sel:sel3});break;
+      case 'viewer':S({viewer:'p2'});break;
+      case 'album':S({selecting:true,sel:sel3,sheet:'album'});break;
+      case 'delete-sel':S({selecting:true,sel:sel3,sheet:'confirm',confirm:{kind:'delSel'}});break;
+      case 'cleanup':S({tab:'cleanup'});break;
+      case 'similar':S({tab:'cleanup',cuMode:'sim',cuGroup:'s1'});break;
+      case 'review':S({tab:'cleanup',cuPushed:true});break;
+      case 'review-multi':S({tab:'cleanup',cuPushed:true,cuGroup:'g3'});break;
+      case 'compare':S({tab:'cleanup',cuPushed:true,compare:true});break;
+      case 'confirm-copy':S({tab:'cleanup',cuPushed:true,sheet:'confirm',confirm:{kind:'delCopy'}});break;
+      case 'confirm-all':S({tab:'cleanup',sheet:'confirm',confirm:{kind:'delAll'}});break;
+      case 'deleted-copy':S({tab:'cleanup',removed:{g1:{0:1}},cuGroup:'g2',toast:{text:'IMG_4299.HEIC deleted. IMG_4299.JPG stays.',act:'Undo',kind:'undo',patch:{removed:{}}}});break;
+      case 'organize':S({tab:'organize'});break;
+      case 'by-date':S({tab:'organize',orgMode:'date',orgPick:'y2023',opts:Object.assign(s.opts,{inside:'place'})});break;
+      case 'map':S({tab:'organize',orgView:'map'});break;
+      case 'options':S({tab:'organize',sheet:'options'});break;
+      case 'preview':S({tab:'organize',orgPushed:true,leftOut:{'anaconda-2021-2':1}});break;
+      case 'nametaken':S({tab:'organize',orgPushed:true,sheet:'nt'});break;
+      case 'dest':S({tab:'organize',orgPushed:true,sheet:'dest'});break;
+      case 'and-move':S({tab:'organize',orgPushed:true,sys:'move'});break;
+      case 'moved':S({tab:'organize',moved:{anaconda:1},toast:{text:'Moved 724 files to Anaconda.',act:'Undo',kind:'undo',patch:{moved:{}}}});break;
+      case 'send':S({tab:'send'});break;
+      case 'send-waiting':S({tab:'send'});SD({stage:'waiting'});break;
+      case 'send-code':S({tab:'send'});SD({stage:'code'});break;
+      case 'send-sending':S({tab:'send'});SD({stage:'sending',pct:46});break;
+      case 'send-sent':S({tab:'send'});SD({stage:'sent',pct:100});break;
+      case 'send-delete':S({tab:'send',sys:'deleteSent'});SD({stage:'sent',pct:100,mode:'move'});break;
+      case 'settings':S({sheet:'settings'});break;
+      case 'perm':S({sheet:'confirm',confirm:{kind:'perm1'}});break;
+      case 'perm2':S({sheet:'perm2'});break;
+      case 'recent':S({tab:'organize',sheet:'recent',hist:[{id:'h2',text:'Deleted IMG_4299.HEIC. IMG_4299.JPG stays.',when:'2 min ago',patch:{}},{id:'h1',text:'Moved 724 files to Anaconda',when:'10 min ago',patch:{}}].concat(s.hist)});break;
+    }
+    return s;
+  }
+  componentDidMount(){const s=(this.props&&this.props.start)||'';if(s!==this.state.seededFrom)this.setState(this.seed(s));if(!(this.props&&this.props.still))this.iv=setInterval(()=>this.tick(),120);}
+  componentDidUpdate(prev){const p=this.props||{};if(prev.start!==p.start||prev.epoch!==p.epoch)this.setState(this.seed(p.start));}
+  componentWillUnmount(){clearInterval(this.iv);}
+  tick(){
+    if(this.props&&this.props.still)return;
+    const st=this.state,sd=st.send;
+    if(st.ob==='scanning'){const p=Math.min(100,st.scanPct+1.1);if(p>=100)this.setState({ob:null,scanPct:0,tab:'library',toast:{text:'Found 264 duplicates and 178 groups of similar shots.',act:'Review',kind:'gocu'}});else this.setState({scanPct:p});}
+    if(sd.stage==='waiting'){this.wt=(this.wt||0)+1;if(this.wt>22){this.wt=0;this.setState({send:Object.assign({},sd,{stage:'code'})});}}else this.wt=0;
+    if(sd.stage==='sending'){const p=Math.min(100,sd.pct+0.9);if(p>=100)this.setState({send:Object.assign({},sd,{stage:'sent',pct:100}),sys:sd.mode==='move'?'deleteSent':st.sys});else this.setState({send:Object.assign({},sd,{pct:p})});}
+    if(st.toast){if(this.lastToast!==st.toast){this.lastToast=st.toast;this.tt=0;}this.tt++;if(this.tt>46)this.setState({toast:null});}
+  }
+  set(o){this.setState(o);}
+  seg(opts,cur,fn){return opts.map((o,i)=>{const on=o[0]===cur;return {label:o[1],go:()=>fn(o[0]),bg:on?'var(--seg-on)':'transparent',fg:on?'var(--seg-on-fg)':'var(--t1)',sh:on?'var(--seg-sh)':'none',bl:i?'var(--seg-div)':'none'};});}
+  chips(opts,cur,fn){return opts.map(o=>{const on=o[0]===cur;return {label:o[1],n:o[2]||'',go:()=>fn(o[0]),bg:on?'var(--chip-on-bg)':'var(--chip-bg)',fg:on?'var(--chip-on-fg)':'var(--t1)',bd:on?'1px solid transparent':'1px solid var(--chip-bd)',nc:on?'inherit':'var(--t2)'};});}
+  rows(list){return list.map((r,i)=>Object.assign({sep:i?'var(--item-sep)':'none'},r));}
+  renderVals(){
+    const P=this.props||{},st=this.state;
+    const plat=String(P.platform||'ios').toLowerCase().indexOf('and')===0?'and':'ios';
+    const tablet=String(P.form||'phone').toLowerCase()==='tablet';
+    const brand=String(P.look||'native').toLowerCase()==='brand';
+    const theme=String(st.themeOv||P.theme||'dark').toLowerCase()==='light'?'light':'dark';
+    const isIOS=plat==='ios';
+    const dev=isIOS?(tablet?'ipad':'iphone'):(tablet?'atab':'aphone');
+    const dims={iphone:[402,874],ipad:[1180,820],aphone:[412,892],atab:[1280,800]}[dev];
+    const w=isIOS?{root:'Photo Library',album:'album',Album:'Album',albums:'albums',Albums:'Albums',removed:'PhotoSense Removed',bin:'Recently Deleted',sep:' › ',destRoot:'Photo Library',phone:tablet?"Jamie's iPad":"Jamie's iPhone",os:'iOS'}:{root:'Phone',album:'folder',Album:'Folder',albums:'folders',Albums:'Folders',removed:'Pictures/PhotoSense Removed',bin:'the bin',sep:'/',destRoot:'Pictures',phone:tablet?'Pixel Tablet':'Pixel 9 Pro',os:'Android'};
+    const c={P,st,plat,tablet,brand,theme,isIOS,isAnd:!isIOS,isPhone:!tablet,dev,dims,w,skin:brand?'brand-'+theme:plat+'-native-'+theme};
+    const o={};
+    ['vBase','vLib','vCU','vOrg','vSend','vSheets','vOver'].forEach(k=>{if(this[k])Object.assign(o,this[k](c,o));});
+    return o;
+  }
+  goTab(id){const st=this.state;const p={tab:id,viewer:null};if(st.tab===id){p.cuPushed=false;p.orgPushed=false;}if(id!=='library'&&id!=='send')p.selecting=false;this.setState(p);}
+  vBase(c){
+    const st=c.st,isIOS=c.isIOS,tablet=c.tablet,tab=st.tab;
+    const ipadSide=isIOS&&tablet&&st.sidebar,ipadTop=isIOS&&tablet&&!st.sidebar;
+    const split=tablet&&(tab==='cleanup'||tab==='organize');
+    const pushed=c.isPhone&&((tab==='cleanup'&&st.cuPushed)||(tab==='organize'&&st.orgPushed));
+    const selN=Object.keys(st.sel).filter(k=>st.sel[k]).length;
+    const selBar=c.isPhone&&tab==='library'&&st.selecting;
+    const showTabBar=c.isPhone&&!pushed&&!selBar;
+    const badges={library:'6,941',cleanup:'264',organize:'4,212',send:''};
+    const TABS=[['library','Library'],['cleanup','Clean up'],['organize','Organize'],['send','Send']];
+    const tabs=TABS.map(([id,label])=>{const on=tab===id;return {label,badge:badges[id],isLib:id==='library',isCu:id==='cleanup',isOrg:id==='organize',isSend:id==='send',go:()=>this.goTab(id),bg:on?'var(--bar-hi)':'transparent',fg:on?'var(--bar-on)':(tablet&&isIOS?'var(--t1)':'var(--bar-off)'),ind:on?'var(--bar-hi)':'transparent',lc:on?'var(--t1)':'var(--bar-off)',fw:on?'700':'500',fw2:on?'600':'500'};});
+    const hdrTop=isIOS?(ipadTop?'calc(var(--safe-t) + 62px)':'var(--safe-t)'):'0px';
+    const lw=isIOS?'360px':'400px';
+    const T={library:'Library',cleanup:'Clean up',organize:'Organize',send:'Send to computer'}[tab];
+    let sub='',act='',onAct=null,closeLead=false;
+    if(tab==='library'){
+      if(st.selecting){act=isIOS?'Cancel':'';closeLead=!isIOS;onAct=()=>this.set({selecting:false,sel:{}});}
+      else{act='Select';onAct=()=>this.set({selecting:true});sub=st.access==='limited'?'The 214 photos you chose':'6,941 photos and videos';}
+    }
+    if(tab==='cleanup')sub=st.cuMode==='dup'?'Copies of the same photo or video':'Shots that look alike';
+    if(tab==='organize')sub='Sort '+c.w.root+' into '+c.w.albums+' by place and date';
+    if(tab==='send')sub='Copy or move to PhotoSense on a Windows PC or Mac';
+    const title=tab==='library'&&st.selecting?(selN?selN+' selected':'Select items'):T;
+    const showGearList=!split;
+    const hasMap=tab==='organize'&&st.orgMode==='place';
+    const hdr={title,sub,hasSub:!!sub,act,hasAct:!!act&&!closeLead,hasActA:!!act&&!closeLead,onAct,closeLead,hasMap,mapOn:st.orgView==='map',listOn:st.orgView!=='map',toggleMap:()=>this.set({orgView:st.orgView==='map'?'list':'map'}),showGear:showGearList&&!(tab==='library'&&st.selecting)};
+    return {skin:c.skin,dev:c.dev,plat:c.plat,devW:c.dims[0],devH:c.dims[1],frameName:isIOS?'IOSDevice':'AndroidDevice',isDark:c.theme==='dark',isTablet:tablet,
+      navBg:(!isIOS&&showTabBar)||(!isIOS&&selBar)?'var(--bar)':'var(--bg)',w:c.w,
+      isIOS,isAnd:!isIOS,isPhone:c.isPhone,isAtab:!isIOS&&tablet,ipadSide,ipadTop,tabs,toggleSidebar:()=>this.set({sidebar:!st.sidebar}),
+      showList:!pushed,L:{w:split?lw:'auto',flex:split?'0 0 auto':'1 1 0',br:split?'1px solid var(--sep)':'none'},
+      showDetail:split||pushed,D:{anim:pushed?'psIn .28s cubic-bezier(.2,.8,.2,1)':'none'},
+      hdrTop,hdr,openSettings:()=>this.set({sheet:'settings'}),
+      goBack:()=>this.set(tab==='cleanup'?{cuPushed:false}:{orgPushed:false}),
+      dhShowBack:pushed,dhShowGear:split,dhAlign:pushed&&isIOS?'center':'left',dhSize:pushed?(isIOS?'17px':'22px'):(isIOS?'22px':'22px'),dhWeight:pushed?(isIOS?'600':'400'):(isIOS?'700':'400'),dhSpacer:pushed&&isIOS,
+      showTabBar,selBar,tabletSel:tablet&&tab==='library'&&st.selecting,selN,
+      isLib:tab==='library',isCU:tab==='cleanup',isOrg:tab==='organize',isSend:tab==='send'};
+  }
+  toggleSel(id){const s=Object.assign({},this.state.sel);if(s[id])delete s[id];else s[id]=1;this.setState({sel:s});}
+  vLib(c){
+    const st=c.st,f=st.libFilter,isAnd=c.isAnd;
+    const cols=c.isPhone?3:(c.isIOS?(st.sidebar?6:8):8);
+    const items=LIB.filter(p=>!st.libGone[p.id]).filter(p=>f==='all'||(f==='unorg'&&!p.org)||(f==='noloc'&&p.noLoc)||(f==='vid'&&p.vid));
+    const months=[];
+    items.forEach(p=>{let m=months.find(x=>x.label===p.month);if(!m){m={label:p.month,items:[],cols};months.push(m);}
+      const on=!!st.sel[p.id];
+      m.items.push({tap:()=>st.selecting?this.toggleSel(p.id):this.set({viewer:p.id}),bg:th(p.hue,6),vid:p.vid,dur:p.dur,sel:st.selecting,on,chkBg:on?'var(--acc)':'rgba(0,0,0,.2)',inset:on&&isAnd?'8px':'0px',rad:on&&isAnd?'14px':'0px'});});
+    months.forEach(m=>{m.count=m.items.length+' items';});
+    const libChips=this.chips([['all','All','6,941'],['unorg','Not organized','4,212'],['noloc','No location','381'],['vid','Videos','512']],f,v=>this.set({libFilter:v}));
+    const v=LIB.find(p=>p.id===st.viewer);
+    const vv=v?{name:v.name,date:v.date+', '+v.time,place:v.noLoc?'No location':v.place+', Montana',album:v.org?'Anaconda'+c.w.sep+'2023':c.w.root,size:v.vid?(v.size+' · 1920 × 1080 · '+v.dur):(v.size+' · 4032 × 3024'),bg:th(v.hue,14),vid:v.vid,ar:v.vid?'16/9':'3/4'}:{};
+    const one=fn=>()=>{if(v)this.setState({sel:{[v.id]:1},viewer:null},fn);};
+    const selN=Object.keys(st.sel).length;
+    return {libChips,libMonths:months,libEmpty:!months.length,limited:st.access==='limited',
+      chooseMore:()=>this.set({access:'full',toast:{text:'PhotoSense can now see all 6,941 photos and videos.'}}),
+      viewerOn:!!v,v:vv,closeViewer:()=>this.set({viewer:null}),
+      vSend:one(()=>this.selSend()),vAlbum:one(()=>this.set({sheet:'album'})),vDelete:one(()=>this.set({sheet:'confirm',confirm:{kind:'delSel'}})),
+      selSend:()=>this.selSend(),selAlbum:()=>selN&&this.set({sheet:'album'}),selDelete:()=>selN&&this.set({sheet:'confirm',confirm:{kind:'delSel'}}),
+      selOp:selN?'1':'.4'};
+  }
+  selSend(){const st=this.state;if(!Object.keys(st.sel).length)return;this.setState({tab:'send',selecting:false,viewer:null,send:Object.assign({},st.send,{stage:'idle',what:'sel'})});}
+  live(g,st){return g.copies.map((x,i)=>Object.assign({},g.keeper,{kept:false},x,{i})).filter(x=>!((st.removed[g.id]||{})[x.i]));}
+  undoable(text,prev,extra){const st=this.state;const h={id:'h'+Date.now(),text,when:'Just now',patch:prev};return Object.assign({toast:{text,act:'Undo',kind:'undo',patch:prev,hid:h.id},hist:[h].concat(st.hist)},extra||{});}
+  vCU(c){
+    const st=c.st,G=mkGroups(c.w.root);let remN=0,remMb=0;
+    G.forEach(g=>{const k=Object.keys(st.removed[g.id]||{}).length;if(g.kind==='dup'){remN+=k;remMb+=k*(g.mb/g.copies.length);}});
+    const dupN=264-remN,mb=Math.max(0,795-remMb);
+    const isKept=(g,x)=>x.kept||st.kept[g.id+':'+x.i];
+    const vis=G.filter(g=>g.kind===st.cuMode&&this.live(g,st).length);
+    const cuGroups=this.rows(vis.map(g=>{const L=this.live(g,st),n=L.length,keepAll=L.every(x=>isKept(g,x)),on=c.tablet&&st.cuGroup===g.id;
+      return {name:g.keeper.name,sub:keepAll?n+' copies, all marked keep':(g.kind==='dup'?n+' duplicate'+(n>1?'s':'')+' · '+(g.mb*n/g.copies.length).toFixed(1)+' MB':n+' similar shot'+(n>1?'s':'')),subC:keepAll?'var(--keep)':'var(--t2)',badge:'+'+n,th:th(g.hue,4),th2:th(HUES[(HUES.indexOf(g.hue)+3)%10],4),vid:!!g.vid,bg:on?'var(--sel)':'var(--item-bg)',chev:c.isPhone,open:()=>this.set({cuGroup:g.id,cuPushed:true,copyIdx:0,compare:false})};}));
+    const cuSeg=this.seg([['dup','Duplicates'],['sim','Similar']],st.cuMode,v=>this.set({cuMode:v,cuGroup:v==='dup'?'g1':'s1',copyIdx:0}));
+    const out={cuGroups,cuSeg,hasGroups:vis.length>0,noGroups:!vis.length,cu:{showSummary:st.cuMode==='dup'&&dupN>0,dupN:fmtN(dupN)+' duplicates',dupSub:'They take '+fmtN(mb)+' MB. The best copy of each picture or video is kept.',emptyText:st.cuMode==='dup'?'No duplicates left. What you deleted waits in '+c.w.removed+' until you delete it permanently.':'No similar shots left to review.',scanLine:'Scanned 6,941 photos and videos today at 4:25 PM.'},
+      askDelAll:()=>this.set({sheet:'confirm',confirm:{kind:'delAll'}}),scanAgain:()=>this.set({ob:'scanning',scanPct:0}),isReview:false,cmpOn:false,detailEmpty:false};
+    let g=G.find(x=>x.id===st.cuGroup&&x.kind===st.cuMode&&this.live(x,st).length)||vis[0];
+    out._cu={G,vis,g:null,dupN,mb};
+    if(st.tab!=='cleanup')return out;
+    if(!g){out.detailEmpty=c.tablet;out.emptyText=out.cu.emptyText;out.dh={title:'Clean up',sub:'',hasSub:false};return out;}
+    const L=this.live(g,st),k=Math.min(st.copyIdx,L.length-1),cp=L[k],K=g.keeper,dup=g.kind==='dup',kept=isKept(g,cp);
+    const F=[['Name','name',1],['Format','fmt'],['File size','size'],[c.w.Album,'album',1],['Taken','taken'],['Place','place'],['Pixel size','px']];
+    const rv={tier:g.tier,note:g.note,keepLbl:dup?'Original':'Best shot',copyLbl:dup?'Copy '+(k+1)+' of '+L.length:'Shot '+(k+1)+' of '+L.length,copyCol:dup?'This copy':'This shot',kName:K.name,kAlbum:'Stays in '+K.album,cName:cp.name,cAlbum:'In '+cp.album,kBadge:K.fmt+' · '+K.size,cBadge:cp.fmt+' · '+cp.size,th:th(g.hue,9),vid:!!g.vid,ar:g.vid?'16/11':'3/4',delLabel:'Delete '+cp.name,keepLabel:kept?'Marked keep. Tap to unmark':(dup?'Keep this copy too':'Keep this shot too'),multi:L.length>1,kept};
+    out._cu.g=g;out._cu.cp=cp;
+    const diff=F.filter(f=>cp[f[1]]!==K[f[1]]);rv.hasDiff=diff.length>0;
+    Object.assign(out,{isReview:true,rv,
+      rvDiff:diff.map(f=>({label:f[0],o:K[f[1]],v:cp[f[1]],ff:f[2]?'var(--ffm)':'var(--ff)',fs:f[2]?'12.5px':'14px'})),
+      rvSame:this.rows(F.filter(f=>cp[f[1]]===K[f[1]]).map(f=>({label:f[0],o:K[f[1]],ff:f[2]?'var(--ffm)':'var(--ff)',fs:f[2]?'12.5px':'14px'}))),
+      rvCopies:L.map((x,i)=>({label:(dup?'Copy ':'Shot ')+(i+1),go:()=>this.set({copyIdx:i}),bg:i===k?'var(--chip-on-bg)':'var(--chip-bg)',fg:i===k?'var(--chip-on-fg)':'var(--t1)',bd:i===k?'1px solid transparent':'1px solid var(--chip-bd)'})),
+      dh:{title:K.name,sub:dup?L.length+' duplicate'+(L.length>1?'s':'')+' · '+(g.mb*L.length/g.copies.length).toFixed(1)+' MB to free':L.length+' similar shot'+(L.length>1?'s':''),hasSub:true},
+      openCompare:()=>this.set({compare:true,cmpSide:'copy'}),openCompareOrig:()=>this.set({compare:true,cmpSide:'orig'}),
+      askDelCopy:()=>this.set({sheet:'confirm',confirm:{kind:'delCopy'}}),
+      keepCopy:()=>{const kk=Object.assign({},st.kept);const key=g.id+':'+cp.i;if(kk[key])delete kk[key];else kk[key]=1;this.setState({kept:kk,toast:kk[key]?{text:cp.name+' is marked keep. Delete all duplicates skips it.'}:null});}});
+    const side=st.cmpSide,orig=side==='orig';
+    Object.assign(out,{cmpOn:!!st.compare,cmp:{label:orig?rv.keepLbl:rv.copyLbl,name:orig?K.name:cp.name,where:orig?rv.kAlbum:rv.cAlbum,badge:orig?rv.kBadge:rv.cBadge,th:th(g.hue,14),ar:rv.ar,vid:rv.vid,multi:L.length>1,lblBg:orig?'var(--keep)':'rgba(255,255,255,.22)',lblFg:orig?'var(--on-keep)':'#fff',delLabel:rv.delLabel},
+      cmpSeg:[['orig',rv.keepLbl],['copy',rv.copyCol]].map(([id,label])=>({label,go:()=>this.set({cmpSide:id}),bg:side===id?'rgba(255,255,255,.28)':'transparent'})),
+      flip:()=>this.set({cmpSide:orig?'copy':'orig'}),closeCompare:()=>this.set({compare:false}),
+      cmpPrev:()=>this.set({copyIdx:(k-1+L.length)%L.length,cmpSide:'copy'}),cmpNext:()=>this.set({copyIdx:(k+1)%L.length,cmpSide:'copy'})});
+    return out;
+  }
+  delCopyNow(cu){const st=this.state,g=cu.g,cp=cu.cp;if(!g||!cp)return;
+    const prev={removed:st.removed,cuPushed:st.cuPushed,cuGroup:st.cuGroup,copyIdx:st.copyIdx};
+    const r=Object.assign({},st.removed);r[g.id]=Object.assign({},r[g.id],{[cp.i]:1});
+    const left=g.copies.length-Object.keys(r[g.id]).length;const next={removed:r,sheet:null,confirm:null,compare:false,copyIdx:0};
+    if(!left){next.cuPushed=false;const nx=cu.vis.find(x=>x.id!==g.id);if(nx)next.cuGroup=nx.id;}
+    this.setState(this.undoable(cp.name+' deleted. '+g.keeper.name+' stays.',prev,next));}
+  delAllNow(cu){const st=this.state,prev={removed:st.removed,cuPushed:st.cuPushed};const r=Object.assign({},st.removed);let n=0;
+    cu.G.filter(g=>g.kind==='dup').forEach(g=>{this.live(g,st).forEach(x=>{if(x.kept||st.kept[g.id+':'+x.i])return;r[g.id]=Object.assign({},r[g.id],{[x.i]:1});n++;});});
+    this.setState(this.undoable(fmtN(cu.dupN)+' duplicates deleted. The best copy of each stays.',prev,{removed:r,sheet:null,confirm:null,cuPushed:false}));}
+  vOrg(c){
+    const st=c.st,w=c.w,o=st.opts,place=st.orgMode==='place',sep=w.sep;
+    const kMul={both:1,photos:.93,videos:.07}[o.kind]||1;
+    let list=(place?PLACES:YEARS).map(p=>Object.assign({},p));
+    if(place&&!o.combine){const gl=list.find(p=>p.id==='glacier');Object.assign(gl,{n:519,note:'',years:[[2021,112],[2022,180],[2023,227]]});list.splice(4,0,{id:'apgar',name:'Apgar',n:31,gb:'0.2 GB',range:'Aug 2022 – Sep 2023',hues:[180,152,200,88],x:31,y:10,years:[[2022,10],[2023,21]]});}
+    const nm=p=>st.names[p.id]||(place&&o.names==='town'&&p.town?p.town:p.name);
+    const pick=list.find(p=>p.id===st.orgPick)||list[0];
+    const insideLbl=place?{year:'Place'+sep+'Year',month:'Place'+sep+'Month',none:'No subfolders'}[o.inside]:{place:'Year'+sep+'Place',none:'No subfolders'}[o.inside];
+    const optSum=place?[(o.combine?'Within '+o.within+' km':'Each place on its own'),(o.names==='landmark'?'Landmark or area':'Town names'),insideLbl].join(' · '):['By year',insideLbl].join(' · ');
+    const card=p=>{const note=(place&&o.names==='town'&&p.town)?'':(p.note||'');return {name:nm(p),meta:fmtN(p.n*kMul)+' files · '+p.gb,range:p.range,note,hasNote:!!note,moved:!!st.moved[p.id],mosaic:p.hues.map(h=>({bg:th(h,4)})),open:()=>this.set({orgPick:p.id,orgPushed:true}),bg:c.tablet&&pick.id===p.id?'var(--sel)':'var(--item-bg)',chev:c.isPhone};};
+    const orgCards=this.rows(list.map(card));
+    const out={orgSeg:this.seg([['place','Place'],['date','Date']],st.orgMode,v=>this.set({orgMode:v,orgView:'list',orgPick:v==='place'?'anaconda':'y2023',opts:Object.assign({},o,{inside:v==='place'?'year':'place'})})),
+      openOptions:()=>this.set({sheet:'options'}),org:{optSum,secTitle:place?'Suggested '+w.albums:w.Albums+' by year',secCount:list.length+'',noLoc:'381 files have no location. They stay where they are.',recentN:st.hist.length+'',mapNote:'Drawn on this phone. Positions are never sent anywhere.'},
+      orgList:!place||st.orgView!=='map',orgMap:place&&st.orgView==='map',orgCards,
+      myAlbums:this.rows(st.myAlbums.map(a=>({name:a.name,sub:a.n?fmtN(a.n)+' files':'Select files in Library, then Put in '+w.album}))),hasMine:st.myAlbums.length>0,
+      newAlbum:()=>this.set({sheet:'new',newCtx:'org',newName:''}),newLbl:'New '+w.album,goNoLoc:()=>this.set({tab:'library',libFilter:'noloc'}),openRecent:()=>this.set({sheet:'recent'}),
+      mapDots:list.map(p=>{const on=p.id===pick.id;return {x:p.x+'%',y:p.y+'%',s:Math.round(26+Math.sqrt(p.n)*1.05)+'px',n:fmtN(p.n*kMul),bg:on?'var(--acc)':'var(--cell)',fg:on?'var(--on-acc)':'var(--t1)',bd:on?'3px solid var(--cell)':'2px solid var(--acc)',z:on?'3':'1',pick:()=>this.set({orgPick:p.id}),hasLbl:on,lbl:nm(p)};}),
+      picked:card(pick),pickedOpen:()=>this.set({orgPick:pick.id,orgPushed:true}),mapH:c.tablet?'420px':'360px',isPreview:false};
+    let secs;
+    if(place)secs=o.inside==='none'?[[pick.id+'-all','All files',pick.n]]:(o.inside==='month'?[].concat.apply([],pick.years.map(([y,n])=>{const a=Math.round(n*.42),b=Math.round(n*.33);return [[pick.id+'-'+y+'12',y+'-12',a],[pick.id+'-'+y+'07',y+'-07',b],[pick.id+'-'+y+'03',y+'-03',n-a-b]];})):pick.years.map(([y,n])=>[pick.id+'-'+y,String(y),n]));
+    else secs=o.inside==='none'?[[pick.id+'-all','All files',pick.n]]:pick.secs.map(([s,n],i)=>[pick.id+'-'+i,s,n]);
+    const cols=c.isPhone?4:(c.isIOS?(st.sidebar?4:6):6);
+    const leftN=Object.keys(st.leftOut).filter(k=>k.indexOf(pick.id+'-')===0&&st.leftOut[k]).length;
+    const total=Math.round(pick.n*kMul),moveN=total-leftN,name=nm(pick),moved=!!st.moved[pick.id];
+    const destName={root:w.destRoot,trips:'Trips',montana:'Montana',dcim:'DCIM'}[st.dest]||w.destRoot;
+    const pvSections=secs.map(([key,title,n],si)=>{n=Math.round(n*kMul);const ex=!!st.expanded[key],show=Math.min(n,cols*(ex?5:2));
+      const items=[];for(let i=0;i<show;i++){const id=key+'-'+i;items.push({bg:th(HUES[(si*3+i*7+pick.hues[0])%10],5),out:!!st.leftOut[id],vid:i%9===5,tap:()=>{const lo=Object.assign({},this.state.leftOut);if(lo[id])delete lo[id];else lo[id]=1;this.setState({leftOut:lo});}});}
+      return {title,meta:fmtN(n)+' files',items,cols,more:n>cols*2,moreLabel:ex?'Show fewer':'Show more',expand:()=>{const e=Object.assign({},this.state.expanded);e[key]=!ex;this.setState({expanded:e});}};});
+    const taken=(pick.taken||0)>0;
+    out._org={pick,name,moveN,destName,taken};
+    if(st.tab!=='organize')return out;
+    Object.assign(out,{isPreview:true,pvSections,
+      pv:{done:moved,notDone:!moved,sub:fmtN(moveN)+' of '+fmtN(total)+' files will move. Tap a file to leave it where it is.',name,dest:destName,path:o.inside==='none'?'No subfolders':insideLbl,
+        taken:taken&&!st.ntDone[pick.id],takenText:'3 names are already taken in '+name+sep+'2022. Each gets a number, as in IMG_6435 (1).JPG.',reviewed:taken&&!!st.ntDone[pick.id],
+        moveLabel:'Move '+fmtN(moveN)+' files',foot:'Into '+destName+sep+name+'. Undo puts them back.',doneTitle:fmtN(moveN)+' files are in '+name,doneSub:destName+sep+name+sep+'…'},
+      pvNameInput:e=>{const n=Object.assign({},this.state.names);n[pick.id]=e.target.value;this.setState({names:n});},
+      openDest:()=>this.set({sheet:'dest'}),openNT:()=>this.set({sheet:'nt',ntIdx:0,ntBin:null}),
+      doMove:()=>c.isAnd?this.set({sys:'move'}):this.applyMove(out._org),
+      undoMove:()=>{const m=Object.assign({},this.state.moved);delete m[pick.id];this.setState({moved:m,toast:{text:'Put back. The '+moveN+' files are where they were.'}});},
+      dh:{title:name,sub:moved?'Moved':'Preview. Nothing moves until you tap Move.',hasSub:true}});
+    return out;
+  }
+  applyMove(g){const st=this.state,prev={moved:st.moved,orgPushed:st.orgPushed};const m=Object.assign({},st.moved);m[g.pick.id]=1;
+    this.setState(this.undoable('Moved '+fmtN(g.moveN)+' files to '+g.name+'.',prev,{moved:m,sys:null,orgPushed:this.props&&this.props.form==='tablet'?st.orgPushed:false}));}
+  vSend(c){
+    const st=c.st,sd=st.send,w=c.w,selN=Object.keys(st.sel).length;
+    const WH=[['unorg','Everything not in '+(c.isIOS?'an album':'a folder')+' yet','4,212 files · 18.4 GB',4212,18.4],['sel','What you chose in Library',selN?selN+' items':'Nothing chosen yet. Tap to choose.',selN,selN*0.004],['all','Everything','6,941 files · 31.2 GB',6941,31.2]];
+    const cur=WH.find(x=>x[0]===sd.what)||WH[0],n=cur[3],gb=cur[4];
+    const S=o=>this.setState({send:Object.assign({},this.state.send,o)});
+    const sdWhat=this.rows(WH.map(x=>({label:x[1],meta:x[2],on:x[0]===sd.what,ring:x[0]===sd.what?'var(--acc)':'var(--t3)',go:()=>{if(x[0]==='sel'&&!selN){this.setState({tab:'library',selecting:true});return;}S({what:x[0]});}})));
+    const pct=sd.pct,done=Math.round(n*pct/100);
+    const g=v=>v<1?Math.round(v*1000)+' MB':v.toFixed(1)+' GB';
+    return {sd:{idle:sd.stage==='idle',waiting:sd.stage==='waiting',code:sd.stage==='code',sending:sd.stage==='sending',sent:sd.stage==='sent',failed:sd.stage==='failed',
+      modeNote:sd.mode==='copy'?'The photos stay on this phone. Once the computer has them all, you can delete them here.':'Each photo is deleted from this phone once the computer has checked every file of it. It goes to '+w.bin+'.',
+      via:c.isIOS?'The computer finds this '+(c.tablet?'iPad':'iPhone')+' on the same Wi-Fi, or over a USB cable.':'The computer finds this phone on the same Wi-Fi.',
+      startLabel:n?'Offer '+fmtN(n)+' files to a computer':'Choose what to send',startOp:n?'1':'.45',
+      waitSub:w.phone+' is offering '+fmtN(n)+' files. Keep PhotoSense open on this screen.',
+      steps:[{n:'1',t:'Open PhotoSense on the computer.'},{n:'2',t:'Choose Receive from a phone.'},{n:'3',t:'Pick '+w.phone+'.'}],
+      comp:'JAMIE-LAPTOP',codeNum:'482 913',pctLabel:Math.floor(pct)+'%',prog:pct+'%',
+      line1:fmtN(done)+' of '+fmtN(n)+' files · '+g(gb*pct/100)+' of '+g(gb),line2:'To JAMIE-LAPTOP, in D:\\Phone Pictures',file:LIB[Math.floor(pct*3)%LIB.length].name,
+      sentTitle:fmtN(n)+' files are on JAMIE-LAPTOP',sentSub:'In D:\\Phone Pictures. Each file was checked against the one on this phone.',
+      copyMode:sd.mode==='copy'&&!sd.deleted,deleteLabel:'Delete '+fmtN(n)+' from this phone',deleteNote:'The copies on JAMIE-LAPTOP stay. Deleted photos wait in '+w.bin+' for 30 days.',
+      isDeleted:!!sd.deleted,deletedMsg:'Deleted from this phone. They wait in '+w.bin+' for 30 days.'},
+      sdWhat,sdModeSeg:this.seg([['copy','Copy'],['move','Move']],sd.mode,v=>S({mode:v})),
+      sdStart:()=>n&&S({stage:'waiting'}),sdStop:()=>S({stage:'idle',pct:0}),sdSame:()=>S({stage:'sending',pct:0}),sdDiff:()=>S({stage:'failed'}),
+      sdDone:()=>S({stage:'idle',pct:0,deleted:false}),sdAskDelete:()=>this.set({sheet:'confirm',confirm:{kind:'delSent'}}),sdRetry:()=>S({stage:'waiting'}),_sendN:n,
+      pulseA:c.P.still?'none':'psPulse 2.2s ease-out infinite',pulseB:c.P.still?'none':'psPulse 2.2s ease-out 1.1s infinite',pulseOp:c.P.still?'.35':'1'};
+  }
+  vSheets(c,o){
+    const st=c.st,w=c.w,sh=st.sheet,cf0=st.confirm||{},cu=o._cu||{},og=o._org||{},sep=w.sep;
+    const selIds=Object.keys(st.sel),selN=selIds.length;
+    const names=selIds.map(id=>(LIB.find(p=>p.id===id)||{}).name).filter(Boolean);
+    const close=()=>this.set({sheet:null,confirm:null,ntBin:null});
+    let cf={title:'',lines:[],btn:''},ok=close;
+    if(cf0.kind==='delSel'){cf={title:'Delete '+selN+(selN===1?' item?':' items?'),lines:[names.slice(0,3).join(', ')+(selN>3?' and '+(selN-3)+' more':'')+(selN===1?' goes':' go')+' to '+w.removed+'.','Undo can bring '+(selN===1?'it':'them')+' back. Delete permanently, in Settings, sends '+(selN===1?'it':'them')+' to '+w.bin+'.'],btn:'Delete '+selN+(selN===1?' item':' items')};
+      ok=()=>{const prev={libGone:st.libGone,sel:st.sel,selecting:st.selecting};const g=Object.assign({},st.libGone);selIds.forEach(i=>g[i]=1);this.setState(this.undoable(selN+(selN===1?' item':' items')+' moved to '+w.removed+'.',prev,{libGone:g,sel:{},selecting:false,sheet:null,confirm:null,viewer:null}));};}
+    if(cf0.kind==='delCopy'&&cu.cp){cf={title:'Delete '+cu.cp.name+'?',lines:[cu.g.keeper.name+' stays, in '+cu.g.keeper.album+'.',cu.cp.name+', in '+cu.cp.album+', goes to '+w.removed+', where Undo can still bring it back.'],btn:'Delete '+cu.cp.name};ok=()=>this.delCopyNow(cu);}
+    if(cf0.kind==='delAll'){cf={title:'Delete all duplicates?',lines:[fmtN(cu.dupN)+' copies go to '+w.removed+' ('+fmtN(cu.mb)+' MB).','The best copy of each picture or video stays. Copies marked keep are skipped.','Similar shots are not included.'],btn:'Delete '+fmtN(cu.dupN)+' duplicates'};ok=()=>this.delAllNow(cu);}
+    if(cf0.kind==='perm1'){cf={title:'Delete 37 items permanently?',lines:['Everything in '+w.removed+' goes to '+w.bin+', where '+w.os+' keeps it for 30 days.','Undo can no longer bring these back, and they leave Recently moved.'],btn:'Delete 37 items'};ok=()=>this.set(st.dontAsk?{sheet:null,confirm:null,sys:'deletePerm'}:{sheet:'perm2',confirm:null});}
+    if(cf0.kind==='delSent'){const n=o._sendN||0;cf={title:'Delete '+fmtN(n)+' from this phone?',lines:['The copies on JAMIE-LAPTOP stay, in D:\\Phone Pictures.','Only files the computer has checked are deleted. They wait in '+w.bin+' for 30 days.'],btn:'Delete '+fmtN(n)+' from this phone'};ok=()=>this.set({sheet:null,confirm:null,sys:'deleteSent'});}
+    const opt=(k,v)=>this.set({opts:Object.assign({},st.opts,{[k]:v})});const op=st.opts,place=st.orgMode==='place';
+    const optRows=[{label:'Group by',isSeg:true,isChips:false,seg:this.seg([['place','Place'],['date','Date']],st.orgMode,v=>this.set({orgMode:v,orgPick:v==='place'?'anaconda':'y2023',orgView:'list',opts:Object.assign({},op,{inside:v==='place'?'year':'place'})})),note:''}];
+    if(place){optRows.push({label:'Nearby places',isSeg:true,seg:this.seg([['1','Combine'],['0','Keep separate']],op.combine?'1':'0',v=>opt('combine',v==='1'))});
+      if(op.combine)optRows.push({label:'Within',isChips:true,chips:this.chips([[1,'1 km'],[5,'5 km'],[15,'15 km'],[25,'25 km'],[50,'50 km']],op.within,v=>opt('within',v))});
+      optRows.push({label:w.Album+' names',isSeg:true,seg:this.seg([['landmark','Landmark or area'],['town','Town']],op.names,v=>opt('names',v)),note:'A landmark or area is used where a photo was taken at one. Otherwise the town is used.',hasNote:op.names==='landmark'});
+      optRows.push({label:'Inside each '+w.album,isSeg:true,seg:this.seg([['year','Year'],['month','Month'],['none','Nothing']],op.inside,v=>opt('inside',v))});}
+    else optRows.push({label:'Inside each year',isSeg:true,seg:this.seg([['place','Place'],['none','Nothing']],op.inside,v=>opt('inside',v))});
+    optRows.push({label:'Show',isSeg:true,seg:this.seg([['both','Photos & videos'],['photos','Photos'],['videos','Videos']],op.kind,v=>opt('kind',v)),note:'Only the kind shown is sorted. A Live Photo\'s video always goes with its picture.',hasNote:op.kind!=='both'});
+    optRows.forEach(r=>{r.isSeg=!!r.isSeg;r.isChips=!!r.isChips;r.hasNote=!!r.hasNote;});
+    const DEST=c.isIOS?[['root','Photo Library','At the top level of your albums'],['trips','Trips','A folder of albums made earlier'],['montana','Montana','A folder of albums made earlier']]:[['root','Pictures','Pictures, on this phone'],['dcim','DCIM','Beside the camera\'s own folder'],['trips','Trips','Pictures/Trips, made earlier']];
+    const albumNames=PLACES.slice(0,4).map(p=>p.name).concat(st.myAlbums.map(a=>a.name));
+    const putInto=name=>{const prev={sel:st.sel,selecting:st.selecting};this.setState(this.undoable('Moved '+selN+(selN===1?' item':' items')+' to '+name+'.',prev,{sel:{},selecting:false,sheet:null}));};
+    const NT=[{a:{name:'IMG_6435.JPG',from:w.root,meta:'Apr 2, 2022 · 2.4 MB',hue:200},b:{name:'IMG_6435.JPG',from:(og.name||'')+sep+'2022',meta:'Apr 2, 2022 · 2.4 MB',hue:200},same:true},
+      {a:{name:'IMG_6501.HEIC',from:w.root,meta:'Jun 11, 2022 · 3.1 MB',hue:152},b:{name:'IMG_6501.HEIC',from:(og.name||'')+sep+'2022',meta:'Aug 3, 2022 · 2.2 MB',hue:28},same:false},
+      {a:{name:'IMG_7012.MOV',from:w.root,meta:'Sep 9, 2022 · 41.0 MB',hue:262},b:{name:'IMG_7012.MOV',from:(og.name||'')+sep+'2022',meta:'Oct 1, 2022 · 18.6 MB',hue:330},same:false}];
+    const ni=Math.min(st.ntIdx,2),nt=NT[ni],ch=st.ntChoice[ni]||'number',base=nt.a.name.replace(/(\.[A-Z]+)$/,''),ext=nt.a.name.slice(base.length);
+    const bin=st.ntBin,binX=bin==='a'?nt.a:nt.b,binO=bin==='a'?nt.b:nt.a;
+    const ntNext=()=>{if(ni<2)this.set({ntIdx:ni+1,ntBin:null});else{const d=Object.assign({},st.ntDone);d[og.pick.id]=1;this.set({sheet:null,ntDone:d,ntBin:null,toast:{text:'3 names reviewed. Nothing moves until you tap Move.'}});}};
+    const shead={settings:'Settings',options:w.Album+' options',recent:'Recently moved',dest:'Where the '+w.album+' goes',album:(c.isIOS?'Add ':'Move ')+selN+' to '+(c.isIOS?'an album':'a folder'),new:'New '+w.album,nt:'Name taken'}[sh]||'';
+    return {sheetOn:!!sh,closeSheet:close,
+      sh:{hasHead:!!shead,title:shead,done:sh==='nt'?'Close':'Done',isSettings:sh==='settings',isOptions:sh==='options',isConfirm:sh==='confirm',isRecent:sh==='recent',isDest:sh==='dest',isAlbum:sh==='album',isNew:sh==='new',isPerm2:sh==='perm2',isNT:sh==='nt'},
+      themeSeg:this.seg([['system','Auto'],['dark','Dark'],['light','Light']],st.themeOv||'system',v=>this.set({themeOv:v==='system'?null:v})),
+      setGroups:[
+        {title:'Photos',rows:this.rows([{label:'Photo access',value:st.access==='full'?(c.isIOS?'Full access':'All photos and videos'):'214 chosen',fg:'var(--t1)',chev:true,tap:()=>this.set({toast:{text:'Opens PhotoSense in '+w.os+' Settings, where access is changed.'}})},{label:'Scan again',value:'',fg:'var(--acc)',chev:false,tap:()=>this.set({sheet:null,ob:'scanning',scanPct:0})}])},
+        {title:'Removed files',rows:this.rows([{label:w.removed,value:st.permDone?'Empty':'37 items · 212 MB',fg:'var(--t1)',chev:false,tap:()=>{}},{label:'Delete permanently…',value:'',fg:st.permDone?'var(--t3)':'var(--danger-t)',chev:false,tap:()=>!st.permDone&&this.set({sheet:'confirm',confirm:{kind:'perm1'}})}])},
+        {title:'History',rows:this.rows([{label:'Recently moved',value:String(st.hist.length),fg:'var(--t1)',chev:true,tap:()=>this.set({sheet:'recent'})},{label:'Errors',value:'None',fg:'var(--t1)',chev:false,tap:()=>{}}])},
+        {title:'About',rows:this.rows([{label:'Help',value:'',fg:'var(--t1)',chev:true,tap:()=>{}},{label:'About PhotoSense',value:'1.4.0',fg:'var(--t1)',chev:true,tap:()=>{}},{label:'Privacy',value:'',fg:'var(--t1)',chev:true,tap:()=>{}}])}],
+      setFoot:'Runs on this '+(c.tablet?'tablet':'phone')+'. Nothing is uploaded.',
+      optRows,optFoot:(c.isIOS?'Albums are made in Photo Library.':'Folders are made in Pictures.')+' Files already in one of your '+w.albums+' are left out.',
+      cf:{title:cf.title,lines:cf.lines.map(t=>({t})),btn:cf.btn},cfOk:ok,
+      recentRows:this.rows(st.hist.map(h=>({text:h.text,when:h.when,undo:()=>{const s=Object.assign({},h.patch,{hist:this.state.hist.filter(x=>x.id!==h.id),toast:{text:'Put back. Every file is where it was.'}});this.setState(s);}}))),hasRecent:st.hist.length>0,noRecent:!st.hist.length,
+      destRows:this.rows(DEST.map(([id,label,sub])=>({label,sub,on:st.dest===id,ring:st.dest===id?'var(--acc)':'var(--t3)',go:()=>this.set({dest:id})}))),destNote:c.isIOS?'A folder here is a folder of albums in the Photos app.':'Android lets apps make folders only inside DCIM, Pictures or Movies.',
+      albumRows:this.rows(albumNames.map(n=>({name:n,go:()=>putInto(n)}))),albumNew:()=>this.set({sheet:'new',newCtx:'sel',newName:''}),newAlbumLbl:'New '+w.album+'…',
+      newName:st.newName,newNameInput:e=>this.setState({newName:e.target.value}),newPh:c.isIOS?'Album name':'Folder name',
+      createAlbum:()=>{const n=(st.newName||'').trim();if(!n)return;const mine=st.myAlbums.concat([{name:n,n:st.newCtx==='sel'?selN:0}]);if(st.newCtx==='sel'){const prev={sel:st.sel,selecting:st.selecting,myAlbums:st.myAlbums};this.setState(this.undoable('Moved '+selN+(selN===1?' item':' items')+' to '+n+'.',prev,{myAlbums:mine,sel:{},selecting:false,sheet:null}));}else this.setState({myAlbums:mine,sheet:null,toast:{text:n+' is ready. Select files in Library, then Put in '+w.album+'.'}});},
+      createOp:(st.newName||'').trim()?'1':'.45',
+      p2:{text:'The 37 items in '+w.removed+' go to '+w.bin+'. Undo can no longer bring them back.'},dontAskBg:st.dontAsk?'var(--sw-on)':'var(--sw-off)',dontAskX:st.dontAsk?'20px':'0px',toggleDontAsk:()=>this.set({dontAsk:!st.dontAsk}),p2Ok:()=>this.set({sheet:null,sys:'deletePerm'}),
+      nt:{pos:(ni+1)+' of 3',same:nt.same,diff:!nt.same,a:Object.assign({bg:th(nt.a.hue,6)},nt.a),b:Object.assign({bg:th(nt.b.hue,6)},nt.b),binOn:!!bin,binText:'Delete '+binX.name+' from '+binX.from+'? The one in '+binO.from+' stays.',nextLabel:ni<2?'Next name':'Done',renameOn:ch==='rename',renameVal:(st.ntRename||{})[ni]||base+' 2'+ext},
+      ntChoices:this.rows([['number','Add a number',base+' (1)'+ext],['rename','Give it another name','Type the new name below'],['leave','Leave it where it is','It stays in '+w.root]].map(([id,label,sub])=>({label,sub,on:ch===id,ring:ch===id?'var(--acc)':'var(--t3)',go:()=>{const x=Object.assign({},this.state.ntChoice);x[ni]=id;this.setState({ntChoice:x});}}))),
+      ntRenameInput:e=>{const r=Object.assign({},this.state.ntRename);r[ni]=e.target.value;this.setState({ntRename:r});},
+      ntBinA:()=>this.set({ntBin:'a'}),ntBinB:()=>this.set({ntBin:'b'}),ntBinCancel:()=>this.set({ntBin:null}),
+      ntBinOk:()=>{const x=binX;this.setState({ntBin:null,toast:{text:x.name+' deleted from '+x.from+'. '+binO.name+' in '+binO.from+' stays.',act:'Undo',kind:'undo',patch:{}}});ntNext();},ntNext};
+  }
+  vOver(c,o){
+    const st=c.st,w=c.w,isIOS=c.isIOS,og=o._org||{},sn=o._sendN||0;
+    const S=x=>this.setState(x);
+    let sys={title:'',msg:'',stacked:false,inline:false,isPhotos:false},btns=[];
+    const B=(label,go,kind)=>({label,go,fg:kind==='danger'?'var(--danger-t)':(isIOS?'var(--t1)':'var(--acc)'),fw:kind==='bold'?'600':(isIOS?'400':'500')});
+    const delOk=(n,after)=>()=>{S(after);};
+    if(st.sys==='photos'){const full=()=>S({sys:null,access:'full',ob:'scanning',scanPct:0}),lim=()=>S({sys:null,access:'limited',ob:'scanning',scanPct:0}),no=()=>S({sys:null,ob:'denied'});
+      if(isIOS){sys={title:'“PhotoSense” Would Like Full Access to Your Photo Library',msg:'PhotoSense finds copies of the same photo and sorts photos into albums. Nothing leaves this phone unless you send it to your computer.',isPhotos:true};btns=[B('Limit Access…',lim),B('Allow Full Access',full,'bold'),B('Don’t Allow',no)];}
+      else{sys={title:'Allow PhotoSense to access photos and videos on this device?',msg:'',stacked:true};btns=[B('Allow all',full),B('Select photos and videos',lim),B('Don’t allow',no)];}}
+    if(st.sys==='move'){sys={title:'Allow PhotoSense to modify '+fmtN(og.moveN||0)+' photos and videos?',msg:'',inline:true};btns=[B('Deny',()=>S({sys:null,toast:{text:'Nothing was moved.'}})),B('Allow',()=>this.applyMove(og),'bold')];}
+    if(st.sys==='deleteSent'||st.sys==='deletePerm'){const perm=st.sys==='deletePerm',n=perm?37:sn;
+      const yes=perm?()=>S({sys:null,permDone:true,toast:{text:'37 items deleted. They wait in '+w.bin+' for 30 days.'}}):()=>S({sys:null,send:Object.assign({},st.send,{deleted:true})});
+      const no=()=>S({sys:null,toast:{text:'Nothing was deleted from this phone.'}});
+      if(isIOS){sys={title:'Allow “PhotoSense” to delete '+fmtN(n)+' photos?',msg:'They will be kept in Recently Deleted for 30 days.'};btns=[B('Don’t Allow',no),B('Delete',yes,'danger')];}
+      else{sys={title:'Allow PhotoSense to move '+fmtN(n)+' items to trash?',msg:'Items in trash are deleted after 30 days.',inline:true};btns=[B('Deny',no),B('Allow',yes,'bold')];}}
+    btns.forEach((b,i)=>{b.rad=btns.length===1?'20px':(i===0?'20px 20px 4px 4px':(i===btns.length-1?'4px 4px 20px 20px':'4px'));});
+    sys.hasMsg=!!sys.msg;sys.ios=isIOS;sys.and=!isIOS;sys.stacked=!!sys.stacked;sys.inline=!!sys.inline;sys.isPhotos=!!sys.isPhotos;
+    const t=st.toast,pushed=c.isPhone&&((st.tab==='cleanup'&&st.cuPushed)||(st.tab==='organize'&&st.orgPushed));
+    const toastB=c.tablet?'28px':(pushed?'calc(var(--safe-b) + 112px)':(isIOS?'98px':'92px'));
+    const sp=st.scanPct,cnt=c.tablet?96:80,lit=Math.floor(sp/100*cnt),tiles=[];for(let i=0;i<cnt;i++)tiles.push({bg:i<lit?th(HUES[(i*7)%10],3):'var(--fill)'});
+    const selFloat=o.selBar||o.tabletSel;
+    return {sysOn:!!st.sys,sysSkin:c.plat+'-native-'+c.theme,sys,sysBtns:btns,sysStrip:[200,152,28,262].map(h=>({bg:th(h,4)})),
+      toastOn:!!t,toast:t?{text:t.text,act:t.act||'',hasAct:!!t.act}:{},toastB,
+      toastAct:()=>{if(!t)return;if(t.kind==='undo'){const s=Object.assign({},t.patch,{toast:null});if(t.hid)s.hist=this.state.hist.filter(x=>x.id!==t.hid);this.setState(s);}else if(t.kind==='gocu')this.goTab('cleanup');else this.set({toast:null});},
+      tabIOS:o.showTabBar&&isIOS,tabAnd:o.showTabBar&&!isIOS,selFloat,
+      selB:c.tablet?'28px':(isIOS?'22px':'0px'),selL:c.tablet||isIOS?'16px':'0px',selR:c.tablet||isIOS?'16px':'0px',selRad:c.tablet||isIOS?'999px':'0px',selMax:c.tablet?'420px':'none',putLbl:isIOS?'Add to album':'Move to folder',
+      vMax:c.tablet?'680px':'100%',
+      obOn:!!st.ob,ob:{welcome:st.ob==='welcome',denied:st.ob==='denied',scanning:st.ob==='scanning'},
+      obContinue:()=>S({sys:'photos'}),obSettings:()=>S({ob:'scanning',scanPct:0,access:'full'}),
+      scan:{pct:Math.floor(sp)+'%',prog:sp+'%',line:'Read '+fmtN(6941*sp/100)+' of 6,941 photos and videos',left:sp<96?'About '+Math.max(1,Math.ceil((100-sp)/100*5))+' minutes left':'Almost done',tiles,cols:c.tablet?16:10},
+      stopScan:()=>S({ob:null,toast:{text:'Scan stopped. What was read so far is kept, and the next scan carries on from there.'}}),
+      welcomeFoot:'Runs on this '+(c.tablet?'tablet':'phone')+'. Nothing is uploaded.',deniedText:'PhotoSense needs your photos to find copies and sort them. Turn on access in Settings › '+(isIOS?'Apps › PhotoSense › Photos.':'Apps › PhotoSense › Permissions.')};
+  }
+}
+</script>
+</body>
+</html>

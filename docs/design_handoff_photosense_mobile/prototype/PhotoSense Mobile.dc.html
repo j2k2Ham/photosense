@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>html,body{margin:0}body{font-family:'DM Sans',system-ui,sans-serif}a{color:#1a8a99}a:hover{color:#0f5e68}</style>
+</helmet>
+<div style="min-height:100vh;background:{{ page.bg }};color:{{ page.fg }};padding:28px 32px 64px;box-sizing:border-box;display:flex;flex-direction:column;gap:32px;font-family:'DM Sans',system-ui,sans-serif">
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:20px">
+<div style="display:flex;flex-direction:column;gap:6px;min-width:280px;flex:1">
+<div style="display:flex;align-items:center;gap:10px"><img src="./app-icon.png" alt="" style="width:30px;height:30px;border-radius:8px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">PhotoSense for iPhone, iPad and Android</div></div>
+<div style="font-size:14.5px;color:{{ page.mute }};max-width:760px;text-wrap:pretty">Every screen is clickable. <b style="font-weight:600;color:{{ page.fg }}">Native</b> follows each platform's own controls with PhotoSense teal as the accent. <b style="font-weight:600;color:{{ page.fg }}">PhotoSense look</b> carries the desktop app's type and palette onto the same layouts.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+<sc-for list="{{ controls }}" as="ct" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:{{ page.mute }}">{{ ct.label }}</div>
+<div style="display:flex;padding:3px;border-radius:999px;background:{{ page.seg }};gap:2px"><sc-for list="{{ ct.opts }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.go }}" style="height:32px;padding:0 14px;display:flex;align-items:center;border-radius:999px;background:{{ o.bg }};color:{{ o.fg }};font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap">{{ o.label }}</div></sc-for></div></div>
+</sc-for>
+<div onClick="{{ restart }}" style="align-self:flex-end;height:38px;padding:0 16px;display:flex;align-items:center;gap:8px;border-radius:999px;border:1px solid {{ page.line }};font-size:13.5px;font-weight:600;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"></path><path d="M4 4v4.5h4.5"></path></svg>Restart all</div>
+<a href="PhotoSense Mobile Screens.dc.html" style="align-self:flex-end;height:38px;padding:0 16px;display:flex;align-items:center;border-radius:999px;background:{{ page.fg }};color:{{ page.bg }};font-size:13.5px;font-weight:600;text-decoration:none">Every screen</a>
+</div>
+</div>
+<sc-for list="{{ rows }}" as="r" hint-placeholder-count="2">
+<div style="display:flex;flex-direction:column;gap:14px">
+<div style="font-size:15px;font-weight:600;color:{{ page.mute }}">{{ r.title }}</div>
+<div style="display:flex;flex-wrap:wrap;gap:44px;align-items:flex-start">
+<sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="2">
+<div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:10px"><div style="height:24px;padding:0 9px;border-radius:7px;background:{{ c.badgeBg }};color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center">{{ c.id }}</div><div style="font-size:15px;font-weight:600">{{ c.label }}</div></div>
+<div style="width:{{ c.w }};height:{{ c.h }}"><div style="zoom:{{ c.z }}"><dc-import name="MobileApp" platform="{{ c.plat }}" form="{{ c.form }}" look="{{ c.look }}" theme="{{ c.theme }}" start="{{ c.start }}" epoch="{{ c.epoch }}" hint-size="402px,874px"></dc-import></div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Phone&quot;,&quot;Tablet&quot;],&quot;default&quot;:&quot;Phone&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dark&quot;,&quot;Light&quot;],&quot;default&quot;:&quot;Dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startAt&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Library&quot;,&quot;First run&quot;],&quot;default&quot;:&quot;Library&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {form:null,theme:null,start:null,epoch:0};
+  renderVals(){
+    const P=this.props||{},st=this.state;
+    const form=st.form||(String(P.device||'Phone').toLowerCase()==='tablet'?'tablet':'phone');
+    const theme=st.theme||(String(P.theme||'Dark').toLowerCase()==='light'?'light':'dark');
+    const start=st.start!==null?st.start:(String(P.startAt||'Library')==='First run'?'welcome':'');
+    const dark=theme==='dark';
+    const page=dark?{bg:'#0c0e10',fg:'#eef1f3',mute:'#9aa3a9',seg:'#1c2024',on:'#eef1f3',onFg:'#0c0e10',line:'rgba(255,255,255,.14)'}:{bg:'#e6e9ec',fg:'#15191c',mute:'#55606a',seg:'#d3d8dc',on:'#15191c',onFg:'#fff',line:'rgba(0,0,0,.14)'};
+    const opt=(list,cur,k)=>list.map(([v,l])=>({label:l,go:()=>this.setState({[k]:v,epoch:k==='start'?st.epoch+1:st.epoch}),bg:v===cur?page.on:'transparent',fg:v===cur?page.onFg:page.fg}));
+    const tab=form==='tablet';
+    const dims={ios:tab?[1180,820]:[402,874],android:tab?[1280,800]:[412,892]};
+    const z=tab?0.62:1;
+    const cell=(id,plat,look,label)=>({id,plat,look,label,form,theme,start,epoch:st.epoch,z:String(z),w:Math.round(dims[plat][0]*z)+'px',h:Math.round(dims[plat][1]*z)+'px',badgeBg:look==='native'?'#1a8a99':'#5b6470'});
+    const dev=tab?['iPad','Android tablet']:['iPhone','Android phone'];
+    return {page,
+      controls:[{label:'Device',opts:opt([['phone','Phone'],['tablet','Tablet']],form,'form')},{label:'Theme',opts:opt([['dark','Dark'],['light','Light']],theme,'theme')},{label:'Start at',opts:opt([['welcome','First run'],['','Library']],start,'start')}],
+      restart:()=>this.setState({epoch:st.epoch+1}),
+      rows:[{title:dev[0],cells:[cell('1a','ios','native',dev[0]+' · Native'),cell('1b','ios','brand',dev[0]+' · PhotoSense look')]},
+            {title:dev[1],cells:[cell('1c','android','native',dev[1]+' · Native'),cell('1d','android','brand',dev[1]+' · PhotoSense look')]}]};
+  }
+}
+</script>
+</body>
+</html>

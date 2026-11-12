@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>html,body{margin:0}body{font-family:'DM Sans',system-ui,sans-serif}a{color:#1a8a99}a:hover{color:#0f5e68}</style>
+</helmet>
+<div style="background:{{ page.bg }};color:{{ page.fg }};padding:40px 48px 80px;display:flex;flex-direction:column;gap:56px;width:max-content;font-family:'DM Sans',system-ui,sans-serif">
+<div style="display:flex;flex-direction:column;gap:8px;max-width:900px">
+<div style="font-size:30px;font-weight:700;letter-spacing:-0.02em">PhotoSense mobile · every screen</div>
+<div style="font-size:16px;color:{{ page.mute }};text-wrap:pretty">Each row is one state, shown on iPhone and Android in both looks. Every frame is live: tap through it. The theme and which looks show are set in Tweaks. The clickable side-by-side is in <a href="PhotoSense Mobile.dc.html">PhotoSense Mobile</a>.</div>
+</div>
+<sc-for list="{{ sections }}" as="s" hint-placeholder-count="2">
+<section data-screen-label="{{ s.title }}" style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;align-items:baseline;gap:14px;border-bottom:1px solid {{ page.line }};padding-bottom:12px"><div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">{{ s.title }}</div><div style="font-size:15px;color:{{ page.mute }}">{{ s.note }}</div></div>
+<sc-for list="{{ s.rows }}" as="r" hint-placeholder-count="2">
+<div ref="{{ r.ref }}" style="display:flex;flex-direction:column;gap:12px">
+<div style="font-size:18px;font-weight:600">{{ r.label }}</div>
+<div style="display:flex;gap:36px;align-items:flex-start">
+<sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="4">
+<div style="display:flex;flex-direction:column;gap:8px">
+<div style="font-size:13px;font-weight:600;color:{{ page.mute }}">{{ c.label }}</div>
+<div style="width:{{ c.w }};height:{{ c.h }};border-radius:28px;background:{{ c.ph }}"><sc-if value="{{ c.on }}" hint-placeholder-val="{{ false }}"><div style="zoom:{{ c.z }}"><dc-import name="MobileApp" platform="{{ c.plat }}" form="{{ c.form }}" look="{{ c.look }}" theme="{{ c.theme }}" start="{{ c.start }}" still="{{ c.still }}" hint-size="402px,874px"></dc-import></div></sc-if></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</section>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dark&quot;,&quot;Light&quot;],&quot;default&quot;:&quot;Dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;looks&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Both&quot;,&quot;Native&quot;,&quot;PhotoSense look&quot;],&quot;default&quot;:&quot;Both&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {vis:{}};
+  refs = {};
+  componentDidMount(){
+    this.io=new IntersectionObserver(es=>{const v=Object.assign({},this.state.vis);let ch=false;es.forEach(e=>{const k=e.target.dataset.rowKey;if(!!v[k]!==e.isIntersecting){v[k]=e.isIntersecting;ch=true;}});if(ch)this.setState({vis:v});},{rootMargin:'300px'});
+    Object.keys(this.refs).forEach(k=>this.refs[k]&&this.io.observe(this.refs[k]));
+  }
+  componentWillUnmount(){this.io&&this.io.disconnect();}
+  rowRef(k){if(!this._rf)this._rf={};if(!this._rf[k])this._rf[k]=el=>{const old=this.refs[k];if(old===el)return;if(old&&this.io)this.io.unobserve(old);this.refs[k]=el;if(el){el.dataset.rowKey=k;if(this.io)this.io.observe(el);}};return this._rf[k];}
+  renderVals(){
+    const P=this.props||{};
+    const theme=String(P.theme||'Dark').toLowerCase()==='light'?'light':'dark';
+    const looks=String(P.looks||'Both');
+    const page=theme==='dark'?{bg:'#0c0e10',fg:'#eef1f3',mute:'#9aa3a9',line:'rgba(255,255,255,.12)'}:{bg:'#e6e9ec',fg:'#15191c',mute:'#55606a',line:'rgba(0,0,0,.12)'};
+    const L=[['native','Native'],['brand','PhotoSense look']].filter(([k])=>looks==='Both'||(looks==='Native'?k==='native':k==='brand'));
+    const cellsFor=(start,form,only)=>{const out=[];const plats=only?[only]:['ios','android'];
+      L.forEach(([look,ln])=>plats.forEach(plat=>{const tab=form==='tablet';const d=plat==='ios'?(tab?[1180,820]:[402,874]):(tab?[1280,800]:[412,892]);const z=tab?0.55:1;
+        out.push({plat,look,form,theme,start,still:true,z:String(z),w:Math.round(d[0]*z)+'px',h:Math.round(d[1]*z)+'px',label:(plat==='ios'?(tab?'iPad':'iPhone'):(tab?'Android tablet':'Android phone'))+' · '+ln});}));return out;};
+    const vis=this.state.vis,ph=theme==='dark'?'rgba(255,255,255,.04)':'rgba(0,0,0,.05)';
+    const mk=(label,start,form,only)=>{const k=form+':'+start;const on=!!vis[k];return {label,ref:this.rowRef(k),cells:cellsFor(start,form,only).map(c=>Object.assign(c,{on,ph}))};};
+    const R=(label,start,only)=>mk(label,start,'phone',only);
+    const T=(label,start)=>mk(label,start,'tablet');
+    return {page,sections:[
+      {title:'First run',note:'Welcome, the photo access question, scanning',rows:[R('Welcome','welcome'),R('Photo access, the system question','access'),R('Access refused','denied'),R('Scanning','scanning')]},
+      {title:'Library',note:'Every photo; select to send, put in an album or folder, or delete',rows:[R('Library','library'),R('Only some photos allowed','limited'),R('Selecting','select'),R('Add to album / Move to folder','album'),R('Delete the selection','delete-sel'),R('Photo viewer','viewer')]},
+      {title:'Clean up',note:'Duplicates and similar shots, reviewed before anything goes',rows:[R('Groups','cleanup'),R('Review a group','review'),R('A group with several copies','review-multi'),R('Compare, full screen','compare'),R('Delete one copy','confirm-copy'),R('Delete all duplicates','confirm-all'),R('After a delete, with Undo','deleted-copy'),R('Similar shots','similar')]},
+      {title:'Organize',note:'Suggested albums or folders by place or date, previewed before moving',rows:[R('Suggestions by place','organize'),R('By date','by-date'),R('Map','map'),R('Options','options'),R('Preview','preview'),R('Where it goes','dest'),R('Name taken','nametaken'),R('Android asks before moving','and-move','android'),R('Moved, with Undo','moved'),R('Recently moved','recent')]},
+      {title:'Send to computer',note:'Wi-Fi (and cable on iPhone), a number compared once, each file checked',rows:[R('Choose what to send','send'),R('Waiting for a computer','send-waiting'),R('Compare the number','send-code'),R('Sending','send-sending'),R('Sent','send-sent'),R('Move: the system asks before deleting','send-delete')]},
+      {title:'Settings',note:'The gear at the top of every tab',rows:[R('Settings','settings'),R('Delete permanently','perm'),R('Are you sure?','perm2')]},
+      {title:'Tablets',note:'iPad sidebar and Android navigation rail, list beside detail',rows:[T('Library','library'),T('Clean up review','review'),T('Organize preview','preview'),T('Send','send-code'),T('Settings','settings')]}
+    ]};
+  }
+}
+</script>
+</body>
+</html>
