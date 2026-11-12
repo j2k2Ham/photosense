@@ -21,13 +21,16 @@ internal sealed class FakeDetailsReader : IMediaDetailsReader
     public List<string> Reads { get; } = [];
     /// <summary>Runs when a file is read, for a test that needs something to change at that moment.</summary>
     public Action<string>? OnRead { get; set; }
+    /// <summary>Awaited as a file is read, for a test that needs a read to wait for something.</summary>
+    public Func<string, CancellationToken, Task>? WhileReading { get; set; }
 
     /// <inheritdoc />
-    public Task<MediaDetails> ReadAsync(string path, CancellationToken ct)
+    public async Task<MediaDetails> ReadAsync(string path, CancellationToken ct)
     {
         lock (Reads) Reads.Add(Path.GetFileName(path));
         OnRead?.Invoke(path);
-        return Task.FromResult(Says.GetValueOrDefault(Path.GetFileName(path), Nothing));
+        if (WhileReading is { } wait) await wait(path, ct);
+        return Says.GetValueOrDefault(Path.GetFileName(path), Nothing);
     }
 }
 
