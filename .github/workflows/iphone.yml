@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # The whole history and its tags: a build is numbered by them (tools/version.mjs).
           fetch-depth: 0
@@ -217,7 +217,7 @@ jobs:
 
       - name: Checkout
         if: env.READY == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # The whole history and its tags: a build is numbered by them (tools/version.mjs).
           fetch-depth: 0
