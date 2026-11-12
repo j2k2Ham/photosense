@@ -2,10 +2,11 @@ using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Tests.Domain;
 
+/// <summary>What a photo record says of itself.</summary>
 public class PhotoTests
 {
     [Test]
-    public async Task AddCategory_ShouldAdd_WhenNew()
+    public async Task AddCategory_ShouldAdd_WhenNew(CancellationToken ct)
     {
         var photo = new Photo { SourcePath = "a", FileName = "b", FileSizeBytes = 1, Set = PhotoSet.Primary };
         photo.AddCategory("Nature");
@@ -13,7 +14,7 @@ public class PhotoTests
     }
 
     [Test]
-    public async Task AddCategory_ShouldIgnore_Duplicates_And_Whitespace()
+    public async Task AddCategory_ShouldIgnore_Duplicates_And_Whitespace(CancellationToken ct)
     {
         var photo = new Photo { SourcePath = "a", FileName = "b", FileSizeBytes = 1, Set = PhotoSet.Primary };
         photo.AddCategory("Nature");
@@ -23,7 +24,7 @@ public class PhotoTests
     }
 
     [Test]
-    public async Task LoadCategories_ReplacesExisting()
+    public async Task LoadCategories_ReplacesExisting(CancellationToken ct)
     {
         var photo = new Photo { SourcePath = "a", FileName = "b", FileSizeBytes = 1, Set = PhotoSet.Primary };
         photo.AddCategory("A");

@@ -53,7 +53,7 @@ export function HelpWindow({ onGo, onClose }: Props) {
           <button key={t.id} type="button" aria-current={t === topic ? 'page' : undefined} onClick={() => setAt(t.id)}
             className={`flex flex-col gap-0.5 rounded-xl px-3.5 py-2.5 text-left ${t === topic ? 'bg-sel' : 'hover:bg-s2'}`}>
             <span className="text-[14px] font-semibold">{t.title}</span>
-            <span className="text-[12.5px] text-t3">{t.summary}</span>
+            <span className={`text-[12.5px] ${t === topic ? 'text-t2' : 'text-t3'}`}>{t.summary}</span>
           </button>
         ))}
         {found.length === 0 && (

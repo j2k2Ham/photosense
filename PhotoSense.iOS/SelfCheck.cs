@@ -1,0 +1,126 @@
+using WebKit;
+
+namespace PhotoSense.iOS;
+
+/// <summary>
+/// A check the app makes of itself when started with PHOTOSENSE_SELF_CHECK=1, as GitHub's Mac starts it in the
+/// simulator: the requests the page makes, made from inside the web view, from the library offered to the groups
+/// found and the previews made, written down in self-check.json among the app's own files.
+/// </summary>
+public static class SelfCheck
+{
+    /// <summary>The app was started to check itself.</summary>
+    public static bool Running { get; } = Environment.GetEnvironmentVariable("PHOTOSENSE_SELF_CHECK") == "1";
+
+    /// <summary>Puts the check into the web view, when the app was started to check itself.</summary>
+    public static void AddTo(WKWebViewConfiguration config)
+    {
+        if (!Running) return;
+        config.UserContentController.AddScriptMessageHandler(new Report(), "selfCheck");
+        config.UserContentController.AddUserScript(new WKUserScript(new NSString(Script), WKUserScriptInjectionTime.AtDocumentEnd, true));
+    }
+
+    private sealed class Report : NSObject, IWKScriptMessageHandler
+    {
+        // Written after every step, so that a check cut short still says how far it got.
+        /// <summary>Takes the check's report from the page, after every step.</summary>
+        [Export("userContentController:didReceiveScriptMessage:")]
+        public void DidReceiveScriptMessage(WKUserContentController userContentController, WKScriptMessage message)
+        {
+            var report = $"{message.Body}";
+            File.WriteAllText(Path.Combine(PhoneApp.DataFolder, "self-check.json"), report);
+            Say.Line($"self-check: {report[^Math.Min(300, report.Length)..]}");
+        }
+    }
+
+    private const string Script = """
+        (async () => {
+          const headers = { 'x-photosense-client': 'self-check', 'Content-Type': 'application/json' };
+          const report = { steps: [], passed: false, finished: false };
+          const send = () => window.webkit.messageHandlers.selfCheck.postMessage(JSON.stringify(report));
+          const step = async (name, run) => {
+            const started = Date.now();
+            try {
+              const value = await run();
+              report.steps.push({ name, ok: true, ms: Date.now() - started, value });
+              return value;
+            } catch (e) {
+              report.steps.push({ name, ok: false, ms: Date.now() - started, error: String(e) });
+              throw e;
+            } finally {
+              send();
+            }
+          };
+          const ask = async (path, init) => {
+            const answer = await fetch('/api/' + path, { headers, ...init });
+            if (!answer.ok) throw new Error(answer.status + ' ' + await answer.text());
+            return answer;
+          };
+          try {
+            await step('the page loaded', async () => document.querySelectorAll('script').length);
+            await step('health', async () => (await ask('health')).json());
+            const root = await step('the library is offered', async () => (await (await ask('folders')).json()).folders[0].path);
+            await step('a scan starts (a request with a body)', async () =>
+              (await ask('scan/start', { method: 'POST', body: JSON.stringify({ primaryLocation: root, recursive: true }) })).json());
+            const status = await step('the scan finishes', async () => {
+              for (let i = 0; i < 600; i++) {
+                const now = await (await ask('scan/status')).json();
+                if (now.completed) return now;
+                await new Promise(r => setTimeout(r, 500));
+              }
+              throw new Error('not within five minutes');
+            });
+            const groups = await step('copies are found', async () => {
+              const page = await (await ask('scan/groups?mode=duplicates&page=1&pageSize=50')).json();
+              if (page.total < 1) throw new Error('no group of copies');
+              return { groups: page.total, keeper: page.items[0].keeper.id, files: page.items[0].members.length + 1 };
+            });
+            await step('a preview is made', async () => {
+              const answer = await ask('photos/' + groups.keeper + '/thumbnail');
+              return { type: answer.headers.get('Content-Type'), bytes: (await answer.arrayBuffer()).byteLength };
+            });
+            await step('a picture is shown whole', async () => {
+              const answer = await ask('photos/' + groups.keeper + '/image');
+              return { type: answer.headers.get('Content-Type'), bytes: (await answer.arrayBuffer()).byteLength };
+            });
+            const files = await step('Organize lists the library', async () =>
+              (await (await ask('organize/files?root=' + encodeURIComponent(root))).json()).files);
+            const moved = await step('Organize puts a picture in an album in a folder', async () => {
+              const picture = files.find(f => !f.isVideo);
+              const done = await (await ask('organize/apply', { method: 'POST', body: JSON.stringify({
+                basePath: root, folderName: 'PhotoSense Check\\Album', direct: false, mode: 'move', companions: true, label: 'Album',
+                files: [{ id: picture.id, name: picture.name }] }) })).json();
+              if (done.done !== 1) throw new Error(JSON.stringify(done));
+              return { batchId: done.batchId, now: done.items[0].path };
+            });
+            const removed = await step('a copy is removed into the album of removed pictures', async () => {
+              const done = await (await ask('photos/bulk/remove-duplicates', { method: 'POST' })).json();
+              const waiting = await (await ask('removed?root=' + encodeURIComponent(root))).json();
+              if (done.removed < 1 || waiting.files < 1) throw new Error(JSON.stringify({ done, waiting }));
+              return { batchId: done.batchId, removed: done.removed, waiting: waiting.files };
+            });
+            await step('the removal is undone', async () => {
+              const undone = await (await ask('organize/undo/' + removed.batchId, { method: 'POST' })).json();
+              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
+              return undone.restored;
+            });
+            await step('the move is undone', async () => {
+              const undone = await (await ask('organize/undo/' + moved.batchId, { method: 'POST' })).json();
+              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
+              return undone.restored;
+            });
+            await step('a photo is offered to a computer, and no longer once stopped', async () => {
+              const picture = files.find(f => !f.isVideo);
+              const offering = await (await ask('send/start', { method: 'POST', body: JSON.stringify({ files: [picture.id] }) })).json();
+              const stopped = await (await ask('send/stop', { method: 'POST' })).json();
+              if (offering.stage !== 'waiting' || stopped.stage !== 'idle') throw new Error(JSON.stringify({ offering, stopped }));
+              return { offering: offering.stage, total: offering.total, phone: offering.phone, stopped: stopped.stage };
+            });
+            report.photos = status.totalPhotos;
+            report.passed = true;
+          } catch { }
+          report.finished = true;
+          send();
+        })();
+        """;
+}

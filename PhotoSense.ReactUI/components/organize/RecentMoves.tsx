@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Scrim } from '../Scrim';
 import { formatBytes, leaf } from '../../lib/format';
 import type { OrganizeBatchDto } from '../../types';
 import { countFiles } from './shared';
@@ -19,7 +20,7 @@ export function RecentMovesWindow({ batches, busy, onUndo, onClose }: Props) {
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <Scrim className="fixed inset-0 z-[45] flex items-center justify-center bg-scrim p-3 sm:p-6" onDismiss={onClose}>
       <div role="dialog" aria-modal="true" aria-label="Recently moved" className="flex max-h-full w-[560px] max-w-full flex-col gap-4 rounded-[20px] border border-line bg-pop p-5 shadow-dialog sm:p-7">
         <div className="flex items-start gap-3">
           <h2 className="flex-1 text-[21px] font-semibold">Recently moved</h2>
@@ -50,6 +51,6 @@ export function RecentMovesWindow({ batches, busy, onUndo, onClose }: Props) {
           <button type="button" onClick={onClose} className="pill-brand h-11 px-6 text-[15px]">Done</button>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }

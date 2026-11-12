@@ -2,45 +2,66 @@
 
 PhotoSense is a photo and video tidying tool that runs on the machine holding the photos. **Clean up** scans folders, groups exact duplicates and similar shots, keeps the best copy of each and lets the rest be removed after review. **Organize** sorts a folder's files into folders by place and date, with a preview before anything moves. The owner, Jamie, uses it on their own iPhone library (HEIC, JPEG, Live Photo MOVs, `.AAE` sidecars) on Windows. The README describes behaviour in detail; the in-app user guide (`PhotoSense.ReactUI/lib/guide.ts`) describes it for users.
 
+**What Jamie has asked for and what is left to do** are in `STEPS.md`, imported here so that every session starts from it. Keep it current: tick a step once it is done and verified, add new steps, questions and call-outs as they come up, and move a question into the step it settles once Jamie answers.
+
+@STEPS.md
+
+## Skills
+
+Each kind of work has a skill in `.claude/skills`. Load it before starting; its reference files are read only when the skill says to.
+
+| Skill | For |
+|---|---|
+| `photosense-service` | The C# service and its TUnit tests: where code goes, endpoints, patterns, coverage |
+| `photosense-page` | The React page and its Vitest tests |
+| `photosense-e2e` | The Playwright end-to-end tests in `e2e/` |
+| `photosense-phone-apps` | The iPhone and Android apps, and their GitHub checks |
+| `photosense-verify` | Running it as Jamie does, scratch copies, reproducing a report, Jamie's data, Windows traps |
+| `photosense-build-tools` | Versions, third-party notices, the web site, `product.json`, the icon, adding a package |
+| `photosense-finish` | Before saying work is done, committing or pushing: checks, documents, the report, git |
+
 ## Layout
 
 | Folder | What is in it |
 |---|---|
-| `PhotoSense.Domain` | Entities, value objects, store and service interfaces, `PhotoStorageOptions` |
-| `PhotoSense.Application` | Scanning, grouping and removal (`Scanning/`), Organize (`Organizing/`), erasing removed files (`Removal/`) |
-| `PhotoSense.Infrastructure` | LiteDB stores, hashing, Magick.NET imaging, metadata, place names (GeoNames), deletion, folder browsing |
-| `PhotoSense.Functions` | Azure Functions isolated worker: HTTP endpoints in `Api/` and `Scanning/`, DI in `Program.cs` (`AddPhotoSenseCore`) |
-| `PhotoSense.Contracts` | JSON DTOs sent to the UI; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
-| `PhotoSense.ReactUI` | Next.js 14 / React 18 / SWR / Tailwind UI: `app/page.tsx`, `components/`, `components/organize/`, `lib/` |
-| `PhotoSense.Tests` | TUnit tests of everything except the UI |
-| `PhotoSense.Benchmarks` | BenchmarkDotNet runs of near-duplicate matching |
+| `PhotoSense.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions`, and the rules that need nothing else: what counts as the same picture (`Matching/`), file names (`NameRules`, `PhotoNaming`), which files a scan takes in. No packages |
+| `PhotoSense.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`); registered by `AddPhotoSenseApplication` |
+| `PhotoSense.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`); registered by `AddPhotoSenseCore`, with the phones' composition (`AddPhotoSensePhone`, `AddPhotoSenseAndroid`) |
+| `PhotoSense.Desktop` | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` |
+| `PhotoSense.Api` | The endpoints apart from any host, the route table `PhotoSenseRoutes`, `InProcessApi` for the phones |
+| `PhotoSense.Server` | The service as one ASP.NET Core program, serving the page too when built in; `PhotoSenseServer.Build` is its one public entry |
+| `PhotoSense.iOS`, `PhotoSense.Android` | The phone apps: the page in a web view, with the thin layer over each phone's frameworks. Not in `PhotoSense.sln` |
+| `PhotoSense.Contracts` | JSON DTOs sent to the page; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
+| `PhotoSense.ReactUI` | The page: Next.js 16, React 19, SWR, Tailwind 3 |
+| `PhotoSense.Tests`, `e2e`, `PhotoSense.Benchmarks` | TUnit tests of all but the page; Playwright tests of the whole program; BenchmarkDotNet runs of matching |
+| `tools/`, `version.json`, `product.json`, `notices/`, `site/pages/`, `branding/` | Versions, notices, the web site, who makes PhotoSense, the one icon |
 | `docs/design_handoff_photosense_redesign` | Jamie's design handoff. Leave it alone and out of commits unless asked |
 
-## Architecture and stack
+## Architecture
 
-- **Clean Architecture:** Domain ← Application ← Infrastructure, with `PhotoSense.Functions` as the host that wires them together. Domain and Application never reference Infrastructure or Functions; new storage or OS access goes behind an interface in Domain.
-- **.NET 10**, Azure Functions isolated worker with Durable Functions and SignalR. Not ASP.NET Core minimal APIs: endpoints are `[Function]` methods on `HttpRequestData`.
-- **Storage:** LiteDB in one file. No EF Core, no SQL server, no migrations.
-- **Auth:** none. The service runs on the user's own machine; `RequestGuard` is the only gate (see Service patterns). No JWT, OIDC or cookies.
-- **Tests:** TUnit with Moq and coverlet (`coverlet.MTP`), not xUnit, FluentAssertions or Testcontainers.
-- **Imaging and metadata:** Magick.NET (Q8) and MetadataExtractor.
-- Generic .NET advice that assumes another stack (EF Core, minimal APIs, xUnit) does not apply here; follow this file.
-
-## Running and testing
-
-- **Run the app the way Jamie does:** `./dev-start.ps1` from the repo root. It builds, starts Azurite (port 10000), the Functions host (7071) and the UI (3000). `./dev-start.ps1 -Stop` stops a running copy; Ctrl+C in its terminal also stops everything. The UI hot-reloads source changes; the service does not, so service changes need a restart.
-- **Data** lives in `%LOCALAPPDATA%\PhotoSense` (`photosense.db`, thumbnails), never under `bin`. The options validator refuses a data folder inside the program folder.
-- **Build:** `dotnet build PhotoSense.sln -c Release -nodeReuse:false -warnaserror`. CI builds with warnings as errors, so build that way locally.
-- **Service tests (TUnit, a program of its own):** `dotnet run --project PhotoSense.Tests -c Release`. One class: append `-- --treenode-filter "/*/*/ClassName/*"`. Coverage: append `-- --coverlet --coverlet-output-format opencover --coverlet-include "[PhotoSense.*]*" --coverlet-exclude "[PhotoSense.Tests]*" --coverlet-exclude-by-file "**/*.g.cs" --results-directory PhotoSense.Tests/coverage`.
-- **UI tests (Vitest + Testing Library + jsdom):** in `PhotoSense.ReactUI`, `npm test`, or `npm run test:coverage`, which fails below 100%. Type-check with `npx tsc --noEmit`, then delete the `tsconfig.tsbuildinfo` it leaves.
-- **CI** (`.github/workflows/ci.yml`) runs on Ubuntu for pushes and pull requests to `main`/`master`: build, UI tests with coverage, `npm run build`, service tests with coverage. The feature branches have never been through it. Some service tests that hold a file open to make it fail were only ever run on Windows.
+- **Clean Architecture:** Domain ← Application ← Infrastructure. `PhotoSense.Api` never references Infrastructure or ASP.NET Core, because the phone apps answer the same endpoints in-process. New storage or OS access goes behind an interface in Domain.
+  - Each layer registers its own services: `AddPhotoSenseApplication` (Application), `AddPhotoSenseCore` (Infrastructure), `AddPhotoSenseApi` (Api). Each host calls them all, with what only it has.
+  - Logic that needs no outside world goes in Domain; logic over Domain's interfaces in Application. Infrastructure holds only adapters to LiteDB, MetadataExtractor, the disk, the network and the phones.
+- **Photos go through `IPhotoFileSystem` only:** `DiskFileSystem` on a computer, `PhotoLibraryFileSystem` on an iPhone, `MediaFileSystem` on Android. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on a photo.
+- **The stack:**
+  - .NET 10 with one ASP.NET Core program. Endpoints are methods taking an `ApiRequest`: no minimal APIs and no controllers.
+  - LiteDB in one file: no EF Core and no migrations. No auth: `RequestGuard` is the only gate.
+  - TUnit with Moq and coverlet: no xUnit, FluentAssertions or Testcontainers.
+  - Magick.NET on a computer, the phone's own decoder on a phone. Generic .NET advice that assumes another stack does not apply.
+- **Checks on GitHub:**
+  - `ci.yml` runs on Ubuntu, Windows and macOS, for `main` and pull requests, and by hand on another branch: `gh workflow run ci.yml --ref feature/mobile-and-mac`. On Ubuntu it fails below 100% of the service's lines and branches.
+  - `iphone.yml`, `android.yml`, `e2e.yml` and `codeql.yml` also run on pushes to `feature/mobile-and-mac`.
+  - Every workflow's token may only read the repository (`permissions: contents: read`); a job that needs more asks for it alone, as CodeQL's does to upload what it found.
+  - Security (Jamie, 2026-11-11): CodeQL from `codeql.yml` (C#, TypeScript, Python, Actions; weekly too), secret scanning with push protection, and Dependabot's alerts and updates, weekly from `.github/dependabot.yml` into `feature/mobile-and-mac` until it is merged. `dependencies.yml` tells GitHub every NuGet package the solution uses, in place of GitHub's automatic submission, which restores the phone apps too and fails on Linux. Found problems: `gh api repos/{owner}/{repo}/code-scanning/alerts`, `…/dependabot/alerts`, `…/secret-scanning/alerts`.
 
 ## Rules
 
-1. **100% branch coverage in both halves.** Every change ships with tests that keep the service and the UI at 100% of branches. Report the measured figures when done, not a guess.
+1. **100% branch coverage in all three parts.** Every change ships with tests that keep the service, the UI and the build tools (`tools/`) at 100% of branches. Report the measured figures when done, not a guess.
+   - **No test touches the database** (Jamie, 2026-11-10), except the LiteDB stores' own tests, which use LiteDB in memory with no file. Every other test uses the stand-ins in `PhotoSense.Tests/StandInStores.cs`; the program's tests give them to `PhotoSenseServer.Build` or after a phone's setup. Opening the database file (`AddPhotoSenseCore`'s `OpenDatabase`) is left out of coverage; the end-to-end tests run it.
 2. **Nothing is ever replaced, and nothing is erased except by "Delete permanently".**
    - Removing a file moves it into `_PhotoSense_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
-   - The only code that erases files is `RemovedFiles.EraseAsync`, and it only empties folders named `_PhotoSense_Removed`.
+   - The only code that erases files is `RemovedFiles.EraseAsync`, through `IPhotoFileSystem.Erase`, which nothing else calls. It only empties folders named `_PhotoSense_Removed`.
+   - The one exception, Jamie's decision of 2026-10-29: on a phone, after sending to a computer, `PhoneSending.DeleteSent` sends to the phone's Recently Deleted or bin (`IPhotoChangesTogether.EraseAll`) the pictures every file of which the computer has confirmed by its SHA-256, once the person confirms or chose Move. Nothing on a computer is erased that way.
    - A file arriving under a taken name gets a number.
    - The last copy of a picture is never removed as a duplicate.
 3. **Every removal question and message names the file that goes and the file that stays**, by folder when the names are alike. Jamie has twice taken two files for one.
@@ -51,7 +72,7 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
    - never stop Jamie's processes.
 
    "It's locked, so it will refuse" is not a safeguard for a folder: a recursive delete removes everything it can first.
-6. **Never use or commit Jamie's Google Maps key.** It is in `PhotoSense.ReactUI/.env.local`, which git ignores. For map checks, start a scratch UI with a made-up key, and strip `key=` from the Maps script request in Playwright to get Google's unbilled development-mode map.
+6. **Never use or commit Jamie's Google Maps key.** It is in `PhotoSense.ReactUI/.env.local`, which git ignores; every build made for testing leaves it out.
 7. **Git:**
    - Commit or push only when Jamie asks, and ask each time; there is no standing go-ahead.
    - Do not use `git stash`: Jamie keeps uncommitted work of their own in the tree.
@@ -63,63 +84,37 @@ PhotoSense is a photo and video tidying tool that runs on the machine holding th
    - Try new features on the largest, slowest real case, such as the 48,000-file external disk.
    - When Jamie reports odd behaviour, reproduce it, or read a copy of the database first (copy `photosense.db` while the service is stopped), before changing code. Say plainly what was and was not verified.
 9. **Ask before guessing on product decisions that change what gets deleted.** Make a reasonable choice when the request is clear enough, and name any unconfirmed decision in the summary.
-
-## Service patterns
-
-- **Isolated worker:** services reach a function class only through its constructor (a method parameter arrives as null). Register new services in `AddPhotoSenseCore`; a factory lambda is used where a constructor has optional parameters.
-- **Request guard:** an endpoint that reveals or changes someone's files checks `RequestGuard.Allows(req.Headers)` first (the `x-photosense-client` header, which other web pages cannot send). Refusals carry a plain-text reason and a status that says whose fault it is.
-- **Status codes:** set them *after* `WriteAsJsonAsync`, which resets them to 200.
-- **LiteDB:** one shared `LiteDatabase`. Each store's constructor calls `LiteDbMapping.Prepare<T>()` for every mapped type before first use; LiteDB 5 otherwise fails now and then when two stores are first made together.
-- **Paths:** compare file paths with `PhotoPath.Key` / `PhotoPath.Comparer`, which are case-blind on Windows and macOS and case-sensitive on Linux.
-- **Organize file ids:** an HMAC of the path with a key made per run of the service, so a request can never name a path of its own choosing.
-- **Testability seams:** code that would ask the OS or the disk takes that as an argument so every branch runs on one OS, as in `PhotoPath.Key(path, ignoreCase)` and `RemovedFiles(..., eraseFile)`. Prefer a seam like that to a test that depends on Windows file locking.
-- **Scan state:** scans run as Durable Functions orchestrations, with progress held in memory (`InMemoryScanProgressStore`). `/scan/status` reports the scan running now, and the page follows a running scan even after a reload.
-
-## UI patterns
-
-- **API calls** all go through `lib/apiClient.ts`. Calls that change files revalidate the SWR keys they affect (`refreshGroups`, `refreshOrganize`).
-- **Types:** `types.ts` mirrors `PhotoSense.Contracts`. Update both when a field changes.
-- **Styling:** colours are theme tokens in `app/globals.css` (`--bg`, `--t1`, `--brand`, `--rose`, ...), used through Tailwind classes such as `bg-pop`, `text-t2` and `border-line`. Buttons use the `pill-*` classes. Every screen must work in both the dark and the light theme.
-- **Windows and dialogs:** large windows use `WindowShell` (z-30, or z-40 when raised over another). Questions use `ConfirmDialog` (z-[45], rose for anything that removes files); `small` and `ready` cover a second question and a question still waiting for data. Each window handles its own Escape. A window under a question must ignore keys while the question is up (the `asking` / `frozen` props), or one Escape closes both.
-- **Settings** live in `lib/settings.ts` (browser localStorage). Remembered folders live in `lib/lastScan.ts`.
-- **The user guide** (`lib/guide.ts`, shown by `components/HelpWindow.tsx` from Help in the menu) must change whenever something on screen is renamed, added or removed. Its tests check its structure.
-- **Organize state:** arrangements that have not been carried out live in the page only. What was moved is recorded in the service (`organize_batches`), so undo survives a reload.
-
-## Test patterns
-
-- **TUnit:**
-  - Every assertion is awaited (`await Assert.That(x).IsEqualTo(y)`); an un-awaited one is never checked. CS4014 is an error in the test project.
-  - Collections compare with `IsEquivalentTo(expected, CollectionOrdering.Matching)` or `.Any`.
-  - `Assert.ThrowsAsync<T>` returns `T?`.
-  - Tests run in parallel, even within a class; shared static state needs `[NotInParallel("key")]`.
-- **Service helpers:**
-  - `OrganizeFixture` (`Tests/Application/OrganizeTesting.cs`) gives a temp folder, an in-memory repository, the Organize services, `Mover()` and `Removed()`.
-  - `FakeHttpRequest` with `.FromClient()` builds HTTP requests for endpoint tests.
-  - `TestFiles` has `LinkFolder` and `DenyAccess`.
-- **UI tests:**
-  - Tests live in `tests/`, mirroring `app`, `components` and `lib`.
-  - `lib/apiClient` is mocked with `vi.hoisted` plus `vi.mock(..., importOriginal)`. Fixtures are in `tests/fixtures.ts`; `deferred` is in `tests/fakeSignalR.ts`.
-  - Istanbul counts each arm of `if`, ternaries, `&&`, `||`, `??` and default parameter values, but not `?.`.
-  - Test names are plain sentences that say what the user sees ("asks first, then takes the files off the page at once and offers to put them back").
+10. **No anti-patterns unless there is no better way, and then only with Jamie's say-so** (Jamie, 2026-11-09).
+    - Not used: blocking on a task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), `async void`, `new HttpClient()` per call, `DateTime.Now`/`UtcNow` where a `TimeProvider` can be given, an empty `catch`, a catch of every exception, a bare `catch { …; throw; }` (use a `finally` that lets go of what was not handed over).
+    - When one seems the best solution, ask Jamie before writing it, saying why nothing else works, and record the answer here.
+    - Accepted by Jamie on 2026-11-09:
+      - `catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)`: a filter naming the types, which the detector misreads as a catch of everything.
+      - Catches of every error at the edges where nothing else would catch it, each saying so: `InProcessApi.AnswerAsync` and the phones' `PageSchemeHandler` and `PageClient` (the page would wait for ever), and `ScanRunner` (a scan in the background would stop unseen).
+      - One catch of every error around MetadataExtractor, in `MetadataFiles.TryRead`: it throws undocumented errors on damaged files, and one damaged file must not stop a scan of thousands. Each picture decoder instead turns its own errors into `UnreadableImageException`.
+    - Accepted by Jamie on 2026-11-10: Android's `PageClient.Ask` blocks on the answer. `ShouldInterceptRequest` must answer synchronously, with the status known, so there is no non-blocking way; the block is on one of WebView's own threads, where it cannot deadlock; a local web server or a second way of calling for the page would cost more than it saves.
+    - Accepted by Jamie on 2026-11-10, as for `PageClient.Ask`: Android's `MainActivity.Ask` blocks on the person's answer to Android's own question before photos are moved or put in the bin. Every change on a phone is synchronous (`IPhotoFileSystem.Move`, `IPhotoChangesTogether`, `IMediaStore`), and making them all asynchronous would cost more than it saves; the question counts as no when the screen goes for good, so the wait cannot last for ever.
+11. **Every async method takes a `CancellationToken`, last, and uses it** (Jamie, 2026-11-09).
+    - The token is required, not `= default`, so that no caller can forget it; a test method takes the one TUnit gives it. CA2016 (pass it on) and CA1068 (last) are warnings, so errors in CI.
+    - Using it means passing it to every call that takes one and checking it in long loops. A method that answers at once from memory or LiteDB checks it first (`ct.ThrowIfCancellationRequested()`).
+    - Where work must not stop part way, `CancellationToken.None` is passed on purpose, with a comment saying why: once a change's files have moved it is finished and written down (`FileChanges`), erasing once begun is finished and recorded (`RemovedFiles`), a folder's reading is shared by everyone asking (`OrganizeLibrary`), what was done is recorded whatever happens (the audit after a change).
+    - Endpoints take the token the router hands them (`ApiRequest.Aborted`).
 
 ## How things are written here
 
-- **Comments** say *why*, in plain English, usually one line. They never say what the code does or narrate a change. Names describe what the user would recognise.
+- **XML documentation** (Jamie, 2026-11-09):
+  - Every public or internal class, record, struct, interface, enum, delegate, method, property, field, constant and event has a `<summary>`, in the plain English of the rest of the code, saying what it is for; a positional record documents each parameter with `<param>`. A member that implements an interface or overrides one says `<inheritdoc />` when that says it all.
+  - A private method has one when its purpose or intent is not plain from its name and body.
+  - The compiler checks what other projects can see (CS1591, with `GenerateDocumentationFile` in `Directory.Build.props`); internal and private members are kept documented by hand.
+  - In `PhotoSense.Tests`, test methods are exempt, as their names are sentences; every test class, fixture, fake and helper is documented.
+  - The page's TypeScript follows the same rule with TSDoc (`/** … */`): every exported function, component, hook, type, interface and constant (Jamie, 2026-11-09).
+- **Comments** say *why*, in plain English, usually one line. They never say what the code does or narrate a change. A line that does something easy to misread gets one. Names describe what the user would recognise.
+- **Public is each project's front door; the tests use nothing else** (Jamie, 2026-11-09: no `InternalsVisibleTo`).
+  - Public: what another project uses, Domain's rules and interfaces, Application's services, an adapter a program could put together itself, the sending protocol (the contract between two programs), the HTTP vocabulary (`ApiRequest`, `RequestGuard`, `ByteRange`), and each project's registrations. `PhotoSense.Server` has `PhotoSenseServer.Build` only.
+  - Internal: endpoints, the LiteDB stores (their constructors take LiteDB's own types), mappers and helpers. Tests reach them through the front door: endpoints through the router (`TestApi`), stores through `AddPhotoSenseCore` (`Stores`), the server through `PhotoSenseServer.Build`.
+  - When a test seems to need something internal, the structure is usually wrong: move the logic to where it belongs, or give the class a constructor that takes what it asks of the outside world (as `ShellSystemViewer` and `FileSystemFolderBrowser` do).
 - **UI text:**
   - Name what the person sees, in short plain sentences, without jargon or apologies.
   - Buttons say exactly what happens ("Delete 3 files"), and the message after says what happened.
   - Errors say what went wrong and what to do.
 - **The README** documents behaviour and the API table. Update it with any endpoint or user-visible change.
 - **Reports to Jamie:** say what changed, what was verified and how, what was not verified, and any decision Jamie has not confirmed. Use they/them for Jamie.
-
-## Environment traps (Windows)
-
-- Git Bash rewrites MSBuild switches written with a slash (`/p:`, `/warnaserror`) into paths. Write them with a dash.
-- Idle MSBuild workers keep DLLs locked and break the next build (MSB3027). Build with `-nodeReuse:false`.
-- Multi-line heredocs with quotes or backslashes often break in the Bash tool. Write the script to the session scratchpad and run it with `python -I path`.
-- `rm -rf` follows junctions. Never link a scratch UI copy to the repo's `node_modules`; give it its own `npm ci`, and remove a junction only with `[IO.Directory]::Delete(path)`.
-- **Scratch copy of the app for end-to-end checks:**
-  - Service: copy `PhotoSense.Functions/bin/Release/net10.0` to the scratchpad and run `func start --port 7099 --cors http://localhost:3100`, with `PhotoStorage__DatabasePath`, `PhotoStorage__ThumbnailPath` and `AzureFunctionsJobHost__extensions__durableTask__hubName` pointing at scratch.
-  - UI: robocopy `PhotoSense.ReactUI` to the scratchpad, excluding `node_modules`, `.next` and `.env.local`, run its own `npm ci`, then `npx next dev -p 3100` with `NEXT_PUBLIC_API_BASE=http://localhost:7099/api`.
-  - Drive it with `playwright-core` and `chromium.launch({ channel: 'chrome' })`.
-  - To see Jamie's data without touching it, point the scratch service at a *copy* of the database, and abort every non-GET request in Playwright.

@@ -1,17 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 import { reply } from '../fixtures';
 
-const hub = await vi.hoisted(async () => new (await import('../fakeSignalR')).FakeHub());
 const swr = vi.hoisted(() => ({ useSWR: vi.fn(), mutate: vi.fn() }));
-vi.mock('@microsoft/signalr', () => hub.module);
 vi.mock('swr', () => ({ default: swr.useSWR, mutate: swr.mutate }));
 
 const API = 'http://localhost:7071/api';
 const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
-  hub.reset();
   swr.useSWR.mockReset();
   swr.mutate.mockReset();
   fetchMock.mockReset();
@@ -116,30 +113,32 @@ describe('requests that act on photos', () => {
     expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
   });
 
-  it('remove the copies of several groups together, a few dozen named in each request, and list the groups afresh once', async () => {
-    fetchMock.mockImplementation(async url => reply({ removed: String(url).split('group=').length - 1, bytes: 100, skipped: 1, companions: 2, problems: ['one was left alone'] }));
+  it('remove the copies of several groups as one change, however many are named, and list the groups afresh', async () => {
+    const done = { removed: 85, bytes: 300, skipped: 1, companions: 2, problems: ['one was left alone'], batchId: 'b1' };
+    answering(done);
     const api = await load();
     const keys = Array.from({ length: 85 }, (_, i) => `g ${i}`);
 
-    await expect(api.removeGroups(keys, 'duplicates')).resolves.toEqual({ removed: 85, bytes: 300, skipped: 3, companions: 6, problems: ['one was left alone', 'one was left alone', 'one was left alone'] });
-    expect(api.GROUPS_AT_ONCE).toBe(40);
-    expect(fetchMock.mock.calls.map(c => String(c[0]).split('group=').length - 1)).toEqual([40, 40, 5]);
-    expect(lastRequest()).toEqual({ url: `${API}/photos/bulk/remove-duplicates?group=g%2080&group=g%2081&group=g%2082&group=g%2083&group=g%2084`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    await expect(api.removeGroups(keys, 'duplicates')).resolves.toEqual(done);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(lastRequest()).toEqual({
+      url: `${API}/photos/bulk/remove-duplicates`,
+      init: { method: 'POST', body: JSON.stringify({ groups: keys }), headers: { 'Content-Type': 'application/json', 'x-photosense-client': 'web' } },
+    });
     expect(swr.mutate).toHaveBeenCalledOnce();
 
     await api.removeGroups(['gS', 'gT'], 'similar');
-    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?group=gS&group=gT&mode=similar`);
+    expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
     // With no group named nothing is asked for, least of all "every duplicate".
     fetchMock.mockClear();
     await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('list the groups afresh even when removing the copies of several failed part of the way', async () => {
-    fetchMock.mockImplementationOnce(async () => reply({ removed: 40, bytes: 0, skipped: 0, companions: 0, problems: [] })).mockImplementationOnce(async () => reply('The disk is full', 500));
+  it('say why the copies of several groups were not removed', async () => {
+    answering('The disk is full', 500);
     const api = await load();
-    await expect(api.removeGroups(Array.from({ length: 50 }, (_, i) => `g${i}`), 'duplicates')).rejects.toMatchObject({ message: 'The disk is full' });
-    expect(swr.mutate).toHaveBeenCalledOnce();
+    await expect(api.removeGroups(['g1'], 'duplicates')).rejects.toMatchObject({ message: 'The disk is full' });
   });
 
   it('list the folders of the service\'s machine, from the top or inside one of them', async () => {
@@ -164,6 +163,22 @@ describe('requests that act on photos', () => {
     await expect(api.clearResults()).resolves.toEqual({ forgotten: 6941 });
     expect(lastRequest()).toEqual({ url: `${API}/scan/reset`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
     expect(swr.mutate).toHaveBeenCalledOnce();
+  });
+
+  it('stop a scan by its id, keeping what it read', async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.stopScan('scan 7');
+    expect(lastRequest()).toEqual({ url: `${API}/scan/stop/scan%207`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+  });
+
+  it('find where a phone\'s photos are, as the one folder it lists, and say so when it lists none', async () => {
+    answering({ path: null, parent: null, folders: [{ name: 'Photo Library', path: '/Photo Library' }] });
+    const api = await load();
+    await expect(api.libraryRoot()).resolves.toBe('/Photo Library');
+    expect(lastRequest().url).toBe(`${API}/folders`);
+    answering({ path: null, parent: null, folders: [] });
+    await expect(api.libraryRoot()).rejects.toThrow('The phone did not say where its photos are.');
   });
 
   it('start a scan and hand back its id', async () => {
@@ -195,8 +210,66 @@ describe('requests that act on photos', () => {
   });
 });
 
-describe('what the page reads', () => {
-  it('asks for groups fifty to a page, by mode, page, search text and whether reviewed ones are hidden', async () => {
+describe('what a phone lets PhotoSense see', () => {
+  it('is asked of the program, and the phone\'s picker answers with what it then allows, which the listings follow', async () => {
+    swr.useSWR.mockReturnValue({ data: 'the access' });
+    answering({ access: 'everything' });
+    const api = await load();
+
+    expect(api.usePhotoAccess()).toEqual({ data: 'the access' });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/library/access`, expect.any(Function));
+
+    await expect(api.chooseMorePhotos()).resolves.toEqual({ access: 'everything' });
+    expect(lastRequest().url).toBe(`${API}/library/choose-more`);
+    expect(lastRequest().init?.method).toBe('POST');
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/library/access`, { access: 'everything' }, { revalidate: false });
+    const listings = swr.mutate.mock.calls[1][0] as (key: unknown) => boolean;
+    expect([`${API}/organize/files?root=x`, `${API}/scan/groups`, 7].map(listings)).toEqual([true, false, false]);
+  });
+
+  it('asks the phone\'s own question, and answers with what it then allows', async () => {
+    answering({ access: 'selected' });
+    const api = await load();
+    await expect(api.askForPhotos()).resolves.toEqual({ access: 'selected' });
+    expect(lastRequest().url).toBe(`${API}/library/ask`);
+    expect(lastRequest().init?.method).toBe('POST');
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/library/access`, { access: 'selected' }, { revalidate: false });
+  });
+
+  it('opens PhotoSense\'s page of the phone\'s settings', async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.openPhotoSettings();
+    expect(lastRequest().url).toBe(`${API}/library/open-settings`);
+    expect(lastRequest().init?.method).toBe('POST');
+  });
+});
+
+describe('About', () => {  it('shows the icon the program answering hands out, and asks it who makes PhotoSense and which version is running', async () => {
+    swr.useSWR.mockReturnValue({ data: 'the details' });
+    const api = await load();
+
+    expect(api.appIconUrl).toBe(`${API}/about/icon`);
+    expect(api.useAbout()).toEqual({ data: 'the details' });
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/about`, expect.any(Function));
+  });
+
+  it('asks for each document as the text it is, and says why one could not be had', async () => {
+    const api = await load();
+    api.useAboutText('privacy');
+    const [url, fetcher] = swr.useSWR.mock.calls[0] as [string, (url: string) => Promise<string>];
+    expect(url).toBe(`${API}/about/privacy`);
+
+    answering('# Privacy Policy');
+    await expect(fetcher(url)).resolves.toBe('# Privacy Policy');
+    expect(lastRequest()).toEqual({ url, init: undefined });
+
+    answering('There is no document called cookies.', 404);
+    await expect(fetcher(`${API}/about/cookies`)).rejects.toThrow('There is no document called cookies.');
+  });
+});
+
+describe('what the page reads', () => {  it('asks for groups fifty to a page, by mode, page, search text and whether reviewed ones are hidden', async () => {
     swr.useSWR.mockReturnValue({ data: 'the groups' });
     const api = await load();
 
@@ -205,6 +278,22 @@ describe('what the page reads', () => {
 
     api.useGroups('similar', 'trip & beach', 3, true);
     expect(swr.useSWR.mock.calls[1][0]).toBe(`${API}/scan/groups?mode=similar&page=3&pageSize=50&hideKept=true&q=trip%20%26%20beach`);
+  });
+
+  it('on a phone reads the groups two hundred to a page, through the page asked for, listing a group that moved between pages once', async () => {
+    swr.useSWR.mockReturnValue({ data: 'the groups' });
+    const api = await load();
+    expect(api.useGroupsThrough('similar', 2)).toEqual({ data: 'the groups' });
+    const [key, fetcher, options] = swr.useSWR.mock.calls[0] as [string, () => Promise<unknown>, unknown];
+    expect(key).toBe(`${API}/scan/groups?mode=similar&pageSize=200&through=2`);
+    expect(options).toEqual({ refreshInterval: 5000, keepPreviousData: true });
+
+    const pages: Record<string, unknown> = {
+      [`${API}/scan/groups?mode=similar&page=1&pageSize=200&hideKept=false&q=`]: { mode: 'similar', total: 3, items: [{ key: 'a' }, { key: 'b' }] },
+      [`${API}/scan/groups?mode=similar&page=2&pageSize=200&hideKept=false&q=`]: { mode: 'similar', total: 3, items: [{ key: 'b' }, { key: 'c' }] },
+    };
+    fetchMock.mockImplementation(async url => reply(pages[String(url)]));
+    await expect(fetcher()).resolves.toEqual({ mode: 'similar', total: 3, items: [{ key: 'a' }, { key: 'b' }, { key: 'c' }] });
   });
 
   it('fetches a page ahead of its being turned to, with the pictures its tiles show', async () => {
@@ -240,10 +329,10 @@ describe('what the page reads', () => {
     expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/status`, expect.any(Function), { refreshInterval: 5000 });
   });
 
-  it('asks afresh how many groups of each kind there are', async () => {
-    fetchMock.mockImplementation(async url => reply({ total: String(url).includes('mode=similar') ? 170 : 263 }));
+  it('asks afresh how many groups of each kind there are, and how many files are copies', async () => {
+    fetchMock.mockImplementation(async url => reply(String(url).includes('mode=similar') ? { total: 170, removableCount: 0 } : { total: 263, removableCount: 312 }));
     const api = await load();
-    await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170 });
+    await expect(api.fetchGroupTotals()).resolves.toEqual({ duplicates: 263, similar: 170, copies: 312 });
     expect(fetchMock.mock.calls.map(c => c[0])).toEqual([`${API}/scan/groups?mode=duplicates&page=1&pageSize=50&hideKept=false&q=`, `${API}/scan/groups?mode=similar&page=1&pageSize=50&hideKept=false&q=`]);
   });
 
@@ -336,12 +425,12 @@ describe('organize', () => {
 
     swr.mutate.mockClear();
     answering({ restored: 1, skipped: 0, problems: [] });
-    await expect(api.undoOrganize('b 1')).resolves.toEqual({ restored: 1, skipped: 0, problems: [] });
+    await expect(api.undoChange('b 1')).resolves.toEqual({ restored: 1, skipped: 0, problems: [] });
     expect(lastRequest()).toEqual({ url: `${API}/organize/undo/b%201`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
     expect(swr.mutate).toHaveBeenCalledTimes(2);
 
     answering('There is nothing to undo: this was undone already, or was never done.', 404);
-    await expect(api.undoOrganize('b1')).rejects.toMatchObject({ message: 'There is nothing to undo: this was undone already, or was never done.' });
+    await expect(api.undoChange('b1')).rejects.toMatchObject({ message: 'There is nothing to undo: this was undone already, or was never done.' });
   });
 
   it('opens a file in the default viewer of the service\'s machine', async () => {
@@ -383,69 +472,14 @@ describe('removed files', () => {
 });
 
 describe('the log stream', () => {
-  const negotiate = `${API}/scan/logs/negotiate`;
   const polled = `${API}/scan/logs?limit=200`;
-  const hubOffer = { url: 'https://hub.example/client', accessToken: 'token-1' };
   const settle = () => vi.advanceTimersByTimeAsync(0);
   const line = (n: number) => ({ timestamp: `12:00:0${n}`, level: 'Info', message: `line ${n}` });
 
   beforeEach(() => { vi.useFakeTimers(); });
 
-  it('arrives over the hub when the service offers one', async () => {
-    answering(hubOffer);
-    const api = await load();
-    const lines: string[] = [];
-
-    const dispose = api.connectLogStream(l => lines.push(l));
-    await settle();
-
-    // The service shows its log only to the UI, so both requests say where they come from.
-    expect(lastRequest()).toEqual({ url: negotiate, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
-    expect(hub.connection.url).toBe('https://hub.example/client');
-    expect(hub.connection.options.accessTokenFactory()).toBe('token-1');
-    expect(hub.connection.start).toHaveBeenCalledOnce();
-
-    hub.connection.log('scan-7', '12:00:01', 'Info', 'Scanning 12 files');
-    hub.connection.log('scan-7', '12:00:02', 'Warn', 'Could not decode a.heic');
-    expect(lines).toEqual(['12:00:01 Info Scanning 12 files', '12:00:02 Warn Could not decode a.heic']);
-
-    // The hub is used instead of polling, never beside it.
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(fetchMock).toHaveBeenCalledOnce();
-
-    dispose();
-    expect(hub.connection.stop).toHaveBeenCalledOnce();
-  });
-
-  it('is closed quietly even when the hub will not stop cleanly', async () => {
-    answering(hubOffer);
-    hub.stopError = new Error('already closed');
-    const api = await load();
-
-    const dispose = api.connectLogStream(() => undefined);
-    await settle();
-    dispose();
-    await settle();
-
-    expect(hub.connection.stop).toHaveBeenCalledOnce();
-  });
-
-  it('is not opened once it is no longer wanted', async () => {
-    const offer = deferred<Response>();
-    fetchMock.mockReturnValue(offer.promise);
-    const api = await load();
-
-    const dispose = api.connectLogStream(() => undefined);
-    dispose();
-    offer.resolve(reply(hubOffer));
-    await settle();
-
-    expect(hub.connections).toHaveLength(0);
-  });
-
-  it('is polled for when no hub can be negotiated', async () => {
+  it('is asked for every second and a half, through empty answers, refusals and a lost connection alike', async () => {
     fetchMock
-      .mockImplementationOnce(async () => reply('SignalR is not configured', 500))
       .mockImplementationOnce(async () => reply({ items: [line(1), line(2)], count: 2 }))
       .mockImplementationOnce(async () => reply({ count: 0 }))                 // nothing new, and no list at all
       .mockImplementationOnce(async () => reply('Rate limit exceeded', 429))
@@ -457,72 +491,38 @@ describe('the log stream', () => {
     const dispose = api.connectLogStream(l => lines.push(l));
     await settle();
 
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([negotiate, polled]);
-    expect(fetchMock.mock.calls[1][1]).toEqual({ headers: { 'x-photosense-client': 'web' } });
+    // The service shows its log only to the UI, so the request says where it comes from.
+    expect(fetchMock.mock.calls).toEqual([[polled, { headers: { 'x-photosense-client': 'web' } }]]);
     expect(lines).toEqual(['12:00:01 Info line 1', '12:00:02 Info line 2']);
 
-    // Every second and a half, through empty answers, refusals and a lost connection alike.
-    for (const calls of [3, 4, 5]) {
+    for (const calls of [2, 3, 4]) {
       await vi.advanceTimersByTimeAsync(1500);
       expect(fetchMock).toHaveBeenCalledTimes(calls);
       expect(lines).toHaveLength(2);
     }
     await vi.advanceTimersByTimeAsync(1500);
     expect(lines).toEqual(['12:00:01 Info line 1', '12:00:02 Info line 2', '12:00:03 Info line 3']);
-    expect(hub.connections).toHaveLength(0);
 
     // Dismissed between two polls: the one already scheduled does nothing.
     dispose();
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
-  it('is polled for when the hub is offered but cannot be reached', async () => {
-    fetchMock
-      .mockImplementationOnce(async () => reply(hubOffer))
-      .mockImplementation(async () => reply({ items: [line(1)] }));
-    hub.startError = new Error('WebSocket failed to connect');
-    const api = await load();
-    const lines: string[] = [];
-
-    const dispose = api.connectLogStream(l => lines.push(l));
-    await settle();
-
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual([negotiate, polled]);
-    expect(lines).toEqual(['12:00:01 Info line 1']);
-    dispose();
-  });
-
-  it('stops being polled for when dismissed while a poll is in flight', async () => {
+  it('stops being asked for when dismissed while a poll is in flight', async () => {
     const poll = deferred<Response>();
-    fetchMock
-      .mockImplementationOnce(async () => reply(undefined, 500))
-      .mockReturnValueOnce(poll.promise);
+    fetchMock.mockReturnValueOnce(poll.promise);
     const api = await load();
 
     const dispose = api.connectLogStream(() => undefined);
-    await settle();
     dispose();
     poll.resolve(reply({ items: [] }));
-    await vi.advanceTimersByTimeAsync(10_000);
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('is never polled for when dismissed before the hub was refused', async () => {
-    const offer = deferred<Response>();
-    fetchMock.mockReturnValue(offer.promise);
-    const api = await load();
-
-    const dispose = api.connectLogStream(() => undefined);
-    dispose();
-    offer.resolve(reply(undefined, 500));
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it('is asked for beside wherever the service lives', async () => {
+  it('is asked for where the rest of the service is', async () => {
     answering(undefined, 500);
     const api = await load({ base: 'https://photos.example/backend' });
 
@@ -530,6 +530,85 @@ describe('the log stream', () => {
     await settle();
     dispose();
 
-    expect(fetchMock.mock.calls.map(c => c[0])).toEqual(['https://photos.example/backend/api/scan/logs/negotiate', 'https://photos.example/backend/api/scan/logs?limit=200']);
+    expect(fetchMock.mock.calls.map(c => c[0])).toEqual(['https://photos.example/backend/scan/logs?limit=200']);
+  });
+});
+
+describe('sending photos from a phone to a computer', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const state = { stage: 'waiting', code: null, computer: null, done: 0, total: 2, bytes: 0, totalBytes: 900, deletable: [], where: null, phone: 'iPhone', problem: null, current: null };
+
+  it('follows the phone every second while watched or while an offer stands, and shows each answer of the phone at once', async () => {
+    swr.useSWR.mockReturnValue({ data: state });
+    const api = await load();
+    expect(api.useSendState(true)).toEqual({ data: state });
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect([every(undefined), every({ stage: 'idle' })]).toEqual([1000, 1000]);
+    api.useSendState(false);
+    const unwatched = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect(['waiting', 'comparing', 'sending', 'sent', 'failed', 'idle'].map(stage => unwatched({ stage }))).toEqual([1000, 1000, 1000, 0, 0, 0]);
+    expect(unwatched(undefined)).toBe(0);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/send/state`, expect.any(Function), { refreshInterval: expect.any(Function) });
+
+    answering(state);
+    await expect(api.startSending(['f1', 'f2'])).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/send/start`, init: { method: 'POST', body: JSON.stringify({ files: ['f1', 'f2'] }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/send/state`, state, { revalidate: false });
+    await api.confirmSending(true);
+    expect(lastRequest()).toEqual({ url: `${API}/send/confirm`, init: { method: 'POST', body: JSON.stringify({ same: true }), headers: json } });
+    await api.stopSending();
+    expect(lastRequest()).toEqual({ url: `${API}/send/stop`, init: { method: 'POST', headers: json } });
+  });
+
+  it('deletes from the phone what is safely on the computer, and then shows the phone and Organize afresh', async () => {
+    answering({ deleted: 2 });
+    const api = await load();
+    await expect(api.deleteSent()).resolves.toEqual({ deleted: 2 });
+    expect(lastRequest()).toEqual({ url: `${API}/send/delete-sent`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/send/state`);
+    const matches = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
+    expect([`${API}/organize/files?root=x`, `${API}/send/state`].map(matches)).toEqual([true, false]);
+  });
+
+  it('looks for phones and follows receiving only while each is on screen', async () => {
+    const api = await load();
+    api.usePhones(true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/phones`, expect.any(Function), { refreshInterval: 3000 });
+    api.usePhones(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useReceiveState(true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/receive/state`, expect.any(Function), { refreshInterval: 1000 });
+    api.useReceiveState(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+
+    const receiving = { stage: 'connecting', code: null, phone: 'iPhone', done: 0, total: 0, bytes: 0, totalBytes: 0, alreadyThere: 0, folder: 'C:\Photos', problem: null };
+    answering(receiving);
+    await expect(api.startReceiving('wifi:1', 'C:\Photos')).resolves.toEqual(receiving);
+    expect(lastRequest()).toEqual({ url: `${API}/receive/start`, init: { method: 'POST', body: JSON.stringify({ phone: 'wifi:1', folder: 'C:\Photos' }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/receive/state`, receiving, { revalidate: false });
+    await api.confirmReceiving(false);
+    expect(lastRequest()).toEqual({ url: `${API}/receive/confirm`, init: { method: 'POST', body: JSON.stringify({ same: false }), headers: json } });
+    await api.stopReceiving();
+    expect(lastRequest()).toEqual({ url: `${API}/receive/stop`, init: { method: 'POST', headers: json } });
+  });
+});
+
+describe('on Android', () => {
+  it('hands each request body over beside its request, which carries the number the app gave it', async () => {
+    const keep = vi.fn(() => 'body-7');
+    vi.stubGlobal('PhotoSenseAndroid', { keep });
+    try {
+      answering({ instanceId: 'scan-1' });
+      const api = await load();
+      await api.startScan({ primaryLocation: '/Phone', secondaryLocation: '', recursive: true });
+      expect(keep).toHaveBeenCalledExactlyOnceWith(JSON.stringify({ primaryLocation: '/Phone', secondaryLocation: '', recursive: true }));
+      expect(lastRequest().init?.headers).toMatchObject({ 'x-photosense-body': 'body-7' });
+      // A request with no body carries nothing.
+      await api.stopSending();
+      expect(keep).toHaveBeenCalledOnce();
+      expect(lastRequest().init?.headers).not.toHaveProperty('x-photosense-body');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -1,15 +1,23 @@
+using PhotoSense.Application.Changes;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Application.Removal;
 
 /// <summary>A folder that holds removed files, with how much is in it.</summary>
+/// <param name="Path">The folder's full path.</param>
+/// <param name="Files">How many files it holds, in every folder inside it.</param>
+/// <param name="Bytes">How much they take up.</param>
 public sealed record HeldFolder(string Path, int Files, long Bytes);
 
 /// <summary>What erasing did.</summary>
+/// <param name="Erased">Files erased for good.</param>
+/// <param name="Bytes">How much they took up.</param>
 /// <param name="Skipped">Files that could not be erased and are still there.</param>
+/// <param name="Problems">Why each of those could not be, naming the file where there is one to name.</param>
 public sealed record EraseResult(int Erased, long Bytes, int Skipped, IReadOnlyList<string> Problems);
 
 /// <summary>
@@ -18,29 +26,25 @@ public sealed record EraseResult(int Erased, long Bytes, int Skipped, IReadOnlyL
 /// </summary>
 public sealed class RemovedFiles
 {
-    // Hidden and system files are part of a folder too; a link is neither followed nor taken away.
-    private static readonly EnumerationOptions Here = new() { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint };
-    private static readonly EnumerationOptions Throughout = new() { IgnoreInaccessible = true, AttributesToSkip = FileAttributes.ReparsePoint, RecurseSubdirectories = true };
-
     private readonly IPhotoRepository _repo;
     private readonly IOrganizeBatchStore _batches;
     private readonly IAuditRepository _audit;
-    private readonly Action<string> _erase;
+    private readonly IPhotoFileSystem _files;
 
-    /// <param name="eraseFile">How a file is erased; the file system's own way when not given.</param>
-    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, Action<string>? eraseFile = null)
+    /// <summary>The removed files where the photos are kept, with the records of what scans and changes did.</summary>
+    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files)
     {
         _repo = repo;
         _batches = batches;
         _audit = audit;
-        _erase = eraseFile ?? File.Delete;
+        _files = files;
     }
 
     /// <summary>
     /// Every folder of removed files that holds something: those inside the folders given and inside every
     /// folder a scan on record covered, wherever in them they are, and those Organize put files in.
     /// </summary>
-    public async Task<IReadOnlyList<HeldFolder>> FindAsync(IEnumerable<string?> roots, CancellationToken ct = default)
+    public async Task<IReadOnlyList<HeldFolder>> FindAsync(IEnumerable<string?> roots, CancellationToken ct)
     {
         var held = new SortedDictionary<string, string>(StringComparer.Ordinal);
         void Add(string folder) => held.TryAdd(PhotoPath.Key(folder), folder);
@@ -51,7 +55,7 @@ public sealed class RemovedFiles
         // A file Organize took from outside the folder being organized is held beside itself, which no folder above names.
         foreach (var batch in await RemovalsAsync(ct))
             foreach (var item in batch.Items)
-                if (Outermost(Path.GetDirectoryName(item.To)) is { } folder && Directory.Exists(folder)) Add(folder);
+                if (Outermost(Path.GetDirectoryName(item.To)) is { } folder && _files.FolderExists(folder)) Add(folder);
 
         return held.Values.Select(Measure).Where(f => f.Files > 0).ToList();
     }
@@ -60,59 +64,78 @@ public sealed class RemovedFiles
     /// Erases everything in the folders given, and the folders with it. This cannot be taken back. A file
     /// that cannot be erased is left, with the folders it is in.
     /// </summary>
+    /// <param name="folders">The folders of removed files to empty.</param>
+    /// <param name="ct">
+    /// Stops it before anything is erased. Once erasing has begun it is finished and recorded: stopped part way, a
+    /// removal whose files had all gone would still be offered to be undone.
+    /// </param>
     /// <exception cref="ArgumentException">One of them is not a folder of removed files; nothing is erased then.</exception>
-    public async Task<EraseResult> EraseAsync(IEnumerable<string?> folders, CancellationToken ct = default)
+    public async Task<EraseResult> EraseAsync(IEnumerable<string?> folders, CancellationToken ct)
     {
         var asked = folders.ToList();
         // Only the folders PhotoSense itself puts removed files in are ever emptied, whatever is asked.
         foreach (var folder in asked)
             if (string.IsNullOrWhiteSpace(folder) || !Path.IsPathFullyQualified(folder) || !IsHeld(Path.TrimEndingDirectorySeparator(folder)))
                 throw new ArgumentException($"Not a folder of removed files: {folder}");
+        ct.ThrowIfCancellationRequested();
 
         var problems = new List<string>();
         int erased = 0, skipped = 0, emptied = 0;
         long bytes = 0;
         foreach (var path in asked.Select(f => Path.TrimEndingDirectorySeparator(Path.GetFullPath(f!))).Distinct(PhotoPath.Comparer))
         {
-            var held = new DirectoryInfo(path);
-            // Gone since it was listed, or a link to somewhere else: neither is touched.
-            if (!held.Exists || held.LinkTarget is not null) continue;
+            // Gone since it was listed, or a link: neither is touched.
+            if (!_files.FolderExists(path) || _files.IsLink(path)) continue;
             emptied++;
-            foreach (var file in held.EnumerateFiles("*", Throughout).ToList())
+            var inside = Throughout(path);
+            var files = FilesIn(inside).ToList();
+            if (_files is IPhotoChangesTogether together)
             {
+                // One question for the whole folder, which is answered for every file in it.
                 try
                 {
-                    var size = file.Length;
-                    // A file marked read-only cannot be erased until the mark is taken off.
-                    if (file.IsReadOnly) file.IsReadOnly = false;
-                    _erase(file.FullName);
-                    erased++;
-                    bytes += size;
+                    together.EraseAll([.. files.Select(f => f.Path)]);
+                    erased += files.Count;
+                    bytes += files.Sum(f => f.Bytes);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    skipped++;
-                    problems.Add($"{file.Name}: {ex.Message}");
+                    skipped += files.Count;
+                    problems.Add(ex.Message);
+                }
+            }
+            else
+            {
+                foreach (var (file, size) in files)
+                {
+                    try
+                    {
+                        _files.Erase(file);
+                        erased++;
+                        bytes += size;
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        skipped++;
+                        problems.Add($"{Path.GetFileName(file)}: {ex.Message}");
+                    }
                 }
             }
             // The folders go too, deepest first. One that still holds something stays.
-            foreach (var folder in held.EnumerateDirectories("*", Throughout).Select(d => d.FullName).OrderByDescending(d => d.Length).Append(held.FullName).ToList())
-            {
-                try { Directory.Delete(folder); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* not empty */ }
-            }
+            EmptyFolders.TakeAway(_files, inside);
         }
 
         // A removal whose files are all gone can no longer be undone, and is no longer offered to be.
-        foreach (var batch in await RemovalsAsync(ct))
-            if (!batch.Items.Exists(i => File.Exists(i.To))) await _batches.MarkUndoneAsync(batch.Id, ct);
-        await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files erased from {emptied} folders, {skipped} left" }, ct);
+        foreach (var batch in await RemovalsAsync(CancellationToken.None))
+            if (!batch.Items.Exists(i => _files.FileExists(i.To))) await _batches.MarkUndoneAsync(batch.Id, CancellationToken.None);
+        await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files erased from {emptied} folders, {skipped} left" }, CancellationToken.None);
         return new EraseResult(erased, bytes, skipped, problems);
     }
 
+    /// <summary>The removals on record, undone or not.</summary>
     private async Task<IEnumerable<OrganizeBatch>> RemovalsAsync(CancellationToken ct) => (await _batches.RecentAsync(int.MaxValue, ct)).Where(b => b.Removed);
 
-    private static bool IsFolder(string? path) => !string.IsNullOrWhiteSpace(path) && Path.IsPathFullyQualified(path) && Directory.Exists(path);
+    private bool IsFolder(string? path) => !string.IsNullOrWhiteSpace(path) && Path.IsPathFullyQualified(path) && _files.FolderExists(path);
 
     private static bool IsHeld(string folder) => Path.GetFileName(folder).Equals(PhotoStorageOptions.RemovedFolderName, StringComparison.OrdinalIgnoreCase);
 
@@ -125,29 +148,47 @@ public sealed class RemovedFiles
         return found;
     }
 
-    // Looked for at any depth, as a scan leaves them out at any depth; what is inside one is not looked through.
-    private static IEnumerable<string> HeldUnder(string root)
+    // Looked for at any depth, as a scan leaves them out at any depth; what is inside one, or inside a link, is not looked through.
+    private IEnumerable<string> HeldUnder(string root)
     {
         var pending = new Stack<string>([root]);
         while (pending.TryPop(out var folder))
         {
-            foreach (var inside in Directory.EnumerateDirectories(folder, "*", Here))
+            foreach (var inside in _files.FoldersIn(folder))
             {
+                if (_files.IsLink(inside)) continue;
                 if (IsHeld(inside)) yield return inside;
                 else pending.Push(inside);
             }
         }
     }
 
-    private static HeldFolder Measure(string folder)
+    // A folder and every folder inside it. A link is not among them: it is neither followed nor taken away.
+    private List<string> Throughout(string folder)
     {
-        int files = 0;
-        long bytes = 0;
-        foreach (var file in new DirectoryInfo(folder).EnumerateFiles("*", Throughout))
+        var all = new List<string>();
+        var pending = new Stack<string>([folder]);
+        while (pending.TryPop(out var at))
         {
-            files++;
-            bytes += file.Length;
+            all.Add(at);
+            foreach (var inside in _files.FoldersIn(at))
+                if (!_files.IsLink(inside)) pending.Push(inside);
         }
-        return new HeldFolder(folder, files, bytes);
+        return all;
+    }
+
+    // Each file in the folders, hidden ones too, with its size. A link is left as it is, and so is the folder it
+    // is in; a file gone since its folder was read has nothing of it to count or erase.
+    private IEnumerable<(string Path, long Bytes)> FilesIn(IEnumerable<string> folders)
+    {
+        foreach (var folder in folders)
+            foreach (var file in _files.FilesIn(folder))
+                if (!_files.IsLink(file) && _files.Describe(file) is { } stored) yield return (file, stored.Length);
+    }
+
+    private HeldFolder Measure(string folder)
+    {
+        var files = FilesIn(Throughout(folder)).ToList();
+        return new HeldFolder(folder, files.Count, files.Sum(f => f.Bytes));
     }
 }

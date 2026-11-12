@@ -7,4 +7,8 @@
   <ItemGroup>
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Its services register themselves (AddPhotoSenseApplication), with the settings they read. -->
+    <PackageReference Include="Microsoft.Extensions.Options" Version="11.0.0" />
+  </ItemGroup>
 </Project>

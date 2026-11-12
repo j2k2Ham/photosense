@@ -6,8 +6,10 @@ namespace PhotoSense.Domain.Repositories;
 public interface IScanHistory
 {
     /// <summary>Keeps a finished scan.</summary>
-    Task AddAsync(ScanRecord scan, CancellationToken ct = default);
+    Task AddAsync(ScanRecord scan, CancellationToken ct);
 
     /// <summary>The latest scans, newest first.</summary>
-    Task<IReadOnlyList<ScanRecord>> RecentAsync(int take = 10, CancellationToken ct = default);
+    /// <param name="take">How many at most.</param>
+    /// <param name="ct">Stops the reading.</param>
+    Task<IReadOnlyList<ScanRecord>> RecentAsync(int take, CancellationToken ct);
 }

@@ -25,6 +25,8 @@ public static class ScanEstimate
     }
 
     /// <summary>Seconds left, or null while there is nothing yet to go by.</summary>
+    /// <param name="scan">How far the scan has got.</param>
+    /// <param name="nowUtc">The time now.</param>
     public static double? SecondsLeft(ScanProgressSnapshot scan, DateTime nowUtc)
     {
         if (scan.CompletedUtc is not null) return 0;

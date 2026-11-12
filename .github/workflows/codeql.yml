@@ -1,0 +1,49 @@
+name: CodeQL
+
+# GitHub's default setup scans only main; this one also scans the branch the phone apps and sending are on.
+# Uploads from here are refused while the default setup is on (Settings, Code security, CodeQL analysis).
+on:
+  push:
+    branches: [ master, main, feature/mobile-and-mac ]
+  pull_request:
+    branches: [ master, main ]
+  schedule:
+    # Weekly, as the default setup did, for advisories published since the last push. Runs from main only.
+    - cron: '27 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: actions
+          - language: csharp
+          - language: javascript-typescript
+          - language: python
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # C# is read without building, as the default setup does: building would need the iPhone and Android
+      # workloads, which only a Mac and the Android job install.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}

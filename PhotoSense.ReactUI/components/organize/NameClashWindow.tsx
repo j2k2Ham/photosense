@@ -44,7 +44,6 @@ function Picture({ file }: { readonly file: Shown }) {
     );
   return (
     <span className="block h-full w-full bg-contain bg-center bg-no-repeat" style={{ backgroundImage: `url("${organizeThumbnailUrl(file.id)}")` }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img key={file.id} src={organizeImageUrl(file.id)} alt={file.name} className="h-full w-full object-contain" />
     </span>
   );

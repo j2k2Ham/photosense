@@ -20,7 +20,8 @@
 .light {
   --bg: #f5f7f9; --s1: #fdfeff; --s2: #eef0f3; --s3: #dee2e5; --pop: #ffffff;
   --line: rgba(27, 36, 36, .11);
-  --t1: #171b1f; --t2: #50565a; --t3: #676d71;
+  /* --t3 is as light as it can be and still be read on --stage (4.5:1, WCAG AA). */
+  --t1: #171b1f; --t2: #50565a; --t3: #646a6e;
   --stage: #e8ecee;
   --brand: #007283; --on-brand: #ffffff; --sel: #d9f0f4;
   --keep: #006a42; --keep-bg: #cff6e0; --keep-line: rgba(43, 150, 103, .60);
@@ -32,6 +33,58 @@
   color-scheme: light;
 }
 
+/* The phone and tablet skins (docs/design_handoff_photosense_mobile, "Design tokens"): iOS 26 and Material 3,
+   each dark and light, set on <html> as data-skin by platform and theme. They come after the desktop's tokens, so
+   that where the two share a name (--bg, --t1, --keep and the rest) the skin's value is the one a phone shows. */
+[data-skin="ios-native-dark"]{--bg:#000;--cell:#1C1C1E;--fill:rgba(118,118,128,.24);--fill2:#3A3A3C;--t1:#fff;--t2:rgba(235,235,245,.66);--t3:rgba(235,235,245,.5);--sep:rgba(84,84,88,.55);--acc:oklch(0.76 0.11 205);--on-acc:#00242b;--acc-soft:oklch(0.76 0.11 205 / .17);--on-acc-soft:oklch(0.87 0.08 205);--danger:#FF453A;--on-danger:#fff;--danger-t:#FF6961;--danger-soft:rgba(255,69,58,.16);--keep:#30D158;--on-keep:#04170c;--keep-soft:rgba(48,209,88,.16);--amber:#FFD60A;--amber-soft:rgba(255,214,10,.13);--ident:oklch(0.86 0.09 210);--ident-bg:oklch(0.74 0.11 210 / .2);--sel:rgba(118,118,128,.32);--bar:rgba(30,30,32,.62);--bar-bd:.5px solid rgba(255,255,255,.14);--bar-sh:0 10px 30px rgba(0,0,0,.5);--bar-hi:rgba(255,255,255,.13);--bar-on:oklch(0.80 0.11 205);--bar-off:#fff;--side:rgba(30,30,32,.7);--sheet:#1C1C1E;--sheet-cell:#2C2C2E;--scrim:rgba(0,0,0,.5);--toast:rgba(48,48,50,.94);--on-toast:#fff;--toast-act:oklch(0.82 0.11 205);--btn2-bg:rgba(118,118,128,.24);--btn2-fg:#fff;--seg-bg:rgba(118,118,128,.24);--seg-on:#5A5A5E;--seg-on-fg:#fff;--seg-sh:0 2px 6px rgba(0,0,0,.25);--chip-bg:rgba(118,118,128,.24);--chip-on-bg:#fff;--chip-on-fg:#000;--ib-bg:rgba(120,120,128,.3);--ib-bd:.5px solid rgba(255,255,255,.14);--ib-sh:0 2px 8px rgba(0,0,0,.3);--tb-fg:#fff;--grab:rgba(235,235,245,.3);--sw-on:#30D158;--sw-off:rgba(120,120,128,.32);--map:#161d21;--map-line:rgba(255,255,255,.045);--stage:#000;--input:#2C2C2E;--alert:rgba(40,40,42,.96)}
+[data-skin="ios-native-light"]{--bg:#F2F2F7;--cell:#fff;--fill:rgba(118,118,128,.12);--fill2:#E5E5EA;--t1:#000;--t2:rgba(60,60,67,.78);--t3:rgba(60,60,67,.62);--sep:rgba(60,60,67,.18);--acc:oklch(0.50 0.10 215);--on-acc:#fff;--acc-soft:oklch(0.50 0.10 215 / .1);--on-acc-soft:oklch(0.40 0.09 215);--danger:#E0342A;--on-danger:#fff;--danger-t:#D70015;--danger-soft:rgba(255,59,48,.1);--keep:#1F7A35;--on-keep:#fff;--keep-soft:rgba(52,199,89,.14);--amber:#8A5A00;--amber-soft:rgba(255,204,0,.16);--ident:oklch(0.42 0.09 215);--ident-bg:oklch(0.94 0.035 210);--sel:rgba(0,0,0,.06);--bar:rgba(255,255,255,.72);--bar-bd:.5px solid rgba(0,0,0,.06);--bar-sh:0 6px 24px rgba(0,0,0,.12);--bar-hi:rgba(0,0,0,.065);--bar-on:oklch(0.50 0.10 215);--bar-off:#1c1c1e;--side:rgba(255,255,255,.78);--sheet:#F2F2F7;--sheet-cell:#fff;--scrim:rgba(0,0,0,.28);--toast:rgba(28,28,30,.92);--on-toast:#fff;--toast-act:oklch(0.82 0.10 205);--btn2-bg:rgba(118,118,128,.12);--btn2-fg:#000;--seg-bg:rgba(118,118,128,.12);--seg-on:#fff;--seg-on-fg:#000;--seg-sh:0 2px 6px rgba(0,0,0,.12);--chip-bg:rgba(118,118,128,.12);--chip-on-bg:#000;--chip-on-fg:#fff;--ib-bg:rgba(255,255,255,.78);--ib-bd:.5px solid rgba(0,0,0,.06);--ib-sh:0 1px 6px rgba(0,0,0,.1);--tb-fg:#000;--grab:rgba(60,60,67,.3);--sw-on:#34C759;--sw-off:rgba(120,120,128,.16);--map:#E6EBEA;--map-line:rgba(0,0,0,.045);--stage:#000;--input:#fff;--alert:rgba(250,250,252,.96)}
+[data-skin="and-native-dark"]{--bg:#0F1415;--cell:#1B2122;--fill:#252B2C;--fill2:#303637;--t1:#DEE3E5;--t2:#BFC8CA;--t3:#99A2A4;--sep:#3F484A;--acc:#82D3E0;--on-acc:#00363D;--acc-soft:#004F58;--on-acc-soft:#9EEFFD;--danger:#FFB4AB;--on-danger:#690005;--danger-t:#FFB4AB;--danger-soft:rgba(255,180,171,.12);--keep:#8BD6A0;--on-keep:#00391A;--keep-soft:rgba(139,214,160,.14);--amber:#E9C46A;--amber-soft:rgba(233,196,106,.13);--ident:#9EEFFD;--ident-bg:#004F58;--sel:#334B4F;--bar:#1B2122;--bar-hi:#334B4F;--bar-on:#CDE7EC;--bar-off:#BFC8CA;--rail:#0F1415;--sheet:#1B2122;--sheet-cell:#252B2C;--scrim:rgba(0,0,0,.45);--toast:#DEE3E5;--on-toast:#2B3133;--toast-act:#006874;--btn2-bg:#334B4F;--btn2-fg:#CDE7EC;--seg-bd:#899294;--seg-on:#334B4F;--seg-on-fg:#CDE7EC;--chip-bd:#899294;--chip-on-bg:#334B4F;--chip-on-fg:#CDE7EC;--tb-fg:#82D3E0;--grab:#899294;--sw-on:#82D3E0;--sw-off:#3F484A;--map:#172022;--map-line:rgba(255,255,255,.04);--stage:#000;--input:#252B2C;--alert:#252B2C}
+[data-skin="and-native-light"]{--bg:#F5FAFB;--cell:#E7EDEE;--fill:#DEE4E5;--fill2:#D3DADB;--t1:#171D1E;--t2:#3F484A;--t3:#556062;--sep:#BFC8CA;--acc:#006874;--on-acc:#fff;--acc-soft:#CDEFF4;--on-acc-soft:#001F24;--danger:#BA1A1A;--on-danger:#fff;--danger-t:#BA1A1A;--danger-soft:#FFDAD6;--keep:#1E6B38;--on-keep:#fff;--keep-soft:#C8EFD0;--amber:#7A5900;--amber-soft:#FFEFC2;--ident:#004F58;--ident-bg:#CDE7EC;--sel:#CDE7EC;--bar:#E9EFF0;--bar-hi:#CDE7EC;--bar-on:#051F23;--bar-off:#3F484A;--rail:#F5FAFB;--sheet:#EFF5F6;--sheet-cell:#E3E9EA;--scrim:rgba(0,0,0,.32);--toast:#2B3133;--on-toast:#ECF2F3;--toast-act:#82D3E0;--btn2-bg:#CDE7EC;--btn2-fg:#051F23;--seg-bd:#6F797A;--seg-on:#CDE7EC;--seg-on-fg:#051F23;--chip-bd:#6F797A;--chip-on-bg:#CDE7EC;--chip-on-fg:#051F23;--tb-fg:#006874;--grab:#6F797A;--sw-on:#006874;--sw-off:#DEE4E5;--map:#E2E9E8;--map-line:rgba(0,0,0,.045);--stage:#000;--input:#fff;--alert:#E3E9EA}
+
+/* What the two platforms draw differently besides colour: type, corners and the sizes of titles and controls. */
+[data-skin^="ios-native"] {
+  --font-ui: -apple-system, "SF Pro Text", system-ui, sans-serif;
+  --font-title: -apple-system, "SF Pro Display", system-ui, sans-serif;
+  --font-code: ui-monospace, "SF Mono", monospace;
+  --fs-body: 17px; --fs-sub: 15px;
+  --h1: 34px; --h1-weight: 700; --h1-tracking: .01em;
+  --btn-h: 50px; --btn-fs: 17px; --btn-fw: 600;
+  --seg-h: 34px; --ib: 44px; --grab-w: 36px;
+  --r-cell: 24px; --r-sheet: 36px; --r-toast: 22px; --r-dialog: 30px; --r-chip: 999px;
+  /* iOS draws segments and chips without an outline. */
+  --seg-bd: transparent; --chip-bd: transparent;
+}
+[data-skin^="and-native"] {
+  --font-ui: Roboto, system-ui, sans-serif;
+  --font-title: Roboto, system-ui, sans-serif;
+  --font-code: var(--font-mono), monospace;
+  --fs-body: 16px; --fs-sub: 14px;
+  --h1: 24px; --h1-weight: 400; --h1-tracking: 0;
+  --btn-h: 52px; --btn-fs: 16px; --btn-fw: 500;
+  --seg-h: 40px; --ib: 48px; --grab-w: 32px;
+  --r-cell: 20px; --r-sheet: 28px; --r-toast: 8px; --r-dialog: 28px; --r-chip: 8px;
+  /* Material draws its bars, segments, chips and icon buttons flat: no glass, outline or shadow. */
+  --seg-bg: transparent; --chip-bg: transparent; --ib-bg: transparent;
+  --ib-bd: none; --ib-sh: none; --bar-bd: none; --bar-sh: none; --seg-sh: none;
+}
+[data-skin] body { font-family: var(--font-ui); font-size: var(--fs-body); }
+/* The edges the system's own bars and the screen's corners take. An iPhone says them through env(); Android's app
+   says them itself (--app-inset-top and --app-inset-bottom), as its web view may not. */
+[data-skin] {
+  --safe-t: var(--app-inset-top, env(safe-area-inset-top, 0px));
+  --safe-b: var(--app-inset-bottom, env(safe-area-inset-bottom, 0px));
+}
+/* In a phone app the page stays hidden until it has its skin, so the computer's layout never shows there for a moment.
+   Should the program never answer, it shows after three seconds all the same, with whatever it can say. */
+html[data-app] { background: #000; }
+html[data-app].light { background: #fff; }
+html[data-app]:not([data-skin]) body { visibility: hidden; animation: shown 0s 3s forwards; }
+@keyframes shown { to { visibility: visible; } }
+
+/* Phones scroll without a scrollbar drawn, as their own apps do. */
+[data-skin] *::-webkit-scrollbar { display: none; }
+[data-skin] * { scrollbar-width: none; }
+
 html, body, :root { height: 100%; }
 body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -41,6 +94,10 @@ body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.
 /* The bar that sweeps across while something of unknown length is under way. */
 @keyframes reading-sweep { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 .reading-sweep { animation: reading-sweep 1.4s ease-in-out infinite; }
+/* Send's waiting: two rings going out from the computer, the second half a beat behind. */
+@keyframes send-pulse { from { transform: scale(.6); opacity: .6; } to { transform: scale(1.45); opacity: 0; } }
+.send-pulse { animation: send-pulse 2.2s ease-out infinite; }
+.send-pulse-late { animation: send-pulse 2.2s ease-out 1.1s infinite; }
 
 @layer components {
   /* Every button is a pill. */
@@ -53,4 +110,15 @@ body { background: var(--bg); color: var(--t1); font-size: 14px; line-height: 1.
   .pill-keep { @apply pill border border-keep-line text-keep hover:bg-keep-bg disabled:opacity-50; }
   .label-caps { @apply text-[12px] font-semibold uppercase tracking-[0.07em] text-t3; }
   .badge { @apply inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.08em]; }
+}
+/* Where the keyboard is, always visible, in the brand's colour, on both themes. */
+@layer base {
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+}
+/* A text field drawn without an outline of its own shows the ring on the frame it sits in. */
+:where(label, div):has(> input.outline-none:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* For whoever has asked their system for less motion: nothing slides, sweeps or fades. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

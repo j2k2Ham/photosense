@@ -11,18 +11,21 @@ using PhotoSense.Infrastructure.Persistence;
 
 namespace PhotoSense.Tests.Application;
 
+/// <summary>Scanning folders: what is read, skipped, recorded and dropped.</summary>
 public sealed class ScanExecutionServiceTests : IDisposable
 {
     private readonly DirectoryInfo _root = Directory.CreateTempSubdirectory("photosense-scan-");
     private readonly InMemoryPhotoRepository _repo = new();
     private readonly FakeAnalyzer _analyzer = new();
     private readonly FakeThumbnails _thumbnails = new();
-    private readonly InMemoryScanProgressStore _progress = new();
+    private readonly InMemoryScanProgressStore _progress = new(new TestClock());
     private readonly Mock<IScanLogSink> _log = new();
+    // A file held open by another program cannot be read on Windows alone; this disk refuses to on any system.
+    private readonly FailingDisk _disk = new();
     private readonly ScanExecutionService _service;
 
     public ScanExecutionServiceTests()
-        => _service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _log.Object, parallelism: 2);
+        => _service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, _log.Object, parallelism: 2);
 
     public void Dispose() => _root.Delete(true);
 
@@ -39,15 +42,19 @@ public sealed class ScanExecutionServiceTests : IDisposable
     /// <summary>Scans kept in a list, newest first, as the real history hands them back.</summary>
     private sealed class History : IScanHistory
     {
+        /// <summary>The scans kept, newest first.</summary>
         public List<ScanRecord> Scans { get; } = [];
-        public Task AddAsync(ScanRecord scan, CancellationToken ct = default) { Scans.Insert(0, scan); return Task.CompletedTask; }
-        public Task<IReadOnlyList<ScanRecord>> RecentAsync(int take = 10, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ScanRecord>>(Scans.Take(take).ToList());
+        /// <inheritdoc />
+        public Task AddAsync(ScanRecord scan, CancellationToken ct) { Scans.Insert(0, scan); return Task.CompletedTask; }
+        /// <inheritdoc />
+        public Task<IReadOnlyList<ScanRecord>> RecentAsync(int take, CancellationToken ct) => Task.FromResult<IReadOnlyList<ScanRecord>>(Scans.Take(take).ToList());
     }
 
     /// <summary>A clock that moves on seven seconds each time it is read.</summary>
     private sealed class SteppingClock : TimeProvider
     {
         private long _seconds;
+        /// <summary>The day it always tells.</summary>
         public static readonly DateTimeOffset Day = new(2026, 10, 7, 20, 0, 0, TimeSpan.Zero);
         public override long TimestampFrequency => 1;
         public override long GetTimestamp() => _seconds += 7;
@@ -55,15 +62,15 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Test]
-    public async Task Keeps_What_Each_Scan_Took_And_Tells_The_Next_How_Long_To_Expect()
+    public async Task Keeps_What_Each_Scan_Took_And_Tells_The_Next_How_Long_To_Expect(CancellationToken ct)
     {
         var history = new History();
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress,
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk,
             parallelism: 2, history: history, time: new SteppingClock());
         Write("a.jpg", "picture a");
 
         // The first scan has nothing to go by, and leaves a record of itself.
-        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "first");
+        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "first", ct);
         await Assert.That(_progress.Get("first").ExpectedSeconds).IsNull();
         var first = history.Scans.Single();
         await Assert.That((first.StartedUtc, first.Seconds, first.Total, first.Read, first.Unchanged)).IsEqualTo((SteppingClock.Day.UtcDateTime, 7d, 1, 1, 0));
@@ -72,7 +79,7 @@ public sealed class ScanExecutionServiceTests : IDisposable
         history.Scans.Insert(0, new ScanRecord { Seconds = 200, Read = 100, Total = 100 });
         Write("b.jpg", "picture b");
         File.WriteAllBytes(Path.Combine(_root.FullName, "c.jpg"), []);   // an empty file: recorded, and nothing in it to analyse
-        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "second");
+        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "second", ct);
 
         await Assert.That(_progress.Get("second").ExpectedSeconds).IsEqualTo(4);
         var second = history.Scans[0];
@@ -80,27 +87,27 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Test]
-    public async Task A_Scan_That_Was_Not_Started_Leaves_No_Record_Of_Itself()
+    public async Task A_Scan_That_Was_Not_Started_Leaves_No_Record_Of_Itself(CancellationToken ct)
     {
         var history = new History();
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, history: history);
-        await service.RunAsync(new ScanRequest(Path.Combine(_root.FullName, "not-there"), null, true), "missing");
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, history: history);
+        await service.RunAsync(new ScanRequest(Path.Combine(_root.FullName, "not-there"), null, true), "missing", ct);
         await Assert.That(history.Scans).IsEmpty();
     }
 
-    private Task<ScanSummary> ScanAsync(string? secondary = null, bool recursive = true, string instance = "scan")
-        => _service.RunAsync(new ScanRequest(_root.FullName, secondary, recursive), instance);
+    private Task<ScanSummary> ScanAsync(CancellationToken ct, string? secondary = null, bool recursive = true, string instance = "scan")
+        => _service.RunAsync(new ScanRequest(_root.FullName, secondary, recursive), instance, ct);
 
     [Test]
-    public async Task Records_Each_Image_With_Its_Hashes_And_Measurements()
+    public async Task Records_Each_Image_With_Its_Hashes_And_Measurements(CancellationToken ct)
     {
         var path = Write("a.jpg", "picture a");
         Write("notes.txt", "not a picture");
 
-        var summary = await ScanAsync();
+        var summary = await ScanAsync(ct);
 
         await Assert.That(summary).IsEqualTo(new ScanSummary(Total: 1, Analyzed: 1, Unchanged: 0, Unreadable: 0, Pruned: 0));
-        var photo = (await _repo.GetAllAsync()).Single();
+        var photo = (await _repo.GetAllAsync(ct)).Single();
         await Assert.That(photo.SourcePath).IsEqualTo(path);
         await Assert.That(photo.FileName).IsEqualTo("a.jpg");
         await Assert.That(photo.FileSizeBytes).IsEqualTo(new FileInfo(path).Length);
@@ -118,163 +125,162 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Test]
-    public async Task Scanning_Again_Does_Not_Make_A_File_A_Duplicate_Of_Itself()
+    public async Task Scanning_Again_Does_Not_Make_A_File_A_Duplicate_Of_Itself(CancellationToken ct)
     {
         Write("a.jpg", "picture a");
         Write("b.jpg", "picture b");
-        await ScanAsync();
-        var firstIds = (await _repo.GetAllAsync()).Select(p => p.Id).OrderBy(i => i.Value).ToList();
+        await ScanAsync(ct);
+        var firstIds = (await _repo.GetAllAsync(ct)).Select(p => p.Id).OrderBy(i => i.Value).ToList();
 
-        var second = await ScanAsync(instance: "again");
+        var second = await ScanAsync(ct, instance: "again");
 
         await Assert.That(second).IsEqualTo(new ScanSummary(Total: 2, Analyzed: 0, Unchanged: 2, Unreadable: 0, Pruned: 0));
-        await Assert.That((await _repo.GetAllAsync()).Select(p => p.Id).OrderBy(i => i.Value)).IsEquivalentTo(firstIds, CollectionOrdering.Matching);
+        await Assert.That((await _repo.GetAllAsync(ct)).Select(p => p.Id).OrderBy(i => i.Value)).IsEquivalentTo(firstIds, CollectionOrdering.Matching);
         await Assert.That(_analyzer.Calls).IsEqualTo(2); // unchanged files are not decoded again
-        await Assert.That(DuplicateAnalysisService.Analyze(await _repo.GetAllAsync()).Duplicates).IsEmpty();
+        await Assert.That(DuplicateAnalysisService.Analyze(await _repo.GetAllAsync(ct)).Duplicates).IsEmpty();
     }
 
     [Test]
-    public async Task A_Changed_File_Is_Read_Again_And_Keeps_Its_Record_And_Keep_Mark()
+    public async Task A_Changed_File_Is_Read_Again_And_Keeps_Its_Record_And_Keep_Mark(CancellationToken ct)
     {
         var path = Write("a.jpg", "picture a");
-        await ScanAsync();
-        var before = (await _repo.GetAllAsync()).Single();
+        await ScanAsync(ct);
+        var before = (await _repo.GetAllAsync(ct)).Single();
         before.IsKept = true;
-        await _repo.AddOrUpdateAsync(before);
+        await _repo.AddOrUpdateAsync(before, ct);
 
         File.WriteAllText(path, "picture a, edited and longer");
-        var summary = await ScanAsync(instance: "again");
+        var summary = await ScanAsync(ct, instance: "again");
 
         await Assert.That(summary.Analyzed).IsEqualTo(1);
-        var after = (await _repo.GetAllAsync()).Single();
+        var after = (await _repo.GetAllAsync(ct)).Single();
         await Assert.That(after.Id).IsEqualTo(before.Id);
         await Assert.That(after.ContentHash).IsNotEqualTo(before.ContentHash);
         await Assert.That(after.IsKept).IsTrue();
     }
 
     [Test]
-    public async Task Forgets_Files_That_Are_No_Longer_There()
+    public async Task Forgets_Files_That_Are_No_Longer_There(CancellationToken ct)
     {
         var gone = Write("gone.jpg", "picture");
         Write("stays.jpg", "another");
-        await ScanAsync();
+        await ScanAsync(ct);
 
         File.Delete(gone);
-        var summary = await ScanAsync(instance: "again");
+        var summary = await ScanAsync(ct, instance: "again");
 
         await Assert.That(summary.Pruned).IsEqualTo(1);
-        await Assert.That((await _repo.GetAllAsync()).Single().FileName).IsEqualTo("stays.jpg");
+        await Assert.That((await _repo.GetAllAsync(ct)).Single().FileName).IsEqualTo("stays.jpg");
     }
 
     [Test]
-    public async Task A_Missing_Folder_Scans_Nothing_And_Forgets_Nothing()
+    public async Task A_Missing_Folder_Scans_Nothing_And_Forgets_Nothing(CancellationToken ct)
     {
         Write("a.jpg", "picture a");
-        await ScanAsync();
+        await ScanAsync(ct);
 
         var missing = Path.Combine(_root.FullName, "no-such-folder");
-        var summary = await _service.RunAsync(new ScanRequest(missing, null, true), "typo");
-        var blank = await _service.RunAsync(new ScanRequest(" ", null, true), "blank");
-        var missingSecondary = await ScanAsync(secondary: missing, instance: "typo2");
+        var summary = await _service.RunAsync(new ScanRequest(missing, null, true), "typo", ct);
+        var blank = await _service.RunAsync(new ScanRequest(" ", null, true), "blank", ct);
+        var missingSecondary = await ScanAsync(ct, secondary: missing, instance: "typo2");
 
         await Assert.That(summary).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
         await Assert.That(blank).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
         await Assert.That(missingSecondary).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
-        await Assert.That(await _repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(await _repo.GetAllAsync(ct)).HasSingleItem();
         await Assert.That(_progress.Get("typo").CompletedUtc).IsNotNull();
         _log.Verify(l => l.Log("typo", "Error", It.Is<string>(m => m.Contains(missing))), Times.Once);
     }
 
     [Test]
-    public async Task Starting_Over_Forgets_Earlier_Results_And_Reads_Every_File_Again()
+    public async Task Starting_Over_Forgets_Earlier_Results_And_Reads_Every_File_Again(CancellationToken ct)
     {
         var path = Write("a.jpg", "picture a");
         Write("b.jpg", "picture b");
-        await ScanAsync();
-        var before = (await _repo.GetAllAsync()).Single(p => p.SourcePath == path);
+        await ScanAsync(ct);
+        var before = (await _repo.GetAllAsync(ct)).Single(p => p.SourcePath == path);
         before.IsKept = true;
-        await _repo.AddOrUpdateAsync(before);
+        await _repo.AddOrUpdateAsync(before, ct);
         // Left over from a scan of some other folder: an ordinary scan would only drop it at its end.
-        await _repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "elsewhere", "old.jpg"), FileName = "old.jpg", ContentHash = "OLD" });
+        await _repo.AddOrUpdateAsync(new Photo { SourcePath = Path.Combine(Path.GetTempPath(), "elsewhere", "old.jpg"), FileName = "old.jpg", ContentHash = "OLD" }, ct);
         _thumbnails.Saved["STALE"] = [9];
 
-        var summary = await _service.RunAsync(new ScanRequest(_root.FullName, null, true, StartOver: true), "fresh");
+        var summary = await _service.RunAsync(new ScanRequest(_root.FullName, null, true, StartOver: true), "fresh", ct);
 
         // Nothing is taken as unchanged, and nothing is counted as having gone missing.
         await Assert.That(summary).IsEqualTo(new ScanSummary(Total: 2, Analyzed: 2, Unchanged: 0, Unreadable: 0, Pruned: 0));
         await Assert.That(_analyzer.Calls).IsEqualTo(4);
-        var after = (await _repo.GetAllAsync()).Single(p => p.SourcePath == path);
+        var after = (await _repo.GetAllAsync(ct)).Single(p => p.SourcePath == path);
         await Assert.That(after.Id).IsNotEqualTo(before.Id);
         await Assert.That(after.IsKept).IsFalse();                          // marks made on the earlier results go with them
-        await Assert.That((await _repo.GetAllAsync()).Count).IsEqualTo(2);
+        await Assert.That((await _repo.GetAllAsync(ct)).Count).IsEqualTo(2);
         await Assert.That(_thumbnails.Saved.Keys).DoesNotContain("STALE");
         await Assert.That(_thumbnails.Saved.Count).IsEqualTo(2);
         _log.Verify(l => l.Log("fresh", "Info", "Starting over: forgot 3 files recorded by earlier scans"), Times.Once);
     }
 
     [Test]
-    public async Task Starting_Over_With_A_Mistyped_Folder_Forgets_Nothing()
+    public async Task Starting_Over_With_A_Mistyped_Folder_Forgets_Nothing(CancellationToken ct)
     {
         Write("a.jpg", "picture a");
-        await ScanAsync();
-        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, parallelism: 1);
+        await ScanAsync(ct);
+        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, parallelism: 1);
 
         var missing = Path.Combine(_root.FullName, "no-such-folder");
-        await Assert.That(await quiet.RunAsync(new ScanRequest(missing, null, true, StartOver: true), "typo")).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
-        await Assert.That(await _repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(await quiet.RunAsync(new ScanRequest(missing, null, true, StartOver: true), "typo", ct)).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
+        await Assert.That(await _repo.GetAllAsync(ct)).HasSingleItem();
         await Assert.That(_thumbnails.Saved).HasSingleItem();
 
         // The same service, with nowhere to log, starts over all the same once the folder is right.
-        var summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true, StartOver: true), "fresh");
+        var summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true, StartOver: true), "fresh", ct);
         await Assert.That((summary.Analyzed, summary.Unchanged)).IsEqualTo((1, 0));
     }
 
     [Test]
-    public async Task A_File_That_Cannot_Be_Decoded_Is_Still_Recorded_By_Its_Content()
+    public async Task A_File_That_Cannot_Be_Decoded_Is_Still_Recorded_By_Its_Content(CancellationToken ct)
     {
         Write("broken.heic", FakeAnalyzer.Undecodable);
 
-        var summary = await ScanAsync();
+        var summary = await ScanAsync(ct);
 
         await Assert.That((summary.Analyzed, summary.Unreadable)).IsEqualTo((0, 1));
-        var photo = (await _repo.GetAllAsync()).Single();
+        var photo = (await _repo.GetAllAsync(ct)).Single();
         await Assert.That(photo.ContentHash).IsNotNull();
         await Assert.That(photo.PerceptualHash).IsNull();
         await Assert.That(photo.Width).IsEqualTo(0);
         _log.Verify(l => l.Log("scan", "Warn", It.Is<string>(m => m.Contains("broken.heic"))), Times.Once);
 
         // It is not attempted again while it stays unchanged.
-        await Assert.That((await ScanAsync(instance: "again")).Unchanged).IsEqualTo(1);
+        await Assert.That((await ScanAsync(ct, instance: "again")).Unchanged).IsEqualTo(1);
         await Assert.That(_analyzer.Calls).IsEqualTo(1);
     }
 
     [Test]
-    public async Task A_File_That_Cannot_Be_Opened_Keeps_Its_Earlier_Record()
+    public async Task A_File_That_Cannot_Be_Opened_Keeps_Its_Earlier_Record(CancellationToken ct)
     {
         var path = Write("locked.jpg", "picture");
-        await ScanAsync();
+        await ScanAsync(ct);
         File.WriteAllText(path, "changed, so it has to be read again");
+        _disk.Fail("read", path);
 
-        ScanSummary summary;
-        using (new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            summary = await ScanAsync(instance: "again");
+        var summary = await ScanAsync(ct, instance: "again");
 
         await Assert.That((summary.Unreadable, summary.Pruned)).IsEqualTo((1, 0));
-        await Assert.That(await _repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(await _repo.GetAllAsync(ct)).HasSingleItem();
     }
 
     [Test]
-    public async Task Secondary_Folder_Is_Scanned_As_The_Secondary_Set()
+    public async Task Secondary_Folder_Is_Scanned_As_The_Secondary_Set(CancellationToken ct)
     {
         Write("a.jpg", "picture a");
         var backup = Directory.CreateTempSubdirectory("photosense-backup-");
         try
         {
             File.WriteAllText(Path.Combine(backup.FullName, "a copy.jpg"), "picture a");
-            var summary = await ScanAsync(secondary: backup.FullName);
+            var summary = await ScanAsync(ct, secondary: backup.FullName);
 
             await Assert.That(summary.Total).IsEqualTo(2);
-            var photos = await _repo.GetAllAsync();
+            var photos = await _repo.GetAllAsync(ct);
             await Assert.That(photos.Single(p => p.FileName == "a copy.jpg").Set).IsEqualTo(PhotoSet.Secondary);
             await Assert.That(photos.Single(p => p.FileName == "a copy.jpg").ScanRoot).IsEqualTo(backup.FullName);
             var progress = _progress.Get("scan");
@@ -286,27 +292,27 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Test]
-    public async Task A_File_Reachable_From_Both_Folders_Is_Scanned_Once_As_Primary()
+    public async Task A_File_Reachable_From_Both_Folders_Is_Scanned_Once_As_Primary(CancellationToken ct)
     {
         Write(Path.Combine("sub", "a.jpg"), "picture a");
-        var summary = await ScanAsync(secondary: Path.Combine(_root.FullName, "sub"));
+        var summary = await ScanAsync(ct, secondary: Path.Combine(_root.FullName, "sub"));
 
         await Assert.That(summary.Total).IsEqualTo(1);
-        await Assert.That((await _repo.GetAllAsync()).Single().Set).IsEqualTo(PhotoSet.Primary);
+        await Assert.That((await _repo.GetAllAsync(ct)).Single().Set).IsEqualTo(PhotoSet.Primary);
     }
 
     [Test]
-    public async Task Moving_A_Folder_Between_Sets_Updates_The_Record_Without_Reading_The_File_Again()
+    public async Task Moving_A_Folder_Between_Sets_Updates_The_Record_Without_Reading_The_File_Again(CancellationToken ct)
     {
         Write(Path.Combine("sub", "a.jpg"), "picture a");
-        await ScanAsync();
+        await ScanAsync(ct);
         var sub = Path.Combine(_root.FullName, "sub");
         var other = Directory.CreateTempSubdirectory("photosense-other-");
         try
         {
-            var summary = await _service.RunAsync(new ScanRequest(other.FullName, sub, true), "swap");
+            var summary = await _service.RunAsync(new ScanRequest(other.FullName, sub, true), "swap", ct);
             await Assert.That(summary.Unchanged).IsEqualTo(1);
-            var photo = (await _repo.GetAllAsync()).Single();
+            var photo = (await _repo.GetAllAsync(ct)).Single();
             await Assert.That((photo.Set, photo.ScanRoot)).IsEqualTo((PhotoSet.Secondary, sub));
             await Assert.That(_analyzer.Calls).IsEqualTo(1);
         }
@@ -314,34 +320,34 @@ public sealed class ScanExecutionServiceTests : IDisposable
     }
 
     [Test]
-    public async Task Top_Level_Scan_Leaves_Subfolders_Out_And_Removed_Files_Are_Never_Scanned()
+    public async Task Top_Level_Scan_Leaves_Subfolders_Out_And_Removed_Files_Are_Never_Scanned(CancellationToken ct)
     {
         Write("a.jpg", "picture a");
         Write(Path.Combine("sub", "b.jpg"), "picture b");
         Write(Path.Combine(PhotoStorageOptions.RemovedFolderName, "a (1).jpg"), "picture a");
 
-        await Assert.That((await ScanAsync()).Total).IsEqualTo(2);
-        var topOnly = await ScanAsync(recursive: false, instance: "top");
+        await Assert.That((await ScanAsync(ct)).Total).IsEqualTo(2);
+        var topOnly = await ScanAsync(ct, recursive: false, instance: "top");
         await Assert.That((topOnly.Total, topOnly.Pruned)).IsEqualTo((1, 1));
     }
 
     [Test]
-    public async Task Stops_Without_Forgetting_Anything_When_Cancelled()
+    public async Task Stops_Without_Forgetting_Anything_When_Cancelled(CancellationToken ct)
     {
         Write("a.jpg", "picture a");
-        await ScanAsync();
+        await ScanAsync(ct);
         Write("b.jpg", "picture b");
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => _service.RunAsync(new ScanRequest(_root.FullName, null, true), "cancelled", cts.Token));
 
-        await Assert.That(await _repo.GetAllAsync()).HasSingleItem();
+        await Assert.That(await _repo.GetAllAsync(ct)).HasSingleItem();
         await Assert.That(_progress.Get("cancelled").CompletedUtc).IsNotNull();
     }
 
     [Test]
-    public async Task A_Video_Is_Read_In_Full_Only_When_Another_Video_Has_Its_Size()
+    public async Task A_Video_Is_Read_In_Full_Only_When_Another_Video_Has_Its_Size(CancellationToken ct)
     {
         Write("clip.mov", "1234567890");
         Write("a.mp4", "same size AAAA");
@@ -349,10 +355,10 @@ public sealed class ScanExecutionServiceTests : IDisposable
         Write("b.mp4", "same size BBBB");
         Write("picture.jpg", "1234567890"); // a picture's size says nothing about a video
 
-        var summary = await ScanAsync();
+        var summary = await ScanAsync(ct);
 
         await Assert.That(summary).IsEqualTo(new ScanSummary(Total: 5, Analyzed: 5, Unchanged: 0, Unreadable: 0, Pruned: 0));
-        var photos = (await _repo.GetAllAsync()).ToDictionary(p => Path.GetRelativePath(_root.FullName, p.SourcePath));
+        var photos = (await _repo.GetAllAsync(ct)).ToDictionary(p => Path.GetRelativePath(_root.FullName, p.SourcePath));
         var clip = photos["clip.mov"];
         await Assert.That(clip.IsVideo).IsTrue();
         await Assert.That(clip.ContentHash).IsNull(); // nothing else is its size, so nothing can be identical to it
@@ -366,17 +372,17 @@ public sealed class ScanExecutionServiceTests : IDisposable
         var group = DuplicateAnalysisService.Analyze(photos.Values.ToList()).Duplicates.Single();
         await Assert.That((group.Keeper.FileName, group.Members.Single().Photo.FileName)).IsEqualTo(("a.mp4", "a.mp4"));
 
-        await Assert.That((await ScanAsync(instance: "again")).Unchanged).IsEqualTo(5);
+        await Assert.That((await ScanAsync(ct, instance: "again")).Unchanged).IsEqualTo(5);
 
         // A second copy of the lone clip turns up: now both must be read to see whether they match.
         Write("clip copy.mov", "1234567890");
-        var third = await ScanAsync(instance: "third");
+        var third = await ScanAsync(ct, instance: "third");
         await Assert.That((third.Analyzed, third.Unchanged)).IsEqualTo((2, 4));
-        await Assert.That(DuplicateAnalysisService.Analyze(await _repo.GetAllAsync()).Duplicates.Count).IsEqualTo(2);
+        await Assert.That(DuplicateAnalysisService.Analyze(await _repo.GetAllAsync(ct)).Duplicates.Count).IsEqualTo(2);
     }
 
     [Test]
-    public async Task Empty_Files_Are_Recorded_But_Never_Matched_With_One_Another()
+    public async Task Empty_Files_Are_Recorded_But_Never_Matched_With_One_Another(CancellationToken ct)
     {
         // Three zero-byte videos sat side by side in the sample library: transfers that never completed.
         Write("IMG_1501.MOV", "");
@@ -384,17 +390,17 @@ public sealed class ScanExecutionServiceTests : IDisposable
         Write("IMG_1503.JPG", "");
         Write("IMG_1504.JPG", "");
 
-        var summary = await ScanAsync();
+        var summary = await ScanAsync(ct);
 
         await Assert.That(summary.Total).IsEqualTo(4);
-        var photos = await _repo.GetAllAsync();
+        var photos = await _repo.GetAllAsync(ct);
         foreach (var p in photos) await Assert.That(p.ContentHash).IsNull();
         await Assert.That(DuplicateAnalysisService.Analyze(photos).Duplicates).IsEmpty();
-        await Assert.That((await ScanAsync(instance: "again")).Unchanged).IsEqualTo(4);
+        await Assert.That((await ScanAsync(ct, instance: "again")).Unchanged).IsEqualTo(4);
     }
 
     [Test]
-    public async Task A_Record_Written_By_An_Earlier_Version_Of_The_Scan_Is_Read_Again()
+    public async Task A_Record_Written_By_An_Earlier_Version_Of_The_Scan_Is_Read_Again(CancellationToken ct)
     {
         var path = Write("a.jpg", "picture a");
         var info = new FileInfo(path);
@@ -402,90 +408,104 @@ public sealed class ScanExecutionServiceTests : IDisposable
         {
             SourcePath = path, FileName = "a.jpg", FileSizeBytes = info.Length, FileModifiedUtc = info.LastWriteTimeUtc,
             ContentHash = "RECORDED-BEFORE", AnalysisVersion = ScanExecutionService.AnalysisVersion - 1, IsKept = true
-        });
+        }, ct);
 
-        var summary = await ScanAsync();
+        var summary = await ScanAsync(ct);
 
         await Assert.That((summary.Analyzed, summary.Unchanged)).IsEqualTo((1, 0));
-        var photo = (await _repo.GetAllAsync()).Single();
+        var photo = (await _repo.GetAllAsync(ct)).Single();
         await Assert.That(photo.AnalysisVersion).IsEqualTo(ScanExecutionService.AnalysisVersion);
         await Assert.That(photo.ContentHash).IsNotEqualTo("RECORDED-BEFORE");
         await Assert.That(photo.IsKept).IsTrue();
     }
 
     [Test]
-    public async Task Reports_Progress_As_It_Goes()
+    public async Task Names_The_Latest_Pictures_Read_That_Have_A_Preview_Read_Again_Or_Not(CancellationToken ct)
+    {
+        Write("a.jpg", "picture a");
+        Write("broken.heic", FakeAnalyzer.Undecodable);
+        Write("clip.mov", "a video");
+
+        await ScanAsync(ct);
+        var a = (await _repo.GetAllAsync(ct)).Single(p => p.FileName == "a.jpg").Id.ToString();
+        await Assert.That(_progress.Get("scan").Recent).IsEquivalentTo([a]);
+
+        // A picture skipped as unchanged has its preview already.
+        await ScanAsync(ct, instance: "again");
+        await Assert.That(_progress.Get("again").Recent).IsEquivalentTo([a]);
+    }
+
+    [Test]
+    public async Task Reports_Progress_As_It_Goes(CancellationToken ct)
     {
         for (int i = 0; i < 100; i++) Write($"{i}.jpg", $"picture {i}");
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _log.Object);
-        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "many");
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, _log.Object);
+        await service.RunAsync(new ScanRequest(_root.FullName, null, true), "many", ct);
         _log.Verify(l => l.Log("many", "Info", "Processed 100/100 files"), Times.Once);
         await Assert.That(_progress.Get("many").OverallPercent).IsEqualTo(100);
     }
 
 
     [Test]
-    public async Task A_File_Touched_Without_Changing_Size_Is_Read_Again()
+    public async Task A_File_Touched_Without_Changing_Size_Is_Read_Again(CancellationToken ct)
     {
         var path = Write("a.jpg", "picture a");
-        await ScanAsync();
+        await ScanAsync(ct);
         File.SetLastWriteTimeUtc(path, File.GetLastWriteTimeUtc(path).AddMinutes(5));
 
-        var summary = await ScanAsync(instance: "again");
+        var summary = await ScanAsync(ct, instance: "again");
 
         await Assert.That((summary.Analyzed, summary.Unchanged)).IsEqualTo((1, 0));
-        await Assert.That((await _repo.GetAllAsync()).Single().FileModifiedUtc).IsEqualTo(File.GetLastWriteTimeUtc(path));
+        await Assert.That((await _repo.GetAllAsync(ct)).Single().FileModifiedUtc).IsEqualTo(File.GetLastWriteTimeUtc(path));
     }
 
     [Test]
-    public async Task A_Record_Without_A_Modified_Time_Is_Read_Again()
+    public async Task A_Record_Without_A_Modified_Time_Is_Read_Again(CancellationToken ct)
     {
         var path = Write("a.jpg", "picture a");
         await _repo.AddOrUpdateAsync(new Photo
         {
             SourcePath = path, FileName = "a.jpg", FileSizeBytes = new FileInfo(path).Length,
             ContentHash = "RECORDED-BEFORE", AnalysisVersion = ScanExecutionService.AnalysisVersion
-        });
+        }, ct);
 
-        var summary = await ScanAsync();
+        var summary = await ScanAsync(ct);
 
         await Assert.That((summary.Analyzed, summary.Unchanged)).IsEqualTo((1, 0));
-        var photo = (await _repo.GetAllAsync()).Single();
+        var photo = (await _repo.GetAllAsync(ct)).Single();
         await Assert.That(photo.FileModifiedUtc).IsEqualTo(new FileInfo(path).LastWriteTimeUtc);
         await Assert.That(photo.ContentHash).IsNotEqualTo("RECORDED-BEFORE");
     }
 
     [Test]
-    public async Task A_Video_That_Vanishes_As_The_Scan_Starts_Is_Counted_Unreadable()
+    public async Task A_Video_That_Vanishes_As_The_Scan_Starts_Is_Counted_Unreadable(CancellationToken ct)
     {
         var gone = Write("a.mov", "same size AAAA");
         Write("b.mov", "same size BBBB");
         // The folder has been listed by the time the totals are reported; the file goes just after.
         var progress = new Mock<IScanProgressStore>();
         progress.Setup(p => p.SetTotals(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>())).Callback(() => File.Delete(gone));
-        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, progress.Object, _log.Object, parallelism: 1);
+        var service = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, progress.Object, _disk, _log.Object, parallelism: 1);
 
-        var summary = await service.RunAsync(new ScanRequest(_root.FullName, null, true), "scan");
+        var summary = await service.RunAsync(new ScanRequest(_root.FullName, null, true), "scan", ct);
 
         await Assert.That(summary).IsEqualTo(new ScanSummary(Total: 2, Analyzed: 1, Unchanged: 0, Unreadable: 1, Pruned: 0));
-        var remaining = (await _repo.GetAllAsync()).Single();
+        var remaining = (await _repo.GetAllAsync(ct)).Single();
         await Assert.That(remaining.FileName).IsEqualTo("b.mov");
         await Assert.That(remaining.ContentHash).IsNull(); // with the other gone, nothing shares its size
     }
 
     [Test]
-    public async Task Scans_The_Same_With_Nowhere_To_Log()
+    public async Task Scans_The_Same_With_Nowhere_To_Log(CancellationToken ct)
     {
-        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, parallelism: 1);
+        var quiet = new ScanExecutionService(_repo, new Sha256ImageHashingService(), _analyzer, Mock.Of<IPhotoMetadataExtractor>(), _thumbnails, _progress, _disk, parallelism: 1);
         var missing = Path.Combine(_root.FullName, "no-such-folder");
-        await Assert.That(await quiet.RunAsync(new ScanRequest(missing, null, true), "typo")).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
+        await Assert.That(await quiet.RunAsync(new ScanRequest(missing, null, true), "typo", ct)).IsEqualTo(new ScanSummary(0, 0, 0, 0, 0));
 
         for (int i = 0; i < 98; i++) Write($"{i}.jpg", $"picture {i}");
         Write("broken.heic", FakeAnalyzer.Undecodable);
-        var locked = Write("locked.jpg", "another picture");
-        ScanSummary summary;
-        using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-            summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true), "quiet");
+        _disk.Fail("read", Write("locked.jpg", "another picture"));
+        var summary = await quiet.RunAsync(new ScanRequest(_root.FullName, null, true), "quiet", ct);
 
         await Assert.That(summary).IsEqualTo(new ScanSummary(Total: 100, Analyzed: 98, Unchanged: 0, Unreadable: 2, Pruned: 0));
         await Assert.That(_progress.Get("quiet").OverallPercent).IsEqualTo(100);
@@ -494,31 +514,40 @@ public sealed class ScanExecutionServiceTests : IDisposable
 
     private sealed class FakeAnalyzer : IImageAnalyzer
     {
+        /// <summary>What a file holds that the analyzer cannot decode.</summary>
         public const string Undecodable = "not an image";
         private int _calls;
+        /// <summary>How many pictures were decoded.</summary>
         public int Calls => _calls;
 
-        public async Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct = default)
+        /// <inheritdoc />
+        public async Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct)
         {
             Interlocked.Increment(ref _calls);
             using var reader = new StreamReader(imageStream, leaveOpen: true);
             var content = await reader.ReadToEndAsync(ct);
-            if (content == Undecodable) throw new InvalidDataException("no decode delegate");
+            if (content == Undecodable) throw new UnreadableImageException("no decode delegate");
             return new ImageAnalysis(640, 480, "JPEG", 90, HashOf(content), new byte[TestPhotos.SignatureLength], [1, 2, 3]);
         }
 
         // Different content gives an unrelated hash, as different pictures do.
+        /// <summary>A hash of some content: different content gives an unrelated hash, as different pictures do.</summary>
         public static ulong HashOf(string content)
             => BitConverter.ToUInt64(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
 
-        public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct = default) => throw new NotSupportedException();
+        /// <inheritdoc />
+        public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct) => throw new NotSupportedException();
     }
 
     private sealed class FakeThumbnails : IThumbnailStore
     {
+        /// <summary>The previews kept, by hash.</summary>
         public System.Collections.Concurrent.ConcurrentDictionary<string, byte[]> Saved { get; } = new();
-        public Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default) { Saved[contentHash] = jpeg; return Task.CompletedTask; }
-        public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
-        public Task ClearAsync(CancellationToken ct = default) { Saved.Clear(); return Task.CompletedTask; }
+        /// <inheritdoc />
+        public Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct) { Saved[contentHash] = jpeg; return Task.CompletedTask; }
+        /// <inheritdoc />
+        public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
+        /// <inheritdoc />
+        public Task ClearAsync(CancellationToken ct) { Saved.Clear(); return Task.CompletedTask; }
     }
 }

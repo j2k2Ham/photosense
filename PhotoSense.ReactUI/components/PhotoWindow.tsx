@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Scrim } from './Scrim';
 import type { GroupMemberDto, GroupMode, PhotoDto } from '../types';
 import { formatBytes, formatCoordinates, formatFile, formatTaken, hasCoordinates, mapUrl, matchLabel, matchMeaning } from '../lib/format';
 import { Differences } from './Differences';
@@ -103,7 +104,7 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
 
   return (
     // On a narrow screen the window is the whole screen: the pictures on top, the details under them, scrolling together.
-    <div className="fixed inset-0 z-30 bg-scrim lg:p-10" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <Scrim className="fixed inset-0 z-30 bg-scrim lg:p-10" onDismiss={onClose}>
       <div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`Compare ${shown.fileName}`} className="flex h-full flex-col overflow-hidden border-line bg-s1 shadow-dialog outline-none lg:rounded-[18px] lg:border">
         <div className="flex min-h-[60px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-line px-4 py-2.5 lg:h-[72px] lg:flex-nowrap lg:px-6 lg:py-0">
           <span className="min-w-0 truncate text-[18px] font-semibold max-lg:flex-1">{shown.fileName}</span>
@@ -193,7 +194,7 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
               {confirm === 'copy' ? (
                 <div className="rounded-[14px] border border-rose-line bg-rose-bg p-3.5 text-[13.5px]">
                   <p>Move <span className="font-semibold [overflow-wrap:anywhere]">{copy.fileName}</span> ({formatBytes(copy.fileSizeBytes)}) to _PhotoSense_Removed?</p>
-                  <p className="mt-1.5">The {best}, <span className="font-semibold [overflow-wrap:anywhere]">{original.fileName}</span>, stays where it is. The copy can be moved back later.</p>
+                  <p className="mt-1.5">The {best}, <span className="font-semibold [overflow-wrap:anywhere]">{original.fileName}</span>, stays where it is. Undo, on the message that follows, puts the copy back.</p>
                   <div className="mt-3 flex gap-2">
                     <button type="button" onClick={() => setConfirm(undefined)} className="pill-outline h-10 flex-1 text-[14px]">Cancel</button>
                     <button type="button" disabled={busy} onClick={() => onRemove(copy, original)} className="pill-rose h-10 flex-1 text-[14px]">{busy ? 'Working…' : 'Delete this copy'}</button>
@@ -202,7 +203,7 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
               ) : (
                 <button type="button" disabled={busy} onClick={() => setConfirm('copy')} className="pill-rose h-[46px] text-[14.5px]">Delete this copy · {formatBytes(copy.fileSizeBytes)}</button>
               )}
-              <p className="text-[12.5px] text-t3">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder. Move them back to restore them.</p>
+              <p className="text-[12.5px] text-t3">Deleting moves files to <span className="font-mono">_PhotoSense_Removed</span> inside the scanned folder, and Undo puts them back.</p>
 
               {confirm === 'original' ? (
                 <div className="rounded-[14px] bg-s2 p-3.5 text-[13.5px]">
@@ -221,6 +222,6 @@ export function PhotoWindow({ original, member, index, count, mode, busy, onClos
           </aside>
         </div>
       </div>
-    </div>
+    </Scrim>
   );
 }

@@ -1,6 +1,7 @@
 using MetadataExtractor;
 using MetadataExtractor.Formats.Exif.Makernotes;
 using MetadataExtractor.Formats.QuickTime;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using Directory = MetadataExtractor.Directory;
 
@@ -11,10 +12,13 @@ namespace PhotoSense.Infrastructure.Metadata;
 /// maker note, and into the video's QuickTime metadata. A matching identifier is what ties the two
 /// together; a shared file name is not (two unrelated items can end up with the same number).
 /// </summary>
-public static class LivePhotoLink
+internal static class LivePhotoLink
 {
     private const int AppleContentIdentifier = 0x0011;
 
+    /// <summary>The identifier in what was read from a file, or null when it has none.</summary>
+    /// <param name="directories">What was read from the file.</param>
+    /// <param name="isVideo">The file is the video half, whose identifier is kept elsewhere than a picture's.</param>
     public static string? ReadId(IEnumerable<Directory> directories, bool isVideo)
     {
         var id = isVideo
@@ -24,9 +28,10 @@ public static class LivePhotoLink
     }
 
     /// <summary>The identifier in a file, or null when it has none or cannot be read.</summary>
-    public static string? ReadId(string path)
+    public static async Task<string?> ReadIdAsync(IPhotoFileSystem files, string path, CancellationToken ct)
     {
-        try { return ReadId(ImageMetadataReader.ReadMetadata(path), MediaFiles.IsVideo(path)); }
-        catch (Exception ex) when (ex is IOException or ImageProcessingException or UnauthorizedAccessException) { return null; }
+        string? id = null;
+        _ = await MetadataFiles.TryReadAsync(files, path, directories => id = ReadId(directories, MediaFiles.IsVideo(path)), ct);
+        return id;
     }
 }

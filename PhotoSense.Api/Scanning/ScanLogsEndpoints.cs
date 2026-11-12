@@ -1,0 +1,57 @@
+using System.Net;
+using PhotoSense.Api.Endpoints;
+using PhotoSense.Api.Http;
+using PhotoSense.Application.Scanning.Interfaces;
+
+namespace PhotoSense.Api.Scanning;
+
+/// <summary>The lines scans have logged, for the page to show as they come.</summary>
+internal sealed class ScanLogsEndpoints
+{
+    private readonly IScanLogSink _log;
+    private readonly TimeProvider _time;
+
+    /// <summary>The lines of <paramref name="log"/>, handed over at a pace measured by <paramref name="time"/>.</summary>
+    public ScanLogsEndpoints(IScanLogSink log, TimeProvider time)
+    {
+        _log = log;
+        _time = time;
+    }
+
+    // A few requests a second at most, refilled at one a second: the page asks every second and a half.
+    private const double Allowance = 20, RefillPerSecond = 1;
+    private readonly object _allowanceGate = new();
+    private double _tokens = Allowance;
+    private DateTimeOffset? _lastRefill;
+
+    /// <summary>GET /api/scan/logs?limit=: the lines logged since the page last asked, taken off the queue as they are read.</summary>
+    public async Task<ApiResponse> GetPendingAsync(ApiRequest req, CancellationToken ct)
+    {
+        // Lines are taken off the queue as they are read, so another page asking would steal them from the UI.
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
+        var limit = int.TryParse(System.Web.HttpUtility.ParseQueryString(req.Url.Query)["limit"], out var parsed) && parsed > 0 ? Math.Min(parsed, 1000) : 200;
+        if (!TakeAllowance())
+        {
+            var tooMany = req.CreateResponse(HttpStatusCode.TooManyRequests);
+            await tooMany.WriteStringAsync("Rate limit exceeded. Try again later.", ct);
+            return tooMany;
+        }
+        var drained = _log.TakePending(limit).Select(l => new { instanceId = l.InstanceId, timestamp = l.Timestamp, level = l.Level, message = l.Message }).ToList();
+        var resp = req.CreateResponse(HttpStatusCode.OK);
+        await resp.WriteAsJsonAsync(new { items = drained, count = drained.Count }, ct);
+        return resp;
+    }
+
+    private bool TakeAllowance()
+    {
+        lock (_allowanceGate)
+        {
+            var now = _time.GetUtcNow();
+            if (_lastRefill is { } last) _tokens = Math.Min(Allowance, _tokens + Math.Max(0, (now - last).TotalSeconds) * RefillPerSecond);
+            _lastRefill = now;
+            if (_tokens < 1) return false;
+            _tokens -= 1;
+            return true;
+        }
+    }
+}

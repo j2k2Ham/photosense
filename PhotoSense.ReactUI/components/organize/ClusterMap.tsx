@@ -1,4 +1,5 @@
 import React from 'react';
+import { shortDistance } from '../../lib/distance';
 import type { MapLayout } from '../../lib/organize';
 import { EnlargeIcon } from './shared';
 
@@ -21,8 +22,8 @@ export function ClusterMap({ map, focus, note, large = false, onFocus, onEnlarge
   const shape = 1 / Math.min(1.45, Math.max(0.6, map.aspect));
   return (
     <div className={large ? 'flex h-full w-full items-center justify-center [container-type:size]' : 'flex flex-col items-center gap-2.5 pb-2'}>
-      {/* A click on the map itself, as well as the button in its corner, opens it large. */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+      {/* A click on the map itself, as well as the button in its corner, opens it large; the keyboard has the button. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div role="group" aria-label={large ? 'Large map of the suggested folders' : 'Map of the suggested folders'}
         // As wide as the space allows without growing taller than it.
         style={large ? { aspectRatio: shape, width: `min(100cqw, calc(100cqh * ${shape}))` } : { aspectRatio: shape }}
@@ -47,7 +48,7 @@ export function ClusterMap({ map, focus, note, large = false, onFocus, onEnlarge
           );
         })}
         <span aria-hidden style={{ width: `${map.scale.percent}%` }} className="absolute bottom-3 left-3 flex flex-col gap-1 text-[11px] text-t3">
-          <span className="h-1 border border-t-0 border-t3" />{map.scale.miles} mi
+          <span className="h-1 border border-t-0 border-t3" />{shortDistance(map.scale.distance, map.scale.unit)}
         </span>
         {onEnlarge && (
           <button type="button" aria-label="Enlarge the map" title="Enlarge the map" onClick={onEnlarge}

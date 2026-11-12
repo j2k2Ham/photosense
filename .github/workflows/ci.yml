@@ -7,12 +7,19 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+# The token may read the repository and nothing more: no step writes to GitHub.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -44,6 +51,15 @@ jobs:
         working-directory: PhotoSense.ReactUI
         run: npm ci
 
+      - name: Test the build tools, and that the third-party notices are up to date (fails below 100% coverage)
+        run: >-
+          node --test --experimental-test-coverage --test-coverage-include="tools/*.mjs"
+          --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tools/tests/
+
+      - name: Lint React UI (the accessibility rules included)
+        working-directory: PhotoSense.ReactUI
+        run: npm run lint
+
       - name: Test React UI (fails below 100% coverage)
         working-directory: PhotoSense.ReactUI
         run: npm run test:coverage
@@ -74,12 +90,12 @@ jobs:
           dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover*.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
-      - name: Enforce coverage thresholds (Line >= 90% / Branch >= 85%)
+      - name: Enforce coverage of every line and branch (CLAUDE.md rule 1)
         if: success()
         run: |
           set -e
-          thresholdLine=0.90
-          thresholdBranch=0.85
+          thresholdLine=1.00
+          thresholdBranch=1.00
           # The report's name carries the time it was written.
           coverageXml=$(ls PhotoSense.Tests/coverage/coverage.opencover*.xml 2>/dev/null | head -1)
           if [ -z "$coverageXml" ]; then
@@ -105,3 +121,59 @@ jobs:
           path: |
             **/test-results.trx
             coverage/**
+
+  service-on-windows-and-mac:
+    # The service on the systems people run it on, built into one program and started; the job above measures coverage on Linux.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build
+        run: dotnet build PhotoSense.sln --configuration Release -warnaserror
+
+      - name: Test
+        run: dotnet run --project PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release --no-build
+
+      - name: Publish as one program
+        shell: pwsh
+        run: ./publish.ps1 -Output publish/ci
+
+      - name: Start it, and ask it for the page and the service
+        shell: pwsh
+        run: |
+          $program = if ($IsWindows) { 'publish/ci/PhotoSense.Server.exe' } else { 'publish/ci/PhotoSense.Server' }
+          $env:PhotoStorage__DatabasePath = Join-Path $env:RUNNER_TEMP 'photosense/photosense.db'
+          $env:PhotoStorage__ThumbnailPath = Join-Path $env:RUNNER_TEMP 'photosense/thumbnails'
+          $started = Start-Process $program -PassThru -NoNewWindow
+          try {
+            $health = $null
+            for ($i = 0; $i -lt 60 -and -not $health; $i++) {
+              try { $health = Invoke-RestMethod http://localhost:7071/api/health } catch { Start-Sleep -Seconds 1 }
+            }
+            if ($health.status -ne 'ok') { throw 'The service did not answer.' }
+            $page = Invoke-WebRequest http://localhost:7071/ -UseBasicParsing
+            if ($page.Content -notmatch '<title>PhotoSense</title>') { throw 'The page was not served.' }
+            Write-Host "PhotoSense ran on $env:RUNNER_OS ($env:RUNNER_ARCH)."
+          } finally {
+            Stop-Process -Id $started.Id -Force
+          }

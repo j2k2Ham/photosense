@@ -1,0 +1,152 @@
+using System.Buffers.Binary;
+using System.Net;
+using System.Net.Sockets;
+using System.Security;
+using System.Text;
+using System.Xml;
+using System.Xml.Linq;
+using PhotoSense.Application.Transfer;
+using PhotoSense.Domain.Services;
+
+namespace PhotoSense.Infrastructure.Transfer;
+
+/// <summary>
+/// Finds the iPhones and iPads plugged into this computer with a cable, through Apple's own device service (usbmux):
+/// on Windows the Apple Mobile Device Service that iTunes and Apple Devices install, on a Mac part of the system. It
+/// connects to a phone through the cable, to the port the phone waits on.
+/// </summary>
+public sealed class UsbmuxPhoneFinder : IPhoneFinder
+{
+    private const int Plist = 8;
+    private readonly Func<CancellationToken, Task<Stream>> _muxer;
+    private readonly int _port;
+    private readonly TimeSpan _answerWithin;
+
+    /// <summary>Finds phones through this computer's own device service, to connect to the port a phone waits on.</summary>
+    public UsbmuxPhoneFinder() : this(ct => OpenMuxerAsync(Muxer(OperatingSystem.IsWindows()), ct), TcpTransferListener.Port, TimeSpan.FromSeconds(5)) { }
+
+    /// <summary>Finds phones through the device service given, to connect to the port given.</summary>
+    /// <param name="muxer">A connection to the device service.</param>
+    /// <param name="port">The port a phone waits on.</param>
+    /// <param name="answerWithin">How long the device service has to list the phones: one that takes longer is as good as none.</param>
+    public UsbmuxPhoneFinder(Func<CancellationToken, Task<Stream>> muxer, int port, TimeSpan answerWithin)
+    {
+        _muxer = muxer;
+        _port = port;
+        _answerWithin = answerWithin;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct)
+    {
+        XElement answer;
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(_answerWithin);
+        try
+        {
+            await using var muxer = await _muxer(limit.Token);
+            answer = await AskAsync(muxer, "ListDevices", [], limit.Token);
+        }
+        // No device service on this computer, or one that will not answer: no phone on a cable can be reached.
+        catch (Exception ex) when (ex is IOException or SocketException or XmlException or TransferException) { return []; }
+        // One that does not answer in time, the caller not having gone away, is as good as none.
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { return []; }
+        return [.. Entries(answer, "DeviceList")
+            .Select(d => Entries(d, "Properties").SingleOrDefault() is { } p ? (Id: Number(Value(p, "DeviceID")), Via: Value(p, "ConnectionType")?.Value) : default)
+            .Where(d => d.Via == "USB" && d.Id is not null)
+            .Select(d => new FoundPhone($"usb:{d.Id}", "iPhone or iPad on the cable", "usb", ct => ConnectAsync(d.Id!.Value, ct)))];
+    }
+
+    private async Task<Stream> ConnectAsync(long device, CancellationToken ct)
+    {
+        var muxer = await _muxer(ct);
+        var handedOver = false;
+        try
+        {
+            // The port goes in the order the network writes it.
+            var answer = await AskAsync(muxer, "Connect", [("DeviceID", device), ("PortNumber", (long)BinaryPrimitives.ReverseEndianness((ushort)_port))], ct);
+            if (Number(Value(answer, "Number")) != 0)
+                throw new TransferException("PhotoSense is not offering photos on that phone. On the phone, select photos in Organize and choose Send to computer.");
+            // From here on the connection is to the phone itself.
+            handedOver = true;
+            return muxer;
+        }
+        finally
+        {
+            // A connection that did not reach the phone is let go of here, as nothing else holds it.
+            if (!handedOver) await muxer.DisposeAsync();
+        }
+    }
+
+    /// <summary>Where the device service listens: on Windows this computer's own port 27015, on a Mac a socket of the system's.</summary>
+    public static EndPoint Muxer(bool windows) => windows ? new IPEndPoint(IPAddress.Loopback, 27015) : new UnixDomainSocketEndPoint("/var/run/usbmuxd");
+
+    /// <summary>Opens a connection to the device service.</summary>
+    /// <param name="at">Where the service listens (<see cref="Muxer"/>).</param>
+    /// <param name="ct">Stops the connecting.</param>
+    /// <exception cref="SocketException">There is no device service there.</exception>
+    public static async Task<Stream> OpenMuxerAsync(EndPoint at, CancellationToken ct)
+    {
+        var socket = new Socket(at.AddressFamily, SocketType.Stream, at is UnixDomainSocketEndPoint ? ProtocolType.Unspecified : ProtocolType.Tcp);
+        var handedOver = false;
+        try
+        {
+            await socket.ConnectAsync(at, ct);
+            var stream = new NetworkStream(socket, ownsSocket: true);
+            handedOver = true;
+            return stream;
+        }
+        finally
+        {
+            // Once handed over the stream owns the socket; a connection that failed lets go of it here.
+            if (!handedOver) socket.Dispose();
+        }
+    }
+
+    /// <summary>Sends the service a message, a property list, and returns its answer.</summary>
+    public static async Task<XElement> AskAsync(Stream muxer, string kind, IReadOnlyList<(string Key, object Value)> values, CancellationToken ct)
+    {
+        var body = Encoding.UTF8.GetBytes(PropertyList([("MessageType", kind), ("ClientVersionString", "PhotoSense"), ("ProgName", "PhotoSense"), .. values]));
+        var header = new byte[16];
+        BinaryPrimitives.WriteUInt32LittleEndian(header, (uint)(16 + body.Length));
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(8), Plist);
+        BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(12), 1);
+        await muxer.WriteAsync(header, ct);
+        await muxer.WriteAsync(body, ct);
+        await muxer.FlushAsync(ct);
+
+        try
+        {
+            await muxer.ReadExactlyAsync(header, ct);
+            var length = BinaryPrimitives.ReadUInt32LittleEndian(header);
+            if (length is < 16 or > 1 << 20) throw new TransferException("Apple's device service answered with what PhotoSense does not understand.");
+            var reply = new byte[length - 16];
+            await muxer.ReadExactlyAsync(reply, ct);
+            using var reader = XmlReader.Create(new MemoryStream(reply), new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null });
+            return XDocument.Load(reader).Root!.Element("dict") ?? throw new TransferException("Apple's device service answered with what PhotoSense does not understand.");
+        }
+        catch (EndOfStreamException) { throw new TransferException("Apple's device service stopped answering."); }
+    }
+
+    /// <summary>A property list of a dictionary of strings and whole numbers, as the service takes it.</summary>
+    public static string PropertyList(IEnumerable<(string Key, object Value)> values)
+    {
+        var entries = values.Select(v => $"<key>{SecurityElement.Escape(v.Key)}</key>" + (v.Value is long n ? $"<integer>{n}</integer>" : $"<string>{SecurityElement.Escape($"{v.Value}")}</string>"));
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+            + $"<plist version=\"1.0\"><dict>{string.Concat(entries)}</dict></plist>";
+    }
+
+    // The value under a key of a property-list dictionary: the element after the key.
+    private static XElement? Value(XElement dict, string key) => dict.Elements("key").FirstOrDefault(k => k.Value == key)?.ElementsAfterSelf().FirstOrDefault();
+
+    private static long? Number(XElement? value) => long.TryParse(value?.Value, out var n) ? n : null;
+
+    // The dictionaries under a key: the array of them there, or the one dictionary.
+    private static IEnumerable<XElement> Entries(XElement dict, string key) => Value(dict, key) switch
+    {
+        { Name.LocalName: "array" } array => array.Elements("dict"),
+        { Name.LocalName: "dict" } one => [one],
+        _ => [],
+    };
+}

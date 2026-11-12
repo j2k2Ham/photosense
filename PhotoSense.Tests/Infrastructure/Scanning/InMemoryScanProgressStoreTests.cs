@@ -3,12 +3,13 @@ using PhotoSense.Application.Scanning; // Added namespace for InMemoryScanProgre
 
 namespace PhotoSense.Tests.Infrastructure.Scanning;
 
+/// <summary>How far each scan of this run has got.</summary>
 public class InMemoryScanProgressStoreTests
 {
     [Test]
-    public async Task Progress_Flow_Works()
+    public async Task Progress_Flow_Works(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         store.ScanStarted("inst1");
         store.SetTotals("inst1", 10, 5);
         for (int i = 0; i < 3; i++) store.IncrementProcessed("inst1", true);
@@ -23,24 +24,38 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task What_Is_Said_Of_A_Scan_That_Was_Never_Started_Is_Ignored()
+    public async Task What_Is_Said_Of_A_Scan_That_Was_Never_Started_Is_Ignored(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         store.SetTotals("never-started", 10, 5);
         store.Expect("never-started", 60);
         store.IncrementProcessed("never-started", primary: true);
+        store.Read("never-started", "photo");
         store.ScanCompleted("never-started");
 
         var snap = store.Get("never-started");
         await Assert.That((snap.PrimaryTotal, snap.PrimaryProcessed, snap.SecondaryTotal, snap.CompletedUtc)).IsEqualTo((0, 0, 0, (DateTime?)null));
         await Assert.That(snap.ExpectedSeconds).IsNull();
+        await Assert.That(snap.Recent).IsEmpty();
         await Assert.That(store.GetLatest().InstanceId).IsEqualTo(string.Empty);
     }
 
     [Test]
-    public async Task Carries_How_Long_The_Scan_Is_Expected_To_Take_Once_That_Is_Known()
+    public async Task Keeps_The_Latest_Pictures_Read_Oldest_First_And_No_More_Than_Are_Shown(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
+        store.ScanStarted("scan");
+        await Assert.That(store.Get("scan").Recent).IsEmpty();
+
+        for (var i = 1; i <= ScanProgressSnapshot.RecentKept + 3; i++) store.Read("scan", $"photo-{i}");
+
+        await Assert.That(string.Join(",", store.Get("scan").Recent)).IsEqualTo(string.Join(",", Enumerable.Range(4, ScanProgressSnapshot.RecentKept).Select(i => $"photo-{i}")));
+    }
+
+    [Test]
+    public async Task Carries_How_Long_The_Scan_Is_Expected_To_Take_Once_That_Is_Known(CancellationToken ct)
+    {
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         store.ScanStarted("scan");
         await Assert.That(store.Get("scan").ExpectedSeconds).IsNull();
         store.Expect("scan", 780);
@@ -50,7 +65,7 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task A_Scan_Is_Marked_With_When_It_Started_And_Finished()
+    public async Task A_Scan_Is_Marked_With_When_It_Started_And_Finished(CancellationToken ct)
     {
         var clock = new TestClock();
         var store = new InMemoryScanProgressStore(clock);
@@ -63,9 +78,9 @@ public class InMemoryScanProgressStoreTests
     }
 
     [Test]
-    public async Task Latest_Default_When_None()
+    public async Task Latest_Default_When_None(CancellationToken ct)
     {
-        IScanProgressStore store = new InMemoryScanProgressStore();
+        IScanProgressStore store = new InMemoryScanProgressStore(new TestClock());
         var snap = store.GetLatest();
         await Assert.That(snap.InstanceId).IsEqualTo(string.Empty);
     }

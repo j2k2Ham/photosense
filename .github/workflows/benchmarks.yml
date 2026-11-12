@@ -3,6 +3,10 @@ name: Benchmarks
 on:
   workflow_dispatch:
 
+# The token may read the repository and nothing more: no step writes to GitHub.
+permissions:
+  contents: read
+
 jobs:
   benchmarks:
     runs-on: ubuntu-latest

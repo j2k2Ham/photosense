@@ -1,19 +1,21 @@
-using PhotoSense.Infrastructure.Persistence;
-using System.IO;
+using LiteDB;
 using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Tests.Infrastructure;
 
-public class AuditRepositoryTests
+/// <summary>The record of what was done to photos.</summary>
+public sealed class AuditRepositoryTests
 {
     [Test]
-    public async Task Add_And_Retrieve()
+    public async Task The_Audit_Trail_Keeps_What_Was_Done_And_When(CancellationToken ct)
     {
-        var db = Path.GetTempFileName();
-        var repo = new LiteDbAuditRepository(db);
-        await repo.AddAsync(new AuditEntry{ Action="Keep", PhotoId="p1", Details=""});
-        var list = await repo.RecentAsync();
-        await Assert.That(list).HasSingleItem();
-        await Assert.That(list[0].Action).IsEqualTo("Keep");
+        // A day apart, by the clock the store stamps each entry with; a time the caller sets is not the store's.
+        using var db = new LiteDatabase(new MemoryStream());
+        var repo = db.Audit(new TestClock(TestClock.Day, TimeSpan.FromDays(1)));
+        await repo.AddAsync(new AuditEntry { Action = "Keep", PhotoId = "p1", UtcTimestamp = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc) }, ct);
+        await repo.AddAsync(new AuditEntry { Action = "Move", Details = "Trips" }, ct);
+
+        var kept = db.GetCollection<AuditEntry>("audit").FindAll().OrderBy(a => a.UtcTimestamp).Select(a => $"{a.Action} {a.PhotoId} {a.Details} {a.UtcTimestamp.ToUniversalTime():yyyy-MM-dd}").ToList();
+        await Assert.That(kept).IsEquivalentTo(["Keep p1  2026-10-15", "Move  Trips 2026-10-16"], CollectionOrdering.Matching);
     }
 }

@@ -13,7 +13,9 @@ namespace PhotoSense.Infrastructure.Places;
 /// </summary>
 public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
 {
+    /// <summary>The list of towns built into the program.</summary>
     public const string Towns = "PhotoSense.Infrastructure.Places.places.tsv.gz";
+    /// <summary>The list of landmarks built into the program.</summary>
     public const string Landmarks = "PhotoSense.Infrastructure.Places.landmarks.tsv.gz";
     /// <summary>Within this distance the picture is said to be in the place; beyond it, near the place.</summary>
     public const double InsideKm = 3;
@@ -24,9 +26,11 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
     private readonly Lazy<Index> _index;
     private readonly Lazy<LandmarkIndex> _landmarks;
 
+    /// <summary>Names places from the lists built into the program.</summary>
     public GeoNamesPlaceResolver()
         : this(() => OpenBundledList(typeof(GeoNamesPlaceResolver).Assembly), () => OpenBundledList(typeof(GeoNamesPlaceResolver).Assembly, Landmarks)) { }
 
+    /// <summary>Names places from the lists given, read the first time a place is asked for.</summary>
     /// <param name="openList">Opens tab-separated lines of name, region, country code, latitude, longitude.</param>
     /// <param name="openLandmarks">Opens tab-separated lines of name, latitude, longitude, reach in metres; none are known without it.</param>
     public GeoNamesPlaceResolver(Func<TextReader> openList, Func<TextReader>? openLandmarks = null)
@@ -35,6 +39,7 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
         _landmarks = new Lazy<LandmarkIndex>(() => LandmarkIndex.Load(openLandmarks));
     }
 
+    /// <inheritdoc />
     public string? Describe(double latitude, double longitude)
     {
         if (NearestTown(latitude, longitude) is not { } town) return null;
@@ -42,6 +47,7 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
         return town.Km <= InsideKm ? name : $"Near {name}";
     }
 
+    /// <inheritdoc />
     public PlaceMatch? Locate(double latitude, double longitude)
     {
         if (NearestTown(latitude, longitude) is not { } town) return null;
@@ -101,20 +107,30 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
 
     private sealed class Index
     {
+        /// <summary>Each town's name, by its number.</summary>
         public readonly List<string> Town = [];
+        /// <summary>Each town's state, province or county.</summary>
         public readonly List<string> Region = [];
+        /// <summary>Each town's country code.</summary>
         public readonly List<string> Country = [];
+        /// <summary>Where each town is: degrees north.</summary>
         public readonly List<float> Latitude = [];
+        /// <summary>Where each town is: degrees east.</summary>
         public readonly List<float> Longitude = [];
         private readonly List<int>?[] _cells = new List<int>?[180 * 360];
 
+        /// <summary>The band of one degree of latitude a position is in.</summary>
         public static int Row(double latitude) => Math.Clamp((int)Math.Floor(latitude) + 90, 0, 179);
+        /// <summary>The band of one degree of longitude a position is in.</summary>
         public static int Column(double longitude) => Math.Clamp((int)Math.Floor(longitude) + 180, 0, 359);
+        /// <summary>The towns in one square of a degree.</summary>
         public IReadOnlyList<int> Cell(int row, int column) => _cells[row * 360 + column] ?? (IReadOnlyList<int>)[];
 
         // "Buxton, North Carolina, US"; the region is left out where the list has none.
+        /// <summary>A town in words, as the Clean up screens name it.</summary>
         public string NameOf(int i) => string.Join(", ", new[] { Town[i], Region[i], Country[i] }.Where(p => p.Length > 0));
 
+        /// <summary>Reads the list of towns, each filed under the square of a degree it is in.</summary>
         public static Index Load(Func<TextReader> open)
         {
             var index = new Index();
@@ -155,6 +171,7 @@ public sealed class GeoNamesPlaceResolver : IPlaceNameResolver
         private static int Column(double longitude) => Math.Clamp((int)Math.Floor((longitude + 180) * PerDegree), 0, Columns - 1);
         private static long Cell(int row, int column) => (long)row * Columns + column;
 
+        /// <summary>Reads the list of landmarks; none when there is no list.</summary>
         public static LandmarkIndex Load(Func<TextReader>? open)
         {
             var index = new LandmarkIndex();

@@ -6,6 +6,9 @@
     <IsPackable>false</IsPackable>
     <!-- An assertion that is not awaited is never checked, so a forgotten await stops the build. -->
     <WarningsAsErrors>$(WarningsAsErrors);CS4014</WarningsAsErrors>
+    <!-- A test's name is the sentence that documents it, so test methods carry no XML comment of their own. Test
+         classes, fixtures, fakes and helpers are documented all the same (CLAUDE.md). -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -19,7 +22,9 @@
     <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
     <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
     <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
-    <ProjectReference Include="..\PhotoSense.Functions\PhotoSense.Functions.csproj" />
+    <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />
+    <ProjectReference Include="..\PhotoSense.Server\PhotoSense.Server.csproj" />
     <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
+    <ProjectReference Include="..\PhotoSense.Desktop\PhotoSense.Desktop.csproj" />
   </ItemGroup>
 </Project>

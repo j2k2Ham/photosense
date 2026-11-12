@@ -1,0 +1,35 @@
+<Project>
+  <!-- Every program is numbered from version.json and the repository's history by tools/version.mjs: 1.2.0.57 for an
+       ordinary build (57 commits so far), 1.2.0 for the release itself (dotnet build -p:PhotoSenseRelease=true, or a
+       commit tagged v1.2.0). A program names itself with PhotoSensePart; the libraries take the linked version. -->
+  <PropertyGroup>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+  <Target Name="PhotoSenseVersion" BeforeTargets="PrepareForBuild;GetAssemblyVersion">
+    <PropertyGroup>
+      <_PhotoSenseVersionArguments>--format msbuild --part "$(PhotoSensePart)"</_PhotoSenseVersionArguments>
+      <_PhotoSenseVersionArguments Condition="'$(PhotoSenseRelease)' == 'true'">$(_PhotoSenseVersionArguments) --release</_PhotoSenseVersionArguments>
+    </PropertyGroup>
+    <Exec Command="node &quot;$(MSBuildThisFileDirectory)tools/version.mjs&quot; $(_PhotoSenseVersionArguments)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" EchoOff="true"
+          StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_PhotoSenseVersionOutput" />
+      <Output TaskParameter="ExitCode" PropertyName="_PhotoSenseVersionExit" />
+    </Exec>
+    <!-- Without Node (9009 from cmd, 127 from a shell) there is no page to build either; the program is numbered 0. -->
+    <Error Condition="'$(_PhotoSenseVersionExit)' != '0' and '$(_PhotoSenseVersionExit)' != '9009' and '$(_PhotoSenseVersionExit)' != '127'"
+           Text="$(_PhotoSenseVersionOutput)" />
+    <PropertyGroup Condition="'$(_PhotoSenseVersionExit)' == '0'">
+      <Version>$(_PhotoSenseVersionOutput.Split(';')[0])</Version>
+      <PhotoSenseBuild>$(_PhotoSenseVersionOutput.Split(';')[1])</PhotoSenseBuild>
+      <InformationalVersion>$(_PhotoSenseVersionOutput.Split(';')[2])</InformationalVersion>
+      <AssemblyVersion>$(Version).0</AssemblyVersion>
+      <FileVersion>$(Version).$(PhotoSenseBuild)</FileVersion>
+      <!-- On an iPhone: the version people see (three numbers) and the build, which must rise with every upload. -->
+      <ApplicationDisplayVersion>$(Version)</ApplicationDisplayVersion>
+      <ApplicationVersion>$(PhotoSenseBuild)</ApplicationVersion>
+    </PropertyGroup>
+    <Message Importance="normal" Text="$(MSBuildProjectName) is version $(InformationalVersion)" Condition="'$(_PhotoSenseVersionExit)' == '0'" />
+  </Target>
+</Project>

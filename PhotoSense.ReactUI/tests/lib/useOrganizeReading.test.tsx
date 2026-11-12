@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ASK_EVERY_MS, ASK_LATER_BY_MS, useOrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeProgressDto } from '../../types';
-import { deferred } from '../fakeSignalR';
+import { deferred } from '../deferred';
 import { organizeFile as file, organizePlace as place } from '../fixtures';
 
 const api = vi.hoisted(() => ({ fetchOrganizeProgress: vi.fn() }));

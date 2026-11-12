@@ -4,9 +4,9 @@ namespace PhotoSense.Domain.Services;
 public interface IThumbnailStore
 {
     /// <summary>Keeps the preview of the file with this hash, replacing any kept before.</summary>
-    Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default);
+    Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct);
     /// <summary>The preview of the file with this hash, or null when there is none.</summary>
-    Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default);
+    Task<byte[]?> GetAsync(string contentHash, CancellationToken ct);
     /// <summary>Discards every preview; they are made again by the next scan.</summary>
-    Task ClearAsync(CancellationToken ct = default);
+    Task ClearAsync(CancellationToken ct);
 }

@@ -5,12 +5,16 @@ using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Benchmarks;
 
+/// <summary>How long grouping takes over a library of shots each saved twice: as HEIC and as a JPEG conversion.</summary>
+/// <remarks>Public, as BenchmarkDotNet runs only public benchmarks.</remarks>
 public class NearDuplicateBenchmarks
 {
     private List<Photo> _photos = null!;
 
+    /// <summary>How many photos the library holds.</summary>
     [Params(2000, 8000)] public int N;
 
+    /// <summary>Makes the library once, before the runs.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -33,11 +37,14 @@ public class NearDuplicateBenchmarks
         }
     }
 
+    /// <summary>Groups the library, and says how many groups of copies it found.</summary>
     [Benchmark]
     public int Analyze() => DuplicateAnalysisService.Analyze(_photos).Duplicates.Count;
 }
 
+/// <summary>Runs the benchmarks.</summary>
 public static class Program
 {
+    /// <summary>Runs every benchmark and prints how long each took.</summary>
     public static void Main(string[] args) => BenchmarkRunner.Run<NearDuplicateBenchmarks>();
 }

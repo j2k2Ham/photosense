@@ -1,12 +1,12 @@
 import useSWR, { mutate } from 'swr';
-import * as signalR from '@microsoft/signalr';
 import type {
-  BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest,
+  AboutDocument, AboutDto, BulkRemovalResultDto, DeleteSentDto, EraseRemovedDto, FolderListingDto, FoundPhonesDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PhotoAccessDto, ReceiveStateDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, SendStateDto, StartScanRequest,
 } from '../types';
 
-// Base URL can point at Blazor server (proxy) or Functions API.
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:7071/api';
+import { API_BASE } from './apiBase';
+
+export { appIconUrl } from './apiBase';
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth enforced
 // The server acts on photos only for requests carrying this header, which other web sites cannot send.
@@ -18,8 +18,13 @@ async function failure(res: Response): Promise<Error> {
   try { return new Error(JSON.parse(text).error ?? text); } catch { return new Error(text || `Request failed (${res.status})`); }
 }
 
+// Android's web view hands the app no request's body, so there the page hands each body over beside its request,
+// and the request carries the number the app gave it.
+const android = (globalThis as { PhotoSenseAndroid?: { keep(body: string): string } }).PhotoSenseAndroid;
+
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...init?.headers } });
+  const carried: Record<string, string> = android && typeof init?.body === 'string' ? { 'x-photosense-body': android.keep(init.body) } : {};
+  const res = await fetch(url, { ...init, headers: { 'Content-Type': 'application/json', ...authHeaders, ...carried, ...init?.headers } });
   if (!res.ok) throw await failure(res);
   return res.json();
 }
@@ -35,8 +40,55 @@ const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && 
 /** Asks again for everything on screen, for when the service has been out of reach. */
 export const retryNow = () => mutate(() => true);
 
+/** Who makes PhotoSense, how to reach them, and the program answering with its version. */
+export function useAbout() {
+  return useSWR<AboutDto>(`${API_BASE}/about`, json);
+}
+
+async function text(url: string): Promise<string> {
+  const res = await fetch(url);
+  if (!res.ok) throw await failure(res);
+  return res.text();
+}
+
+/** One of the documents About shows: the privacy policy, terms or support page (Markdown), or the third-party notices. */
+export function useAboutText(document: AboutDocument) {
+  return useSWR<string>(`${API_BASE}/about/${document}`, text);
+}
+
+const accessUrl = `${API_BASE}/library/access`;
+
+/** How much of a phone's photos PhotoSense may see; on a computer, always everything. */
+export function usePhotoAccess() {
+  return useSWR<PhotoAccessDto>(accessUrl, json);
+}
+
+/** Asks the phone's own question of what PhotoSense may see, and answers once it is answered. */
+export async function askForPhotos(): Promise<PhotoAccessDto> {
+  const access = await json<PhotoAccessDto>(`${API_BASE}/library/ask`, { method: 'POST' });
+  await mutate(accessUrl, access, { revalidate: false });
+  return access;
+}
+
+/** Shows the phone's own picker for choosing more photos, and answers once it is put away. */
+export async function chooseMorePhotos(): Promise<PhotoAccessDto> {
+  const access = await json<PhotoAccessDto>(`${API_BASE}/library/choose-more`, { method: 'POST' });
+  await mutate(accessUrl, access, { revalidate: false });
+  // What the library holds has changed, and with it what Organize lists.
+  await mutate((key: unknown) => typeof key === 'string' && key.includes('/organize/files?'));
+  return access;
+}
+
+/** Opens PhotoSense's own page of the phone's settings, where its access to the photos is changed. */
+export async function openPhotoSettings() {
+  await send(`${API_BASE}/library/open-settings`, 'POST');
+}
+
+/** The address of a scanned photo's preview. */
 export const thumbnailUrl = (id: string) => `${API_BASE}/photos/${id}/thumbnail`;
+/** The address of a scanned photo, at a size a browser can show. */
 export const imageUrl = (id: string) => `${API_BASE}/photos/${id}/image`;
+/** The address of a scanned video, which a browser plays a part at a time. */
 export const videoUrl = (id: string) => `${API_BASE}/photos/${id}/video`;
 
 /** Opens the file in the default viewer or player of the machine the server runs on. */
@@ -50,8 +102,25 @@ export const PAGE_SIZE = 50;
 const groupsUrl = (mode: GroupMode, filter: string, page: number, hideKept: boolean) =>
   `${API_BASE}/scan/groups?mode=${mode}&page=${page}&pageSize=${PAGE_SIZE}&hideKept=${hideKept}&q=${encodeURIComponent(filter)}`;
 
+/** A page of the groups a scan found, asked again every five seconds, keeping the last page while the next comes. */
 export function useGroups(mode: GroupMode, filter: string, page: number, hideKept: boolean) {
   return useSWR<GroupsPageDto>(groupsUrl(mode, filter, page, hideKept), json, { refreshInterval: 5000, keepPreviousData: true });
+}
+
+/** Groups to a page on a phone, the most the service gives at once. */
+export const PHONE_PAGE = 200;
+
+/**
+ * The groups of one kind from the first page through the one given, as one list, asked again every five seconds: a
+ * phone's list grows as it is scrolled. A group that moved from one page to the next as they were read is listed once.
+ */
+export function useGroupsThrough(mode: GroupMode, pages: number) {
+  const page = (n: number) => `${API_BASE}/scan/groups?mode=${mode}&page=${n}&pageSize=${PHONE_PAGE}&hideKept=false&q=`;
+  return useSWR<GroupsPageDto>(`${API_BASE}/scan/groups?mode=${mode}&pageSize=${PHONE_PAGE}&through=${pages}`, async () => {
+    const read = await Promise.all(Array.from({ length: pages }, (_, i) => json<GroupsPageDto>(page(i + 1))));
+    const seen = new Set<string>();
+    return { ...read[0], items: read.flatMap(p => p.items).filter(g => !seen.has(g.key) && !!seen.add(g.key)) };
+  }, { refreshInterval: 5000, keepPreviousData: true });
 }
 
 /**
@@ -69,51 +138,25 @@ export async function prefetchGroups(mode: GroupMode, filter: string, page: numb
   }
 }
 
-/** Follows the scan's log: over SignalR where the service offers it, otherwise by asking again every few seconds. */
+/** Follows the scan's log, asking every second and a half for the lines logged since it last asked. */
 export function connectLogStream(onLine: (l: string)=>void) {
-  const baseRoot = API_BASE.replace(/\/api$/,'');
   let disposed = false;
-  let conn: signalR.HubConnection | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
-  (async () => {
+  const poll = async () => {
     try {
-      // Updated negotiate route path to match backend (scan/logs/negotiate)
-      const r = await fetch(`${baseRoot}/api/scan/logs/negotiate`, { method: 'POST', headers: authHeaders });
-      if (!r.ok) throw new Error('negotiate failed');
-      const info = await r.json();
-      if (disposed) return;
-      conn = new signalR.HubConnectionBuilder()
-        .withUrl(info.url, { accessTokenFactory: () => info.accessToken })
-        .withAutomaticReconnect()
-        .build();
-      conn.on('log', (_instanceId: string, ts: string, level: string, msg: string) => {
-        onLine(`${ts} ${level} ${msg}`);
-      });
-      await conn.start();
-    } catch {
-      if (disposed) return;
-      // Fallback to simple polling REST endpoint as SSE stream not implemented.
-      const poll = async () => {
-        try {
-          const res = await fetch(`${baseRoot}/api/scan/logs?limit=200`, { headers: authHeaders });
-          if (res.ok) {
-            const json = await res.json();
-            for (const i of json.items ?? []) {
-              onLine(`${i.timestamp} ${i.level} ${i.message}`);
-            }
-          }
-        } catch {/* ignore */}
-        // Dismissed while this poll was in flight: it was the last.
-        if (!disposed) pollTimer = setTimeout(poll, 1500);
-      };
-      poll();
-    }
-  })();
+      const res = await fetch(`${API_BASE}/scan/logs?limit=200`, { headers: authHeaders });
+      if (res.ok) {
+        const json = await res.json();
+        for (const i of json.items ?? []) onLine(`${i.timestamp} ${i.level} ${i.message}`);
+      }
+    } catch {/* asked again in a moment */}
+    // Dismissed while this poll was in flight: it was the last.
+    if (!disposed) pollTimer = setTimeout(poll, 1500);
+  };
+  void poll();
   return () => {
     disposed = true;
     clearTimeout(pollTimer);
-    // A connection that never opened, or has already closed, has nothing left to stop.
-    conn?.stop().catch(() => undefined);
   };
 }
 
@@ -124,7 +167,7 @@ export async function setKept(id: string, kept: boolean){
 }
 
 /** Moves one file, and the sidecars and Live Photo video that belong to it alone, to the holding folder. */
-export async function removePhoto(id: string): Promise<{ companions: number }> {
+export async function removePhoto(id: string): Promise<RemovePhotoResultDto> {
   const res = await send(`${API_BASE}/photos/${id}?physical=true`, 'DELETE');
   const result = await res.json();
   await refreshGroups();
@@ -145,31 +188,18 @@ export async function removeDuplicates(groupKey?: string, mode: GroupMode = 'dup
   return result;
 }
 
-/** How many groups one request names, so that no request grows longer than a server will take. */
-export const GROUPS_AT_ONCE = 40;
-
 /**
  * Moves the duplicates of each of the groups named to the holding folder, or their similar shots when
- * asked for those. The best of each group stays.
+ * asked for those, as one change: should one file not move, none does. The best of each group stays.
  */
 export async function removeGroups(groupKeys: string[], mode: GroupMode): Promise<BulkRemovalResultDto> {
-  const total: BulkRemovalResultDto = { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
-  try {
-    for (let from = 0; from < groupKeys.length; from += GROUPS_AT_ONCE) {
-      const named = groupKeys.slice(from, from + GROUPS_AT_ONCE).map(key => `group=${encodeURIComponent(key)}`).join('&');
-      const res = await send(`${API_BASE}/photos/bulk/remove-duplicates?${named}${mode === 'similar' ? '&mode=similar' : ''}`, 'POST');
-      const part: BulkRemovalResultDto = await res.json();
-      total.removed += part.removed;
-      total.bytes += part.bytes;
-      total.skipped += part.skipped;
-      total.companions += part.companions;
-      total.problems.push(...part.problems);
-    }
-  } finally {
-    // What went before a request failed has gone all the same.
-    await refreshGroups();
-  }
-  return total;
+  // With no group named the service would take every duplicate.
+  if (groupKeys.length === 0) return { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
+  // Named in the body, as more of them than an address holds can be ticked.
+  const result = await json<BulkRemovalResultDto>(`${API_BASE}/photos/bulk/remove-duplicates${mode === 'similar' ? '?mode=similar' : ''}`,
+    { method: 'POST', body: JSON.stringify({ groups: groupKeys }) });
+  await refreshGroups();
+  return result;
 }
 
 /** Forgets everything earlier scans recorded. The photos themselves are not touched. */
@@ -180,11 +210,11 @@ export async function clearResults(): Promise<{ forgotten: number }> {
   return result;
 }
 
-/** How many groups of each kind there are now, asked afresh: for saying what a scan found. */
-export async function fetchGroupTotals(): Promise<{ duplicates: number; similar: number }> {
-  const total = async (mode: GroupMode) => (await json<GroupsPageDto>(groupsUrl(mode, '', 1, false))).total;
-  const [duplicates, similar] = await Promise.all([total('duplicates'), total('similar')]);
-  return { duplicates, similar };
+/** How many groups of each kind there are now, and how many files are copies, asked afresh: for saying what a scan found. */
+export async function fetchGroupTotals(): Promise<{ duplicates: number; similar: number; copies: number }> {
+  const first = (mode: GroupMode) => json<GroupsPageDto>(groupsUrl(mode, '', 1, false));
+  const [duplicates, similar] = await Promise.all([first('duplicates'), first('similar')]);
+  return { duplicates: duplicates.total, similar: similar.total, copies: duplicates.removableCount };
 }
 
 /** How many files are on record, and whether the last scan has finished. */
@@ -192,6 +222,7 @@ export function useScanStatus() {
   return useSWR<ScanStatusDto>(`${API_BASE}/scan/status`, json, { refreshInterval: 5000 });
 }
 
+/** How far a scan has got, asked every second and a half; nothing is asked while no scan is named. */
 export function useScanProgress(instanceId?: string) {
   const key = instanceId ? `${API_BASE}/scan/progress/${instanceId}` : null;
   return useSWR<ScanProgressSnapshotDto>(key, json, { refreshInterval: 1500 });
@@ -202,13 +233,28 @@ export function browseFolders(path?: string) {
   return json<FolderListingDto>(`${API_BASE}/folders${path ? `?path=${encodeURIComponent(path)}` : ''}`);
 }
 
+/** Starts a scan of the folders asked for, and gives the id it runs under. */
 export async function startScan(req: StartScanRequest) {
   return json<{ instanceId: string }>(`${API_BASE}/scan/start`, { method: 'POST', body: JSON.stringify(req) });
 }
 
+/** Stops the scan named; what it has read so far is kept, and the next scan carries on from there. */
+export async function stopScan(instanceId: string) {
+  await send(`${API_BASE}/scan/stop/${encodeURIComponent(instanceId)}`, 'POST');
+}
+
+/** On a phone, the one folder its photos are shown as: the Photo Library on an iPhone, the Phone on Android. */
+export async function libraryRoot(): Promise<string> {
+  const top = (await browseFolders()).folders[0];
+  if (!top) throw new Error('The phone did not say where its photos are.');
+  return top.path;
+}
+
 // ---- Organize
 
+/** The address of the preview of a file in the folder being organized. */
 export const organizeThumbnailUrl = (id: string) => `${API_BASE}/organize/files/${id}/thumbnail`;
+/** The address of a file in the folder being organized, at a size a browser can show. */
 export const organizeImageUrl = (id: string) => `${API_BASE}/organize/files/${id}/image`;
 
 // Everything Organize shows changes when files are moved, and so does what Clean up lists of the same files.
@@ -250,8 +296,8 @@ export async function removeOrganize(root: string, fileIds: string[]) {
   return result;
 }
 
-/** Takes one move, copy or removal back. */
-export async function undoOrganize(batchId: string): Promise<OrganizeUndoDto> {
+/** Takes one move, copy or removal back, from Organize or Clean up alike. */
+export async function undoChange(batchId: string): Promise<OrganizeUndoDto> {
   const res = await send(`${API_BASE}/organize/undo/${encodeURIComponent(batchId)}`, 'POST');
   const result = await res.json();
   await refreshOrganize();
@@ -265,15 +311,78 @@ export async function openOrganizeFile(id: string) {
 
 // ---- Removed files
 
+const removedUrl = (roots: readonly string[]) => `${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`;
+
 /** How much is waiting in the folders that hold removed files: inside the folders given, and wherever else the service knows of. */
 export function fetchRemoved(roots: string[]) {
-  return json<RemovedFilesDto>(`${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`);
+  return json<RemovedFilesDto>(removedUrl(roots));
+}
+
+/** How much is waiting to be erased, asked afresh each time it is shown; nothing is asked while `roots` is null. */
+export function useRemoved(roots: readonly string[] | null) {
+  return useSWR<RemovedFilesDto>(roots ? removedUrl(roots) : null, json, { revalidateOnFocus: false });
 }
 
 /** Erases everything in those folders. This cannot be taken back. */
 export async function eraseRemoved(folders: string[]) {
   const result = await json<EraseRemovedDto>(`${API_BASE}/removed/erase`, { method: 'POST', body: JSON.stringify({ folders }) });
-  // A deletion whose files are erased can no longer be undone, so it leaves the list of what can be.
-  await mutate((key: unknown) => typeof key === 'string' && key.includes('/organize/batches'));
+  // A deletion whose files are erased can no longer be undone, so it leaves the list of what can be; and nothing waits now.
+  await mutate((key: unknown) => typeof key === 'string' && (key.includes('/organize/batches') || key.includes('/removed?')));
   return result;
 }
+
+// ---- Sending photos from a phone to a computer
+
+const sendStateUrl = `${API_BASE}/send/state`;
+
+/** Where sending from this phone has got to: asked every second while it is watched, or while an offer stands. */
+export function useSendState(watching: boolean) {
+  return useSWR<SendStateDto>(sendStateUrl, json, { refreshInterval: latest => (watching || (latest !== undefined && LIVE_SEND.has(latest.stage)) ? 1000 : 0) });
+}
+// The stages in which the phone is waiting for the computer, comparing numbers with it, or sending.
+const LIVE_SEND = new Set<SendStateDto['stage']>(['waiting', 'comparing', 'sending']);
+
+async function sending(path: string, body?: object) {
+  const state = await json<SendStateDto>(`${API_BASE}/send/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
+  await mutate(sendStateUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Offers these files, by the ids Organize gave them, to the computer that connects next. */
+export const startSending = (files: string[]) => sending('start', { files });
+/** Says whether the number on the computer is the one on the phone. */
+export const confirmSending = (same: boolean) => sending('confirm', { same });
+/** Stops sending from this phone. */
+export const stopSending = () => sending('stop');
+
+/** Deletes from the phone what is safely on the computer; the phone asks first, and keeps them in Recently Deleted. */
+export async function deleteSent() {
+  const result = await json<DeleteSentDto>(`${API_BASE}/send/delete-sent`, { method: 'POST' });
+  await Promise.all([refreshOrganize(), mutate(sendStateUrl)]);
+  return result;
+}
+
+const receiveStateUrl = `${API_BASE}/receive/state`;
+
+/** The phones offering photos now, looked for again every few seconds while they are being chosen from. */
+export function usePhones(looking: boolean) {
+  return useSWR<FoundPhonesDto>(looking ? `${API_BASE}/phones` : null, json, { refreshInterval: 3000 });
+}
+
+/** Where receiving from a phone has got to, asked every second while it goes on. */
+export function useReceiveState(receiving: boolean) {
+  return useSWR<ReceiveStateDto>(receiving ? receiveStateUrl : null, json, { refreshInterval: 1000 });
+}
+
+async function receiving(path: string, body?: object) {
+  const state = await json<ReceiveStateDto>(`${API_BASE}/receive/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
+  await mutate(receiveStateUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Receives what the phone found offers, into a folder of this computer. */
+export const startReceiving = (phone: string, folder: string) => receiving('start', { phone, folder });
+/** Says whether the numbers shown on the phone and on this computer are the same. */
+export const confirmReceiving = (same: boolean) => receiving('confirm', { same });
+/** Stops receiving photos on this computer. */
+export const stopReceiving = () => receiving('stop');

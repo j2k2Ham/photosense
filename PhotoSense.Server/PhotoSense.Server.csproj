@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- The service on a Windows or Mac computer: one program, with no emulator or tools beside it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Its version comes from version.json (Directory.Build.targets). -->
+    <PhotoSensePart>server</PhotoSensePart>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />
+    <ProjectReference Include="..\PhotoSense.Application\PhotoSense.Application.csproj" />
+    <ProjectReference Include="..\PhotoSense.Contracts\PhotoSense.Contracts.csproj" />
+    <ProjectReference Include="..\PhotoSense.Desktop\PhotoSense.Desktop.csproj" />
+    <ProjectReference Include="..\PhotoSense.Domain\PhotoSense.Domain.csproj" />
+    <ProjectReference Include="..\PhotoSense.Infrastructure\PhotoSense.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shown under About: what this program ships that others made (node tools/notices.mjs writes it). -->
+    <EmbeddedResource Include="..\notices\server.txt" LogicalName="PhotoSense.ThirdPartyNotices.txt" />
+  </ItemGroup>
+</Project>

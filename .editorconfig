@@ -1,0 +1,7 @@
+root = true
+
+[*.cs]
+# A method that is given a CancellationToken passes it to every call that takes one (CLAUDE.md, rule on cancellation).
+dotnet_diagnostic.CA2016.severity = warning
+# The token is the last parameter, where callers expect it.
+dotnet_diagnostic.CA1068.severity = warning

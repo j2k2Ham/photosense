@@ -17,12 +17,38 @@ import { TopBar } from '../../components/TopBar';
 vi.mock('next/font/google', () => ({ DM_Sans: () => ({ variable: 'font-sans-var' }), DM_Mono: () => ({ variable: 'font-mono-var' }) }));
 
 describe('the page frame', () => {
-  it('carries the fonts and applies a saved light theme before anything is painted', () => {
+  it('carries the fonts and applies a saved light theme, or Auto on a light system, before anything is painted', () => {
     const html = renderToStaticMarkup(<RootLayout><p>the page itself</p></RootLayout>);
     expect(html).toMatch(/^<html lang="en" class="font-sans-var font-mono-var">/);
-    expect(html).toContain("localStorage.getItem('photosense-theme')==='light'");
     expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('the page itself'));
+    const paint = new Function(html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>')));
+    const lightBefore = (saved: string, systemLight: boolean) => {
+      document.documentElement.classList.remove('light');
+      localStorage.setItem('photosense-theme', saved);
+      vi.stubGlobal('matchMedia', () => ({ matches: systemLight }));
+      paint();
+      return document.documentElement.classList.contains('light');
+    };
+    expect([lightBefore('light', false), lightBefore('auto', true), lightBefore('auto', false), lightBefore('dark', true)]).toEqual([true, true, false, false]);
+    expect(document.documentElement.hasAttribute('data-app')).toBe(false);
+
+    // In a phone app the page is marked as the app's before it is painted, and with no theme chosen it follows the system.
+    localStorage.clear();
+    vi.stubGlobal('webkit', { messageHandlers: { photosenseBars: {} } });
+    document.documentElement.classList.remove('light');
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    paint();
+    expect([document.documentElement.hasAttribute('data-app'), document.documentElement.classList.contains('light')]).toEqual([true, true]);
+    vi.unstubAllGlobals();
+    vi.stubGlobal('PhotoSenseBars', {});
+    document.documentElement.removeAttribute('data-app');
+    paint();
+    expect(document.documentElement.hasAttribute('data-app')).toBe(true);
+    document.documentElement.removeAttribute('data-app');
+    document.documentElement.classList.remove('light');
     expect(metadata.title).toBe('PhotoSense');
+    // The one icon every program keeps, which the program answering hands out.
+    expect(metadata.icons.icon).toBe('http://localhost:7071/api/about/icon');
   });
 });
 
@@ -46,7 +72,7 @@ describe('TopBar', () => {
   it('shows the name, that nothing is uploaded, and the menu', async () => {
     const { onToggleMenu } = show();
     expect(screen.getByRole('heading', { name: 'PhotoSense' })).toBeInTheDocument();
-    expect(screen.getByText('Runs on this computer. Nothing is uploaded.')).toBeInTheDocument();
+    expect(screen.getByText('Runs on this device. Nothing is uploaded.')).toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Scanned folders')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /error/ })).not.toBeInTheDocument();
@@ -87,27 +113,80 @@ describe('TopBar', () => {
 
 describe('AppMenu', () => {
   function show(theme: 'dark' | 'light' = 'dark') {
-    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
     render(<div><span>elsewhere</span><AppMenu theme={theme} errorCount={2} {...handlers} /></div>);
     return handlers;
   }
 
   it('switches the theme without closing', async () => {
     const { onTheme, onClose } = show();
-    expect(screen.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'false');
-    await userEvent.click(screen.getByRole('button', { name: 'Light' }));
+    expect(screen.queryByRole('menuitem', { name: 'Receive from phone' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
     expect(onTheme).toHaveBeenCalledExactlyOnceWith('light');
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('says that nothing leaves the device, for a screen whose bar has no room to say it', () => {
+    show();
+    // Shown only below the width at which the bar says it itself.
+    expect(screen.getByText('Runs on this device. Nothing is uploaded.')).toHaveClass('xl:hidden');
+  });
+
+  it('on a computer, receives photos from a phone', async () => {
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn(), onReceive: vi.fn() };
+    render(<AppMenu theme="dark" errorCount={0} {...handlers} />);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Receive from phone' }));
+    expect([handlers.onReceive.mock.calls.length, handlers.onClose.mock.calls.length]).toEqual([1, 1]);
+  });
+
   it('marks light as chosen when it is', () => {
     show('light');
-    expect(screen.getByRole('button', { name: 'Light' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('gives focus back to what opened it once it closes, if that is still there', () => {
+    const { rerender } = render(<button type="button">Menu</button>);
+    screen.getByRole('button', { name: 'Menu' }).focus();
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
+    rerender(<><button type="button">Menu</button><AppMenu theme="dark" errorCount={0} {...handlers} /></>);
+    expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveFocus();
+    rerender(<button type="button">Menu</button>);
+    expect(screen.getByRole('button', { name: 'Menu' })).toHaveFocus();
+
+    rerender(<><button type="button">Menu</button><AppMenu theme="dark" errorCount={0} {...handlers} /></>);
+    rerender(<p>The menu button is gone too</p>);
+    expect(document.body).toHaveFocus();
+  });
+
+  it('opens on its first item, and goes through the items with the arrow keys, Home and End, round from either end', async () => {
+    show();
+    const names = () => (document.activeElement as HTMLElement).textContent;
+    expect(names()).toBe('Dark');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(names()).toBe('Light');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(names()).toBe('Errors2');
+    await userEvent.keyboard('{End}');
+    expect(names()).toBe('Delete permanently');
+    await userEvent.keyboard('{ArrowDown}');
+    expect(names()).toBe('Dark');
+    await userEvent.keyboard('{ArrowUp}');
+    expect(names()).toBe('Delete permanently');
+    await userEvent.keyboard('{Home}');
+    expect(names()).toBe('Dark');
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(names()).toBe('Dark');
+    // From nowhere in the menu, up is its last item.
+    (document.activeElement as HTMLElement).blur();
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowUp' });
+    expect(names()).toBe('Delete permanently');
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
   });
 
   it.each([
-    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['Delete permanently', 'onDeletePermanently'],
+    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['About PhotoSense', 'onAbout'], ['Delete permanently', 'onDeletePermanently'],
   ] as const)('does what is chosen and closes', async (name, handler) => {
     const handlers = show();
     await userEvent.click(screen.getByRole('menuitem', { name }));
@@ -118,7 +197,7 @@ describe('AppMenu', () => {
   it('shows the error count, and says on hovering Delete permanently where removed files wait', () => {
     show();
     expect(screen.getByRole('menuitem', { name: /^Errors/ })).toHaveTextContent('Errors2');
-    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Help', 'Delete permanently']);
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Help', 'About PhotoSense', 'Delete permanently']);
     // The one thing in the menu that erases files is marked as such.
     expect(screen.getByRole('menuitem', { name: 'Delete permanently' })).toHaveClass('text-rose-t');
     expect(screen.getByRole('menuitem', { name: 'Delete permanently' })).toHaveAttribute('title', 'Removed files wait in _PhotoSense_Removed inside each folder they were removed from. Delete permanently erases them.');
@@ -241,7 +320,7 @@ describe('ConfirmDialog', () => {
 describe('the settings window', () => {
   it('shows each setting as it is, changes it at once, and closes on Done, Escape or a press outside', async () => {
     const onChange = vi.fn(), onClose = vi.fn();
-    const { container, rerender, unmount } = render(<SettingsWindow settings={{ eraseAskTwice: true }} onChange={onChange} onClose={onClose} />);
+    const { container, rerender, unmount } = render(<SettingsWindow settings={{ eraseAskTwice: true, distanceUnit: 'miles' }} onChange={onChange} onClose={onClose} />);
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
     expect(dialog).toHaveTextContent('After the warning, Delete permanently asks “Are you sure?” once more. Turned off, the files are erased as soon as the warning is confirmed.');
     expect(dialog).toHaveTextContent('Settings are kept in this browser.');
@@ -249,7 +328,7 @@ describe('the settings window', () => {
     expect(ask).toBeChecked();
     await userEvent.click(ask);
     expect(onChange).toHaveBeenLastCalledWith({ eraseAskTwice: false });
-    rerender(<SettingsWindow settings={{ eraseAskTwice: false }} onChange={onChange} onClose={onClose} />);
+    rerender(<SettingsWindow settings={{ eraseAskTwice: false, distanceUnit: 'miles' }} onChange={onChange} onClose={onClose} />);
     expect(ask).not.toBeChecked();
     await userEvent.click(ask);
     expect(onChange).toHaveBeenLastCalledWith({ eraseAskTwice: true });
@@ -257,6 +336,10 @@ describe('the settings window', () => {
     fireEvent.keyDown(window, { key: 'Enter' });
     fireEvent.mouseDown(dialog);
     expect(onClose).not.toHaveBeenCalled();
+    const units = within(dialog).getByRole('group', { name: 'Distances' });
+    expect(within(units).getByRole('button', { name: 'Miles' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(units).getByRole('button', { name: 'Kilometers' }));
+    expect(onChange).toHaveBeenLastCalledWith({ distanceUnit: 'km' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
     fireEvent.keyDown(window, { key: 'Escape' });
     fireEvent.mouseDown(container.firstElementChild!);
@@ -320,9 +403,10 @@ describe('messages', () => {
     render(<Toaster remove={remove} toasts={[...toasts, { id: 6, message: 'done', kind: 'ok' }, { id: 7, message: 'failed', kind: 'error' }]} />);
 
     expect(screen.queryByText('message 3')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('status').map(s => s.textContent)).toEqual(['message 4×', 'message 5×', 'done×']);
-    const error = screen.getByRole('alert');
-    expect(error).toHaveTextContent('failedKept in Errors');
+    // One region that is always there, so that each message added to it is read out; an error says it is one.
+    const messages = [...screen.getByRole('log', { name: 'Messages' }).children] as HTMLElement[];
+    expect(messages.map(m => m.textContent)).toEqual(['message 4×', 'message 5×', 'done×', 'Error: failedKept in Errors×']);
+    const error = messages[3];
 
     await userEvent.click(within(error).getByRole('button', { name: 'Dismiss' }));
     expect(remove).toHaveBeenCalledExactlyOnceWith(7);

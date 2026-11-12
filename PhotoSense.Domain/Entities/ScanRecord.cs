@@ -3,8 +3,11 @@ namespace PhotoSense.Domain.Entities;
 /// <summary>What one finished scan took, kept so that the next one can say how long it will be.</summary>
 public class ScanRecord
 {
+    /// <summary>Tells this scan from every other.</summary>
     public Guid Id { get; init; } = Guid.NewGuid();
+    /// <summary>When the scan began.</summary>
     public DateTime StartedUtc { get; init; }
+    /// <summary>How long the scan took.</summary>
     public double Seconds { get; init; }
     /// <summary>Files the scan covered.</summary>
     public int Total { get; init; }

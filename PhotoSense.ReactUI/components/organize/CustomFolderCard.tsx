@@ -5,7 +5,15 @@ import type { OrganizeFileDto } from '../../types';
 import { countFiles, useDrop } from './shared';
 
 /** One of the person's own folders, with the files put in it so far. */
-export interface OwnFolder { id: string; name: string; files: OrganizeFileDto[]; }
+export interface OwnFolder {
+  id: string;
+  name: string;
+  files: OrganizeFileDto[];
+  /** Where it is, said when it is not a new folder in the folder being organized: "Already there", "In D:\Archive". */
+  where?: string;
+  /** Its whole path, said on hover. */
+  path?: string;
+}
 
 interface FolderProps {
   readonly folder: OwnFolder;
@@ -26,7 +34,8 @@ export function CustomFolderCard({ folder, on, picked, onFocus, onAdd, onPreview
       <button type="button" aria-pressed={on} aria-label={`Show the files for ${folder.name}`} onClick={onFocus} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <span aria-hidden className="h-[22px] w-[30px] shrink-0 rounded-[5px] bg-brand opacity-75" />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-[14.5px] font-semibold">{folder.name}</span>
+          <span className="truncate text-[14.5px] font-semibold" title={folder.path}>{folder.name}</span>
+          {folder.where && <span className="truncate text-[12.5px] text-t3" title={folder.path}>{folder.where}</span>}
           <span className="text-[12.5px] text-t2">{n > 0 ? `${countFiles(n)} · ${formatBytes(totalBytes(folder.files))} · not moved yet` : 'Empty. Select or drag files onto it.'}</span>
         </span>
       </button>

@@ -1,5 +1,6 @@
 import type { DuplicateGroupDto, GroupMode, MatchKind, PhotoDto } from '../types';
 
+/** A size as a person reads it: "2.41 GB", "3.2 MB" or "12 KB", never less than 1 KB. */
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
   if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -13,10 +14,12 @@ export function formatTaken(takenOn?: string): string {
   return Number.isNaN(d.getTime()) ? takenOn : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 }
 
+/** A picture's size in pixels, or that it is not known. */
 export function formatDimensions(p: PhotoDto): string {
   return p.width > 0 ? `${p.width} × ${p.height}` : 'Size unknown';
 }
 
+/** A video's length: "1:05", or "1:02:05" for an hour or more. */
 export function formatDuration(seconds: number): string {
   const total = Math.round(seconds);
   const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
@@ -39,10 +42,12 @@ export function linkedFiles(count: number): string {
   return count > 0 ? ` and ${count} linked ${count === 1 ? 'file' : 'files'}` : '';
 }
 
+/** Whether the file says where it was taken. */
 export function hasCoordinates(p: PhotoDto): p is PhotoDto & { latitude: number; longitude: number } {
   return typeof p.latitude === 'number' && typeof p.longitude === 'number';
 }
 
+/** Where a file was taken, as latitude and longitude, or that it does not say. */
 export function formatCoordinates(p: PhotoDto): string {
   if (!hasCoordinates(p)) return 'No location in this file';
   const lat = `${Math.abs(p.latitude).toFixed(4)}° ${p.latitude >= 0 ? 'N' : 'S'}`;
@@ -50,6 +55,7 @@ export function formatCoordinates(p: PhotoDto): string {
   return `${lat}, ${lon}`;
 }
 
+/** A map of where a file was taken, or nothing when it does not say. */
 export function mapUrl(p: PhotoDto): string | undefined {
   if (!hasCoordinates(p)) return undefined;
   return `https://www.openstreetmap.org/?mlat=${p.latitude}&mlon=${p.longitude}#map=15/${p.latitude}/${p.longitude}`;
@@ -85,6 +91,7 @@ function pixels(p: PhotoDto): string {
   return p.durationSeconds != null ? `${formatDimensions(p)} · ${formatDuration(p.durationSeconds)}` : formatDimensions(p);
 }
 
+/** One thing that sets a copy apart from its original, and how. */
 export interface Difference { label: string; text: string; }
 
 /** What sets a copy apart from the original it was matched with: one entry for each thing that differs. */
@@ -101,6 +108,7 @@ export function differences(original: PhotoDto, copy: PhotoDto): Difference[] {
   return found;
 }
 
+/** One line of the side-by-side comparison: what is compared, and each file's value. */
 export interface CompareRow {
   label: string;
   original: string;
@@ -140,6 +148,7 @@ export function groupSummary(group: DuplicateGroupDto, mode: GroupMode): { text:
   return { text: `${removable} ${removable === 1 ? 'duplicate' : 'duplicates'} · ${formatBytes(group.reclaimableBytes)}`, allKept: false };
 }
 
+/** How sure a match is, in the words the page shows. */
 export const matchLabel: Record<MatchKind, string> = {
   identical: 'Identical file',
   samePicture: 'Same picture',

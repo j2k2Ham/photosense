@@ -1,0 +1,29 @@
+# The iPhone app
+
+- **The project:** plain .NET for iOS (not MAUI), bundle id `com.j2k2ham.photosense`, iOS 16 or later.
+- **The web view:** a `WKWebView` on `app://photosense/`. `PageSchemeHandler` hands out `wwwroot` and sends `/api` to the router; on iOS a request's body is in `NSUrlRequest.Body`.
+  - The page draws under the status bar and round the corners itself (`viewport-fit=cover`, `env(safe-area-inset-*)`), so the scroll view adjusts nothing. A swipe from the left edge goes back in the page's history (`AllowsBackForwardNavigationGestures`), closing what the page opened last.
+  - The page tells the app its theme through the `photosenseBars` message handler, and the status bar's icons follow it (`PreferredStatusBarStyle`).
+  - The app does not ask for photos as it starts: the page asks after Welcome (`library/ask`, `PhotoKitAccess.AskAsync`). iOS asks once only; after that only Settings changes it, and iOS restarts the app when it does.
+  - The page knows it is in an app before it is drawn, by the `photosenseBars` handler (or Android's `PhotoSenseBars`), and stays hidden until it has its skin.
+- **LiteDB compiles expressions while it runs,** which iOS allows only through .NET's interpreter, hence `<MtouchInterpreter>-all</MtouchInterpreter>`.
+- **`PhotoKitLibrary`:**
+  - Albums PhotoSense made are known by the ids kept in `albums.txt` among the app's files. The person's own albums are never shown or changed.
+  - Each `Change` is one `PHPhotoLibrary.PerformChangesAndWait`, so iOS asks once and makes all of it or none. Error 3072 means the person said no.
+  - A folder made in the same block is filed with `objc_msgSend` and `addChildCollections:`, because the bindings take only collections that already exist.
+- **Never delete an album:** iOS shows a question before an app deletes one, which hung the simulator's check. An emptied album stays.
+- **Removed photos are not hidden:** with the Hidden album locked, the default since iOS 16, apps cannot see hidden photos at all.
+- **`ImageIOAnalyzer`** measures pictures through the shared `ImageFingerprint`.
+- **`BonjourAdvertiser`** calls `DNSServiceRegister` from `libSystem` with no callback, and keeps the screen on while the phone offers photos.
+- **`Info.plist`:**
+  - `NSPhotoLibraryUsageDescription`
+  - `NSLocalNetworkUsageDescription`, and `NSBonjourServices` (`_photosense._tcp`)
+  - `PHPhotoLibraryPreventAutomaticLimitedAccessAlert`
+  - `ITSAppUsesNonExemptEncryption`, still false: an open question for Jamie, since the app now encrypts what it sends.
+- **`PrivacyInfo.xcprivacy`:** App Store Connect refuses an upload without it.
+- **`iphone.yml`:**
+  - Pins Xcode 26.6, .NET SDK 10.0.401 and the iOS workload set 10.0.401; each workload release needs one Xcode.
+  - Makes a HEIC, an exact copy of it and a JPEG with `sips`, and adds them to the simulator's library.
+  - Grants photo access, then rewrites the TCC row to 2/2/2, because simctl's grant reads as never asked on Xcode 26.
+  - Launches the app with `PHOTOSENSE_SELF_CHECK=1` and waits for `self-check.json` to say `"finished":true`.
+  - Its TestFlight job is skipped until the Apple account's secrets are set.

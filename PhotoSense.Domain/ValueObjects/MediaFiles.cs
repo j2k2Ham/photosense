@@ -14,7 +14,12 @@ public static class MediaFiles
         ".mov", ".mp4", ".m4v", ".3gp"
     };
 
+    /// <summary>Whether the file is a picture, by its extension.</summary>
     public static bool IsImage(string path) => Images.Contains(Path.GetExtension(path));
+
+    /// <summary>Whether the file is a video, by its extension.</summary>
     public static bool IsVideo(string path) => Videos.Contains(Path.GetExtension(path));
+
+    /// <summary>Whether a scan takes the file in: a picture or a video.</summary>
     public static bool IsScanned(string path) => IsImage(path) || IsVideo(path);
 }

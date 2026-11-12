@@ -2,13 +2,16 @@ using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Infrastructure.Thumbnails;
 
-public class FileSystemThumbnailStore : IThumbnailStore
+/// <summary>Previews kept as JPEG files in a folder of PhotoSense's own, named by the hash of the file each shows.</summary>
+public sealed class FileSystemThumbnailStore : IThumbnailStore
 {
     private readonly string _root;
 
+    /// <summary>Keeps previews in <paramref name="root"/>, made when the first is saved.</summary>
     public FileSystemThumbnailStore(string root) => _root = root;
 
-    public async Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct)
     {
         var path = PathFor(contentHash);
         if (File.Exists(path)) return;
@@ -20,14 +23,17 @@ public class FileSystemThumbnailStore : IThumbnailStore
         catch (IOException) { File.Delete(temp); } // an identical file was saved first
     }
 
-    public async Task<byte[]?> GetAsync(string contentHash, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<byte[]?> GetAsync(string contentHash, CancellationToken ct)
     {
         var path = PathFor(contentHash);
         return File.Exists(path) ? await File.ReadAllBytesAsync(path, ct) : null;
     }
 
-    public Task ClearAsync(CancellationToken ct = default)
+    /// <inheritdoc />
+    public Task ClearAsync(CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
         return Task.CompletedTask;
     }

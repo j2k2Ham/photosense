@@ -1,0 +1,28 @@
+using System.Net.Http.Headers;
+
+namespace PhotoSense.Api.Endpoints;
+
+/// <summary>Tells requests from PhotoSense's own page from those any other web page could make a browser send.</summary>
+public static class RequestGuard
+{
+    /// <summary>The header only the page sends, which no other web page can make a browser add.</summary>
+    public const string ClientHeader = "x-photosense-client";
+    /// <summary>The header that carries the key the service was started with, when it was started with one.</summary>
+    public const string ApiKeyHeader = "x-api-key";
+
+    /// <summary>Whether a request may change, move or remove photos, given the key this service was started with.</summary>
+    public static bool Allows(HttpHeaders headers) => Allows(headers, Environment.GetEnvironmentVariable("PHOTOSENSE_API_KEY"));
+
+    /// <summary>Whether a request may change, move or remove photos.</summary>
+    /// <param name="headers">The headers sent.</param>
+    /// <param name="configuredKey">The API key the server was started with, if any.</param>
+    public static bool Allows(HttpHeaders headers, string? configuredKey)
+    {
+        // Any web page can make a browser send a plain request to a server on this machine. It cannot make
+        // the browser add a custom header: for that the browser first asks this server, which only grants
+        // it to the UI's own address (Cors:Origins in appsettings.json).
+        if (!headers.Contains(ClientHeader)) return false;
+        if (string.IsNullOrEmpty(configuredKey)) return true;
+        return headers.TryGetValues(ApiKeyHeader, out var values) && values.FirstOrDefault() == configuredKey;
+    }
+}

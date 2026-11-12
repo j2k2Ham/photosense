@@ -12,12 +12,14 @@ public sealed class PhotoRanking
 {
     private readonly FormatPreference _preference;
 
+    /// <summary>Ranks copies, preferring HEIC or JPEG as <paramref name="preference"/> says when nothing else tells them apart.</summary>
     public PhotoRanking(FormatPreference preference = FormatPreference.WidelyCompatible)
     {
         _preference = preference;
         BestFirst = Comparer<Photo>.Create(Compare);
     }
 
+    /// <summary>Orders copies of one picture with the best to keep first.</summary>
     public IComparer<Photo> BestFirst { get; }
 
     private int Compare(Photo a, Photo b)

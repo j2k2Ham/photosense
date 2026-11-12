@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { loadGoogleMaps, onGoogleMapsRefused, type GoogleMap, type GoogleMaps, type GoogleMarker } from '../../lib/googleMaps';
+import { googleMapsId, loadGoogleMaps, onGoogleMapsRefused, type GoogleMap, type GoogleMaps, type GoogleMarker } from '../../lib/googleMaps';
 import type { MapDot } from '../../lib/organize';
 import { Segmented } from '../ModeSwitch';
 import { EnlargeIcon } from './shared';
@@ -25,6 +25,16 @@ interface Props {
 
 /** How far in a map of a single folder is drawn: a town and what is around it. */
 const ONE_PLACE_ZOOM = 11;
+
+/** A folder's dot: as wide as the folder has files, darker and with a heavier edge when it is the one picked. */
+function dotOf(size: number, on: boolean): HTMLElement {
+  const dot = document.createElement('span'), edge = on ? 3 : 1.5;
+  Object.assign(dot.style, {
+    display: 'block', boxSizing: 'border-box', width: `${size + edge}px`, height: `${size + edge}px`, borderRadius: '50%', cursor: 'pointer',
+    background: on ? '#00525f' : 'rgba(13, 143, 161, 0.85)', border: `${edge}px solid #ffffff`,
+  });
+  return dot;
+}
 
 /**
  * The suggested folders as dots on Google's map: streets or satellite pictures, to zoom and move about in.
@@ -55,7 +65,7 @@ export function GoogleFolderMap({ mapsKey, dots, focus, view, large = false, onV
   useEffect(() => {
     if (!maps) return;
     const made = new maps.Map(holder.current!, {
-      center: { lat: 0, lng: 0 }, zoom: 2, mapTypeId: 'roadmap',
+      mapId: googleMapsId(), center: { lat: 0, lng: 0 }, zoom: 2, mapTypeId: 'roadmap',
       // Zooming always; no street-level pictures, which are not what this is for. Google's own switch between map
       // and satellite does not show on a small map, so the page has one of its own. The small map is opened large
       // by a click, so nothing on it but the dots answers a click; the large one can also take the whole screen.
@@ -72,11 +82,11 @@ export function GoogleFolderMap({ mapsKey, dots, focus, view, large = false, onV
     if (!maps || !map) return undefined;
     const markers: GoogleMarker[] = dots.map(d => {
       const on = d.key === focus;
-      const marker = new maps.Marker({
-        map, position: { lat: d.latitude, lng: d.longitude }, title: d.tip, zIndex: on ? 2 : 1,
-        icon: { path: maps.SymbolPath.CIRCLE, scale: d.size / 2, fillColor: on ? '#00525f' : '#0d8fa1', fillOpacity: on ? 1 : 0.85, strokeColor: '#ffffff', strokeWeight: on ? 3 : 1.5 },
+      // Centred on the place, rather than hanging from it as Google's pins do; clickable, which also lets the keyboard reach it.
+      const marker = new maps.marker.AdvancedMarkerElement({
+        map, position: { lat: d.latitude, lng: d.longitude }, title: d.tip, zIndex: on ? 2 : 1, content: dotOf(d.size, on), gmpClickable: true, anchorLeft: '-50%', anchorTop: '-50%',
       });
-      marker.addListener('click', () => focusOn.current(on ? undefined : d.key));
+      marker.addEventListener('gmp-click', () => focusOn.current(on ? undefined : d.key));
       return marker;
     });
 
@@ -92,7 +102,7 @@ export function GoogleFolderMap({ mapsKey, dots, focus, view, large = false, onV
         map.fitBounds(bounds, large ? 72 : 36);
       }
     }
-    return () => { for (const marker of markers) marker.setMap(null); };
+    return () => { for (const marker of markers) marker.map = null; };
   }, [maps, map, dots, focus, large]);
 
   return (

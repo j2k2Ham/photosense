@@ -1,0 +1,38 @@
+name: Dependencies
+
+# Tells GitHub every NuGet package the computer program uses, those that come in through other packages included,
+# so that Dependabot can warn of a vulnerable one. GitHub's automatic submission does the same but restores every
+# project it finds, and the phone apps cannot be restored on Linux without their workloads, so it failed on every
+# push once they were added. It is turned off (Settings, Code security, Dependency graph) in favour of this one,
+# which restores the solution only. The phone apps' own one package is still read from their project files.
+on:
+  push:
+    branches: [ master, main, feature/mobile-and-mac ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nuget:
+    runs-on: ubuntu-latest
+    permissions:
+      # Sending the list of packages to GitHub's dependency graph needs this.
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore PhotoSense.sln
+
+      # The commit GitHub's automatic submission uses; the action has no tagged releases.
+      - name: Submit
+        uses: actions/component-detection-dependency-submission-action@98beaea5a1227f3db476e4c9ca959a0cacd7ac4f
+        with:
+          detectorsCategories: NuGet

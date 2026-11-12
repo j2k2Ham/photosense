@@ -9,21 +9,20 @@ using Directory = MetadataExtractor.Directory;
 
 namespace PhotoSense.Infrastructure.Metadata;
 
-public class BasicExifMetadataExtractor : IPhotoMetadataExtractor
+/// <summary>Reads what a picture's EXIF, or a video's QuickTime metadata, says about it into the record a scan makes.</summary>
+public sealed class BasicExifMetadataExtractor : IPhotoMetadataExtractor
 {
     // QuickTime writes a position as signed degrees run together: +35.2886-075.5161+003.214/
     private static readonly Regex Iso6709 = new(@"^([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)", RegexOptions.Compiled);
     private const int QuickTimeCreationDate = 0x7, QuickTimeGpsLocation = 0xE, QuickTimeModel = 0x16;
 
-    public Task ExtractAsync(Photo photo, Stream imageStream, CancellationToken ct = default)
+    /// <inheritdoc />
+    public Task ExtractAsync(Photo photo, Stream imageStream, CancellationToken ct)
     {
-        try
-        {
-            imageStream.Position = 0;
-            Read(photo, ImageMetadataReader.ReadMetadata(imageStream));
-        }
-        // A file whose details cannot be read is still recorded; a malformed one must not stop the whole scan.
-        catch (Exception ex) when (ex is not OperationCanceledException) { }
+        ct.ThrowIfCancellationRequested();
+        imageStream.Position = 0;
+        // A file whose details cannot be read is still recorded, as it was: the photo is left as it is.
+        _ = MetadataFiles.TryRead(imageStream, directories => Read(photo, directories));
         return Task.CompletedTask;
     }
 

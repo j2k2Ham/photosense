@@ -1,0 +1,78 @@
+name: End-to-end
+
+on:
+  push:
+    branches: [ master, main, feature/mobile-and-mac ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+# The token may read the repository and nothing more: no step writes to GitHub.
+permissions:
+  contents: read
+
+jobs:
+  browsers:
+    # PhotoSense as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
+    # test makes for itself (e2e/README.md). Ubuntu 24.04, as Playwright 1.56 has no browsers for the 26.04 that
+    # ubuntu-latest now is.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # The whole history and its tags: a build is numbered by them (tools/version.mjs).
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: 'npm'
+          cache-dependency-path: |
+            PhotoSense.ReactUI/package.json
+            e2e/package.json
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install the tests and their browsers
+        working-directory: e2e
+        # A browser's download now and then stops short and never ends, so each try is given five minutes, three times.
+        # The machine may still be installing packages of its own, or briefly unable to reach Ubuntu's servers: apt
+        # waits for its locks and retries a download, each try waits for the machine's own apt to finish, and a failed
+        # try is followed by half a minute's pause.
+        run: |
+          npm ci
+          echo 'DPkg::Lock::Timeout "300"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/90photosense-wait
+          for try in 1 2 3; do
+            timeout 300 bash -c 'while pgrep -x "apt|apt-get|dpkg|unattended-upgr" > /dev/null; do sleep 5; done' || true
+            timeout 300 npx playwright install --with-deps chromium webkit && exit 0
+            sleep 30
+          done
+          exit 1
+
+      - name: Make the program the tests drive
+        working-directory: e2e
+        run: npm run app
+
+      - name: Type-check the tests
+        working-directory: e2e
+        run: npm run typecheck
+
+      - name: Run the tests
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: end-to-end-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          if-no-files-found: ignore

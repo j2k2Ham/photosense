@@ -3,6 +3,7 @@
 /** A place in PhotoSense a topic of the guide can take the reader to. */
 export type GuidePlace = 'scan' | 'duplicates' | 'similar' | 'organize' | 'settings';
 
+/** A part of a topic of the user guide: a heading with paragraphs, steps or notes. */
 export interface GuideSection {
   heading?: string;
   /** Paragraphs. */
@@ -13,6 +14,7 @@ export interface GuideSection {
   tips?: string[];
 }
 
+/** A topic of the user guide, as Help lists it. */
 export interface GuideTopic {
   id: string;
   title: string;
@@ -23,6 +25,7 @@ export interface GuideTopic {
   sections: GuideSection[];
 }
 
+/** The user guide shown by Help, topic by topic. It changes whenever something on screen is renamed, added or removed. */
 export const GUIDE: GuideTopic[] = [
   {
     id: 'start',
@@ -32,15 +35,16 @@ export const GUIDE: GuideTopic[] = [
       {
         text: [
           'PhotoSense tidies a folder of pictures and videos in two ways. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken.',
-          'Everything happens on this computer. Nothing is uploaded.',
+          'Everything happens on this device, the computer or the phone PhotoSense runs on. Nothing is uploaded.',
           'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Delete permanently**.',
+          'A move, copy or deletion happens in full or not at all. Should one file not go, the files that had gone go back, and the message says which file stopped it. One cut short because PhotoSense stopped is put back the next time it starts.',
         ],
       },
       {
         heading: 'Finding your way',
         tips: [
           'The switch at the top left, **Clean up | Organize**, moves between the two areas. Each keeps what you were doing in it.',
-          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help** and **Delete permanently**.',
+          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help**, **About PhotoSense** and **Delete permanently**.',
           'Messages appear at the bottom right, or across the bottom on a phone. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
           'On a phone, or in a narrow window, the screen rearranges itself to fit. In **Clean up**, tap a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and tapping a folder shows its files. Make the window wider and the two sit side by side again.',
         ],
@@ -70,6 +74,28 @@ export const GUIDE: GuideTopic[] = [
           'If you like, give a **Secondary folder** too, a backup for example. Copies are then found between the two as well as inside each.',
           'Leave **Recursive** ticked to include the folders inside the folder.',
           'Press **Scan**.',
+        ],
+      },
+      {
+        heading: 'On an iPhone or iPad',
+        text: [
+          '**Library** shows every photo and video, newest first, by month. Tap one to see it whole; **Select** chooses several to send, add to an album or delete. **Not organized** shows those in no album yet.',
+          '**Clean up** lists the copies found. Tap one to put it beside the photo that stays, see what differs, and **Delete** it, or keep it with **Keep this copy too**. Tap either picture to see it full screen, and tap again to flip between the two. **Delete all duplicates** deletes every copy at once and keeps the best of each. Everything deleted waits in PhotoSense Removed, and **Undo** brings it back.',
+          'The first time, **Continue** asks the phone\'s own question of which photos PhotoSense may see, and then reads them all. If you said no, **Open Settings** goes to where access is turned on; come back, and the reading starts.',
+          'The phone\'s photos are the one folder, **Photo Library**, read whole: **Scan again** in Settings reads it again, and **Stop** ends a scan, keeping what it read. If you let PhotoSense see only some of them, Library says so: **Choose more** opens the phone\'s own picker.',
+          '**Organize** suggests an album for each place, or each year, for the photos in no album yet. **Options** sets how: nearby places together or apart, landmark or town names, and what goes inside each album. Tap a suggestion to preview it: rename it, choose where it is made, and tap any photo to leave it where it is. Nothing moves until **Move**, and **Undo**, or **Recently moved**, puts it back. A name already taken in the album gets a number; **Review each name** lets you rename a file, leave it out, or delete one of the two.',
+          'There, a folder is an album. Organizing a photo puts it in an album, inside a folder of albums when you choose one, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied. An album left empty, by **Undo** or otherwise, stays in Photos until you delete it there.',
+          'What you delete waits in an album called **PhotoSense Removed**, where **Undo** can still take it back. **Delete permanently** sends it to the phone\'s **Recently Deleted**, which keeps it for 30 days; the phone asks you first.',
+          '**Settings**, the gear at the top of each tab, has the theme, **Distances**, **Photo access** (which opens the phone\'s own settings for PhotoSense), **Scan again**, what waits in **PhotoSense Removed** with **Delete permanently**, **Recently moved** with **Undo**, **Errors**, **Help**, **About PhotoSense** and **Privacy**. Delete permanently asks twice unless you turned the second question off as it was asked.',
+        ],
+      },
+      {
+        heading: 'On an Android phone',
+        text: [
+          'As on an iPhone, the first time **Continue** asks which photos PhotoSense may see, and then reads them all; **Scan again** in Settings reads them again.',
+          'The phone\'s storage is the one folder, **Phone**, holding its own folders: **DCIM** (with the camera\'s **Camera**), **Pictures**, **Movies** and the rest. Android keeps photos only inside DCIM, Pictures or Movies, so a folder made in Organize goes in **Pictures** unless you choose DCIM or a folder made there earlier. Organize sorts what is in no folder yet, and what is still where the camera put it, in **DCIM/Camera**.',
+          'What you delete waits in **_PhotoSense_Removed** inside the folder it was in, where **Undo** can still take it back; what you delete from the whole phone waits in **Pictures/PhotoSense Removed**. **Delete permanently** sends it to the phone\'s bin, which keeps it for 30 days. Android asks you once before each set of photos is moved or put in the bin.',
+          'A photo can be moved on the phone, not copied; to copy photos, send them to a computer.',
         ],
       },
       {
@@ -107,7 +133,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Going through a group',
         steps: [
           'Click a group. The original is shown beside one of its copies, with what differs between the two and why the original was preferred.',
-          'Under them is a strip of every copy. Click one to show it beside the original; hover over it for its name, date, folder and where it was taken.',
+          'Under them is a strip of every copy. Click one to show it beside the original; hover over it for its name, date, folder, where it was taken and what differs from the original.',
           'Click either picture to open the two large, side by side. There, **Space** flips between them in the same spot, and the arrow keys go through the copies.',
           'Press **Keep this copy** to mark a copy you want to keep. Deleting in bulk skips it.',
           'Press **Delete this copy** to remove the copy shown, or **Delete all copies** (the button says how many) to remove every copy of the group. The original stays.',
@@ -124,7 +150,9 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Good to know',
         tips: [
+          'Hover over a tile, or reach it with **Tab**, for the details of the picture on it: its name, when and where it was taken, its folder, its size and the camera. **Esc** puts the details away.',
           'Every question asked before a removal names the file that goes and the file that stays: two files holding one picture look alike, and are two files all the same.',
+          'The message after a removal has an **Undo** button, which puts every file it took back where it was, into its group again.',
           'The last copy of a picture is never removed as a duplicate. If the original has been moved, changed or deleted since the scan, its copies are left alone; scan again to bring the results up to date.',
           'A picture’s Live Photo video and edit file go with it, when they belong to that picture and to no other.',
           'If the Duplicates tab is empty, the scan found no copies. Anything that only looks alike is under **Similar**.',
@@ -164,7 +192,7 @@ export const GUIDE: GuideTopic[] = [
           'Switch to **Organize**. It starts with the folder you last scanned; **Choose root folder** takes any other. No scan is needed.',
           'Wait while the folder is read. Only the date and the place of each file are read. A large folder takes minutes the first time, and the files appear as they are read; after that it is quick.',
           'Choose how to group, on the right: **Group by** Place or Date, and **Then by** what each folder is split by inside. Place then Year gives folders such as Butte\\2022; Date then Place gives 2022\\Butte.',
-          'For places, **Nearby places** decides whether places within 1, 5, 15, 25 or 50 miles of each other share a folder, and **Folder names** how a place’s folder is named.',
+          'For places, **Nearby places** decides whether places within 1, 5, 15, 25 or 50 miles of each other share a folder, and **Folder names** how a place’s folder is named. Choose kilometers instead under **Distances** in Settings.',
           'Each card is a folder that would be made. Click a card to see its files alone.',
         ],
       },
@@ -193,20 +221,22 @@ export const GUIDE: GuideTopic[] = [
   {
     id: 'own',
     title: 'Organize: folders of your own',
-    summary: 'Making your own folders and putting files in them.',
+    summary: 'Making your own folders, or using ones already there, and putting files in them.',
     go: { label: 'Open Organize', place: 'organize' },
     sections: [
       {
         steps: [
-          'Under **Your folders**, press **New folder** and name it. A \\ in the name makes a folder inside a folder, as in Trips\\Glacier 2022.',
+          'Under **Your folders**, press **New folder** and name it. It is made inside the folder being organized; **Change**, beside **Made inside**, makes it somewhere else. A \\ in the name makes a folder inside a folder, as in Trips\\Glacier 2022.',
+          'Or choose **Folder already there** and pick one, such as a folder you made before: the files go straight into it. **›** shows the folders inside a folder, and **Up** the folder above.',
           'Select files and press the **Add here** button on the folder’s card (it says how many, as in Add 3 here), or drag files onto the card.',
-          'Or the other way round: select files first, then press **New folder from these** in the bar under the files.',
+          'Or the other way round: select files first, then press **New folder from these** in the bar under the files. The same window opens, and the selected files go in the folder you set up.',
         ],
       },
       {
         tips: [
           'Files in your own folders are left out of the suggested folders. A file can also be dragged onto a suggested folder.',
-          'Nothing is moved by any of this. A folder exists on disk only once you preview it and confirm.',
+          'Nothing is moved by any of this. A new folder exists on disk only once you preview it and confirm.',
+          'Nothing in a folder already there is replaced: a file arriving under a name it already has gets a number. A card says where its folder is when that is not a new folder in the folder being organized; hover over it for the whole path.',
           'What you have arranged but not carried out lives in the page, and is gone if the page is loaded again.',
         ],
       },
@@ -244,7 +274,9 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Undoing',
         tips: [
           'The message after a move has an **Undo** button.',
-          'The **Recently moved** button, at the foot of the panel on the right, says how many moves can still be undone and opens a list of what was moved, copied or deleted, each with **Undo**. Moved files go back under the names they had, and the folders made for them go again if that leaves them empty. **Done**, the **×** in its corner or **Esc** closes the list.',
+          'The **Recently moved** button, at the foot of the panel on the right, says how many moves can still be undone and opens a list of what was moved, copied or deleted, in Organize or in Clean up, each with **Undo**. Moved files go back under the names they had, and the folders made for them go again if that leaves them empty. **Done**, the **×** in its corner or **Esc** closes the list.',
+          'A file whose old name has been taken since goes back with a number, as in IMG_6435 (1).JPG. One that is no longer where the move put it is left, and the message says so.',
+          'An undo too happens in full or not at all: if one file cannot go back, none does, and the message says why.',
         ],
       },
     ],
@@ -261,6 +293,7 @@ export const GUIDE: GuideTopic[] = [
           'Hold **Shift** and click to select everything from the last file you clicked to this one.',
           '**Select all**, above the files, selects every file being shown, on every page; turned off, it lets them go. With a folder picked, a search or a filter on, that is only the files those leave.',
           'Double-click a file to open it in the computer’s own viewer or player.',
+          'Hover over a file, or reach it with **Tab**, for its details: its name, when and where it was taken, its folder and its size. **Esc** puts them away.',
         ],
       },
       {
@@ -269,9 +302,47 @@ export const GUIDE: GuideTopic[] = [
           'A bar appears under the files as soon as one is selected.',
         ],
         tips: [
-          '**New folder from these** makes a folder of your own with the selected files in it.',
+          '**New folder from these** puts the selected files in a folder of your own: a new one, wherever you choose, or one that is already there.',
           'The bin deletes the selected files. It asks first, then moves them to **_PhotoSense_Removed** inside the folder being organized, with any Live Photo videos and edit files that belong only to them. **Undo** puts them back.',
           '**Clear** lets every file go.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone',
+    title: 'Sending photos from a phone to a computer',
+    summary: 'Moving photos off an iPhone or iPad to PhotoSense on a computer, over Wi-Fi or a cable, and then off the phone.',
+    sections: [
+      {
+        text: [
+          'PhotoSense on the phone sends photos straight to PhotoSense on your computer. They go over your own Wi-Fi, or from an iPhone or iPad through a cable plugged into the computer, never through the internet, and no one else on the network can read them.',
+          'On Windows, sending through a cable needs Apple’s **Apple Devices** app or iTunes on the computer. Over Wi-Fi the phone and the computer need to be on the same network.',
+        ],
+      },
+      {
+        heading: 'Sending',
+        steps: [
+          'On the phone, open **Send**. Choose what to send: everything not in an album yet, what you chose in **Library**, or everything; their Live Photo videos and edits go with them. To send only some, select them in Library and choose **Send**. Choose **Copy** to keep them on the phone as well, or **Move** to have them deleted from the phone once they are on the computer, and press **Offer**. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
+          'On the computer, choose **Receive from phone** in the menu. Pick the phone, and the folder the photos go to with **Change**, then press **Receive into** that folder.',
+          'The first time, the phone and the computer each show a six-digit number. If they are the same, press **It’s the same number** on the phone and **They match** on the computer. If not, press **It’s different** and **They don’t match**: something else may be trying to connect. After that the two know each other and do not ask again.',
+          'The photos arrive. Each is checked, and only a photo that arrived whole is kept. One the very same as a file already in the folder is not copied again, and one whose name is taken there arrives under a new name: nothing on the computer is replaced.',
+        ],
+      },
+      {
+        heading: 'Copy or move',
+        tips: [
+          'With **Move**, once they have all arrived the phone deletes them from itself, and says what went where.',
+          'With **Copy**, the phone offers afterwards to **Delete** them **from this phone**, naming what goes and saying the copies on the computer stay. Press **Done** instead to keep them on the phone too.',
+          'Either way, only photos that are safely on the computer, with every file that belongs to them, are deleted. They go to **Recently Deleted** on the phone, where they stay for 30 days, and the phone asks you first.',
+          'Photos are copied to a computer, never onto the phone: in Organize on a phone, photos are moved between albums only.',
+        ],
+      },
+      {
+        heading: 'If sending stops',
+        tips: [
+          'If the phone or the computer hears nothing from the other for a minute, as when the phone loses the Wi-Fi or its screen locks, sending stops and says **The other device stopped answering**. What had arrived is kept, and nothing that had not arrived is deleted from the phone. Send again: what is already on the computer is not copied twice.',
+          'A photo kept only in iCloud is fetched to the phone first, which can take a while. The computer is told meanwhile, and waits.',
         ],
       },
     ],
@@ -290,7 +361,8 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Putting a file back',
         tips: [
-          'In Organize, press **Undo** in the message, or open **Recently moved** and press **Undo** beside the deletion.',
+          'Press **Undo** in the message that says what was deleted, in Clean up or in Organize. Every file it took goes back where it was, and Clean up lists the copies in their groups again.',
+          'Later, open **Recently moved** in Organize and press **Undo** beside the deletion. It lists what Clean up deleted too.',
           'Otherwise, move the file out of **_PhotoSense_Removed** back to where it was, with the computer’s own file manager. Scan again for Clean up to list it once more.',
         ],
       },
@@ -312,7 +384,7 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'menu',
-    title: 'Settings, theme and errors',
+    title: 'Settings, theme, errors and About',
     summary: 'What the menu holds besides the things described elsewhere.',
     go: { label: 'Open Settings', place: 'settings' },
     sections: [
@@ -320,8 +392,10 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           '**Theme** switches between dark and light.',
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
-          '**Settings** has the switch for the second question before deleting permanently. Settings are kept in this browser.',
+          '**Settings** has the switch for the second question before deleting permanently, and **Distances**: miles, or kilometers, for Organize and its map. Settings are kept in this browser.',
+          '**Receive from phone**, on a computer, takes in photos a phone with PhotoSense sends.',
           '**Help** opens this guide.',
+          '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
         ],
       },
     ],
@@ -358,7 +432,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'A file was left where it is',
         text: [
-          'It is open in another program, or it has changed since the scan. Close the program, or scan again, and try once more. The reason is kept under **Errors**.',
+          'It is open in another program, or it has changed since the scan. A file that cannot be moved stops the whole move or deletion, so nothing went and everything is where it was. Close the program, or scan again, and try once more. The reason is kept under **Errors**.',
         ],
       },
       {

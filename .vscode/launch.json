@@ -2,10 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Attach to .NET Functions",
+            "name": "Launch the PhotoSense service",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build (service)",
+            "program": "${workspaceFolder}/PhotoSense.Server/bin/Debug/net10.0/PhotoSense.Server.dll",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Attach to the PhotoSense service",
             "type": "coreclr",
             "request": "attach",
-            "processId": "${command:azureFunctions.pickProcess}"
+            "processId": "${command:pickProcess}"
         }
     ]
 }
