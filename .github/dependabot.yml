@@ -29,7 +29,14 @@ updates:
       # https://github.com/typescript-eslint/typescript-eslint/issues/10940. Take this out once it supports 7.
       - dependency-name: typescript
         update-types: [ "version-update:semver-major" ]
+      # The page's lint holds it to every accessibility rule of eslint-plugin-jsx-a11y, which supports ESLint up to 9
+      # only. Take this out once it supports 10.
+      - dependency-name: eslint
+        update-types: [ "version-update:semver-major" ]
     groups:
+      # Vitest's own packages each require the same version of Vitest, so a new major of one comes with the rest.
+      vitest:
+        patterns: [ "vitest", "@vitest/*" ]
       npm:
         update-types: [ minor, patch ]
 
