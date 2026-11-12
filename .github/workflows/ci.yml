@@ -114,7 +114,7 @@ jobs:
           awk -v p=$branchPct -v t=$thresholdBranch 'BEGIN{ exit (p/100 < t) }' || { echo "Branch coverage below threshold"; exit 1; }
 
       - name: Upload Test Results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
