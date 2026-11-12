@@ -44,7 +44,7 @@ jobs:
           echo "::notice title=Xcode::$(xcodebuild -version | head -1)"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
           cache: 'npm'
@@ -228,7 +228,7 @@ jobs:
 
       - name: Setup Node
         if: env.READY == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 26
 
