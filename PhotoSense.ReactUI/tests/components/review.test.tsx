@@ -117,11 +117,13 @@ describe('DuplicateStrip', () => {
 
   it('shows a tile for each copy with its format, how it matched, and which is beside the original', () => {
     show([identical, converted, burst, keeping, member({ id: 'm5', fileName: 'mystery.dat', format: undefined })], 1);
-    expect(tile('IMG_4198 (1).JPG')).toHaveTextContent('JPEGIdentical file');
-    expect(tile('IMG_4198.HEIC')).toHaveTextContent('HEICSame picture');
-    expect(tile('IMG_4199.JPG')).toHaveTextContent('Similar');
-    expect(tile('IMG_4198 (2).JPG')).toHaveTextContent('Keeping');
-    expect(tile('mystery.dat')).toHaveTextContent(/^Identical file$/);
+    expect(tile('IMG_4198 (1).JPG').parentElement).toHaveTextContent('JPEGIdentical file');
+    expect(tile('IMG_4198.HEIC').parentElement).toHaveTextContent('HEICSame picture');
+    expect(tile('IMG_4199.JPG').parentElement).toHaveTextContent('Similar');
+    expect(tile('IMG_4198 (2).JPG').parentElement).toHaveTextContent('Keeping');
+    expect(tile('mystery.dat').parentElement).toHaveTextContent(/^Identical file$/);
+    // The words are on the tile beneath the button, which says only what it does (WCAG 2.5.3).
+    expect(tile('IMG_4198.HEIC')).toBeEmptyDOMElement();
     expect(tile('IMG_4198.HEIC')).toHaveAttribute('aria-pressed', 'true');
     expect(tile('IMG_4198 (1).JPG')).toHaveAttribute('aria-pressed', 'false');
   });

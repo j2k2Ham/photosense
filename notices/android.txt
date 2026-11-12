@@ -214,20 +214,20 @@ SOFTWARE
 .NET (MIT)
 .NET for Android (MIT)
 LiteDB 5.0.21 (MIT)
-MetadataExtractor 2.8.1 (Apache-2.0)
+MetadataExtractor 2.9.3 (Apache-2.0)
 Microsoft.Extensions.DependencyInjection 11.0.0 (MIT)
 Microsoft.Extensions.DependencyInjection.Abstractions 11.0.0 (MIT)
 Microsoft.Extensions.Options 11.0.0 (MIT)
 Microsoft.Extensions.Primitives 11.0.0 (MIT)
 XmpCore 6.1.10.1 (BSD-3-Clause)
-@next/env 16.4.3 (MIT)
+@next/env 16.4.5 (MIT)
 @swc/helpers 0.5.23 (Apache-2.0)
 baseline-browser-mapping 2.11.34 (Apache-2.0)
 caniuse-lite 1.0.30001819 (CC-BY-4.0)
 client-only 0.0.1 (MIT)
 dequal 2.0.3 (MIT)
 nanoid 3.3.20 (MIT)
-next 16.4.3 (MIT)
+next 16.4.5 (MIT)
 picocolors 1.1.1 (ISC)
 postcss 8.5.23 (MIT)
 react 19.3.1 (MIT)
@@ -321,8 +321,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ------------------------------------------------------------------------
-MetadataExtractor 2.8.1 (Apache-2.0)
-Copyright Drew Noakes 2002-2023
+MetadataExtractor 2.9.3 (Apache-2.0)
+Copyright Drew Noakes 2002-2026
 ------------------------------------------------------------------------
 
 Apache License
@@ -520,7 +520,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ------------------------------------------------------------------------
-@next/env 16.4.3 (MIT)
+@next/env 16.4.5 (MIT)
 ------------------------------------------------------------------------
 
 MIT License
@@ -1435,7 +1435,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ------------------------------------------------------------------------
-next 16.4.3 (MIT)
+next 16.4.5 (MIT)
 ------------------------------------------------------------------------
 
 The MIT License (MIT)

@@ -56,9 +56,8 @@ public sealed class BasicExifMetadataExtractor : IPhotoMetadataExtractor
         {
             photo.CameraModel = ifd0.GetDescription(ExifDirectoryBase.TagModel);
         }
-        var loc = directories.OfType<GpsDirectory>().FirstOrDefault()?.GetGeoLocation();
         // 0,0 is what devices write when they have no fix.
-        if (loc != null && !loc.IsZero)
+        if (directories.OfType<GpsDirectory>().FirstOrDefault()?.GetGeoLocation() is { IsZero: false } loc)
         {
             photo.Latitude = loc.Latitude;
             photo.Longitude = loc.Longitude;
