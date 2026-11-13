@@ -13,7 +13,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="TUnit" Version="1.83.8" />
+    <PackageReference Include="TUnit" Version="1.84.0" />
     <PackageReference Include="coverlet.MTP" Version="10.1.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
     <PackageReference Include="Castle.Core" Version="5.2.1" />
