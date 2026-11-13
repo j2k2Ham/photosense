@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>html,body{margin:0;-webkit-text-size-adjust:100%;text-size-adjust:100%}body{font-family:'DM Sans',system-ui,sans-serif;color:#1d2226}a{color:#1a7f8c;text-decoration-thickness:1px;text-underline-offset:2px}a:hover{color:#0f5e68}doc-page:not(:defined){visibility:hidden}</style>
+</helmet>
+<x-import component-from-global-scope="doc-page" from="./doc-page.js" size="letter" margin="0.75in" hint-size="100%,100%">
+<div style="font-family:'DM Sans',system-ui,sans-serif;font-size:14.5px;line-height:1.6;color:#1d2226">
+
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><img src="./app-icon.png" alt="" style="width:28px;height:28px;border-radius:7px"><div style="font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#5a646c">PhotoSense · Product plan · November 2026</div></div>
+<h1 style="font-size:34px;line-height:1.15;font-weight:700;letter-spacing:-0.02em;margin:0 0 14px">Features, pricing and rollout</h1>
+<p style="font-size:16.5px;line-height:1.55;color:#3a4248;margin:0 0 10px;max-width:40em">PhotoSense cleans up duplicates and similar shots, organizes files by place and date, and sends photos from a phone to a computer. This plan adds fourteen features in four phases, and a Free, Pro and Family pricing model.</p>
+<p style="margin:0 0 28px;color:#5a646c">Mockups for all four phases: <a href="PhotoSense Growth Features.dc.html">PhotoSense Growth Features</a></p>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:0 0 10px">Goals</h2>
+<ul style="margin:0 0 28px;padding-left:20px;display:flex;flex-direction:column;gap:6px">
+<li><b style="font-weight:600">Storage people can trust.</b> People delete more when they know a copy exists. Every deletion feature says where the copy is.</li>
+<li><b style="font-weight:600">A daily habit.</b> Short sessions, streaks, alerts and widgets bring people back between cleanups.</li>
+<li><b style="font-weight:600">Recurring revenue.</b> The free tier proves the value with a real number of gigabytes. Pro pays for the features that run on their own.</li>
+</ul>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:0 0 10px">Roadmap</h2>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.5;margin:0 0 8px">
+<thead><tr><th style="text-align:left;font-weight:600;padding:8px 10px 8px 0;border-bottom:1.5px solid #1d2226;width:62px">Phase</th><th style="text-align:left;font-weight:600;padding:8px 10px;border-bottom:1.5px solid #1d2226">Features</th><th style="text-align:left;font-weight:600;padding:8px 0 8px 10px;border-bottom:1.5px solid #1d2226;width:42%">Why this order</th></tr></thead>
+<tbody>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">1</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">Safe to delete, Swipe to clean, Automatic backup, Free and Pro tiers</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top;color:#3a4248">Backup makes deleting safe and swiping makes it a habit. Together they carry the first paywall.</td></tr>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">2</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">Smarter Clean up categories, Video compression, Low-storage alerts, Share card</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top;color:#3a4248">Bigger storage wins, and a reason to come back when the phone fills up again.</td></tr>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">3</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">On-device search, Trips and events, Fix metadata, Privacy tools, Widgets and Shortcuts</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top;color:#3a4248">Turns PhotoSense into an app people use to find and enjoy photos, not only to clean.</td></tr>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">4</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">Family plan, Year in review</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top;color:#3a4248">Spreads through households, and once a year through social posts.</td></tr>
+</tbody>
+</table>
+<p style="font-size:13px;color:#5a646c;margin:0 0 30px">Each phase ships on iPhone, iPad, Android phone and tablet together. Desktop changes ship with the phase that needs them.</p>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:0 0 4px">Phase 1 · Launch</h2>
+<p style="margin:0 0 8px;color:#5a646c">The three features build on each other: backup creates verified copies, Safe to delete uses them, and Swipe to clean shows them on every card.</p>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">01</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Safe to delete</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free · removal limit on Free</div></div>
+<p style="margin:0 0 10px">PhotoSense checks which photos and videos are already on the paired computer and marks them on the phone. People can remove every backed-up item in one step, with their own exceptions.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">How it works</div><div>After each backup the computer returns a SHA-256 checksum for every file it holds. The phone marks an item safe only when the checksum matches its own copy. Backed-up thumbnails get a badge in Library, and a banner offers to free the total.</div>
+<div style="font-weight:600;color:#5a646c">Keep rules</div><div>Favorites and the last 30 days are kept by default. Either can be turned off before removing.</div>
+<div style="font-weight:600;color:#5a646c">Platform notes</div><div>Both platforms show a system confirmation before deleting, and deleted items stay in Recently Deleted (iOS) or Trash (Android) for 30 days. On iOS with iCloud Photos turned on, deleting also removes the item from iCloud and the person's other Apple devices. The review screen says so before they confirm.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">02</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Swipe to clean</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free · counts toward daily limit</div></div>
+<p style="margin:0 0 10px">One photo at a time, full screen. Swipe left to delete, right to keep. Each day brings a set of 50 photos, with a streak counter and a running total of space to free.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">Daily set</div><div>Mixes photos likely to go (screenshots, blurry shots, near-duplicates, old large videos) with random older photos, so sessions stay interesting.</div>
+<div style="font-weight:600;color:#5a646c">On each card</div><div>Date, place and size. "Backed up" when the item is safe to delete. Flags such as Blurry or Screenshot.</div>
+<div style="font-weight:600;color:#5a646c">Deleting</div><div>Deletions are collected during the session and confirmed once at the end, so the system dialog appears one time. Undo steps back through the whole session.</div>
+<div style="font-weight:600;color:#5a646c">Pricing</div><div>Free, streak included. Deletions count toward the free limit of 50 removals a day. During a session the footer shows how many free removals are left, and the upgrade offer waits for the summary. When a session marks more than the free removals left, the summary deletes what the limit allows and keeps the rest marked for the next day. Pro deletes all of them at once.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">03</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Automatic backup</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Pro · manual send stays free</div></div>
+<p style="margin:0 0 10px">The Send tab becomes Backup. Once a phone is paired with the PhotoSense desktop app, new photos and videos copy to the computer on their own when both are on the same Wi-Fi network. Manual send stays in the same tab.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">How it works</div><div>Transfers stay on the local network. Nothing is uploaded to a PhotoSense server. Files keep their original names, dates and location. Each finished file returns a checksum for Safe to delete.</div>
+<div style="font-weight:600;color:#5a646c">Settings</div><div>Wi-Fi network, only while charging, include videos, folder on the computer.</div>
+<div style="font-weight:600;color:#5a646c">iOS</div><div>The system decides when background work runs. PhotoSense backs up right away while the app is open, schedules a background processing task that requires Wi-Fi and power, and on iOS 26 and later lets a backup the person started continue with system progress after they leave the app.</div>
+<div style="font-weight:600;color:#5a646c">Android</div><div>WorkManager with Wi-Fi and charging constraints. Long transfers run as a foreground service with a progress notification.</div>
+</div>
+</div>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:22px 0 4px">Phase 2 · Bigger storage wins</h2>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">04</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Smarter Clean up categories</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free scan · removal limit on Free</div></div>
+<p style="margin:0 0 10px">New categories next to Duplicates and Similar: Screenshots, Blurry, Closed eyes, Bursts (keep the best shot), Large videos, Messaging app media, Receipts and documents, and Memes. Each shows how many items and how many GB it would free.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">Detection</div><div>All on the device. iOS uses Apple Vision: classification, face landmarks for closed eyes, and image aesthetics scores, which also flag utility images such as receipts. Android uses ML Kit and a small LiteRT blur model.</div>
+<div style="font-weight:600;color:#5a646c">Selection</div><div>Most categories open with everything selected. Closed eyes, and Receipts and documents, open with nothing selected, because people often keep these on purpose. Bursts keep the sharpest shot with open eyes, and a tap keeps a different one.</div>
+<div style="font-weight:600;color:#5a646c">Limits</div><div>Messaging app media is Android only at first, identified by folder. iOS does not reliably say which app saved a photo.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">05</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Video compression</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Pro</div></div>
+<p style="margin:0 0 10px">Large videos lists every video over 200 MB with its compressed size. Compression saves an HEVC copy at High, Balanced or Small quality, and shows the same frame side by side with the size before and after.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">Quality</div><div>High keeps 4K where it was recorded. Balanced (default) is 1080p and saves about 70%. Small is 720p and saves about 85%. A split view compares the same frame before compressing.</div>
+<div style="font-weight:600;color:#5a646c">How it works</div><div>AVFoundation export on iOS, Media3 Transformer on Android. The smaller file is saved as a new item with the original's date and location, then the original is deleted with the system confirmation and kept for 30 days in Recently Deleted or Trash.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">06</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Low-storage alerts</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free</div></div>
+<p style="margin:0 0 10px">A notification when free space drops below 10%, with the amount PhotoSense found: "iPhone storage is 92% full. PhotoSense found 4.1 GB you can free." Tapping it opens Free up space, with Duplicates, Screenshots, Blurry and Closed eyes selected.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">Rules</div><div>Only when storage is actually low, and at most once a week. The number in the alert is the number the app will show. On Free, the alert gives the space that today's 50 free removals can free (the 50 largest items in the picks), and the app offers Pro for the rest.</div>
+<div style="font-weight:600;color:#5a646c">Quick clean</div><div>Tapping the alert opens a short list of safe picks: old screenshots, duplicates, extra burst shots and blurry photos. Each can be unchecked, and one confirmation removes the rest.</div>
+<div style="font-weight:600;color:#5a646c">Platform notes</div><div>Android checks during a periodic WorkManager job. iOS can only check when the app runs, including background refresh, which the system schedules, so alerts on iOS are best effort.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">07</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Share card</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free</div></div>
+<p style="margin:0">After a large cleanup, a shareable image: "I freed 28.1 GB with PhotoSense". It never includes the person's photos. Offered on the result screen, never as a pop-up. Story (9:16) and square formats, saved as an image or sent through the system share sheet.</p>
+</div>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:22px 0 4px">Phase 3 · Find and enjoy</h2>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">08</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">On-device search</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Pro · date and place search free</div></div>
+<p style="margin:0 0 10px">Search in plain language, such as "dog at the beach 2023". Results combine what is in the photo with its date and place.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">How it works</div><div>An image-text embedding model runs on the device (Core ML on iOS, LiteRT on Android). The index is built while charging and never leaves the phone.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">09</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Trips and events</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free</div></div>
+<p style="margin:0">Builds trip albums from the location clusters Organize already finds (5 km radius) and from gaps between dates. A travel map shows every trip. A trip can become a folder on the computer in one step.</p>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">10</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Fix metadata</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Pro</div></div>
+<p style="margin:0">Finds files with wrong dates (camera defaults like 1970 or 2000, or dates reset by messaging apps) and missing locations. Fixes them in batches: shift dates, copy location from nearby shots, and rename computer copies by date.</p>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">11</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Privacy tools</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Location removal free · vault Pro</div></div>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">Remove location</div><div>A share option that sends a copy without location data. The original keeps it.</div>
+<div style="font-weight:600;color:#5a646c">Hidden vault</div><div>Locked with Face ID or fingerprint. Vault items are encrypted inside PhotoSense and removed from the system library. Backups carry them encrypted. Deleting the app deletes vault items that are not backed up, and the vault says so plainly.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">12</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Widgets and Shortcuts</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free</div></div>
+<p style="margin:0">Home screen widgets for today's swipe set with the streak, and for storage. Shortcuts and Siri actions on iOS (WidgetKit and App Intents), widgets and app shortcuts on Android, for "Back up now" and "Start swipe".</p>
+</div>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:22px 0 4px">Phase 4 · Households and sharing</h2>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">13</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Family plan</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Family</div></div>
+<p style="margin:0 0 10px">Pro for up to six people. Everyone can back up to one family computer. PhotoSense finds files that several people have, such as photos shared in a family chat, and keeps one copy in a shared Family folder.</p>
+<div style="display:grid;grid-template-columns:118px minmax(0,1fr);gap:6px 14px;font-size:13.5px;line-height:1.55">
+<div style="font-weight:600;color:#5a646c">Billing</div><div>App Store Family Sharing on iOS. On Android, confirm Google Play's current family support for subscriptions; if it does not cover this, use invite-based family accounts.</div>
+</div>
+</div>
+
+<div style="break-inside:avoid;border-top:1px solid #dde2e6;padding:16px 0 18px">
+<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:#1a7f8c">14</div><h3 style="font-size:17px;font-weight:700;margin:0;flex:1">Year in review</h3><div style="font-size:12px;font-weight:600;color:#5a646c">Free</div></div>
+<p style="margin:0">Each December: photos taken, places visited, busiest months and GB freed, as a few shareable cards. Built on the device from the same data as Trips.</p>
+</div>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:26px 0 10px;break-before:page">Pricing</h2>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.5;margin:0 0 10px">
+<thead><tr><th style="text-align:left;font-weight:600;padding:8px 10px 8px 0;border-bottom:1.5px solid #1d2226;width:70px">Plan</th><th style="text-align:left;font-weight:600;padding:8px 10px;border-bottom:1.5px solid #1d2226;width:150px">Price</th><th style="text-align:left;font-weight:600;padding:8px 0 8px 10px;border-bottom:1.5px solid #1d2226">Includes</th></tr></thead>
+<tbody>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Free</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">$0</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top">Full scan with the real amount that can be freed. Swipe to clean with streaks. Safe to delete badges and review. Manual send. Up to 50 removals a day, shared by Swipe to clean, Clean up and Safe to delete. Low-storage alerts, location removal, trips, widgets, share card, year in review.</td></tr>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Pro</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">$2.99 a month<br>$19.99 a year<br>$39 lifetime</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top">Everything in Free, plus automatic backup, unlimited removals, video compression, on-device search, fix metadata and the hidden vault. One purchase covers phone, tablet and computer.</td></tr>
+<tr><td style="padding:10px 10px 10px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Family</td><td style="padding:10px;border-bottom:1px solid #dde2e6;vertical-align:top">$29.99 a year</td><td style="padding:10px 0 10px 10px;border-bottom:1px solid #dde2e6;vertical-align:top">Pro for up to six people, plus the shared Family folder.</td></tr>
+</tbody>
+</table>
+<p style="font-size:13px;color:#5a646c;margin:0 0 24px">A 7-day free trial comes with the annual plan. Video compression is Pro only, so it does not use free removals.</p>
+
+<h3 style="font-size:16px;font-weight:700;margin:0 0 6px">Subscription page</h3>
+<p style="margin:0 0 8px">Settings opens a subscription page with three states.</p>
+<ul style="margin:0 0 22px;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+<li><b style="font-weight:600">Free:</b> free removals left today, a Free and Pro comparison, and all four plans.</li>
+<li><b style="font-weight:600">Trial:</b> days left, the reminder date and the renewal date and price, with the reminder on by default.</li>
+<li><b style="font-weight:600">Pro or Family:</b> renewal date, price, where it is billed, and a plan switcher.</li>
+<li>Every state has Restore purchases. Cancelling goes through the App Store or Google Play.</li>
+</ul>
+<h3 style="font-size:16px;font-weight:700;margin:0 0 6px">Where the paywall appears</h3>
+<ul style="margin:0 0 22px;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+<li>After the first scan, once the person has seen how much space they can free. The offer can be skipped and the app works without it.</li>
+<li>When the free daily removal limit is reached, with the amount still waiting.</li>
+<li>When turning on Automatic backup, compression, search, metadata fixes or the vault.</li>
+<li>Never during a swipe session. The footer shows the free removals left, and the offer waits for the summary.</li>
+</ul>
+
+<h3 style="font-size:16px;font-weight:700;margin:0 0 6px">Trust rules</h3>
+<p style="margin:0 0 8px">Many cleaner apps are known for aggressive paywalls and fake alerts. PhotoSense stands apart on these points, which also show up in reviews.</p>
+<ul style="margin:0 0 28px;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+<li>No ads, and no tracking of photo content.</li>
+<li>Photos never leave the person's own devices.</li>
+<li>Every number shown before payment is real, and the free daily limit is shown next to it.</li>
+<li>A reminder two days before a trial converts. Cancel is linked from Settings.</li>
+<li>Every deletion goes through the system confirmation and stays recoverable for 30 days.</li>
+</ul>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:0 0 10px">Growth</h2>
+<ul style="margin:0 0 28px;padding-left:20px;display:flex;flex-direction:column;gap:4px">
+<li><b style="font-weight:600">Share card</b> after big cleanups and <b style="font-weight:600">Year in review</b> each December bring new people in through social posts.</li>
+<li><b style="font-weight:600">Family invites</b> from the Family plan.</li>
+<li><b style="font-weight:600">Store listings</b> built around "storage full": screenshots that show real GB freed, and the search terms people use when their phone runs out of space.</li>
+<li><b style="font-weight:600">Low-storage alerts and widgets</b> bring lapsed users back at the moment they need the app.</li>
+</ul>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:0 0 10px">What to measure</h2>
+<table style="width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.5;margin:0 0 28px">
+<thead><tr><th style="text-align:left;font-weight:600;padding:8px 10px 8px 0;border-bottom:1.5px solid #1d2226;width:110px">Area</th><th style="text-align:left;font-weight:600;padding:8px 0 8px 10px;border-bottom:1.5px solid #1d2226">Metrics</th></tr></thead>
+<tbody>
+<tr><td style="padding:9px 10px 9px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Activation</td><td style="padding:9px 0 9px 10px;border-bottom:1px solid #dde2e6">Share of new users who free space in the first session. GB freed in the first week. Backup set-up rate.</td></tr>
+<tr><td style="padding:9px 10px 9px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Habit</td><td style="padding:9px 0 9px 10px;border-bottom:1px solid #dde2e6">Day 1, 7 and 30 retention. Swipe sessions per week. Streak length.</td></tr>
+<tr><td style="padding:9px 10px 9px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Revenue</td><td style="padding:9px 0 9px 10px;border-bottom:1px solid #dde2e6">Trial start rate, trial to paid, plan mix, refunds, churn by month.</td></tr>
+<tr><td style="padding:9px 10px 9px 0;border-bottom:1px solid #dde2e6;vertical-align:top;font-weight:600">Trust</td><td style="padding:9px 0 9px 10px;border-bottom:1px solid #dde2e6">Store rating, restores from Recently Deleted or Trash after a PhotoSense deletion, support tickets about lost photos.</td></tr>
+</tbody>
+</table>
+
+<h2 style="font-size:21px;font-weight:700;letter-spacing:-0.01em;margin:0 0 10px">Risks and open questions</h2>
+<ul style="margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px">
+<li><b style="font-weight:600">iCloud Photos.</b> Deleting from an iPhone with iCloud Photos on deletes everywhere. Safe to delete warns about this today. A later version could detect iCloud Photos and suggest the computer copy as the only remaining one.</li>
+<li><b style="font-weight:600">iOS background limits.</b> Automatic backup will be less immediate on iOS than on Android. The Backup tab states when it runs.</li>
+<li><b style="font-weight:600">Store review.</b> App Review and Play review watch cleaner apps for exaggerated claims. Copy and screenshots must match what the app does.</li>
+<li><b style="font-weight:600">Free limit.</b> 50 removals a day is a starting guess. Test 25, 50 and 100 against conversion and rating.</li>
+<li><b style="font-weight:600">Desktop dependency.</b> Backup and Safe to delete need the desktop app. Phone-only users still get Swipe to clean and Clean up, and should be offered the desktop download without pressure.</li>
+</ul>
+
+</div>
+</x-import>
+</x-dc>
+</body>
+</html>

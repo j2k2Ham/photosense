@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>html,body{margin:0;-webkit-text-size-adjust:100%;text-size-adjust:100%}body{font-family:'DM Sans',system-ui,sans-serif}a{color:#1a8a99}a:hover{color:#0f5e68}</style>
+</helmet>
+<div style="min-height:100vh;background:{{ page.bg }};color:{{ page.fg }};padding:28px 32px 64px;box-sizing:border-box;display:flex;flex-direction:column;gap:40px;font-family:'DM Sans',system-ui,sans-serif">
+<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:20px">
+<div style="display:flex;flex-direction:column;gap:6px;min-width:280px;flex:1">
+<div style="display:flex;align-items:center;gap:10px"><img src="./app-icon.png" alt="" style="width:30px;height:30px;border-radius:8px"><div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">PhotoSense growth features</div></div>
+<div style="font-size:14.5px;color:{{ page.mute }};max-width:760px;text-wrap:pretty">Every phone is clickable and starts at a different step. Plan switches between the free plan, with 50 removals a day, and Pro. Full plan: <a href="PhotoSense Product Plan.dc.html">PhotoSense Product Plan</a>.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+<sc-for list="{{ controls }}" as="ct" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:6px"><div style="font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:{{ page.mute }}">{{ ct.label }}</div>
+<div style="display:flex;padding:3px;border-radius:999px;background:{{ page.seg }};gap:2px"><sc-for list="{{ ct.opts }}" as="o" hint-placeholder-count="2"><div onClick="{{ o.go }}" style="height:32px;padding:0 14px;display:flex;align-items:center;border-radius:999px;background:{{ o.bg }};color:{{ o.fg }};font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap">{{ o.label }}</div></sc-for></div></div>
+</sc-for>
+<div onClick="{{ restart }}" style="align-self:flex-end;height:38px;padding:0 16px;display:flex;align-items:center;gap:8px;border-radius:999px;border:1px solid {{ page.line }};font-size:13.5px;font-weight:600;cursor:pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"></path><path d="M4 4v4.5h4.5"></path></svg>Restart all</div>
+</div>
+</div>
+<sc-for list="{{ groups }}" as="gr" hint-placeholder-count="2">
+<div style="display:flex;flex-direction:column;gap:36px">
+<div style="display:flex;align-items:baseline;gap:14px;padding-bottom:10px;border-bottom:1px solid {{ page.line }}"><div style="font-size:28px;font-weight:700;letter-spacing:-0.02em">{{ gr.title }}</div><div style="font-size:14.5px;color:{{ page.mute }}">{{ gr.sub }}</div></div>
+<sc-for list="{{ gr.rows }}" as="r" hint-placeholder-count="3">
+<div style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;flex-direction:column;gap:4px;max-width:760px"><div style="font-size:18px;font-weight:700">{{ r.title }}</div><div style="font-size:14.5px;color:{{ page.mute }};text-wrap:pretty">{{ r.desc }}</div></div>
+<div style="display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start">
+<sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="3">
+<div id="{{ c.id }}" style="display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:10px"><div style="height:24px;padding:0 9px;border-radius:7px;background:#1a8a99;color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center">{{ c.id }}</div><div style="font-size:15px;font-weight:600">{{ c.label }}</div></div>
+<div style="width:{{ c.w }};height:{{ c.h }}"><div style="zoom:{{ c.z }}"><sc-if value="{{ c.isPhone }}" hint-placeholder-val="{{ true }}"><dc-import name="FeaturePhone" platform="{{ c.plat }}" theme="{{ c.theme }}" tier="{{ c.tier }}" phase="{{ c.phase }}" start="{{ c.start }}" epoch="{{ c.epoch }}" hint-size="402px,874px"></dc-import></sc-if><sc-if value="{{ c.isTab }}" hint-placeholder-val="{{ false }}"><dc-import name="FeatureTablet" platform="{{ c.plat }}" theme="{{ c.theme }}" start="{{ c.start }}" epoch="{{ c.epoch }}" hint-size="1180px,820px"></dc-import></sc-if><sc-if value="{{ c.isDesk }}" hint-placeholder-val="{{ false }}"><dc-import name="DesktopPhones" theme="{{ c.dtheme }}" start="{{ c.start }}" epoch="{{ c.epoch }}" hint-size="1280px,800px"></dc-import></sc-if></div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;iPhone&quot;,&quot;Android&quot;],&quot;default&quot;:&quot;iPhone&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dark&quot;,&quot;Light&quot;],&quot;default&quot;:&quot;Dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;plan&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Free&quot;,&quot;Pro&quot;],&quot;default&quot;:&quot;Free&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;zoom&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0.5,&quot;max&quot;:1,&quot;step&quot;:0.05,&quot;default&quot;:0.8,&quot;tsType&quot;:&quot;number&quot;}}">
+class Component extends DCLogic {
+  state = {plat:null,theme:null,tier:null,epoch:0};
+  renderVals(){
+    const P=this.props||{},st=this.state;
+    const plat=st.plat||(String(P.platform||'iPhone')==='Android'?'android':'ios');
+    const theme=st.theme||(String(P.theme||'Dark').toLowerCase()==='light'?'light':'dark');
+    const tier=st.tier||(String(P.plan||'Free').toLowerCase()==='pro'?'pro':'free');
+    const dark=theme==='dark';
+    const page=dark?{bg:'#0c0e10',fg:'#eef1f3',mute:'#9aa3a9',seg:'#1c2024',on:'#eef1f3',onFg:'#0c0e10',line:'rgba(255,255,255,.14)'}:{bg:'#e6e9ec',fg:'#15191c',mute:'#55606a',seg:'#d3d8dc',on:'#15191c',onFg:'#fff',line:'rgba(0,0,0,.14)'};
+    const opt=(list,cur,k)=>list.map(([v,l])=>({label:l,go:()=>this.setState({[k]:v}),bg:v===cur?page.on:'transparent',fg:v===cur?page.onFg:page.fg}));
+    const z=Number(P.zoom)||0.8,dims=plat==='ios'?[402,874]:[412,892];
+    const cell=(id,start,label,phase)=>({id,start,label,isPhone:true,plat,theme,tier,phase:phase||'2',epoch:st.epoch,z:String(z),w:Math.round(dims[0]*z)+'px',h:Math.round(dims[1]*z)+'px'});
+    const tdims=plat==='ios'?[1180,820]:[1280,800],tz=0.62,tab=(id,start,label)=>({id,start,label,plat,theme,isTab:true,epoch:st.epoch,z:String(tz),w:Math.round(tdims[0]*tz)+'px',h:Math.round(tdims[1]*tz)+'px'}),desk=(id,start,label)=>({id,start,label,dtheme:theme==='dark'?'Dark':'Light',isDesk:true,epoch:st.epoch,z:'0.62',w:'794px',h:'496px'});
+    const c1=(id,start,label)=>cell(id,start,label,'1'),c3=(id,start,label)=>cell(id,start,label,'3'),c4=(id,start,label)=>cell(id,start,label,'4'),cT=(id,start,label,t)=>Object.assign(cell(id,start,label,'4'),{tier:t});
+    return {page,
+      controls:[{label:'Platform',opts:opt([['ios','iPhone'],['android','Android']],plat,'plat')},{label:'Theme',opts:opt([['dark','Dark'],['light','Light']],theme,'theme')},{label:'Plan',opts:opt([['free','Free'],['trial','Trial'],['pro','Pro']],tier,'tier')}],
+      restart:()=>this.setState({epoch:st.epoch+1}),
+      groups:[
+        {title:'Desktop app',sub:'What changes on the computer',rows:[
+          {title:'D1 · Phones',desc:'A new Phones tab lists every paired phone and tablet. It shows backups as they arrive, checks each file against the phone, and reports how much is safe to delete on the phone.',cells:[desk('D1a','phones','Backing up'),desk('D1b','pair','Pair a phone')]},
+          {title:'D2 · File names and Family',desc:'Rename by date applies to the computer copies only, with a preview first. The Family tab shows each member and keeps one copy of photos that several people have.',cells:[desk('D2a','rename','Rename by date'),desk('D2b','family','Family')]}
+        ]},
+        {title:'Tablet',sub:'iPad sidebar and Android rail',rows:[
+          {title:'T1 · Library and Clean up',desc:'Library uses the wider screen for search, Safe to delete, Trips and Year in review side by side. Clean up shows the category list and the selected grid together.',cells:[tab('T1a','library','Library'),tab('T1b','cleanup','Clean up')]},
+          {title:'T2 · Swipe, Trips and Subscription',desc:'Swipe to clean keeps the marked photos and the free limit beside the card. Trips puts the list next to the map. Settings shows the subscription page in the detail pane.',cells:[tab('T2a','swipe','Swipe to clean'),tab('T2b','trips','Trips'),tab('T2c','settings','Subscription')]}
+        ]},
+        {title:'First launch',sub:'From install to the first offer',rows:[
+          {title:'F1 · Welcome, photo access and pairing',desc:'Explains what PhotoSense does, asks for full photo access with the reason, then pairs with the computer by scanning the code on its Phones tab. Pairing can be skipped.',cells:[c4('F1a','onbWelcome','Welcome'),c4('F1b','onbAccess','Why access is needed'),c4('F1c','onbPerm','System prompt'),c4('F1d','onbPair','Pair a computer')]},
+          {title:'F2 · First scan and offer',desc:'The scan counts what it finds as it goes. The result shows the real total, then a full-screen Pro offer that can be skipped with Continue with Free.',cells:[c4('F2a','onbScan','Scanning'),c4('F2b','onbResult','Scan result'),c4('F2c','onbOffer','Pro offer')]}
+        ]},
+        {title:'Settings and subscription',sub:'Opened from the gear on every tab',rows:[
+          {title:'15 · Settings',desc:'The plan sits at the top of Settings and opens the subscription page. The rest covers the computer, theme with Auto, clean-up rules, privacy and app info.',cells:[cT('15a','settings','Free','free'),cT('15b','settings','Trial','trial'),cT('15c','settings','Pro','pro')]},
+          {title:'16 · Subscription',desc:'Free shows today\u2019s removals left, a Free and Pro comparison and all four plans. Trial shows the days left, when the reminder comes and when it renews. Pro shows renewal and billing, with a plan switcher. Cancelling always goes through the App Store or Google Play.',cells:[cT('16a','subscription','Free','free'),cT('16b','subscription','Trial','trial'),cT('16c','subscription','Pro','pro')]}
+        ]},
+        {title:'Phase 4',sub:'Households and sharing',rows:[
+          {title:'13 · Family plan',desc:'Pro for up to 6 people for $29.99 a year, managed from the Backup tab. Everyone can back up to one family computer, and photos that several people have are kept once in a shared Family folder. iOS uses Family Sharing; Android uses invite links.',cells:[c4('13a','famIntro','Family offer'),c4('13b','family','Family'),c4('13c','famShared','Shared photos'),c4('13d','famInvite','Add members')]},
+          {title:'14 · Year in review',desc:'Each December a card in Library opens five story cards: photos taken, trips, busiest month, space freed and a summary. Tap the right side to go forward and the left side to go back. No photos are on the cards, so any of them can be shared.',cells:[c4('14a','yearEntry','Library in December'),c4('14b','year','Opening card'),c4('14c','yearMonths','Busiest month'),c4('14d','yearClean','Clean up')]}
+        ]},
+        {title:'Phase 3',sub:'Find and enjoy',rows:[
+          {title:'8 · On-device search',desc:'A search field at the top of Library. A search like \u201cdog at the beach 2023\u201d is split into what is in the photo, the place and the date. The free plan searches by date and place; searching what is in photos needs Pro. Nothing is uploaded.',cells:[c3('8a','lib3','Library with search'),c3('8b','results','Results')]},
+          {title:'9 · Trips and events',desc:'Trips are grouped by place and date from photos taken away from home. Each trip can become a folder on the computer in one step.',cells:[c3('9a','trips','Trips'),c3('9b','tripsMap','Travel map'),c3('9c','trip','Trip')]},
+          {title:'10 · Fix metadata',desc:'Finds wrong dates and missing places and suggests a fix from nearby photos. Also renames the computer copies by date. Part of Pro.',cells:[c3('10a','fix','Fix dates and places')]},
+          {title:'11 · Privacy tools',desc:'Sharing a photo makes a copy without its location; the library keeps the original. The hidden vault is locked with Face ID or fingerprint and is part of Pro.',cells:[c3('11a','sharePriv','Share without location'),c3('11b','vault','Hidden vault'),c3('11c','vaultOpen','Unlocked')]},
+          {title:'12 · Widgets and Shortcuts',desc:'A storage widget with a working Back up now button, and a swipe widget with the streak. Tap the PhotoSense icon on 12a to see its shortcuts; the same actions are available to Shortcuts and Siri on iOS.',cells:[c3('12a','home','Home screen widgets'),c3('12b','quickAct','App shortcuts')]}
+        ]},
+        {title:'Phase 2',sub:'Bigger storage wins',rows:[
+          {title:'4 · Smarter Clean up categories',desc:'Clean up shows the total it found and lists every category with the space it would free. Categories open as a grid with everything selected; tap a photo to keep it. Bursts keep the sharpest shot. Messaging apps appears on Android only.',cells:[cell('4a','cleanup','Clean up tab'),cell('4b','grid','Screenshots'),cell('4c','bursts','Bursts')]},
+          {title:'5 · Video compression',desc:'Large videos lists every video over 200 MB with its compressed size. Compressing saves a smaller copy with the same date and location, then asks to delete the original.',cells:[cell('5a','videos','Large videos'),cell('5b','compress','Compare and compress')]},
+          {title:'6 · Low-storage alerts',desc:'When less than 10% is free, a notification says how much PhotoSense found. Tapping it opens Free up space with the four quickest categories selected.',cells:[cell('6a','lock','Notification'),cell('6b','quick','Free up space')]},
+          {title:'7 · Share card',desc:'Offered on result screens, never as a pop-up. Square or story format. The card never includes photos.',cells:[cell('7a','share','Share card')]}
+        ]},
+        {title:'Phase 1',sub:'Launch',rows:[
+          {title:'1 · Safe to delete',desc:'Backed-up thumbnails carry a check badge. The banner opens a review with keep rules, then one system confirmation removes everything that matched. On the free plan, PhotoSense offers to remove the 50 largest first.',cells:[c1('1a','library','Library with badges'),c1('1b','review','Review and keep rules'),c1('1c','freed','Space freed'),c1('1d','paywall','Over the free limit')]},
+          {title:'2 · Swipe to clean',desc:'A daily set of 50 from the Clean up tab. Deletions are collected and confirmed once at the end, and count toward the free plan\u2019s 50 removals a day. Tap a thumbnail on the summary to keep it.',cells:[c1('2a','cleanup','Clean up entry'),c1('2b','swipe','Swiping'),c1('2c','swipeDone','Session summary'),c1('2d','swipeLimit','Over the free limit')]},
+          {title:'3 · Automatic backup',desc:'The Send tab becomes Backup. It shows what is waiting, when the next backup runs, and progress while it runs. Automatic backup is part of Pro; Back up now stays free.',cells:[c1('3a','backup','Waiting for backup'),c1('3b','backupRun','Backing up')]}
+        ]}
+      ]};
+  }
+}
+</script>
+</body>
+</html>
