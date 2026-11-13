@@ -153,11 +153,18 @@ public sealed class OrganizeLibraryTests : IDisposable
     public async Task Leaves_Out_A_File_That_Went_Away_While_The_Folder_Was_Being_Read(CancellationToken ct)
     {
         for (var i = 0; i < 300; i++) _f.Put($"IMG_{i:000}.JPG");
-        // The first file to be read takes most of the others with it.
+        // The first file to be read takes most of the others with it. The other readers wait until they have gone, so
+        // that each finds at most the one file it was reading still there: left to run on, a fast machine finds them all.
         var once = 0;
-        _f.Reader.OnRead = _ =>
+        var gone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _f.Reader.WhileReading = (_, token) =>
         {
-            if (Interlocked.Exchange(ref once, 1) == 0) foreach (var path in Directory.GetFiles(_f.Root.FullName).Skip(50)) File.Delete(path);
+            if (Interlocked.Exchange(ref once, 1) == 0)
+            {
+                foreach (var path in Directory.GetFiles(_f.Root.FullName).Skip(50)) File.Delete(path);
+                gone.SetResult();
+            }
+            return gone.Task.WaitAsync(token);
         };
 
         var files = await _f.Library.ListAsync(_f.Root.FullName, ct);
