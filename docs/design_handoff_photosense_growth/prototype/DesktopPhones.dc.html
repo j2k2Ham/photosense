@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+[data-theme="Dark"]{color-scheme:dark;--bg:oklch(0.165 0.006 240);--s1:oklch(0.195 0.007 240);--s2:oklch(0.23 0.008 240);--s3:oklch(0.28 0.009 240);--pop:oklch(0.22 0.008 240);--line:oklch(1 0 0 / 0.08);--t1:oklch(0.96 0.004 240);--t2:oklch(0.76 0.01 240);--t3:oklch(0.64 0.01 240);--stage:oklch(0.125 0.005 240);--brand:oklch(0.74 0.11 200);--on-brand:oklch(0.18 0.02 200);--sel:oklch(0.27 0.016 215);--diff:oklch(0.82 0.13 78 / 0.10);--keep:oklch(0.80 0.13 160);--keep-bg:oklch(0.80 0.13 160 / 0.14);--keep-line:oklch(0.80 0.13 160 / 0.55);--rose:oklch(0.58 0.19 18);--rose-t:oklch(0.80 0.12 18);--rose-line:oklch(0.70 0.16 18 / 0.4);--rose-bg:oklch(0.62 0.19 18 / 0.13);--amber:oklch(0.84 0.13 80);--amber-bg:oklch(0.82 0.13 78 / 0.13);--ident:oklch(0.84 0.09 210);--ident-bg:oklch(0.74 0.11 210 / 0.16);--same:oklch(0.90 0.01 240);--same-bg:oklch(1 0 0 / 0.1);--thL:0.45;--thL2:0.41;--thC:0.07;--shadow:oklch(0 0 0 / 0.5);--scrim:oklch(0.06 0.005 240 / 0.72)}
+[data-theme="Light"]{color-scheme:light;--bg:oklch(0.975 0.003 240);--s1:oklch(0.997 0.002 240);--s2:oklch(0.955 0.004 240);--s3:oklch(0.91 0.006 240);--pop:oklch(1 0 0);--line:oklch(0.25 0.01 240 / 0.11);--t1:oklch(0.22 0.01 240);--t2:oklch(0.45 0.01 240);--t3:oklch(0.53 0.01 240);--stage:oklch(0.94 0.005 240);--brand:oklch(0.50 0.10 210);--on-brand:#fff;--sel:oklch(0.94 0.025 210);--diff:oklch(0.96 0.05 88);--keep:oklch(0.46 0.11 160);--keep-bg:oklch(0.94 0.05 160);--keep-line:oklch(0.60 0.12 160 / 0.6);--rose:oklch(0.54 0.19 20);--rose-t:oklch(0.48 0.18 20);--rose-line:oklch(0.54 0.19 20 / 0.35);--rose-bg:oklch(0.96 0.03 20);--amber:oklch(0.50 0.11 70);--amber-bg:oklch(0.95 0.06 88);--ident:oklch(0.42 0.09 215);--ident-bg:oklch(0.94 0.035 210);--same:oklch(0.30 0.01 240);--same-bg:oklch(0.25 0.01 240 / 0.08);--thL:0.86;--thL2:0.82;--thC:0.05;--shadow:oklch(0.25 0.02 240 / 0.18);--scrim:oklch(0.25 0.01 240 / 0.4)}
+
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="width:1280px;height:800px;flex:none;display:flex;flex-direction:column;background:var(--bg);color:var(--t1);font:400 14px/1.45 'DM Sans',sans-serif;position:relative;overflow:hidden;border-radius:14px;box-shadow:0 20px 60px var(--shadow)">
+<header style="height:64px;flex:none;display:flex;align-items:center;gap:16px;padding:0 24px;border-bottom:1px solid var(--line);background:var(--bg)">
+<div style="display:flex;align-items:center;gap:11px;flex:none"><div style="width:26px;height:26px;border-radius:8px;background:var(--brand);display:grid;place-items:center"><div style="width:10px;height:10px;border-radius:50%;border:2px solid var(--on-brand)"></div></div><div style="font-weight:600;font-size:17px;letter-spacing:-0.01em">PhotoSense</div></div>
+<div style="display:flex;padding:3px;border-radius:999px;background:var(--s2);border:1px solid var(--line);flex:none"><sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4"><div onClick="{{ t.go }}" style="height:32px;padding:0 16px;display:flex;align-items:center;gap:7px;border-radius:999px;background:{{ t.bg }};color:{{ t.fg }};font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap">{{ t.label }}<sc-if value="{{ t.isNew }}" hint-placeholder-val="{{ false }}"><div style="width:6px;height:6px;border-radius:50%;background:var(--brand)"></div></sc-if></div></sc-for></div>
+<div style="flex:1"></div>
+<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;background:var(--s2);font-size:13px;color:var(--t2);white-space:nowrap"><div style="width:7px;height:7px;border-radius:50%;background:var(--keep)"></div>Runs on this computer. Nothing is uploaded.</div>
+<div style="height:32px;padding:0 12px;display:flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:600;white-space:nowrap">{{ planPill }}</div>
+<div title="Menu" style="width:40px;height:40px;flex:none;border-radius:50%;border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;box-sizing:border-box"><div style="width:16px;height:2px;border-radius:2px;background:var(--t1)"></div><div style="width:16px;height:2px;border-radius:2px;background:var(--t1)"></div><div style="width:16px;height:2px;border-radius:2px;background:var(--t1)"></div></div>
+</header>
+
+<sc-if value="{{ isPhones }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;min-height:0;display:flex">
+<div style="width:320px;flex:none;border-right:1px solid var(--line);padding:20px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;background:var(--s1)">
+<div style="padding:0 8px 8px;display:flex;flex-direction:column;gap:2px"><div style="font-size:18px;font-weight:600">Phones and tablets</div><div style="font-size:13px;color:var(--t2)">Back up to Pictures/PhotoSense</div></div>
+<sc-for list="{{ devices }}" as="d" hint-placeholder-count="3"><div onClick="{{ d.go }}" style="padding:12px;border-radius:14px;background:{{ d.bg }};display:flex;align-items:center;gap:12px;cursor:pointer" style-hover="background:var(--s2)">
+<div style="width:38px;height:38px;border-radius:11px;background:var(--s3);display:grid;place-items:center;color:var(--t1);flex:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{ d.icon }}"></path></svg></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><div style="font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.name }}</div><div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:{{ d.dot }};flex:none"></div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.status }}</div></div></div>
+</div></sc-for>
+<div style="flex:1"></div>
+<div onClick="{{ openPair }}" style="height:40px;border-radius:999px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600;font-size:13.5px;cursor:pointer" style-hover="background:var(--s2)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg>Pair a phone</div>
+</div>
+<div style="flex:1;min-width:0;overflow-y:auto;padding:24px 28px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;align-items:flex-end;gap:16px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">{{ dv.name }}</div><div style="font-size:13.5px;color:var(--t2)">{{ dv.meta }}</div></div><sc-if value="{{ dv.canPause }}" hint-placeholder-val="{{ true }}"><div onClick="{{ togglePause }}" style="height:36px;padding:0 16px;border-radius:999px;background:var(--s2);border:1px solid var(--line);display:flex;align-items:center;font-weight:600;font-size:13.5px;cursor:pointer" style-hover="background:var(--s3)">{{ dv.pauseL }}</div></sc-if></div>
+<div style="padding:18px 20px;border-radius:18px;background:var(--s1);border:1px solid var(--line);display:flex;flex-direction:column;gap:12px">
+<div style="display:flex;align-items:center;gap:10px"><sc-if value="{{ dv.done }}" hint-placeholder-val="{{ false }}"><div style="width:22px;height:22px;border-radius:50%;background:var(--keep);color:var(--on-brand);display:grid;place-items:center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></div></sc-if><div style="font-size:18px;font-weight:600">{{ dv.title }}</div></div>
+<div style="font-size:13.5px;color:var(--t2)">{{ dv.sub }}</div>
+<sc-if value="{{ dv.run }}" hint-placeholder-val="{{ true }}"><div style="height:6px;border-radius:3px;background:var(--s3);overflow:hidden"><div style="height:100%;width:{{ dv.pct }};background:var(--brand);transition:width .2s linear"></div></div>
+<div style="display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:4px"><sc-for list="{{ dv.strip }}" as="b" hint-placeholder-count="10"><div style="aspect-ratio:1;border-radius:6px;background:{{ b.bg }};opacity:{{ b.op }};position:relative;transition:opacity .3s"><sc-if value="{{ b.ok }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;right:4px;bottom:4px;width:16px;height:16px;border-radius:50%;background:var(--keep);color:var(--on-brand);display:grid;place-items:center"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg></div></sc-if></div></sc-for></div></sc-if>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px"><sc-for list="{{ dv.stats }}" as="s" hint-placeholder-count="3"><div style="padding:16px 18px;border-radius:16px;background:var(--s1);border:1px solid var(--line);display:flex;flex-direction:column;gap:2px"><div style="font-size:12.5px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em">{{ s.k }}</div><div style="font-size:22px;font-weight:700">{{ s.v }}</div><div style="font-size:13px;color:var(--t2)">{{ s.s }}</div></div></sc-for></div>
+<div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:12px;align-items:start">
+<div style="border-radius:16px;background:var(--s1);border:1px solid var(--line);overflow:hidden">
+<div style="padding:14px 18px;font-weight:600">Files from this phone</div>
+<div style="padding:12px 18px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><div>Folder</div><div style="font-size:13px;color:var(--t2);font-family:'DM Mono',monospace">{{ dv.folder }}</div></div><div style="height:30px;padding:0 12px;border-radius:999px;background:var(--s2);display:flex;align-items:center;font-size:13px;font-weight:600">Change…</div></div>
+<div style="padding:12px 18px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><div>File names</div><div style="font-size:13px;color:var(--t2);font-family:'DM Mono',monospace">{{ nameEx }}</div></div><div onClick="{{ openRename }}" style="height:30px;padding:0 12px;border-radius:999px;background:var(--brand);color:var(--on-brand);display:flex;align-items:center;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">{{ renameL }}</div></div>
+<div style="padding:12px 18px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px"><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><div>Trip folders</div><div style="font-size:13px;color:var(--t2)">Made when the phone asks. 2 so far.</div></div></div>
+</div>
+<div style="border-radius:16px;background:var(--s1);border:1px solid var(--line);overflow:hidden">
+<div style="padding:14px 18px;font-weight:600">Activity</div>
+<sc-for list="{{ dv.act }}" as="a" hint-placeholder-count="4"><div style="padding:11px 18px;border-top:1px solid var(--line);display:flex;gap:12px;font-size:13.5px"><div style="width:76px;flex:none;color:var(--t2)">{{ a.t }}</div><div style="flex:1;min-width:0">{{ a.x }}</div></div></sc-for>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isFamily }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;min-height:0;display:flex">
+<div style="width:320px;flex:none;border-right:1px solid var(--line);padding:20px 16px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;background:var(--s1)">
+<div style="padding:0 8px 8px;display:flex;flex-direction:column;gap:2px"><div style="font-size:18px;font-weight:600">PhotoSense Family</div><div style="font-size:13px;color:var(--t2)">4 of 6 people · back up to this computer</div></div>
+<sc-for list="{{ members }}" as="m" hint-placeholder-count="4"><div style="padding:10px 12px;border-radius:14px;display:flex;align-items:center;gap:12px"><div style="width:36px;height:36px;border-radius:50%;background:{{ m.bg }};color:#fff;display:grid;place-items:center;font-weight:600;flex:none">{{ m.i }}</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><div style="font-weight:600">{{ m.name }}</div><div style="font-size:12.5px;color:var(--t2)">{{ m.sub }}</div></div></div></sc-for>
+<div style="flex:1"></div>
+<div style="padding:12px;border-radius:14px;background:var(--s2);display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;font-size:13px"><div style="color:var(--t2)">PhotoSense on this computer</div><div style="font-weight:600">{{ disk }}</div></div><div style="height:6px;border-radius:3px;background:var(--s3);overflow:hidden"><div style="height:100%;width:{{ diskW }};background:var(--brand);transition:width .3s"></div></div></div>
+</div>
+<div style="flex:1;min-width:0;overflow-y:auto;padding:24px 28px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:26px;font-weight:700;letter-spacing:-0.01em">Shared photos</div><div style="font-size:13.5px;color:var(--t2);font-family:'DM Mono',monospace">Pictures/PhotoSense/Family</div></div>
+<div style="padding:18px 20px;border-radius:18px;background:var(--s1);border:1px solid var(--line);display:flex;align-items:center;gap:18px">
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px"><div style="font-size:18px;font-weight:600">{{ fm.t }}</div><div style="font-size:13.5px;color:var(--t2);text-wrap:pretty">{{ fm.s }}</div></div>
+<sc-if value="{{ fm.can }}" hint-placeholder-val="{{ true }}"><div onClick="{{ keepOne }}" style="height:40px;padding:0 20px;border-radius:999px;background:var(--brand);color:var(--on-brand);display:flex;align-items:center;font-weight:600;cursor:pointer;flex:none">Keep one copy</div></sc-if>
+</div>
+<div style="display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px"><sc-for list="{{ fm.tiles }}" as="g" hint-placeholder-count="16"><div style="aspect-ratio:1;border-radius:8px;background:{{ g.bg }};position:relative;opacity:{{ g.op }}"><div style="position:absolute;left:5px;bottom:5px;display:flex"><sc-for list="{{ g.who }}" as="w" hint-placeholder-count="2"><div style="width:20px;height:20px;margin-left:{{ w.ml }};box-sizing:border-box;border-radius:50%;background:{{ w.bg }};border:2px solid rgba(0,0,0,.35);color:#fff;display:grid;place-items:center;font-size:9.5px;font-weight:700">{{ w.i }}</div></sc-for></div></div></sc-for></div>
+<div style="font-size:13px;color:var(--t2);text-wrap:pretty">Extra copies go to the Trash on this computer. Nothing changes on anyone's phone. Each person still sees their own photos in their own folder.</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isOther }}" hint-placeholder-val="{{ false }}"><div style="flex:1;display:grid;place-items:center;color:var(--t2);font-size:15px">Clean up and Organize work as in the desktop handoff.</div></sc-if>
+
+<sc-if value="{{ modalPair }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:50;background:var(--scrim);display:grid;place-items:center">
+<div style="width:640px;border-radius:20px;background:var(--pop);border:1px solid var(--line);box-shadow:0 20px 60px var(--shadow);padding:28px;box-sizing:border-box;display:flex;flex-direction:column;gap:20px">
+<div style="display:flex;align-items:center"><div style="flex:1;font-size:20px;font-weight:700">Pair a phone</div><div onClick="{{ closeModal }}" style="width:32px;height:32px;border-radius:50%;background:var(--s2);display:grid;place-items:center;cursor:pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"></path></svg></div></div>
+<div style="display:flex;gap:28px;align-items:center">
+<div style="width:220px;height:220px;flex:none;padding:14px;box-sizing:border-box;border-radius:16px;background:#fff;display:grid;grid-template-columns:repeat(21,1fr)"><sc-for list="{{ qr }}" as="q" hint-placeholder-count="21"><div style="aspect-ratio:1;background:{{ q.c }}"></div></sc-for></div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ pairSteps }}" as="s" hint-placeholder-count="3"><div style="display:flex;gap:12px;font-size:14.5px"><div style="width:24px;height:24px;border-radius:50%;background:var(--s2);display:grid;place-items:center;font-size:12.5px;font-weight:700;flex:none">{{ s.n }}</div><div style="padding-top:2px;text-wrap:pretty">{{ s.t }}</div></div></sc-for>
+<div style="padding:12px 14px;border-radius:12px;background:var(--s2);display:flex;align-items:center;gap:12px"><div style="flex:1;font-size:13px;color:var(--t2)">Or enter this code on the phone</div><div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:500;letter-spacing:.12em">482 913</div></div>
+</div>
+</div>
+<div style="font-size:13px;color:var(--t2)">The phone and this computer need to be on the same Wi-Fi. The code changes every 5 minutes.</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ modalRename }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;z-index:50;background:var(--scrim);display:grid;place-items:center">
+<div style="width:680px;border-radius:20px;background:var(--pop);border:1px solid var(--line);box-shadow:0 20px 60px var(--shadow);padding:28px;box-sizing:border-box;display:flex;flex-direction:column;gap:18px">
+<div style="display:flex;flex-direction:column;gap:4px"><div style="font-size:20px;font-weight:700">Rename files by date</div><div style="font-size:13.5px;color:var(--t2)">6,941 files from Alex's iPhone in Pictures/PhotoSense</div></div>
+<div style="display:flex;padding:3px;border-radius:999px;background:var(--s2);border:1px solid var(--line);align-self:flex-start"><sc-for list="{{ patterns }}" as="p" hint-placeholder-count="2"><div onClick="{{ p.go }}" style="height:32px;padding:0 16px;display:flex;align-items:center;border-radius:999px;background:{{ p.bg }};color:{{ p.fg }};font-weight:600;font-size:13.5px;cursor:pointer">{{ p.label }}</div></sc-for></div>
+<div style="border-radius:14px;border:1px solid var(--line);overflow:hidden">
+<div style="display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr);padding:10px 16px;background:var(--s2);font-size:12.5px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em"><div>Now</div><div>After</div></div>
+<sc-for list="{{ renRows }}" as="r" hint-placeholder-count="5"><div style="display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.4fr);padding:10px 16px;border-top:1px solid var(--line);font-family:'DM Mono',monospace;font-size:13px"><div style="color:var(--t2)">{{ r.a }}</div><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.b }}</div></div></sc-for>
+</div>
+<div style="font-size:13px;color:var(--t2);text-wrap:pretty">Only the copies on this computer are renamed. Files on the phone keep their names. Files with the same date and time get -2, -3 at the end.</div>
+<div style="display:flex;justify-content:flex-end;gap:10px"><div onClick="{{ closeModal }}" style="height:40px;padding:0 18px;border-radius:999px;background:var(--s2);display:flex;align-items:center;font-weight:600;cursor:pointer">Cancel</div><div onClick="{{ doRename }}" style="height:40px;padding:0 20px;border-radius:999px;background:var(--brand);color:var(--on-brand);display:flex;align-items:center;font-weight:600;cursor:pointer">Rename 6,941 files</div></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ toastOn }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;padding:12px 18px;border-radius:12px;background:var(--t1);color:var(--bg);font-weight:500;box-shadow:0 8px 24px var(--shadow)">{{ toastT }}</div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;1320px&quot;,&quot;height&quot;:&quot;840px&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Dark&quot;,&quot;Light&quot;],&quot;default&quot;:&quot;Dark&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;start&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;phones&quot;,&quot;pair&quot;,&quot;rename&quot;,&quot;family&quot;],&quot;default&quot;:&quot;phones&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;epoch&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;}}">
+const HUES=[200,152,28,88,262,330,60,180,12,232];
+function th(h,s){s=s||7;return 'repeating-linear-gradient(135deg,oklch(var(--thL) var(--thC) '+h+') 0 '+s+'px,oklch(var(--thL2) var(--thC) '+h+') '+s+'px '+(2*s)+'px)';}
+const MEM=[{name:'Alex',i:'A',h:205,sub:'iPhone and iPad · 31.1 GB'},{name:'Sam',i:'S',h:28,sub:'Pixel 9 · 18.4 GB'},{name:'Riley',i:'R',h:330,sub:'iPhone · 12.7 GB'},{name:'Jordan',i:'J',h:120,sub:'Not backing up yet'}];
+const PH='M8 3h8a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM10.5 18h3',TB='M5 3.5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2zM10.5 17.5h3';
+function qrCells(){const N=21,out=[];const fin=(r,c,R,C)=>{const y=r-R,x=c-C;if(y<0||x<0||y>6||x>6)return null;return (y===0||y===6||x===0||x===6||(y>=2&&y<=4&&x>=2&&x<=4));};
+  for(let r=0;r<N;r++)for(let c=0;c<N;c++){let v=fin(r,c,0,0);if(v===null)v=fin(r,c,0,N-7);if(v===null)v=fin(r,c,N-7,0);if(v===null){const inF=(r<8&&c<8)||(r<8&&c>N-9)||(r>N-9&&c<8);v=inF?false:((r*7+c*13+r*c)%5<2);}out.push({c:v?'#111':'#fff'});}return out;}
+const QR=qrCells();
+class Component extends DCLogic {
+  state = this.seed();
+  seed(){const s=String((this.props||{}).start||'phones');return {tab:s==='family'?'family':'phones',dev:0,modal:s==='pair'?'pair':s==='rename'?'rename':null,pat:'dt',renamed:false,famDone:false,prog:.43,paused:false,toast:null};}
+  componentDidMount(){this.tm=setInterval(()=>{const s=this.state;if(s.paused||s.prog>=1)return;const p=Math.min(1,s.prog+.006);this.setState({prog:p});},150);}
+  componentDidUpdate(pp){const P=this.props||{};if(pp.epoch!==P.epoch||pp.start!==P.start)this.setState(this.seed());}
+  componentWillUnmount(){clearInterval(this.tm);clearTimeout(this.tt);}
+  toast(t){clearTimeout(this.tt);this.setState({toast:t});this.tt=setTimeout(()=>this.setState({toast:null}),3500);}
+  renderVals(){
+    const P=this.props||{},st=this.state,theme=String(P.theme||'Dark').toLowerCase()==='light'?'Light':'Dark';
+    const TABS=[['cleanup','Clean up',false],['organize','Organize',false],['phones','Phones',true],['family','Family',true]];
+    const n=Math.round(380*st.prog),done=st.prog>=1;
+    const devs=[{name:'Alex\u2019s iPhone',icon:PH,dot:done?'var(--keep)':'var(--brand)',status:done?'Up to date \u00b7 just now':st.paused?'Paused at '+n+' of 380':'Backing up '+n+' of 380',meta:'iPhone \u00b7 paired Nov 10, 2026 \u00b7 Home Wi-Fi',folder:'Pictures/PhotoSense/Alex\u2019s iPhone'},
+      {name:'Alex\u2019s iPad',icon:TB,dot:'var(--keep)',status:'Up to date \u00b7 today at 8:02',meta:'iPad \u00b7 paired Nov 10, 2026',folder:'Pictures/PhotoSense/Alex\u2019s iPad'},
+      {name:'Sam\u2019s Pixel 9',icon:PH,dot:'var(--keep)',status:'Family \u00b7 up to date yesterday',meta:'Android phone \u00b7 Family member \u00b7 paired Oct 2, 2026',folder:'Pictures/PhotoSense/Family/Sam'}];
+    const d=devs[st.dev],first=st.dev===0,run=first&&!done;
+    const dv={name:d.name,meta:d.meta,folder:d.folder,run,done:!run,canPause:run,pauseL:st.paused?'Resume':'Pause backups',
+      title:run?(st.paused?'Paused at '+n+' of 380':'Backing up '+n+' of 380'):'Up to date',
+      sub:run?(2.1*(1-st.prog)).toFixed(1)+' GB left \u00b7 about '+Math.max(1,Math.ceil(4*(1-st.prog)))+' min \u00b7 each file is checked after it arrives':'Every file from this device matches its copy here.',
+      pct:(st.prog*100).toFixed(1)+'%',strip:Array.from({length:10},(_,k)=>{const ok=st.prog>(k+1)/11;return {bg:th(HUES[(k*3+2)%10],4),ok,op:ok||st.prog>k/11?1:.35};}),
+      stats:first?[{k:'On this computer',v:(6561+(done?380:n)).toLocaleString('en-US')+' items',s:(31.1+2.1*st.prog).toFixed(1)+' GB'},{k:'Checked',v:'All match',s:'SHA-256 checksum of every file'},{k:'Safe to delete on the phone',v:'5,998 items',s:'28.1 GB after keep rules'}]
+        :[{k:'On this computer',v:st.dev===1?'2,114 items':'4,380 items',s:st.dev===1?'9.6 GB':'18.4 GB'},{k:'Checked',v:'All match',s:'SHA-256 checksum of every file'},{k:'Safe to delete on the device',v:st.dev===1?'1,902 items':'3,977 items',s:st.dev===1?'8.8 GB':'16.2 GB'}],
+      act:(first?[[done?'Just now':'Now',done?'380 new items backed up and checked':'Receiving 380 new items'],['9:12 AM','Made folder 2026-07 Glacier National Park'],['Yesterday','214 items backed up and checked'],['Nov 10','Paired with this computer']]:[['8:02 AM','Up to date'],['Yesterday','96 items backed up and checked'],['Nov 10','Paired with this computer']]).map(([t,x])=>({t,x}))};
+    const fmt=st.pat==='dt'?(a,b)=>b:(a,b,p)=>b.replace('.HEIC',' '+p+'.HEIC').replace('.MOV',' '+p+'.MOV');
+    const R=[['IMG_4821.HEIC','2026-03-02 14.31.07.HEIC','Big Sky'],['IMG_4822.HEIC','2026-03-02 14.31.07-2.HEIC','Big Sky'],['IMG_5107.MOV','2026-07-19 09.12.44.MOV','Glacier National Park'],['IMG_5110.HEIC','2026-07-19 09.20.03.HEIC','Glacier National Park'],['IMG_6002.HEIC','2026-11-08 17.45.30.HEIC','Bozeman']];
+    const memRows=MEM.map(m=>({name:m.name,i:m.i,sub:m.sub,bg:'oklch(0.6 0.12 '+m.h+')'}));
+    return {theme,tabs:TABS.map(([id,label,isNew])=>({label,isNew,go:()=>this.setState({tab:id}),bg:st.tab===id?'var(--t1)':'transparent',fg:st.tab===id?'var(--bg)':'var(--t1)'})),
+      isPhones:st.tab==='phones',isFamily:st.tab==='family',isOther:st.tab==='cleanup'||st.tab==='organize',planPill:'PhotoSense Family',
+      devices:devs.map((x,k)=>({name:x.name,icon:x.icon,dot:x.dot,status:x.status,bg:k===st.dev?'var(--sel)':'transparent',go:()=>this.setState({dev:k})})),dv,
+      nameEx:st.renamed?(st.pat==='dt'?'2026-03-02 14.31.07.HEIC':'2026-03-02 14.31.07 Big Sky.HEIC'):'IMG_4821.HEIC',renameL:st.renamed?'Renamed':'Rename by date\u2026',
+      togglePause:()=>this.setState({paused:!st.paused}),openPair:()=>this.setState({modal:'pair'}),openRename:()=>{if(!st.renamed)this.setState({modal:'rename'});},closeModal:()=>this.setState({modal:null}),
+      modalPair:st.modal==='pair',modalRename:st.modal==='rename',qr:QR,
+      pairSteps:['Install PhotoSense from the App Store or Google Play.','On the phone, choose Connect your computer.','Point the phone at this code.'].map((t,k)=>({n:String(k+1),t})),
+      patterns:[['dt','Date and time'],['dtp','Date, time and place']].map(([id,label])=>({label,go:()=>this.setState({pat:id}),bg:st.pat===id?'var(--t1)':'transparent',fg:st.pat===id?'var(--bg)':'var(--t1)'})),
+      renRows:R.map(([a,b,p])=>({a,b:fmt(a,b,p)})),doRename:()=>{this.setState({modal:null,renamed:true});this.toast('Renamed 6,941 files.');},
+      members:memRows,disk:st.famDone?'73.1 GB':'76.9 GB',diskW:st.famDone?'7.3%':'7.7%',
+      fm:{t:st.famDone?'One copy kept':'1,204 photos are in more than one library',s:st.famDone?'3.8 GB saved on this computer.':'Sent around in family chats or saved by more than one person. Keeping one copy saves 3.8 GB.',can:!st.famDone,
+        tiles:Array.from({length:24},(_,k)=>({bg:th(HUES[(k*7+2)%10],5),op:1,who:[k%4,(k+1)%4,(k+2)%4].slice(0,2+(k%2)).map((w,j)=>({i:memRows[w].i,bg:memRows[w].bg,ml:j?'-6px':'0'}))}))},
+      keepOne:()=>{this.setState({famDone:true});this.toast('Saved 3.8 GB. Extra copies are in the Trash.');},
+      toastOn:!!st.toast,toastT:st.toast||''};
+  }
+}
+</script>
+</body>
+</html>
