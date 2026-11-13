@@ -1,8 +1,8 @@
 # Weekly updates of every package (Jamie, 2026-11-11). Updates for known vulnerabilities come as well, whenever
 # one is published, from the repository's own settings.
 #
-# Dependabot reads this file from main only, so it starts working once it is on main. Until the feature branch is
-# merged, its updates go to that branch, where the phone apps and everything since 2026-10-27 are.
+# Dependabot reads this file from main only. Its pull requests go to main (Jamie, 2026-11-12), where every check runs
+# before one can be merged; pull requests into another branch run none, which let three rounds of updates in unchecked.
 #
 # Smaller updates come together, one pull request per ecosystem and folder; each major version comes alone, as it
 # may need changes to the code.
@@ -12,7 +12,6 @@ updates:
   - package-ecosystem: nuget
     # The solution, and the phone apps, which are not in it.
     directories: [ "/", "/PhotoSense.iOS", "/PhotoSense.Android" ]
-    target-branch: feature/mobile-and-mac
     schedule:
       interval: weekly
     groups:
@@ -21,7 +20,6 @@ updates:
 
   - package-ecosystem: npm
     directories: [ "/PhotoSense.ReactUI", "/e2e" ]
-    target-branch: feature/mobile-and-mac
     schedule:
       interval: weekly
     ignore:
@@ -42,7 +40,6 @@ updates:
 
   - package-ecosystem: github-actions
     directory: /
-    target-branch: feature/mobile-and-mac
     schedule:
       interval: weekly
     groups:
