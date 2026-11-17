@@ -1,17 +1,20 @@
 import React from 'react';
 
-/** The two things PhotoSense does: clearing out duplicates, and putting files into folders. */
-export type Area = 'clean' | 'organize';
+/** What PhotoSense does on a computer: clearing out duplicates, putting files into folders, and keeping phones' backups. */
+export type Area = 'clean' | 'organize' | 'phones';
 
-const areas: { id: Area; name: string }[] = [{ id: 'clean', name: 'Clean up' }, { id: 'organize', name: 'Organize' }];
+const areas: { id: Area; name: string }[] = [{ id: 'clean', name: 'Clean up' }, { id: 'organize', name: 'Organize' }, { id: 'phones', name: 'Phones' }];
 
-/** The switch in the header between the two areas. */
-export function ModeSwitch({ area, onArea }: { readonly area: Area; onArea(area: Area): void }) {
+/** The switch in the header between the areas; one that is new has a dot until it is first opened. */
+export function ModeSwitch({ area, fresh = [], onArea }: { readonly area: Area; readonly fresh?: readonly Area[]; onArea(area: Area): void }) {
   return (
     <div role="group" aria-label="Area" className="flex shrink-0 rounded-full border border-line bg-s2 p-[3px]">
       {areas.map(a => (
         <button key={a.id} type="button" aria-pressed={area === a.id} onClick={() => onArea(a.id)}
-          className={`pill h-8 px-4 text-[13.5px] ${area === a.id ? 'bg-t1 text-bg' : 'text-t2'}`}>{a.name}</button>
+          className={`pill h-8 gap-1.5 px-4 text-[13.5px] max-sm:px-3 ${area === a.id ? 'bg-t1 text-bg' : 'text-t2'}`}>
+          {a.name}
+          {fresh.includes(a.id) && <span role="img" aria-label="New" className="h-1.5 w-1.5 rounded-full bg-brand" />}
+        </button>
       ))}
     </div>
   );

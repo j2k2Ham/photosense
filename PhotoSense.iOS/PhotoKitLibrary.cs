@@ -30,7 +30,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
             foreach (var resource in PHAssetResource.GetAssetResources(asset))
                 if (KindOf(resource.ResourceType) is { } kind) files.Add(new LibraryFile(kind, resource.OriginalFilename, SizeOf(resource)));
             var created = asset.CreationDate is { } taken ? (DateTime)taken : DateTime.UnixEpoch;
-            items.Add(new LibraryItem(asset.LocalIdentifier, created, asset.ModificationDate is { } changed ? (DateTime)changed : created, files));
+            items.Add(new LibraryItem(asset.LocalIdentifier, created, asset.ModificationDate is { } changed ? (DateTime)changed : created, files, asset.Favorite));
         }
         return items;
     }

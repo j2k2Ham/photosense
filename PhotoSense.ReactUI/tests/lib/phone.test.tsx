@@ -1,14 +1,21 @@
 import { act, render, renderHook } from '@testing-library/react';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup } from '@testing-library/react';
+
 import { PHONE_TOAST_MS, TOAST_MS, useToasts } from '../../components/Toaster';
 import { useBackLayer } from '../../lib/backStack';
-import { platformOf, TABLET, useForm, usePhone, WORDS } from '../../lib/phone';
+import { deviceName, deviceWord, platformOf, TABLET, useForm, usePhone, WORDS } from '../../lib/phone';
 import { tellSystemBars } from '../../lib/systemBars';
 import { width } from '../components/phone/frame';
 
 describe('where the page is', () => {
+  it('names what the person holds: a phone, an iPad, or an Android tablet', () => {
+    expect([deviceName('ios', false), deviceName('android', false), deviceName('ios', true), deviceName('android', true)]).toEqual(['phone', 'phone', 'iPad', 'tablet']);
+    expect([deviceWord('ios', false), deviceWord('android', false), deviceWord('ios', true), deviceWord('android', true)]).toEqual(['iPhone', 'phone', 'iPad', 'tablet']);
+  });
+
   it('is an iPhone or iPad, an Android phone or tablet, or a computer', () => {
     expect([platformOf('iphone'), platformOf('android'), platformOf('server'), platformOf(undefined)]).toEqual(['ios', 'android', undefined, undefined]);
     expect([WORDS.ios.put, WORDS.android.put, WORDS.android.separator]).toEqual(['Add to album', 'Move to folder', '/']);
@@ -40,6 +47,13 @@ describe('where the page is', () => {
 });
 
 describe('Back', () => {
+  // A layer closed some other way than by Back takes its entry out of the history by going back, which the browser says
+  // it has done a moment later; each test closes what it opened and waits for that, so that the next does not hear it
+  // as a Back of its own.
+  afterEach(async () => {
+    cleanup();
+    await new Promise(r => setTimeout(r, 60));
+  });
   function Layer({ open, onBack }: { open: boolean; onBack: () => void }) {
     useBackLayer(open, onBack);
     return null;
@@ -75,6 +89,23 @@ describe('Back', () => {
     await act(async () => { history.back(); });
     await settle();
     expect([first.mock.calls.length, next.mock.calls.length]).toEqual([0, 1]);
+  });
+
+  it('something opened while the page is still taking an entry out is put in after, so it stays open, and Back then closes it', async () => {
+    const first = vi.fn(), later = vi.fn(), brief = vi.fn();
+    const three = (a: boolean, b: boolean, c: boolean) => <><Layer open={a} onBack={first} /><Layer open={b} onBack={later} /><Layer open={c} onBack={brief} /></>;
+    const { rerender } = render(three(true, false, false));
+    rerender(three(false, false, false));
+    // The step back has started, and the browser has not yet said it is done.
+    await act(async () => { await Promise.resolve(); });
+    rerender(three(false, true, true));
+    // One closed before it was put in leaves nothing to take out.
+    rerender(three(false, true, false));
+    await settle();
+    expect([first.mock.calls.length, later.mock.calls.length, brief.mock.calls.length]).toEqual([0, 0, 0]);
+    await act(async () => { history.back(); });
+    await settle();
+    expect([first.mock.calls.length, later.mock.calls.length, brief.mock.calls.length]).toEqual([0, 1, 0]);
   });
 
   it('a Back that lands on an entry left over from before closes every layer made since', async () => {

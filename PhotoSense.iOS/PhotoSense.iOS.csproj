@@ -43,6 +43,33 @@
     <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->
     <EmbeddedResource Include="..\notices\iphone.txt" LogicalName="PhotoSense.ThirdPartyNotices.txt" />
   </ItemGroup>
+  <!-- StoreKit 2 is Swift alone: PhotoSense's own small bridge to it (Native/StoreKitBridge.swift) is built here into a
+       static library for the phone or the simulator being built for, and linked into the app with the Swift libraries
+       it needs. StoreKitStore calls it. -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <StoreBridgeSdk Condition="$(RuntimeIdentifier.StartsWith('iossimulator'))">iphonesimulator</StoreBridgeSdk>
+    <StoreBridgeSdk Condition="'$(StoreBridgeSdk)' == ''">iphoneos</StoreBridgeSdk>
+    <StoreBridgeArch Condition="$(RuntimeIdentifier.EndsWith('x64'))">x86_64</StoreBridgeArch>
+    <StoreBridgeArch Condition="'$(StoreBridgeArch)' == ''">arm64</StoreBridgeArch>
+    <StoreBridgeTarget>$(StoreBridgeArch)-apple-ios$(SupportedOSPlatformVersion)</StoreBridgeTarget>
+    <StoreBridgeTarget Condition="'$(StoreBridgeSdk)' == 'iphonesimulator'">$(StoreBridgeTarget)-simulator</StoreBridgeTarget>
+  </PropertyGroup>
+  <Target Name="BuildStoreBridge" BeforeTargets="BeforeBuild" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <StoreBridgeLibrary>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)libPhotoSenseStore.a</StoreBridgeLibrary>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <Exec Command="xcrun --sdk $(StoreBridgeSdk) swiftc -parse-as-library -emit-library -static -O -module-name PhotoSenseStore -target $(StoreBridgeTarget) -o &quot;$(StoreBridgeLibrary)&quot; Native/StoreKitBridge.swift" />
+    <!-- Where Xcode keeps the Swift libraries an older iOS needs beside the system's own. -->
+    <Exec Command="xcode-select -p" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="StoreBridgeDeveloperDir" />
+    </Exec>
+    <ItemGroup>
+      <NativeReference Include="$(StoreBridgeLibrary)" Kind="Static" ForceLoad="true" SmartLink="false" Frameworks="StoreKit Foundation UIKit"
+        LinkerFlags="-L/usr/lib/swift -L$(StoreBridgeDeveloperDir)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(StoreBridgeSdk)" />
+    </ItemGroup>
+  </Target>
   <Target Name="RequireThePage" BeforeTargets="Build" Condition="!Exists('..\PhotoSense.ReactUI\out\index.html')">
     <Error Text="Build the page first: in PhotoSense.ReactUI, run npm ci, then npm run build with NEXT_PUBLIC_API_BASE set to /api." />
   </Target>

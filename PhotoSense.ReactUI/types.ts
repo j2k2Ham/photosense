@@ -387,3 +387,149 @@ export interface ReceiveStateDto {
   folder: string | null;
   problem: string | null;
 }
+
+/** Which plan someone has. */
+export type PlanTier = 'free' | 'trial' | 'pro' | 'family';
+/** How Pro is paid for. */
+export type PlanKind = 'yearly' | 'monthly' | 'lifetime' | 'family';
+/** A plan for sale, priced as the store says (PhotoSense.Contracts.Plans.PlanOfferDto). */
+export interface PlanOfferDto {
+  kind: PlanKind;
+  /** The price as the store writes it, such as "$19.99". */
+  price: string;
+  /** The price as a number, in `currency`. */
+  amount: number;
+  /** The currency's ISO 4217 code, such as "USD". */
+  currency: string;
+}
+/** The plan, the removals left today, and the plans for sale (PhotoSense.Contracts.Plans.PlanDto). */
+export interface PlanDto {
+  tier: PlanTier;
+  kind: PlanKind | null;
+  /** When the plan or its trial began (ISO 8601). */
+  started: string | null;
+  /** When it renews or a trial ends (ISO 8601); null when it never does. */
+  until: string | null;
+  /** The phone that told this computer of the plan. */
+  sharedBy: string | null;
+  /** "App Store" or "Google Play"; null on a computer. */
+  store: string | null;
+  removalsPerDay: number;
+  removedToday: number;
+  /** How many more can be removed today; null when there is no limit. */
+  leftToday: number | null;
+  offers: PlanOfferDto[];
+}
+/** How buying a plan ended, and the plan then (PhotoSense.Contracts.Plans.PlanBuyResultDto). */
+export interface PlanBuyResultDto {
+  outcome: 'bought' | 'cancelled' | 'pending';
+  plan: PlanDto;
+}
+
+/** Where pairing a phone with a computer has got to (PhotoSense.Contracts.Transfer.PairingStateDto). */
+export interface PairingStateDto {
+  /** A computer: idle, waiting, comparing, paired or failed. A phone: idle, scanning, finding, connecting, comparing, paired or failed. */
+  stage: 'idle' | 'waiting' | 'scanning' | 'finding' | 'connecting' | 'comparing' | 'paired' | 'failed';
+  /** On a computer while waiting: the QR code's text. */
+  link: string | null;
+  /** On a computer while waiting: the six digits to type on the phone. */
+  code: string | null;
+  /** On a computer while waiting: when the codes change (ISO 8601). */
+  expires: string | null;
+  /** While comparing: the number to compare, "482 917". */
+  check: string | null;
+  /** The other device: the phone on a computer, the computer on a phone. */
+  other: string | null;
+  /** On a phone once paired: where the computer puts its backups. */
+  folder: string | null;
+  problem: string | null;
+}
+/** What the scans so far have found to free, by kind (PhotoSense.Contracts.Duplicates.FindingsDto). */
+export interface FindingsDto {
+  items: { kind: 'duplicates' | 'similar' | 'largeVideos'; count: number; bytes: number }[];
+}
+
+/** How a phone backs up by itself, and what Safe to delete keeps (PhotoSense.Contracts.Transfer.BackupSettingsDto). */
+export interface BackupSettingsDto {
+  automatic: boolean;
+  onlyWhileCharging: boolean;
+  includeVideos: boolean;
+  keepFavorites: boolean;
+  keepRecent: boolean;
+}
+
+/** How backing up stands on the phone (PhotoSense.Contracts.Transfer.BackupStateDto). */
+export interface BackupStateDto {
+  stage: 'unpaired' | 'ready' | 'running' | 'paused' | 'failed';
+  computer: string | null;
+  folder: string | null;
+  waiting: number;
+  waitingBytes: number;
+  onComputer: number;
+  done: number;
+  total: number;
+  bytes: number;
+  totalBytes: number;
+  lastChecked: string | null;
+  lastBackup: string | null;
+  strip: { id: string; done: boolean }[];
+  problem: string | null;
+  settings: BackupSettingsDto;
+}
+
+/** Which of the library's pictures and videos are on the computer, and which wait (PhotoSense.Contracts.Transfer.LibraryBackupDto). */
+export interface LibraryBackupDto {
+  computer: string | null;
+  onComputer: string[];
+  waiting: string[];
+  lastChecked: string | null;
+}
+
+/** A number of pictures and videos, and how much they take (PhotoSense.Contracts.Transfer.ItemCountDto). */
+export interface ItemCountDto {
+  count: number;
+  bytes: number;
+}
+
+/** What Safe to delete could delete, and what the keep rules keep (PhotoSense.Contracts.Transfer.SafeReviewDto). */
+export interface SafeReviewDto {
+  computer: string | null;
+  folder: string | null;
+  lastChecked: string | null;
+  checked: ItemCountDto;
+  favorites: ItemCountDto;
+  recent: ItemCountDto;
+  removable: ItemCountDto;
+  storageTotal: number;
+  storageFree: number;
+  cloudPhotos: boolean;
+  settings: BackupSettingsDto;
+}
+
+/** What Safe to delete deleted (PhotoSense.Contracts.Transfer.SafeRemovalDto). */
+export interface SafeRemovalDto {
+  removed: number;
+  bytes: number;
+  left: number;
+  storageTotal: number;
+  storageFreeBefore: number;
+}
+
+/** A phone that backs up to this computer, as Phones shows it (PhotoSense.Contracts.Transfer.BackupPhoneDto). */
+export interface BackupPhoneDto {
+  id: string;
+  name: string;
+  kind: string | null;
+  folder: string;
+  path: string;
+  paused: boolean;
+  paired: string;
+  lastBackup: string | null;
+  lastChecked: string | null;
+  held: number;
+  heldBytes: number;
+  safe: number;
+  safeBytes: number;
+  arriving: { done: number; total: number; bytes: number; totalBytes: number; started: string; arrived: string[] } | null;
+  events: { at: string; text: string }[];
+}

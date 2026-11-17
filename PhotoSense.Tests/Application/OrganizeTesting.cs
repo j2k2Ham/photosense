@@ -80,6 +80,8 @@ internal sealed class OrganizeFixture : IDisposable
     public FailingDisk Disk { get; } = new();
     /// <summary>The changes moves are made through.</summary>
     public FileChanges Changes { get; }
+    /// <summary>The free plan the changes are made under: its counts, its clock, and no store.</summary>
+    public PlanParts Plan { get; } = new();
     private readonly Mock<IAuditRepository> _audit = new();
 
     public OrganizeFixture()
@@ -91,7 +93,7 @@ internal sealed class OrganizeFixture : IDisposable
         Finder = new CompanionFileFinder(Disk, (path, _) => Task.FromResult(ContentAsId(path)));
         Planner = new OrganizePlanner(Library, Finder, Places, Disk);
         Batches = new MemoryBatchStore();
-        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);
+        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk, TestPlans.Removals(Plan));
     }
 
     /// <summary>Finds companions, reading a file's content as its Live Photo identifier.</summary>

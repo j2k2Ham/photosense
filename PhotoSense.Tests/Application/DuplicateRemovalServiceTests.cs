@@ -22,7 +22,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
 
     public DuplicateRemovalServiceTests()
     {
-        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk);
+        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk, TestPlans.Unlimited());
         _service = Service(new CompanionFileFinder(_disk, (_, _) => Task.FromResult<string?>(null)));
     }
 

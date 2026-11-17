@@ -38,6 +38,13 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
         return item;
     }
 
+    /// <summary>Marks a picture or video as a favorite, as the person would in Photos.</summary>
+    public void Favorite(string id)
+    {
+        var at = _items.FindIndex(i => i.Id == id);
+        _items[at] = _items[at] with { Favorite = true };
+    }
+
     /// <summary>Takes a picture or video out of the library, as deleting it in Photos would.</summary>
     public void Remove(string id) => _items.RemoveAll(i => i.Id == id);
 

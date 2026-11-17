@@ -17,6 +17,16 @@ public sealed record Device(string Id, string Name);
 /// <param name="Paired">The two were paired just now, the person having compared the numbers.</param>
 public sealed record Linked(SecureChannel Channel, Device Other, bool Paired);
 
+/// <summary>A computer's invitation to pair, while Pair a phone shows it: the code to type, and the secret its QR code carries.</summary>
+/// <param name="Code">The six digits to type on the phone, which only find this computer: the person then compares numbers.</param>
+/// <param name="Secret">The secret in the QR code, which proves the phone scanned it: no numbers are compared.</param>
+public sealed record PairingInvitation(string Code, byte[] Secret);
+
+/// <summary>How a phone pairs afresh: by the secret of the QR code it scanned, or by the code typed from the computer's screen.</summary>
+/// <param name="Secret">The QR code's secret; null when a code was typed.</param>
+/// <param name="Code">The six digits typed; null when the QR code was scanned.</param>
+public sealed record PairingTicket(byte[]? Secret, string? Code);
+
 /// <summary>
 /// How a phone and a computer come to trust each other. Each makes a new key for every connection and the two agree
 /// on a secret from them (elliptic-curve Diffie-Hellman, P-256). The first time, each shows a six-digit number worked
@@ -32,12 +42,30 @@ public static class Pairing
     /// <param name="self">This computer.</param>
     /// <param name="pairs">The devices this one has been paired with; a new pairing is kept there.</param>
     /// <param name="compare">Shows the number and says whether the person found it the same on the phone.</param>
+    /// <param name="invitation">The invitation Pair a phone shows now; null while it does not. A phone pairing afresh by QR code or typed code is turned away without one.</param>
+    /// <param name="strangers">A phone this computer does not know may pair by comparing numbers, as when the computer connected to it; false turns it away.</param>
     /// <param name="ct">Stops the pairing.</param>
-    /// <exception cref="TransferException">The two could not agree, or the person said the numbers differ.</exception>
-    public static async Task<Linked> ComputerAsync(Stream stream, Device self, IPairingStore pairs, Func<string, Device, CancellationToken, Task<bool>> compare, CancellationToken ct)
+    /// <exception cref="TransferException">The two could not agree, the person said the numbers differ, or the phone was turned away (<see cref="TransferException.Refused"/>).</exception>
+    public static async Task<Linked> ComputerAsync(Stream stream, Device self, IPairingStore pairs, Func<string, Device, CancellationToken, Task<bool>> compare,
+        PairingInvitation? invitation, bool strangers, CancellationToken ct)
     {
         var greeting = await Wire.ReceiveAsync(stream, "phone", ct);
         var phone = new Device(Wire.Text(greeting, "id"), Wire.Text(greeting, "name"));
+        // A phone pairing afresh says how: by the QR code's secret, or by the code typed, which must be this computer's.
+        var via = greeting["pair"] is JsonValue p && p.TryGetValue(out string? how) ? how : null;
+        if (via is not null && (invitation is null || via is not ("qr" or "code") || (via == "code" && !Typed(greeting, invitation.Code))))
+        {
+            var why = invitation is null ? "This computer is not pairing now. On the computer, open Phones and choose Pair a phone." : "That is not the code this computer shows.";
+            await Wire.SendAsync(stream, new JsonObject { ["t"] = "refused", ["why"] = why }, ct);
+            throw new TransferException(why, refused: true);
+        }
+        // A phone that connected to this computer unasked, and that it does not know, is not asked to compare numbers here.
+        if (via is null && !strangers && await pairs.GetAsync(phone.Id, ct) is null)
+        {
+            var why = $"{self.Name} does not know this phone any more. Pair them again: on the computer, open Phones and choose Pair a phone.";
+            await Wire.SendAsync(stream, new JsonObject { ["t"] = "refused", ["why"] = why }, ct);
+            throw new TransferException(why, refused: true);
+        }
         using var mine = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
         var myKey = mine.PublicKey.ExportSubjectPublicKeyInfo();
         await Wire.SendAsync(stream, new JsonObject { ["t"] = "hello", ["id"] = self.Id, ["name"] = self.Name, ["key"] = Convert.ToBase64String(myKey) }, ct);
@@ -54,9 +82,18 @@ public static class Pairing
 
         var shared = Agree(mine, theirKey);
         var said = Transcript(self.Id, phone.Id, myKey, theirKey, myNonce, theirNonce);
-        var pair = await pairs.GetAsync(phone.Id, ct);
+        var pair = via is null ? await pairs.GetAsync(phone.Id, ct) : null;
         byte[] secret;
-        if (pair is not null && known)
+        if (via == "qr")
+        {
+            // Each proves it has the QR code's secret; no one in between can, and no numbers need comparing.
+            await Wire.SendAsync(stream, new JsonObject { ["t"] = "prove", ["mac"] = Convert.ToBase64String(Proof(invitation!.Secret, said, "computer")) }, ct);
+            if (!CryptographicOperations.FixedTimeEquals(Wire.Bytes(await Wire.ReceiveAsync(stream, "prove", ct), "mac"), Proof(invitation.Secret, said, "phone")))
+                throw new TransferException("The phone did not scan this computer's code, so PhotoSense stopped. Scan the code on this computer.");
+            secret = HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, said, "photosense pairing"u8.ToArray());
+            await pairs.SaveAsync(new PairedDevice(phone.Id, phone.Name, secret), ct);
+        }
+        else if (pair is not null && known)
         {
             await Wire.SendAsync(stream, new JsonObject { ["t"] = "prove", ["mac"] = Convert.ToBase64String(Proof(pair.Key, said, "computer")) }, ct);
             var proof = Wire.Bytes(await Wire.ReceiveAsync(stream, "prove", ct), "mac");
@@ -77,23 +114,33 @@ public static class Pairing
         return new Linked(Channel(stream, shared, secret, said, "computer to phone", "phone to computer"), phone, pair is null || !known);
     }
 
+    // Whether the code the phone sent is the one this computer shows; spaces and the like are not counted.
+    private static bool Typed(JsonObject greeting, string code)
+        => greeting["code"] is JsonValue v && v.TryGetValue(out string? typed) && new string([.. typed.Where(char.IsAsciiDigit)]) == code;
+
     /// <summary>The phone's half. It waits for a computer, and speaks first.</summary>
     /// <param name="stream">The connection to the computer.</param>
     /// <param name="self">This phone.</param>
     /// <param name="pairs">The devices this one has been paired with; a new pairing is kept there.</param>
     /// <param name="compare">Shows the number and says whether the person found it the same on the computer.</param>
+    /// <param name="ticket">How to pair afresh: the QR code's secret, or the code typed; null to pair as before, or with a computer already paired.</param>
     /// <param name="ct">Stops the pairing.</param>
-    /// <exception cref="TransferException">The two could not agree, or the person said the numbers differ.</exception>
-    public static async Task<Linked> PhoneAsync(Stream stream, Device self, IPairingStore pairs, Func<string, Device, CancellationToken, Task<bool>> compare, CancellationToken ct)
+    /// <exception cref="TransferException">The two could not agree, the person said the numbers differ, or the computer turned the phone away (<see cref="TransferException.Refused"/>).</exception>
+    public static async Task<Linked> PhoneAsync(Stream stream, Device self, IPairingStore pairs, Func<string, Device, CancellationToken, Task<bool>> compare,
+        PairingTicket? ticket, CancellationToken ct)
     {
-        await Wire.SendAsync(stream, new JsonObject { ["t"] = "phone", ["id"] = self.Id, ["name"] = self.Name }, ct);
-        var hello = await Wire.ReceiveAsync(stream, "hello", ct);
+        var greeting = new JsonObject { ["t"] = "phone", ["id"] = self.Id, ["name"] = self.Name };
+        if (ticket is not null) greeting["pair"] = ticket.Secret is not null ? "qr" : "code";
+        if (ticket?.Code is { } typed) greeting["code"] = typed;
+        await Wire.SendAsync(stream, greeting, ct);
+        var hello = Wire.Expect(await Wire.ReadFrameAsync(stream, ct), "hello", "refused");
+        if (Wire.Text(hello, "t") == "refused") throw new TransferException(Wire.Text(hello, "why"), refused: true);
         var computer = new Device(Wire.Text(hello, "id"), Wire.Text(hello, "name"));
         var theirKey = Wire.Bytes(hello, "key");
         using var mine = ECDiffieHellman.Create(ECCurve.NamedCurves.nistP256);
         var myKey = mine.PublicKey.ExportSubjectPublicKeyInfo();
         var myNonce = RandomNumberGenerator.GetBytes(32);
-        var pair = await pairs.GetAsync(computer.Id, ct);
+        var pair = ticket is null ? await pairs.GetAsync(computer.Id, ct) : null;
         await Wire.SendAsync(stream, new JsonObject
         {
             ["t"] = "key", ["key"] = Convert.ToBase64String(myKey), ["commit"] = Convert.ToBase64String(Commit(myKey, theirKey, myNonce)), ["known"] = pair is not null,
@@ -104,6 +151,16 @@ public static class Pairing
         var shared = Agree(mine, theirKey);
         var said = Transcript(computer.Id, self.Id, theirKey, myKey, theirNonce, myNonce);
         byte[] secret;
+        if (ticket?.Secret is { } scanned)
+        {
+            // The computer proves first that it showed the QR code; only then does the phone prove it scanned it.
+            if (!CryptographicOperations.FixedTimeEquals(Wire.Bytes(await Wire.ReceiveAsync(stream, "prove", ct), "mac"), Proof(scanned, said, "computer")))
+                throw new TransferException($"{computer.Name} is not the computer whose code was scanned. Scan the code again.");
+            await Wire.SendAsync(stream, new JsonObject { ["t"] = "prove", ["mac"] = Convert.ToBase64String(Proof(scanned, said, "phone")) }, ct);
+            secret = HKDF.DeriveKey(HashAlgorithmName.SHA256, shared, 32, said, "photosense pairing"u8.ToArray());
+            await pairs.SaveAsync(new PairedDevice(computer.Id, computer.Name, secret), ct);
+            return new Linked(Channel(stream, shared, secret, said, "phone to computer", "computer to phone"), computer, true);
+        }
         // With no pairing to prove, the number is shown at once, as the computer shows it; the question goes again
         // should the computer say no first. A computer that has lost its pairing asks to pair afresh, and only then.
         using var asking = CancellationTokenSource.CreateLinkedTokenSource(ct);

@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { imageUrl, removeDuplicates, removePhoto, setKept, thumbnailUrl, undoChange } from '../../lib/apiClient';
+import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
 import {
-  allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, whereOf, type CleanUp, type DetailRow, type Question,
+  allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, someGroups, whereOf, type CleanUp, type DetailRow, type Question,
 } from '../../lib/cleanup';
+import { limitLine } from '../../lib/plan';
 import { formatBytes, groupSummary, matchLabel } from '../../lib/format';
 import { usePhone } from '../../lib/phone';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, ScanStatusDto } from '../../types';
@@ -12,6 +13,7 @@ import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, PhoneButton, Segmented, StickyFooter } from './Controls';
 import { ChevronBackIcon, ChevronIcon, CloseIcon } from './Icons';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
+import { usePlanGate } from './ProSheet';
 import { ConfirmSheet } from './Sheet';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
@@ -19,8 +21,9 @@ type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const KINDS: readonly { readonly id: GroupMode; readonly label: string }[] = [{ id: 'duplicates', label: 'Duplicates' }, { id: 'similar', label: 'Similar' }];
 
-/** What is waiting for a yes or no: one copy, or every duplicate. */
-type Asked = { readonly kind: 'copy'; readonly group: DuplicateGroupDto; readonly member: GroupMemberDto } | { readonly kind: 'all'; readonly count: number; readonly bytes: number };
+/** What is waiting for a yes or no: one copy, every duplicate, or the duplicates of some groups, as many as the free plan has left today. */
+type Asked = { readonly kind: 'copy'; readonly group: DuplicateGroupDto; readonly member: GroupMemberDto } | { readonly kind: 'all'; readonly count: number; readonly bytes: number }
+  | { readonly kind: 'some'; readonly keys: string[]; readonly count: number; readonly bytes: number };
 
 interface Props {
   readonly cleanUp: CleanUp;
@@ -42,7 +45,14 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
   const [asked, setAsked] = useState<Asked>();
   const [comparing, setComparing] = useState<'original' | 'copy'>();
   const [busy, setBusy] = useState(false);
+  const gate = usePlanGate();
   const where = (p: PhotoDto) => whereOf(p, root, words);
+  // Each removal asks the plan first: a copy is one, Delete all as many as there are, or as many as are left today.
+  const askCopy = (group: DuplicateGroupDto, member: GroupMemberDto) => gate.remove(1, 'items', () => setAsked({ kind: 'copy', group, member }));
+  const askAll = () => gate.remove(removable, 'duplicates', allowed => {
+    if (allowed >= removable) setAsked({ kind: 'all', count: removable, bytes: data!.reclaimableBytes });
+    else setAsked({ kind: 'some', ...someGroups(items, allowed) });
+  });
   const removable = data?.removableCount ?? 0;
 
   // More groups are read as the end of those listed comes into view.
@@ -79,8 +89,8 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
     notify(copyGone(member.photo, from.keeper, result.companions, where), 'ok', undoAction(result.batchId, member.photo.fileName, true));
   });
 
-  const deleteAll = () => act(async () => {
-    const result = await removeDuplicates(undefined, 'duplicates');
+  const deleteAll = (keys?: string[]) => act(async () => {
+    const result = keys ? await removeGroups(keys, 'duplicates') : await removeDuplicates(undefined, 'duplicates');
     setAsked(undefined);
     cleanUp.review(undefined);
     if (result.removed > 0) notify(allGone(result.removed, result.companions), 'ok', undoAction(result.batchId, `the ${duplicates(result.removed)}`, false));
@@ -101,7 +111,7 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
           <section aria-label="Duplicates to delete" className="flex flex-col gap-1.5 rounded-cell bg-cell p-[18px]">
             <h2 className="text-[26px] font-bold tabular-nums">{duplicates(removable)}</h2>
             <p className="text-[15px] leading-[1.4] text-t2">{removable === 1 ? 'It takes' : 'They take'} {formatBytes(data!.reclaimableBytes)}. The best copy of each picture or video is kept.</p>
-            <PhoneButton kind="danger" disabled={busy} className="mt-3" onClick={() => setAsked({ kind: 'all', count: removable, bytes: data!.reclaimableBytes })}>Delete all duplicates</PhoneButton>
+            <PhoneButton kind="danger" disabled={busy} className="mt-3" onClick={askAll}>Delete all duplicates</PhoneButton>
           </section>
         )}
         <Segmented label="Show" options={KINDS} value={mode} onChange={cleanUp.turnTo} />
@@ -125,10 +135,13 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
   const member = group?.members[copy];
   const review = group && member && (
     <Review group={group} member={member} index={copy} mode={mode} root={root} busy={busy} onBack={tablet ? undefined : () => cleanUp.review(undefined)}
-      onCopy={cleanUp.chooseCopy} onCompare={setComparing} onDelete={() => setAsked({ kind: 'copy', group, member })} onKeep={() => void toggleKeep(member.photo)} />
+      onCopy={cleanUp.chooseCopy} onCompare={setComparing} onDelete={() => askCopy(group, member)} onKeep={() => void toggleKeep(member.photo)} />
   );
-  const question: Question | undefined = asked?.kind === 'copy' ? copyQuestion(asked.member.photo, asked.group.keeper, where, words)
-    : asked && allQuestion(asked.count, asked.bytes, words);
+  const asking: Question | undefined = asked?.kind === 'copy' ? copyQuestion(asked.member.photo, asked.group.keeper, where, words)
+    : asked && allQuestion(asked.count, asked.bytes, words, asked.kind === 'some');
+  // The free plan's removals left today are said beside every number before a removal.
+  const limit = limitLine(gate.plan);
+  const question = asking && limit ? { ...asking, lines: [...asking.lines, limit] } : asking;
 
   return (
     <>
@@ -147,11 +160,11 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
         {comparing && group && member && (
           <Compare group={group} member={member} index={copy} mode={mode} side={comparing} root={root} busy={busy} onSide={setComparing} onClose={() => setComparing(undefined)}
             onStep={by => { cleanUp.chooseCopy((copy + by + group.members.length) % group.members.length); setComparing('copy'); }}
-            onDelete={() => setAsked({ kind: 'copy', group, member })} />
+            onDelete={() => askCopy(group, member)} />
         )}
         {question && (
           <ConfirmSheet title={question.title} lines={question.lines} confirmLabel={question.button} busy={busy} onCancel={() => setAsked(undefined)}
-            onConfirm={() => void (asked!.kind === 'copy' ? deleteCopy(asked!.group, asked!.member) : deleteAll())} />
+            onConfirm={() => void (asked!.kind === 'copy' ? deleteCopy(asked!.group, asked!.member) : deleteAll(asked!.kind === 'some' ? asked!.keys : undefined))} />
         )}
       </>, document.body)}
     </>

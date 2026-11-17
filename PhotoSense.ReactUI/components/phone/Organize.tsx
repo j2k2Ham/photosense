@@ -17,7 +17,9 @@ import { Chip, IconButton, ListGroup, ListRow, PhoneButton, Radio, Segmented, St
 import { ChevronIcon, DoneIcon, ListIcon, MapIcon, PlusIcon, SlidersIcon, TrashIcon } from './Icons';
 import { NewAlbumSheet } from './Library';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
+import { usePlanGate } from './ProSheet';
 import { Sheet } from './Sheet';
+import { limitLine } from '../../lib/plan';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 
@@ -562,6 +564,7 @@ function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice,
   const { words } = usePhone();
   const [index, setIndex] = useState(0);
   const [deleting, setDeleting] = useState<{ goes: Side; stays: Side }>();
+  const gate = usePlanGate();
   const at = Math.min(index, clashes.length - 1), clash = clashes[at], there = clash.takenBy[0], last = at === clashes.length - 1;
   const where = (folder: string) => whereIs(folder, root, words);
   const going: Side = { id: clash.file.id, name: clash.file.name, where: `From ${where(clash.file.folder)}`, date: clash.file.date, sizeBytes: clash.file.sizeBytes, isVideo: clash.file.isVideo, folder: clash.file.folder };
@@ -590,7 +593,7 @@ function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice,
       <span className="truncate pt-1 font-code text-[12.5px]">{side.name}</span>
       <span className="truncate text-[13px] text-t2">{side.where}</span>
       <span className="text-[13px] text-t2">{shortDate(side.date)} · {formatBytes(side.sizeBytes)}</span>
-      <button type="button" disabled={busy} onClick={() => setDeleting({ goes: side, stays })} aria-label={`Delete ${side.name}, ${heading.toLowerCase()}`}
+      <button type="button" disabled={busy} onClick={() => gate.remove(1, 'items', () => setDeleting({ goes: side, stays }))} aria-label={`Delete ${side.name}, ${heading.toLowerCase()}`}
         className="mt-1 flex h-8 items-center gap-1.5 self-start rounded-full bg-danger-soft px-3 text-[13.5px] font-semibold text-danger-t disabled:opacity-40"><TrashIcon size={15} />Delete</button>
     </div>
   );
@@ -610,7 +613,8 @@ function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice,
         </div>
         {deleting ? (
           <div role="alertdialog" aria-label={`Delete ${deleting.goes.name}?`} className="flex flex-col gap-3 rounded-cell bg-danger-soft px-4 py-3.5">
-            <p className="text-[15px] leading-[1.4]">Delete {deleting.goes.name} from {where(deleting.goes.folder)}? The one in {where(deleting.stays.folder)} stays.</p>
+            <p className="text-[15px] leading-[1.4]">Delete {deleting.goes.name} from {where(deleting.goes.folder)}? The one in {where(deleting.stays.folder)} stays. {deleting.goes.name} goes to {words.removed}, where Undo can still bring it back.</p>
+            {limitLine(gate.plan) && <p className="text-[13.5px] text-t2">{limitLine(gate.plan)}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={() => setDeleting(undefined)} className="h-10 flex-1 rounded-full bg-btn2-bg text-[15px] font-semibold text-btn2-fg">Cancel</button>
               <button type="button" disabled={busy} onClick={() => void remove(deleting.goes, deleting.stays)} className="h-10 flex-1 rounded-full bg-danger text-[15px] font-semibold text-on-danger disabled:opacity-40">Delete</button>

@@ -1,7 +1,7 @@
 import useSWR, { mutate } from 'swr';
 import type {
-  AboutDocument, AboutDto, BulkRemovalResultDto, DeleteSentDto, EraseRemovedDto, FolderListingDto, FoundPhonesDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PhotoAccessDto, ReceiveStateDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, SendStateDto, StartScanRequest,
+  AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -35,7 +35,9 @@ async function send(url: string, method: 'POST' | 'DELETE'): Promise<Response> {
   return res;
 }
 
-const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status')));
+const planUrl = `${API_BASE}/plan`;
+// A removal counts toward the free plan's limit each day, so the plan is asked again after one, with the groups.
+const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status') || key === planUrl));
 
 /** Asks again for everything on screen, for when the service has been out of reach. */
 export const retryNow = () => mutate(() => true);
@@ -309,6 +311,75 @@ export async function openOrganizeFile(id: string) {
   await send(`${API_BASE}/organize/files/${id}/open`, 'POST');
 }
 
+// ---- The plan
+
+/** The plan, how many removals are left today, and the plans for sale with the store's prices. */
+export function usePlan() {
+  return useSWR<PlanDto>(planUrl, json);
+}
+
+/** Puts the store's own sheet for buying a plan in front of the person, and answers how it ended, with the plan then. */
+export async function buyPlan(kind: PlanKind): Promise<PlanBuyResultDto> {
+  const result = await json<PlanBuyResultDto>(`${planUrl}/buy`, { method: 'POST', body: JSON.stringify({ kind }) });
+  await mutate(planUrl, result.plan, { revalidate: false });
+  return result;
+}
+
+/** Asks the store again for what was bought with the same account, and answers with the plan then. */
+export async function restorePurchases(): Promise<PlanDto> {
+  const plan = await json<PlanDto>(`${planUrl}/restore`, { method: 'POST' });
+  await mutate(planUrl, plan, { revalidate: false });
+  return plan;
+}
+
+/** Opens the store's own page for changing or cancelling the subscription. */
+export async function manageSubscription() {
+  await send(`${planUrl}/manage`, 'POST');
+}
+
+// ---- Pairing a phone with a computer
+
+const pairingUrl = `${API_BASE}/pairing/state`;
+// Pairing is waited on while it is shown, or while it is under way.
+const PAIRING_LIVE: ReadonlySet<PairingStateDto['stage']> = new Set(['waiting', 'scanning', 'finding', 'connecting', 'comparing']);
+
+/** Where pairing has got to, on whichever this program is: asked every second while it is shown, or under way; nothing is asked otherwise. */
+export function usePairing(watching: boolean) {
+  return useSWR<PairingStateDto>(watching ? pairingUrl : null, json, { refreshInterval: latest => (latest !== undefined && PAIRING_LIVE.has(latest.stage) ? 1000 : 0) });
+}
+
+async function pairing(what: string, body?: unknown): Promise<PairingStateDto> {
+  const state = await json<PairingStateDto>(`${API_BASE}/pairing/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(pairingUrl, state, { revalidate: false });
+  return state;
+}
+
+/** On a computer: shows a new QR code and code, and waits for a phone. */
+export const openPairing = () => pairing('open');
+/** On a phone: opens the camera, and pairs with the computer whose QR code it sees. */
+export const scanPairing = () => pairing('scan');
+/** On a phone: finds the computer showing the code typed. */
+export const enterPairingCode = (code: string) => pairing('code', { code });
+/** The person's answer to whether the numbers on the two match. */
+export const confirmPairing = (same: boolean) => pairing('confirm', { same });
+
+/** On a computer: stops waiting for a phone. */
+export async function closePairing() {
+  await send(`${API_BASE}/pairing/close`, 'POST');
+  await mutate(pairingUrl);
+}
+
+/** On a phone: stops pairing. */
+export async function stopPairing() {
+  await send(`${API_BASE}/pairing/stop`, 'POST');
+  await mutate(pairingUrl);
+}
+
+/** What the scans so far have found to free, by kind: asked every two seconds while a scan runs. */
+export function useFound(watching: boolean, scanning: boolean) {
+  return useSWR<FindingsDto>(watching ? `${API_BASE}/scan/found` : null, json, { refreshInterval: scanning ? 2000 : 0 });
+}
+
 // ---- Removed files
 
 const removedUrl = (roots: readonly string[]) => `${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`;
@@ -331,58 +402,67 @@ export async function eraseRemoved(folders: string[]) {
   return result;
 }
 
-// ---- Sending photos from a phone to a computer
+// ---- Backing up from a phone to a computer
 
-const sendStateUrl = `${API_BASE}/send/state`;
+const backupUrl = `${API_BASE}/backup`;
+const backupLibraryUrl = `${API_BASE}/backup/library`;
+const safeUrl = `${API_BASE}/backup/safe`;
+const phonesUrl = `${API_BASE}/backup/phones`;
+// What a backup or Safe to delete changes: how backing up stands, what is on the computer, what is safe to delete.
+const refreshBackup = () => mutate((key: unknown) => typeof key === 'string' && (key === backupUrl || key === backupLibraryUrl || key === safeUrl));
 
-/** Where sending from this phone has got to: asked every second while it is watched, or while an offer stands. */
-export function useSendState(watching: boolean) {
-  return useSWR<SendStateDto>(sendStateUrl, json, { refreshInterval: latest => (watching || (latest !== undefined && LIVE_SEND.has(latest.stage)) ? 1000 : 0) });
+/** On a phone: how backing up stands, asked every second while a backup runs and every half minute otherwise; nothing is asked while `watching` is off. */
+export function useBackup(watching: boolean) {
+  return useSWR<BackupStateDto>(watching ? backupUrl : null, json, { refreshInterval: latest => (latest?.stage === 'running' ? 1000 : 30_000) });
 }
-// The stages in which the phone is waiting for the computer, comparing numbers with it, or sending.
-const LIVE_SEND = new Set<SendStateDto['stage']>(['waiting', 'comparing', 'sending']);
 
-async function sending(path: string, body?: object) {
-  const state = await json<SendStateDto>(`${API_BASE}/send/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
-  await mutate(sendStateUrl, state, { revalidate: false });
+/** On a phone: which of the library's pictures and videos are on the computer, and which wait. */
+export function useLibraryBackup(on: boolean) {
+  return useSWR<LibraryBackupDto>(on ? backupLibraryUrl : null, json);
+}
+
+/** On a phone: what Safe to delete could delete, and what the keep rules keep. */
+export function useSafeReview(on: boolean) {
+  return useSWR<SafeReviewDto>(on ? safeUrl : null, json);
+}
+
+async function backingUp(what: string, body?: unknown): Promise<BackupStateDto> {
+  const state = await json<BackupStateDto>(`${backupUrl}/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(backupUrl, state, { revalidate: false });
+  await refreshBackup();
   return state;
 }
 
-/** Offers these files, by the ids Organize gave them, to the computer that connects next. */
-export const startSending = (files: string[]) => sending('start', { files });
-/** Says whether the number on the computer is the one on the phone. */
-export const confirmSending = (same: boolean) => sending('confirm', { same });
-/** Stops sending from this phone. */
-export const stopSending = () => sending('stop');
+/** On a phone: backs up what waits, or carries on a backup paused; with `files`, sends only those (Send now). */
+export const startBackup = (files?: readonly string[]) => backingUp('start', files ? { files } : undefined);
+/** On a phone: pauses the backup going on. */
+export const pauseBackup = () => backingUp('pause');
+/** On a phone: backs up by itself if a backup is due, as the app opens. */
+export const backUpIfDue = () => backingUp('auto');
+/** On a phone: how it backs up by itself, and what Safe to delete keeps. */
+export const saveBackupSettings = (settings: BackupSettingsDto) => backingUp('settings', settings);
 
-/** Deletes from the phone what is safely on the computer; the phone asks first, and keeps them in Recently Deleted. */
-export async function deleteSent() {
-  const result = await json<DeleteSentDto>(`${API_BASE}/send/delete-sent`, { method: 'POST' });
-  await Promise.all([refreshOrganize(), mutate(sendStateUrl)]);
-  return result;
+/** On a phone: Safe to delete, the largest first and no more than `atMost`; the phone asks first. Each counts toward the day's free removals. */
+export async function removeSafe(atMost?: number): Promise<SafeRemovalDto> {
+  const removed = await json<SafeRemovalDto>(`${backupUrl}/remove`, { method: 'POST', ...(atMost === undefined ? {} : { body: JSON.stringify({ atMost }) }) });
+  await refreshBackup();
+  await mutate(planUrl);
+  return removed;
 }
 
-const receiveStateUrl = `${API_BASE}/receive/state`;
-
-/** The phones offering photos now, looked for again every few seconds while they are being chosen from. */
-export function usePhones(looking: boolean) {
-  return useSWR<FoundPhonesDto>(looking ? `${API_BASE}/phones` : null, json, { refreshInterval: 3000 });
+/** On a computer: every phone that backs up to it, asked every two seconds while one is arriving and every ten otherwise. */
+export function useBackupPhones(on: boolean) {
+  return useSWR<BackupPhoneDto[]>(on ? phonesUrl : null, json, { refreshInterval: latest => (latest?.some(p => p.arriving) ? 2000 : 10_000) });
 }
 
-/** Where receiving from a phone has got to, asked every second while it goes on. */
-export function useReceiveState(receiving: boolean) {
-  return useSWR<ReceiveStateDto>(receiving ? receiveStateUrl : null, json, { refreshInterval: 1000 });
+async function phoneChange(id: string, what: 'folder' | 'pause', body: unknown) {
+  const phone = await json<BackupPhoneDto>(`${phonesUrl}/${encodeURIComponent(id)}/${what}`, { method: 'POST', body: JSON.stringify(body) });
+  await mutate(phonesUrl);
+  return phone;
 }
 
-async function receiving(path: string, body?: object) {
-  const state = await json<ReceiveStateDto>(`${API_BASE}/receive/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
-  await mutate(receiveStateUrl, state, { revalidate: false });
-  return state;
-}
+/** On a computer: sends a phone's backups to another folder from now on. */
+export const moveBackups = (id: string, folder: string) => phoneChange(id, 'folder', { folder });
+/** On a computer: pauses a phone's backups, or lets them run again. */
+export const pausePhone = (id: string, paused: boolean) => phoneChange(id, 'pause', { paused });
 
-/** Receives what the phone found offers, into a folder of this computer. */
-export const startReceiving = (phone: string, folder: string) => receiving('start', { phone, folder });
-/** Says whether the numbers shown on the phone and on this computer are the same. */
-export const confirmReceiving = (same: boolean) => receiving('confirm', { same });
-/** Stops receiving photos on this computer. */
-export const stopReceiving = () => receiving('stop');

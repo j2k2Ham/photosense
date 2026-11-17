@@ -1,7 +1,9 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup } from '@testing-library/react';
+
 import { Chip, HeaderTextButton, IconButton, ListGroup, ListRow, PhoneButton, Segmented, StickyFooter } from '../../../components/phone/Controls';
 import * as Icons from '../../../components/phone/Icons';
 import { PhoneToaster } from '../../../components/phone/PhoneToaster';
@@ -112,6 +114,13 @@ describe('the phone layout\'s buttons and controls', () => {
 });
 
 describe('a sheet', () => {
+  // A layer closed some other way than by Back takes its entry out of the history by going back, which the browser says
+  // it has done a moment later; each test closes what it opened and waits for that, so that the next does not hear it
+  // as a Back of its own.
+  afterEach(async () => {
+    cleanup();
+    await new Promise(r => setTimeout(r, 60));
+  });
   it('rises from the bottom of a phone with a grabber, and goes on Done, Escape or a press outside it', async () => {
     const closed = vi.fn();
     inFrame(<Sheet title="Settings" onClose={closed}><p>Inside</p></Sheet>);

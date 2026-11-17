@@ -1,4 +1,5 @@
 using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -41,16 +42,23 @@ public sealed class FileChanges
     private readonly IPhotoRepository _repo;
     private readonly IAuditRepository _audit;
     private readonly IPhotoFileSystem _files;
+    private readonly DailyRemovals _removals;
     // One change at a time: two at once could each find a name free and both take it.
     private readonly SemaphoreSlim _one = new(1, 1);
 
     /// <summary>Changes made where the photos are kept, written down in the store of changes.</summary>
-    public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, IPhotoFileSystem files)
+    /// <param name="batches">The store of changes.</param>
+    /// <param name="repo">What scans recorded, which follows the files.</param>
+    /// <param name="audit">Where each change is recorded once made.</param>
+    /// <param name="files">Where the photos are kept.</param>
+    /// <param name="removals">The free plan's limit on removals each day, which every removal is held to and counted against.</param>
+    public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals)
     {
         _batches = batches;
         _repo = repo;
         _audit = audit;
         _files = files;
+        _removals = removals;
     }
 
     /// <summary>A place a file can go to without replacing anything: the one asked for, or that name with a number.</summary>
@@ -83,12 +91,19 @@ public sealed class FileChanges
     /// straight back, its companions stay where they are, and the change goes on without them. Null keeps every file.
     /// </param>
     /// <param name="ct">Stops the change while files are moving; every file that had gone is then put back.</param>
+    /// <remarks>
+    /// A removal of more files than the free plan has left today is refused before anything is written down; one
+    /// carried out counts the files that went, their companions aside.
+    /// </remarks>
     /// <exception cref="OperationCanceledException">Cancelled; every file that had gone is back.</exception>
     public async Task<ChangeResult> CarryOutAsync(OrganizeBatch batch, Func<OrganizeBatchItem, bool>? keep, CancellationToken ct)
     {
         await _one.WaitAsync(ct);
         try
         {
+            var allowance = batch.Removed ? await _removals.TodayAsync(ct) : null;
+            var asked = batch.Items.Count(i => !i.Companion);
+            if (allowance is not null && !allowance.Allows(asked)) return new ChangeResult(false, DailyRemovals.Refusal(allowance, asked), []);
             var records = batch.Removed ? await RecordsAtAsync(batch.Items.Select(i => i.From), ct) : [];
             if (records.Count > 0) await _batches.KeepRecordsAsync(batch.Id, records, ct);
             batch.State = ChangeState.Started;
@@ -161,7 +176,10 @@ public sealed class FileChanges
             batch.State = ChangeState.Done;
             // A change that let go of every file changed nothing, and there is nothing to undo.
             batch.Undone = batch.Items.Count == 0;
+            batch.Counted = allowance is { Unlimited: false } ? batch.Files : 0;
             await _batches.SaveAsync(batch, CancellationToken.None);
+            // The files have gone, so they count, whatever happens.
+            if (batch.Counted > 0) await _removals.RecordAsync(batch.Counted, allowance!, CancellationToken.None);
             return new ChangeResult(true, null, left);
         }
         finally
@@ -250,6 +268,8 @@ public sealed class FileChanges
             batch.State = ChangeState.Done;
             batch.Undone = true;
             await _batches.SaveAsync(batch, CancellationToken.None);
+            // What came back counts no longer, if it was counted today; the files are back, so this is done whatever happens.
+            if (batch.Counted > 0) await _removals.GiveBackAsync(Math.Min(batch.Counted, going.Count(i => !i.Companion)), batch.UtcTicks, CancellationToken.None);
             if (batch.Copy)
                 foreach (var item in going.ToList())
                     if (DeleteSetAside(item) is { } why) { left.Add(why); going.Remove(item); }

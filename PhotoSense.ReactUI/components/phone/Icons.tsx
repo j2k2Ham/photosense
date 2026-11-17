@@ -35,6 +35,11 @@ export const AddToFolderIcon = (p: IconProps) => (
   <Line {...p}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /><path d="M12 11.5v5M9.5 14h5" /></Line>
 );
 
+/** Backup: a laptop with an arrow going up into it. */
+export const BackupIcon = (p: IconProps) => (
+  <Line {...p}><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5M2.5 18.5h19M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2" /></Line>
+);
+
 /** Send: a laptop with an arrow going up. */
 export const SendIcon = (p: IconProps) => (
   <Line {...p}><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5" /><path d="M2.5 18.5h19" /><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2" /></Line>
@@ -85,6 +90,9 @@ export const ImageIcon = (p: IconProps) => (
 export const TickIcon = ({ size = 14 }: IconProps) => (
   <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
+
+/** A check in the colour of the text around it, for what a plan includes. */
+export const CheckIcon = (p: IconProps) => <Line size={16} stroke={2.4} {...p}><path d="M5 12.5l4.5 4.5L19 7.5" /></Line>;
 
 /** Options: three sliders. */
 export const SlidersIcon = (p: IconProps) => (

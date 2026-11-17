@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Removal;
 using PhotoSense.Application.Scanning;
 using PhotoSense.Application.Scanning.Interfaces;
@@ -28,6 +29,12 @@ public static class PhotoSenseApplicationServices
         s.AddSingleton(sp => new PhotoRanking(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.KeepFormat));
         s.AddSingleton<IDuplicateAnalysisService, DuplicateAnalysisService>();
         s.AddSingleton<IDuplicateRemovalService, DuplicateRemovalService>();
+        s.AddSingleton<LibraryFindings>();
+        // The settings only those who make PhotoSense change; a configuration service can be registered before this.
+        s.TryAddSingleton<IProductSettingsSource, CodedProductSettings>();
+        // A phone registers its store; a computer has none, and learns the plan from a paired phone.
+        s.AddSingleton(sp => new Subscription(sp.GetRequiredService<IPlanStore>(), sp.GetRequiredService<TimeProvider>(), sp.GetService<IAppStore>()));
+        s.AddSingleton<DailyRemovals>();
         // Every move, copy and removal of files goes through the one journal, one at a time.
         s.AddSingleton<FileChanges>();
         s.AddSingleton(sp => new OrganizeLibrary(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IMediaDetailsReader>(), sp.GetRequiredService<IImageHashingService>(),

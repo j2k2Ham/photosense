@@ -35,7 +35,10 @@
     <key>NSBonjourServices</key>
     <array>
         <string>_photosense._tcp</string>
+        <string>_photosense-pc._tcp</string>
     </array>
+    <key>NSCameraUsageDescription</key>
+    <string>PhotoSense uses the camera only to scan the pairing code on your computer.</string>
     <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
     <true/>
     <key>ITSAppUsesNonExemptEncryption</key>

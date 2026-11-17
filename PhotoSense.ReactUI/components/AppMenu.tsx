@@ -12,8 +12,6 @@ interface Props {
   onSettings(): void;
   onHelp(): void;
   onAbout(): void;
-  /** On a computer: receives photos from a phone. */
-  onReceive?(): void;
   /** Asks to erase what has been removed; nothing goes until that is confirmed. */
   onDeletePermanently(): void;
   onClose(): void;
@@ -24,8 +22,8 @@ const themes: { id: Theme; name: string; swatch: string }[] = [
   { id: 'light', name: 'Light', swatch: '#f5f7f9' },
 ];
 
-/** The menu in the bar: the theme, errors, the folders scanned, settings, help, About, receiving photos and Delete permanently. */
-export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders, onClearResults, onSettings, onHelp, onAbout, onReceive, onDeletePermanently, onClose }: Props) {
+/** The menu in the bar: the theme, errors, the folders scanned, settings, help, About and Delete permanently. */
+export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders, onClearResults, onSettings, onHelp, onAbout, onDeletePermanently, onClose }: Props) {
   const ref = useDismiss<HTMLDivElement>(onClose);
   // Choosing something from the menu puts the menu away.
   const pick = (action: () => void) => () => { action(); onClose(); };
@@ -63,7 +61,6 @@ export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders,
       </button>
       <button type="button" role="menuitem" onClick={pick(onChangeFolders)} className={item}>Change folders or rescan</button>
       <button type="button" role="menuitem" onClick={pick(onClearResults)} className={item}>Clear results</button>
-      {onReceive && <button type="button" role="menuitem" onClick={pick(onReceive)} className={item}>Receive from phone</button>}
       <button type="button" role="menuitem" onClick={pick(onSettings)} className={item}>Settings</button>
       <button type="button" role="menuitem" onClick={pick(onHelp)} className={item}>Help</button>
       <button type="button" role="menuitem" onClick={pick(onAbout)} className={item}>About PhotoSense</button>

@@ -7,6 +7,7 @@ using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Infrastructure.Library;
+using PhotoSense.Infrastructure.Transfer;
 
 namespace PhotoSense.AndroidApp;
 
@@ -34,7 +35,8 @@ public static class PhoneApp
         if (_built is not null) return;
         _built = new ServiceCollection()
             .AddPhotoSenseAndroid(new AndroidMediaStore(context), new AndroidAccess(), new AndroidImageAnalyzer(), DataFolder(context), context.CacheDir!.AbsolutePath,
-                new NsdAdvertiser(context), $"{Build.Manufacturer} {Build.Model}".Trim())
+                new NsdAdvertiser(context), new PlayBillingStore(TimeProvider.System),
+                new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), $"{Build.Manufacturer} {Build.Model}".Trim())
             .AddPhotoSenseApi()
             .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "android"))
             .BuildServiceProvider();

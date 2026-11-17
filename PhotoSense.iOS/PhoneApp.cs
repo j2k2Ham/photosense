@@ -12,7 +12,8 @@ namespace PhotoSense.iOS;
 public static class PhoneApp
 {
     private static readonly Lazy<ServiceProvider> Built = new(() => new ServiceCollection()
-        .AddPhotoSensePhone(new PhotoKitLibrary(DataFolder), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory), new BonjourAdvertiser(), UIDevice.CurrentDevice.Name)
+        .AddPhotoSensePhone(new PhotoKitLibrary(DataFolder), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory), new BonjourAdvertiser(), new StoreKitStore(),
+            new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), UIDevice.CurrentDevice.Name)
         .AddPhotoSenseApi()
         .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "iphone"))
         .BuildServiceProvider());

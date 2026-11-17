@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -62,6 +63,7 @@ public sealed class PhoneSending
     private readonly Dictionary<string, string> _safe = [];
     private TaskCompletionSource<bool>? _answer;
     private bool _serving, _offering;
+    private readonly Subscription _plan;
 
     // A file offered, and the picture or video it goes with: a Live Photo's video goes with its picture.
     private sealed record Offered(string Id, string Path, long Size, DateTime ModifiedUtc, int Unit);
@@ -73,10 +75,13 @@ public sealed class PhoneSending
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="companions">Finds the Live Photo videos and edit files that go with a picture.</param>
     /// <param name="library">The files Organize knows, by id.</param>
+    /// <param name="plan">The phone's plan, which the computer is told of so that it covers the computer too.</param>
     /// <param name="name">What this phone is called, as the computer shows it.</param>
     /// <param name="clock">Times how long the computer has been silent (<see cref="TimedConnection"/>).</param>
-    public PhoneSending(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, IPhotoFileSystem files, ICompanionFileFinder companions, OrganizeLibrary library, string name, TimeProvider clock)
+    public PhoneSending(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, IPhotoFileSystem files, ICompanionFileFinder companions, OrganizeLibrary library,
+        Subscription plan, string name, TimeProvider clock)
     {
+        _plan = plan;
         _listener = listener;
         _advertiser = advertiser;
         _pairs = pairs;
@@ -202,7 +207,7 @@ public sealed class PhoneSending
         var problem = "Sending stopped. Try again.";
         try
         {
-            var linked = await Pairing.PhoneAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ct);
+            var linked = await Pairing.PhoneAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ticket: null, ct);
             using var channel = linked.Channel;
             Set(s => s with { Stage = SendStage.Sending, Code = null, Computer = linked.Other.Name, Problem = null });
             while (await AnswerAsync(channel, ct)) { }
@@ -235,7 +240,7 @@ public sealed class PhoneSending
                 lock (_lock) offer = _offer;
                 await channel.SendAsync(new JsonObject
                 {
-                    ["t"] = "offer", ["name"] = _name,
+                    ["t"] = "offer", ["name"] = _name, ["plan"] = PlanMessage.Write(await _plan.CurrentAsync(ct)),
                     ["files"] = new JsonArray([.. offer.Select(f => (JsonNode)new JsonObject { ["id"] = f.Id, ["name"] = Path.GetFileName(f.Path), ["size"] = f.Size, ["modified"] = f.ModifiedUtc.ToString("O") })]),
                 }, ct);
                 return true;

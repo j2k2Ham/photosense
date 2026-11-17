@@ -24,7 +24,8 @@ public sealed record LibraryFile(LibraryFileKind Kind, string FileName, long Len
 /// <param name="CreatedUtc">When it was taken or added.</param>
 /// <param name="ModifiedUtc">When it last changed.</param>
 /// <param name="Files">The files it is kept as.</param>
-public sealed record LibraryItem(string Id, DateTime CreatedUtc, DateTime ModifiedUtc, IReadOnlyList<LibraryFile> Files);
+/// <param name="Favorite">The person marked it as a favorite in Photos.</param>
+public sealed record LibraryItem(string Id, DateTime CreatedUtc, DateTime ModifiedUtc, IReadOnlyList<LibraryFile> Files, bool Favorite = false);
 
 /// <summary>An album PhotoSense made: the names of the folders it is in, outermost first, then its own; and what is in it.</summary>
 /// <param name="Path">The names of the folders it is in, outermost first, then its own.</param>

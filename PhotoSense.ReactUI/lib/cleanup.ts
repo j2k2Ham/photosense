@@ -138,17 +138,34 @@ export function copyQuestion(copy: PhotoDto, keeper: PhotoDto, where: (p: PhotoD
   };
 }
 
-/** The question before every duplicate is deleted. */
-export function allQuestion(count: number, bytes: number, words: Words): Question {
+/** The question before every duplicate is deleted, or, with `some`, as many as the free plan has left today. */
+export function allQuestion(count: number, bytes: number, words: Words, some = false): Question {
   return {
-    title: 'Delete all duplicates?',
+    title: some ? `Delete ${duplicates(count)}?` : 'Delete all duplicates?',
     lines: [
-      `${count.toLocaleString()} ${count === 1 ? 'copy goes' : 'copies go'} to ${words.removed} (${formatBytes(bytes)}).`,
-      'The best copy of each picture or video stays. Copies marked keep are skipped.',
+      `${count.toLocaleString()} ${count === 1 ? 'copy goes' : 'copies go'} to ${words.removed} (${formatBytes(bytes)}), where Undo can still bring ${count === 1 ? 'it' : 'them'} back.`,
+      some ? 'The largest go first. The best copy of each picture or video stays.' : 'The best copy of each picture or video stays. Copies marked keep are skipped.',
       'Similar shots are not included.',
     ],
     button: `Delete ${duplicates(count)}`,
   };
+}
+
+/**
+ * The groups whose copies, together, come to no more than `count`, the groups that free the most first: what "Delete L
+ * now" takes when the free plan has fewer removals left than there are duplicates. Copies marked keep are not counted,
+ * as they stay.
+ */
+export function someGroups(groups: readonly DuplicateGroupDto[], count: number): { keys: string[]; count: number; bytes: number } {
+  const taken = { keys: [] as string[], count: 0, bytes: 0 };
+  for (const g of [...groups].sort((a, b) => b.reclaimableBytes - a.reclaimableBytes)) {
+    const copies = g.members.filter(m => !m.photo.kept).length;
+    if (copies === 0 || taken.count + copies > count) continue;
+    taken.keys.push(g.key);
+    taken.count += copies;
+    taken.bytes += g.reclaimableBytes;
+  }
+  return taken;
 }
 
 /**

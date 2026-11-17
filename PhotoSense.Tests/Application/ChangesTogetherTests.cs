@@ -104,7 +104,7 @@ public sealed class ChangesTogetherTests
     public ChangesTogetherTests()
     {
         _batches = new MemoryBatchStore();
-        _changes = new FileChanges(_batches, new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, _files);
+        _changes = new FileChanges(_batches, new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, _files, TestPlans.Unlimited());
     }
 
     private string In(params string[] parts) => Path.Combine([_root, .. parts]);

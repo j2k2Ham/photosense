@@ -1,3 +1,5 @@
+using PhotoSense.Application.Transfer;
+using PhotoSense.Infrastructure.Transfer;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
@@ -85,7 +87,7 @@ internal sealed class MemoryBatchStore : IOrganizeBatchStore
 
     private static OrganizeBatch Copy(OrganizeBatch b) => new()
     {
-        Id = b.Id, UtcTicks = b.UtcTicks, Label = b.Label, Copy = b.Copy, Removed = b.Removed, Files = b.Files, Bytes = b.Bytes, Undone = b.Undone, State = b.State,
+        Id = b.Id, UtcTicks = b.UtcTicks, Label = b.Label, Copy = b.Copy, Removed = b.Removed, Files = b.Files, Counted = b.Counted, Bytes = b.Bytes, Undone = b.Undone, State = b.State,
         Items = b.Items.Select(i => new OrganizeBatchItem { From = i.From, To = i.To, SizeBytes = i.SizeBytes, ModifiedUtcTicks = i.ModifiedUtcTicks, Companion = i.Companion, Back = i.Back }).ToList(),
         CreatedFolders = [.. b.CreatedFolders], UndoFolders = [.. b.UndoFolders],
     };
@@ -158,6 +160,43 @@ internal sealed class MemoryAudit(TimeProvider time) : IAuditRepository
     }
 }
 
+/// <summary>Each day's count of removals and a shared plan, in memory.</summary>
+internal sealed class MemoryPlanStore : IPlanStore
+{
+    private readonly Dictionary<DateOnly, int> _removed = [];
+    private Entitlement? _shared;
+
+    /// <inheritdoc />
+    public Task<int> RemovedOnAsync(DateOnly day, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_removed) return Task.FromResult(_removed.GetValueOrDefault(day));
+    }
+
+    /// <inheritdoc />
+    public Task AddRemovedAsync(DateOnly day, int count, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_removed) _removed[day] = Math.Max(0, _removed.GetValueOrDefault(day) + count);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<Entitlement?> SharedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_shared);
+    }
+
+    /// <inheritdoc />
+    public Task KeepSharedAsync(Entitlement? plan, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _shared = plan;
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Every store a program keeps, replaced by a stand-in in memory, so that no test but the stores' own touches the database.</summary>
 internal static class StandInStores
 {
@@ -170,5 +209,10 @@ internal static class StandInStores
             .AddSingleton<IMediaDetailsStore>(new MemoryMediaDetailsStore())
             .AddSingleton<IScanHistory>(new MemoryScanHistory())
             .AddSingleton<IAuditRepository>(sp => new MemoryAudit(sp.GetRequiredService<TimeProvider>()))
-            .AddSingleton<IPairingStore>(pairs ?? new MemoryPairs("this-device"));
+            .AddSingleton<IPairingStore>(pairs ?? new MemoryPairs("this-device"))
+            .AddSingleton<IPlanStore>(new MemoryPlanStore())
+            .AddSingleton<IBackupStore>(new MemoryBackupStore())
+            .AddSingleton<IBackupLedger>(new MemoryBackupLedger())
+            // The computer's door for phones waits on a free port of its own, and tells no network.
+            .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

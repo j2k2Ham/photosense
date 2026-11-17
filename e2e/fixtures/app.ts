@@ -135,7 +135,7 @@ export const test = base.extend<{ program: Program; photos: Photos; service: Ser
     const said: string[] = [];
     const child = spawn('dotnet', [program, '--urls', url], {
       cwd: dirname(program),
-      env: { ...process.env, PhotoStorage__DatabasePath: join(data, 'photosense.db'), PhotoStorage__ThumbnailPath: join(data, 'thumbnails'), DOTNET_NOLOGO: '1' },
+      env: { ...process.env, PhotoStorage__DatabasePath: join(data, 'photosense.db'), PhotoStorage__ThumbnailPath: join(data, 'thumbnails'), PhotoStorage__BackupPath: join(data, 'backups'), DOTNET_NOLOGO: '1' },
     });
     child.stdout?.on('data', chunk => said.push(String(chunk)));
     child.stderr?.on('data', chunk => said.push(String(chunk)));

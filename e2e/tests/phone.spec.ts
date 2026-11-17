@@ -1,23 +1,12 @@
 import { expect, message, test } from '../fixtures/app';
-import { Phone } from '../fixtures/phone';
+import { Phone, SAFE } from '../fixtures/phone';
 import { phoneSettings, phoneTab, question } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
-const sendScreen = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Send to computer' });
-
-/** Chooses the photos named in Library, once it has read them all, and takes them to Send. */
-async function sendFromLibrary(page: import('@playwright/test').Page, names: string[]) {
-  await page.goto('/');
-  await phoneTab(page, 'Library');
-  const library = page.getByRole('region', { name: 'Library' });
-  await expect(library.getByRole('button', { name: 'Select' })).toBeVisible({ timeout: 60_000 });
-  await library.getByRole('button', { name: 'Select' }).click();
-  for (const name of names) await library.getByRole('button', { name }).click();
-  await page.getByRole('toolbar', { name: 'What is selected' }).getByRole('button', { name: 'Send' }).click();
-}
+const backupScreen = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Backup', exact: true });
 
 test.describe('on a phone', () => {
-  test('the first time, Welcome says what PhotoSense does, and Continue asks for the photos, reads them all and says what it found @phone', async ({ page, photos }) => {
+  test('the first time, Welcome leads through photo access and pairing to the first scan, what it found and the offer, then Clean up @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
     photos.copy('IMG_0001.JPG', 'Saved again/IMG_0001.JPG');
@@ -26,35 +15,51 @@ test.describe('on a phone', () => {
     await phone.attach(page);
     await page.goto('/');
     const welcome = page.getByRole('region', { name: 'Welcome' });
-    await expect(welcome.getByRole('heading', { name: 'Welcome to PhotoSense' })).toBeVisible();
-    await expect(welcome).toContainText('Suggested albums for each place and year');
-    await welcome.getByRole('button', { name: 'Continue' }).click();
-
-    await expect(message(page, 'Found 1 duplicate and no similar shots.')).toBeVisible({ timeout: 60_000 });
+    await expect(welcome.getByRole('heading', { name: 'PhotoSense' })).toBeVisible();
+    await expect(welcome).toContainText('Back up to your own computer over Wi-Fi');
+    await welcome.getByRole('button', { name: 'Get started' }).click();
+    const access = page.getByRole('region', { name: 'Photo access' });
+    // An iPhone at a phone's width, an iPad at a computer's.
+    await expect(access).toContainText(/Photos are checked on this (iPhone|iPad) and never uploaded\./);
+    await access.getByRole('button', { name: 'Continue' }).click();
     expect(phone.asked).toContain('library/ask');
+
+    const pair = page.getByRole('region', { name: 'Connect your computer' });
+    await expect(pair).toContainText('Backups and Safe to delete need PhotoSense on your Mac or PC.');
+    await pair.getByRole('button', { name: 'Skip for now' }).click();
+
+    const result = page.getByRole('region', { name: 'Scan complete' });
+    await expect(result).toContainText(/can be freed from this (iPhone|iPad)/, { timeout: 60_000 });
+    await expect(result.locator('dl > div')).toHaveText([/^Duplicates1/]);
+    await expect(message(page, 'Found 1 duplicate and no similar shots.')).toBeHidden();
+    await result.getByRole('button', { name: 'Continue' }).click();
+    // This computer stands in for the phone: it has no store, so the offer has no plans to show.
+    const offer = page.getByRole('region', { name: 'PhotoSense Pro' });
+    await expect(offer.getByRole('heading', { name: /^Free all .+ with Pro$/ })).toBeVisible();
+    await offer.getByRole('button', { name: 'Continue with Free' }).click();
+
     const tabs = page.getByRole('navigation', { name: 'Tabs' });
-    await expect(tabs.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
-    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Review' }).click();
     await expect(tabs.getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('list', { name: 'Groups' }).getByRole('listitem')).toHaveCount(1);
   });
 
-  test('refused its photos, it says where access is turned on, and reads them once it is on and the app opens again @phone', async ({ page, photos }) => {
+  test('refused its photos, it says so and where access is turned on, and goes on to pairing once it is on and the app opens again @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     const phone = new Phone('nothing');
     Object.assign(phone, { firstRun: true, root: photos.root, answer: 'nothing' });
     await phone.attach(page);
     await page.goto('/');
+    await page.getByRole('button', { name: 'Get started' }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
     const refused = page.getByRole('region', { name: 'Photo access' });
-    await expect(refused.getByRole('heading', { name: 'PhotoSense can\'t see your photos' })).toBeVisible();
+    await expect(message(page, 'PhotoSense needs photo access to work. You can allow it later in Settings.')).toBeVisible();
     await refused.getByRole('button', { name: 'Open Settings' }).click();
     expect(phone.asked).toContain('library/open-settings');
 
     // iOS starts an app again when its access is changed in Settings.
     phone.access = 'everything';
     await page.reload();
-    await expect(message(page, 'Found no duplicates or similar shots.')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByRole('region', { name: 'Connect your computer' })).toBeVisible();
     await expect(refused).toBeHidden();
   });
   test('a phone that may see only some photos says so in Library, and more are chosen with its own picker @phone', async ({ page, photos }) => {
@@ -204,7 +209,7 @@ test.describe('on a phone', () => {
     await expect(settings.getByRole('button', { name: /^Recently moved\s*0$/ })).toBeVisible();
   });
 
-  test('About, from Settings, names the phone app, which has no menu and receives nothing @phone', async ({ page }) => {
+  test('About, from Settings, names the phone app, which has no menu @phone', async ({ page }) => {
     await new Phone().attach(page);
     await page.goto('/');
     const settings = await phoneSettings(page);
@@ -251,85 +256,74 @@ test.describe('on a phone', () => {
     await expect(page.getByText(/^Within 5 mi · /)).toBeVisible();
     const settings = await phoneSettings(page);
     await settings.getByRole('radiogroup', { name: 'Distances' }).getByRole('radio', { name: 'Kilometers' }).click();
-    await settings.getByRole('button', { name: 'Done' }).click();
+    await settings.getByRole('button', { name: 'Back' }).click();
     await expect(page.getByText(/^Within 5 km · /)).toBeVisible();
   });
 
-  test('photos are sent to a computer after both show one number, and Move deletes them from the phone once they are all there @phone', async ({ page, photos }) => {
+  test('Backup says what waits on the computer, backs up, pauses and carries on, and Send now sends what is chosen in Library @phone', async ({ page, photos }) => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
     phone.root = photos.root;
-    await sendFromLibrary(page, ['IMG_0001.JPG', 'IMG_0002.JPG']);
-    const send = sendScreen(page);
-    await expect(send.getByRole('radio', { name: /^What you chose in Library\s*2 items$/ })).toHaveAttribute('aria-checked', 'true');
-    await send.getByRole('radiogroup', { name: 'Copy or move' }).getByRole('radio', { name: 'Move' }).click();
-    await expect(send).toContainText('Each photo is deleted from this phone once the computer has checked every file of it. It goes to Recently Deleted.');
-    await send.getByRole('button', { name: 'Offer 2 items to a computer' }).click();
-    await expect(send).toContainText("Jamie's iPhone is offering 2 files. Keep PhotoSense open on this screen.");
-    expect(phone.asked[0]).toMatch(/^send\/start \{"files":\["[^"]+","[^"]+"\]\}$/);
+    await page.goto('/');
+    // The app backs up by itself as it opens, when a backup is due.
+    await expect.poll(() => phone.asked).toContain('auto');
+    await phoneTab(page, 'Backup');
+    const backup = backupScreen(page);
+    const card = backup.getByRole('region', { name: 'DESKTOP-1' });
+    await expect(card).toContainText('2 new items waiting');
+    await expect(card).toContainText('automatic backup is off');
+    await card.getByRole('button', { name: 'Back up now' }).click();
+    await expect(card.getByRole('progressbar', { name: 'Backing up to DESKTOP-1' })).toBeVisible();
+    await card.getByRole('button', { name: 'Pause' }).click();
+    await expect(card).toContainText('Paused at 0 of 2');
+    await card.getByRole('button', { name: 'Resume' }).click();
+    expect(phone.asked.filter(a => a === 'start')).toHaveLength(2);
+    expect(phone.asked).toContain('pause');
 
-    phone.set({ stage: 'comparing', code: '482 917', computer: 'DESKTOP-1' });
-    await expect(send.getByRole('heading', { name: 'Does DESKTOP-1 show this number?' })).toBeVisible();
-    await expect(send.getByLabel('The number: 482 917')).toBeVisible();
-    await send.getByRole('button', { name: "It's the same number" }).click();
-    expect(phone.asked).toContain('send/confirm {"same":true}');
+    // Automatic backup is part of Pro: turning it on opens the Pro sheet, and nothing is kept.
+    await backup.getByText('Back up automatically').click();
+    await expect(page.getByRole('dialog', { name: 'PhotoSense Pro' })).toContainText('Automatic backup is part of Pro. Sending photos yourself stays free.');
+    await page.keyboard.press('Escape');
+    expect(phone.asked.filter(a => a.startsWith('settings'))).toHaveLength(0);
+    await backup.getByText('Include videos').click();
+    await expect.poll(() => phone.asked.filter(a => a.startsWith('settings'))).toEqual([expect.stringContaining('"includeVideos":false')]);
 
-    phone.set({ stage: 'sending', done: 1, bytes: 1_000_000, totalBytes: 2_000_000, current: 'IMG_0002.JPG' });
-    await expect(send.getByRole('progressbar', { name: 'Sending to DESKTOP-1' })).toHaveAttribute('aria-valuenow', '50');
-    await expect(send).toContainText('IMG_0002.JPG');
-
-    phone.set({ stage: 'sent', done: 2, bytes: 2_000_000, current: null, where: 'C:\\Users\\jamie\\Pictures\\From the phone', deletable: ['IMG_0001.JPG', 'IMG_0002.JPG'] });
-    await expect(message(page, 'Moved 2 photos to DESKTOP-1. They are in Recently Deleted on this phone for 30 days.')).toBeVisible();
-    await expect(send.getByRole('heading', { name: '2 files are on DESKTOP-1' })).toBeVisible();
-    await expect(send).toContainText('Deleted from this phone. They wait in Recently Deleted for 30 days.');
-    expect(phone.asked.filter(a => a === 'send/delete-sent')).toHaveLength(1);
-    await send.getByRole('button', { name: 'Done' }).click();
-    await expect(send.getByRole('radiogroup', { name: 'What to send' })).toBeVisible();
-    expect(phone.asked).not.toContain('send/stop');
+    phone.set({ stage: 'ready', waiting: 2 });
+    await backup.getByRole('button', { name: 'Choose photos to send' }).click();
+    const library = page.getByRole('region', { name: 'Library' });
+    await expect(page.getByRole('toolbar', { name: 'What is selected' })).toBeVisible();
+    await library.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+    await page.getByRole('toolbar', { name: 'What is selected' }).getByRole('button', { name: 'Send' }).click();
+    await expect(message(page, 'Sending 1 item to DESKTOP-1.')).toBeVisible();
+    expect(phone.asked.at(-1)).toMatch(/^start \{"files":\["[^"]+"\]\}$/);
+    await expect(backupScreen(page)).toBeVisible();
   });
 
-  test('with Copy, the photos stay on the phone, and are deleted only after a question naming what goes and what stays @phone', async ({ page, photos }) => {
+  test('Safe to delete, from Library, removes what the computer checked after saying how much it frees, and says what was freed @phone', async ({ page, photos }) => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
     phone.root = photos.root;
-    await sendFromLibrary(page, ['IMG_0001.JPG']);
-    const send = sendScreen(page);
-    await expect(send).toContainText('The photos stay on this phone. Once the computer has them all, you can delete them here.');
-    await send.getByRole('button', { name: 'Offer 1 item to a computer' }).click();
-    phone.set({ stage: 'sent', computer: 'DESKTOP-1', done: 1, total: 1, where: 'C:\\Photos', deletable: ['IMG_0001.JPG'] });
-    await expect(send.getByRole('heading', { name: '1 file is on DESKTOP-1' })).toBeVisible();
-    await expect(send).toContainText('Free up space on this phone');
-    expect(phone.asked).not.toContain('send/delete-sent');
-
-    await send.getByRole('button', { name: 'Delete 1 from this phone' }).click();
-    const asked = page.getByRole('dialog', { name: 'Delete IMG_0001.JPG from this phone?' });
-    await expect(asked).toContainText('IMG_0001.JPG goes to Recently Deleted on this phone, with any Live Photo videos and edits.');
-    await expect(asked).toContainText('The copies on DESKTOP-1 stay, in C:\\Photos.');
-    await asked.getByRole('button', { name: 'Delete 1 photo' }).click();
-    await expect(message(page, 'Deleted 1 photo from this phone. It is in Recently Deleted for 30 days, and the copies on DESKTOP-1 stay.')).toBeVisible();
-    await expect(send).toContainText('Deleted from this phone. They wait in Recently Deleted for 30 days.');
-  });
-
-  test('numbers said to be different stop it with nothing sent; Try again offers again, and Stop offering stops @phone', async ({ page, photos }) => {
-    const phone = new Phone();
-    await phone.attach(page);
-    photos.picture('IMG_0001.JPG', { seed: 1 });
-    phone.root = photos.root;
-    await sendFromLibrary(page, ['IMG_0001.JPG']);
-    const send = sendScreen(page);
-    await send.getByRole('button', { name: 'Offer 1 item to a computer' }).click();
-    phone.set({ stage: 'comparing', code: '482 917', computer: 'DESKTOP-1' });
-    await send.getByRole('button', { name: "It's different" }).click();
-    await expect(send.getByRole('heading', { name: 'Stopped. Nothing was sent.' })).toBeVisible();
-    await expect(send.getByRole('alert')).toHaveText('The numbers did not match. Check that you picked this phone on the computer, then try again.');
-    await send.getByRole('button', { name: 'Try again' }).click();
-    await expect(send.getByRole('heading', { name: 'Waiting for a computer' })).toBeVisible();
-    expect(phone.asked.filter(a => a.startsWith('send/start'))).toHaveLength(2);
-    await send.getByRole('button', { name: 'Stop offering' }).click();
-    await expect(send.getByRole('radiogroup', { name: 'What to send' })).toBeVisible();
-    await expect.poll(() => phone.asked).toContain('send/stop');
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const banner = page.getByRole('region', { name: 'On DESKTOP-1' });
+    await expect(banner).toContainText(/^2 items are on DESKTOP-1Remove them from this (iPhone|iPad) to free up to 6\.0 GB\./);
+    await banner.getByRole('button', { name: 'Review' }).click();
+    const safe = page.getByRole('dialog', { name: 'Safe to delete' });
+    await expect(safe).toContainText(/6\.0 GBcan be freed from this (iPhone|iPad)/);
+    await expect(safe.getByRole('region', { name: 'Checked on DESKTOP-1' })).toContainText('2 photos and videosEach one matches the copy on the computer');
+    await expect(safe).toContainText('Removed items stay in Recently Deleted for 30 days.');
+    await safe.getByRole('button', { name: `Remove ${SAFE.removable.count} items` }).click();
+    const freed = page.getByRole('dialog', { name: 'Space freed' });
+    await expect(freed.getByRole('heading', { name: '6.0 GB freed' })).toBeVisible();
+    await expect(freed).toContainText(/2 items removed from this (iPhone|iPad)\. The copies are on DESKTOP-1 in Pictures\/PhotoSense\/Jamie's iPhone\./);
+    await expect(freed).toContainText('Before112 of 128 GB');
+    await expect(freed).toContainText('Now106 of 128 GB');
+    expect(phone.asked).toContain('remove');
+    await freed.getByRole('button', { name: 'Done' }).click();
+    await expect(freed).toBeHidden();
+    await expect(page.getByRole('region', { name: 'Library' })).toBeVisible();
   });
 });

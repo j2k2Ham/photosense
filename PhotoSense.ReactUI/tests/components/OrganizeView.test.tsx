@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizeView } from '../../components/organize/OrganizeView';
 import { saveOrganizeRoot } from '../../lib/lastScan';
 import type { OrganizeReading } from '../../lib/useOrganizeReading';
-import type { OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFileDto, OrganizeFilesDto, OrganizePlanDto, OrganizePlanFile } from '../../types';
+import type { OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFileDto, OrganizeFilesDto, OrganizePlanDto, OrganizePlanFile, PlanDto } from '../../types';
 import { deferred } from '../deferred';
-import { organizeFile as file, organizePlace as place } from '../fixtures';
+import { organizeFile as file, organizePlace as place, plan } from '../fixtures';
 
 const api = vi.hoisted(() => ({
   useOrganizeFiles: vi.fn(), useOrganizeBatches: vi.fn(), useAbout: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), openOrganizeFile: vi.fn(), browseFolders: vi.fn(),
+  usePlan: vi.fn((): { data?: PlanDto } => ({ data: undefined })),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // What has been read so far of a folder that is still being read.
@@ -711,6 +712,26 @@ describe('deleting files', () => {
     expect(shownNames()).not.toContain('b1.JPG');
   });
 
+  it('on the free plan asks before more than are left go, then deletes the largest of them, saying the removals left', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 1 }) });
+    api.removeOrganize.mockResolvedValue(applied({ batchId: 'r2', done: 1, bytes: 6_093_000, items: held('a1') }));
+    open();
+    await userEvent.click(tile('a1.JPG'));
+    await userEvent.click(tile('b1.JPG'));
+    await userEvent.click(bin(2));
+    expect(question()).toHaveAccessibleName('1 free removal left today');
+    expect(question()).toHaveTextContent('You chose 2 files. The free plan deletes 50 items a day, and you have 1 left today.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await userEvent.click(bin(2));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 now' }));
+    // The two are the same size, so the first of them goes.
+    expect(question()).toHaveAccessibleName('Delete a1.JPG?');
+    expect(question()).toHaveTextContent('to free the space. Free plan: 1 removal left today.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(api.removeOrganize).toHaveBeenCalledExactlyOnceWith(ROOT, ['a1']);
+  });
+
   it('says what could not be deleted, and why the service could not be asked', async () => {
     api.removeOrganize.mockResolvedValueOnce(applied({ batchId: '', skipped: 1, problems: ['a1.JPG: The process cannot access the file because it is being used by another process.'] }));
     open();
@@ -767,6 +788,14 @@ describe('deleting files', () => {
       expect(question()).toHaveTextContent('a1.JPG in Top level stays.');
       expect(question()).toHaveTextContent('Undo this from Recently moved, or use Delete permanently in the menu to free the space.');
       // Esc answers the question and nothing else: both windows behind it stay.
+      api.usePlan.mockReturnValue({ data: plan({ leftToday: 0, removedToday: 50 }) });
+      fireEvent.keyDown(window, { key: 'Escape' });
+      await userEvent.click(bin('Delete a1.JPG, already there'));
+      expect(question()).toHaveAccessibleName('No free removals left today');
+      expect(within(question()).getAllByRole('button').map(b => b.textContent)).toEqual(['Not now']);
+      api.usePlan.mockReturnValue({ data: undefined });
+      await userEvent.click(within(question()).getByRole('button', { name: 'Not now' }));
+      await userEvent.click(bin('Delete a1.JPG, already there'));
       fireEvent.keyDown(window, { key: 'Escape' });
       expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       expect(clashWindow()).toBeInTheDocument();

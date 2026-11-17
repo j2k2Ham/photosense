@@ -44,6 +44,8 @@ public sealed class MainActivity : Activity
         base.OnCreate(savedInstanceState);
         Shown = this;
         PhoneApp.Start(ApplicationContext!);
+        // Automatic backup, with the app closed too: it backs up only when one is due.
+        BackupWorker.Schedule(ApplicationContext!);
         SelfCheck.Prepare(this, Intent);
 
         var page = _page = new WebView(this);

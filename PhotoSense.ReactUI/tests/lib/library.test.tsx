@@ -35,7 +35,7 @@ describe('the library\'s files', () => {
       organizeFile({ id: 'c', folder: IOS, isVideo: true }),
     ];
     expect(files.filter(f => shows('videos', f, IOS, 'ios')).map(f => f.id)).toEqual(['c']);
-    expect(filterCounts(files, IOS, 'ios')).toEqual({ all: 3, unsorted: 2, unplaced: 2, videos: 1 });
+    expect(filterCounts(files, IOS, 'ios')).toEqual({ all: 3, onComputer: 0, waiting: 0, unsorted: 2, unplaced: 2, videos: 1 });
   });
 
   it('are split by month, each month named, its files counted', () => {

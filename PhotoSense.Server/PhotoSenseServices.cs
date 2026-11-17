@@ -9,6 +9,7 @@ using PhotoSense.Infrastructure;
 using PhotoSense.Infrastructure.Files;
 using PhotoSense.Infrastructure.Transfer;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Repositories;
 
@@ -37,7 +38,16 @@ internal static class PhotoSenseServices
         // Photos come from phones over the network, or through a cable by Apple's device service.
         s.AddSingleton<IPhoneFinder>(new PhoneFinders(new MdnsPhoneFinder(), new UsbmuxPhoneFinder()));
         s.AddSingleton(sp => new PhoneReceiving(sp.GetRequiredService<IPhoneFinder>(), sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<IPhotoFileSystem>(),
-            sp.GetRequiredService<FileChanges>(), Environment.MachineName, sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<FileChanges>(), sp.GetRequiredService<Subscription>(), Environment.MachineName, sp.GetRequiredService<TimeProvider>()));
+        // Phones back up to this computer: it waits for them on a port of its own while it runs, and says so on the network.
+        s.AddSingleton(new PhoneDoor(new TcpTransferListener(TcpTransferListener.ComputerPort), new MdnsAdvertiser()));
+        s.AddSingleton(sp => new ComputerBackup(sp.GetRequiredService<IBackupStore>(), sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<FileChanges>(),
+            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveBackupPath(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), sp.GetRequiredService<TimeProvider>()));
+        // Pair a phone: the computer shows a code, and a phone it does not know may pair with it.
+        s.AddSingleton(sp => new ComputerPairing(sp.GetRequiredService<PhoneDoor>().Listener, sp.GetRequiredService<PhoneDoor>().Advertiser, sp.GetRequiredService<IPairingStore>(),
+            Environment.MachineName, () => [.. MdnsPhoneFinder.Networks().Select(a => a.ToString())], sp.GetRequiredService<ComputerBackup>(), sp.GetRequiredService<TimeProvider>()));
+        s.AddHostedService<OpenToPhones>();
         return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

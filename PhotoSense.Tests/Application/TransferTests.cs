@@ -8,6 +8,9 @@ using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Hosting;
 using PhotoSense.Api.Http;
+using PhotoSense.Application.Plans;
+using PhotoSense.Domain.ValueObjects;
+using PhotoSense.Domain.Entities;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Desktop.Imaging;
@@ -36,11 +39,17 @@ public sealed class TransferTests : IDisposable
     private readonly PhoneReceiving _computer;
     private readonly string _folder;
     private readonly List<IDisposable> _open = [];
+    // The phone's store, and the computer's plan, which the phone tells it of.
+    private readonly FakeAppStore _app = new();
+    // The phone's camera, and the computers it finds on the Wi-Fi.
+    private readonly FakeCodeScanner _scanner = new();
+    private readonly FakeComputerFinder _computers = new();
+    private readonly PlanParts _computerPlan = new();
 
     public TransferTests()
     {
         _phone = new ServiceCollection()
-            .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), _advertiser, "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), _advertiser, _app, _scanner, _computers, new FakeDevice(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()
@@ -54,13 +63,14 @@ public sealed class TransferTests : IDisposable
     private PhoneReceiving Receiving(IPhoneFinder finder, DiskFileSystem? disk = null, TimeProvider? clock = null)
     {
         disk ??= new DiskFileSystem();
-        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk), "DESKTOP-1", clock ?? TimeProvider.System);
+        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk, TestPlans.Unlimited()),
+            TestPlans.Subscription(_computerPlan), "DESKTOP-1", clock ?? TimeProvider.System);
     }
 
     /// <summary>The phone's sending on a clock of the test's own, offering through the same network and library as the phone.</summary>
     private PhoneSending Sending(TimeProvider clock)
         => new(new TcpTransferListener(0), _advertiser, _phone.GetRequiredService<IPairingStore>(), _phone.GetRequiredService<IPhotoFileSystem>(),
-            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), "Jamie's iPhone", clock);
+            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), _phone.GetRequiredService<Subscription>(), "Jamie's iPhone", clock);
 
     /// <summary>The phone and the computer paired already, as after a first time.</summary>
     private async Task PairedAsync(CancellationToken ct)
@@ -178,6 +188,27 @@ public sealed class TransferTests : IDisposable
     }
 
     [Test]
+    public async Task The_Phone_Tells_The_Computer_Its_Plan_Which_Then_Covers_The_Computer_And_Is_Taken_Back_When_It_Ends(CancellationToken ct)
+    {
+        // The phone reads the real clock, so the trial ends years from the test's day.
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Yearly, TestClock.Day, TestClock.Day.AddYears(5), Trial: true));
+        var computerPlan = TestPlans.Subscription(_computerPlan);
+
+        var files = await OfferedAsync(ct);
+        await PhoneAsync("POST", "send/start", ct, new { files });
+        await PairedAsync(ct);
+        await ReceiveAsync(ct);
+        await Until(() => Task.FromResult(_computer.State.Stage is ReceiveStage.Done or ReceiveStage.Failed), "done");
+        await Assert.That(await computerPlan.CurrentAsync(ct)).IsEqualTo(new Entitlement(PlanTier.Trial, PlanKind.Yearly, TestClock.Day, TestClock.Day.AddYears(5), "Jamie's iPhone"));
+
+        _app.Purchases.Clear();
+        await PhoneAsync("POST", "send/start", ct, new { files });
+        await ReceiveAsync(ct);
+        await Until(() => Task.FromResult(_computer.State.Stage is ReceiveStage.Done or ReceiveStage.Failed), "done again");
+        await Assert.That(await computerPlan.CurrentAsync(ct)).IsEqualTo(Entitlement.Free);
+    }
+
+    [Test]
     [Arguments(false, true, "The numbers did not match, so nothing was sent. Try again, and look that both show the same number.", "On the computer the numbers were said not to match, so nothing was sent. Try again.")]
     [Arguments(true, false, "On the phone the numbers were said not to match, so nothing was sent. Try again.", "The numbers did not match, so nothing was sent. Try again, and look that both show the same number.")]
     public async Task Numbers_Said_Not_To_Match_On_Either_Stop_Both_And_Nothing_Is_Sent(bool computerSays, bool phoneSays, string onComputer, string onPhone, CancellationToken ct)
@@ -237,7 +268,7 @@ public sealed class TransferTests : IDisposable
     public async Task Only_A_Phone_Deletes_What_It_Sent(CancellationToken ct)
     {
         var onAComputer = new PhoneSending(new TcpTransferListener(0), new FakeAdvertiser(), new MemoryPairs("computer"), new DiskFileSystem(),
-            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), "DESKTOP-1", TimeProvider.System);
+            _phone.GetRequiredService<ICompanionFileFinder>(), _phone.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(), TestPlans.Subscription(), "DESKTOP-1", TimeProvider.System);
         await Assert.That(Assert.Throws<InvalidOperationException>(() => onAComputer.DeleteSent())!.Message).IsEqualTo("Only a phone deletes what it has sent.");
     }
 
@@ -263,7 +294,7 @@ public sealed class TransferTests : IDisposable
         await _phone.GetRequiredService<IPairingStore>().SaveAsync(new PairedDevice("test-computer", "Test computer", secret), ct);
         var stream = await Loopback.ConnectAsync(port, CancellationToken.None);
         _open.Add(stream);
-        var linked = await Pairing.ComputerAsync(stream, new Device("test-computer", "Test computer"), pairs, (_, _, _) => Task.FromResult(false), CancellationToken.None);
+        var linked = await Pairing.ComputerAsync(stream, new Device("test-computer", "Test computer"), pairs, (_, _, _) => Task.FromResult(false), null, true, CancellationToken.None);
         _open.Add(linked.Channel);
         return linked.Channel;
     }
@@ -333,7 +364,7 @@ public sealed class TransferTests : IDisposable
         var computer = Receiving(new Found(new FoundPhone("wifi:test-phone", "Test phone", "wifi", _ => Task.FromResult(near))), disk, clock);
         await computer.FindAsync(ct);
         computer.Start("wifi:test-phone", _folder);
-        var linked = await Pairing.PhoneAsync(far, new Device("test-phone", "Test phone"), pairs, (_, _, _) => Task.FromResult(false), CancellationToken.None);
+        var linked = await Pairing.PhoneAsync(far, new Device("test-phone", "Test phone"), pairs, (_, _, _) => Task.FromResult(false), null, CancellationToken.None);
         _open.Add(linked.Channel);
         await linked.Channel.ReceiveAsync(CancellationToken.None, "offer?");
         return (computer, linked.Channel);

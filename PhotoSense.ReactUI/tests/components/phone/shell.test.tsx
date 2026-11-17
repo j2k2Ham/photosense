@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,11 +10,15 @@ import type { Platform, TabId } from '../../../lib/phone';
 import type { AppSettings } from '../../../lib/settings';
 import { frame, inFrame, width } from './frame';
 import { group, groupsPage, photo } from './groups';
+import { backupState, plan, safeReview } from '../../fixtures';
+import type { PlanDto } from '../../../types';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
 // tested on its own, has one group of duplicates.
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})), useSendState: vi.fn(() => ({})),
+const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})),
+  useBackup: vi.fn(() => ({})), useLibraryBackup: vi.fn(() => ({})), useSafeReview: vi.fn(() => ({})), backUpIfDue: vi.fn(async () => ({})), startBackup: vi.fn(async () => ({})), removeSafe: vi.fn(), stopPairing: vi.fn(async () => undefined), usePairing: vi.fn(() => ({})),
   useRemoved: vi.fn<(roots: string[] | null) => { data?: unknown }>(() => ({})), eraseRemoved: vi.fn(), openPhotoSettings: vi.fn(), undoChange: vi.fn(),
+  usePlan: vi.fn<() => { data?: PlanDto }>(() => ({})),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
@@ -112,7 +116,7 @@ describe('a screen', () => {
 });
 
 describe('the shell', () => {
-  const screens = { library: <p>library screen</p>, cleanup: <p>cleanup screen</p>, organize: <p>organize screen</p>, send: <p>send screen</p> };
+  const screens = { library: <p>library screen</p>, cleanup: <p>cleanup screen</p>, organize: <p>organize screen</p>, backup: <p>backup screen</p> };
   function Shell({ platform = 'ios', start = 'library', foot = 'tabs' as const }: { platform?: Platform; start?: TabId; foot?: 'tabs' | 'selection' | 'none' }) {
     const [tab, setTab] = React.useState<TabId>(start);
     return <PhoneShell platform={platform} tab={tab} foot={foot} counts={{ cleanup: '264' }} screens={screens} toasts={[]} onTab={setTab} onSettings={vi.fn()} removeToast={vi.fn()}
@@ -124,7 +128,7 @@ describe('the shell', () => {
     render(<Shell />);
     const tabs = screen.getByRole('navigation', { name: 'Tabs' });
     expect(tabs).toHaveClass('bottom-[22px]', 'rounded-full');
-    expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['Library', 'Clean up', 'Organize', 'Send']);
+    expect(within(tabs).getAllByRole('button').map(b => b.textContent)).toEqual(['Library', 'Clean up', 'Organize', 'Backup']);
     expect(within(tabs).getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByText('cleanup screen')).not.toBeInTheDocument();
     await userEvent.click(within(tabs).getByRole('button', { name: 'Clean up' }));
@@ -158,8 +162,8 @@ describe('the shell', () => {
     await userEvent.click(within(side).getByRole('button', { name: 'Hide sidebar' }));
     const floating = screen.getByRole('navigation', { name: 'Tabs' });
     expect(floating).toHaveClass('-translate-x-1/2');
-    await userEvent.click(within(floating).getByRole('button', { name: 'Send' }));
-    expect(within(floating).getByRole('button', { name: 'Send' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(floating).getByRole('button', { name: 'Backup' }));
+    expect(within(floating).getByRole('button', { name: 'Backup' })).toHaveAttribute('aria-current', 'page');
     await userEvent.click(screen.getByRole('button', { name: 'Show sidebar' }));
     expect(screen.getByRole('button', { name: 'Hide sidebar' })).toBeInTheDocument();
   });
@@ -180,7 +184,7 @@ describe('Settings', () => {
   function show(platform: Platform = 'ios', more = {}) {
     const calls = {
       onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
-      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(),
+      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(),
     };
     const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} access="everything" removed={removed(37)} moves={1} {...calls} {...more} />, frame(platform));
     return { calls, view };
@@ -192,7 +196,31 @@ describe('Settings', () => {
     expect(within(themes).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(within(themes).getByRole('radio', { name: 'Light' }));
     expect(calls.onTheme).toHaveBeenCalledWith('light');
-    expect(screen.getByText('PhotoSense 1.4.0 · Runs on this phone. Nothing is uploaded.')).toBeInTheDocument();
+    expect(screen.getByText('Your photos stay on your own devices. PhotoSense has no ads and does not track what is in your photos.')).toBeInTheDocument();
+  });
+
+  it('shows the plan first: the removals left with Get Pro on the free plan, the plan and its renewal on Pro; either opens Subscription', async () => {
+    const { calls, view } = show('ios', { plan: plan() });
+    const card = screen.getByRole('button', { name: 'PhotoSense Free. Subscription' });
+    expect(card).toHaveTextContent('PhotoSense Free38 of 50 free removals left todayGet Pro');
+    await userEvent.click(card);
+    expect(calls.onSubscription).toHaveBeenCalledOnce();
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} plan={plan({ tier: 'pro', kind: 'yearly', until: '2027-11-17T12:00:00Z' })} {...noCalls()} />);
+    expect(screen.getByRole('button', { name: 'PhotoSense Pro. Subscription' })).toHaveTextContent('PhotoSense ProYearly plan · renews Nov 17, 2027');
+    expect(screen.queryByText('Get Pro')).not.toBeInTheDocument();
+  });
+
+  it('names the computer backups go to, and where they go; with none, connects one; until the phone has said, has no Computer at all', async () => {
+    const { calls, view } = show('ios', { computer: { name: 'Studio iMac', folder: 'Pictures/PhotoSense' } });
+    const computer = screen.getByRole('region', { name: 'Computer' });
+    expect(within(computer).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Studio iMac Paired', 'Backup folder Pictures/PhotoSense']);
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} computer={{ name: 'Studio iMac', folder: null }} {...noCalls()} />);
+    expect(screen.getByText('Backup folder').closest('li')).toHaveTextContent(/^Backup folder$/);
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} computer={null} {...calls} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
+    expect([calls.onClose.mock.calls.length, calls.onPair.mock.calls.length]).toEqual([1, 1]);
+    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} {...noCalls()} />);
+    expect(screen.queryByRole('region', { name: 'Computer' })).not.toBeInTheDocument();
   });
 
   it('chooses miles or kilometers for distances', async () => {
@@ -221,7 +249,7 @@ describe('Settings', () => {
     const { calls } = show();
     const rows = [
       ['Photo access Full access', calls.onPhotoAccess], ['Scan again', calls.onScanAgain], ['Delete permanently…', calls.onDeletePermanently], ['Recently moved 1', calls.onRecent],
-      ['Errors None', calls.onErrors], ['Help', calls.onHelp], ['About PhotoSense 1.4.0', calls.onAbout], ['Privacy', calls.onPrivacy],
+      ['Errors None', calls.onErrors], ['Help', calls.onHelp], ['About PhotoSense 1.4.0', calls.onAbout], ['Privacy policy', calls.onPrivacy],
     ] as const;
     for (const [row, call] of rows) {
       await userEvent.click(screen.getByRole('button', { name: row }));
@@ -230,18 +258,16 @@ describe('Settings', () => {
     expect(calls.onClose).toHaveBeenCalledTimes(8);
   });
 
-  it('counts the errors, says where it runs before the version is known, and offers no deleting while nothing waits or before it is known', () => {
+  it('counts the errors, and offers no deleting while nothing waits or before it is known', () => {
     const { view } = show('ios', { errorCount: 2, version: undefined });
     expect(screen.getByRole('button', { name: 'Errors 2' })).toBeInTheDocument();
-    expect(screen.getByText('Runs on this phone. Nothing is uploaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'About PhotoSense' })).toBeInTheDocument();
     view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} access="nothing" removed={removed(0)} {...noCalls()} />, frame('ios', { tablet: true }));
-    expect(screen.getByText('Runs on this iPad. Nothing is uploaded.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Photo access None' })).toBeInTheDocument();
     expect(screen.getByText('Empty')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
     expect(screen.getByText('Delete permanently…')).toHaveClass('text-t3');
     view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} {...noCalls()} />, frame('android', { tablet: true }));
-    expect(screen.getByText('Runs on this tablet. Nothing is uploaded.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Photo access' })).toBeInTheDocument();
     expect(screen.getByText('…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
@@ -253,7 +279,7 @@ describe('Settings', () => {
 function noCalls() {
   return {
     onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
-    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(),
+    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(),
   };
 }
 
@@ -265,7 +291,7 @@ describe('Delete permanently', () => {
     const onErase = vi.fn(), onCancel = vi.fn();
     inFrame(<DeletePermanently removed={waiting} askTwice busy={false} onErase={onErase} onCancel={onCancel} />);
     expect(question()).toHaveAccessibleName('Delete 37 items permanently?');
-    expect(question()).toHaveTextContent('Everything in PhotoSense Removed (212.0 MB) goes to Recently Deleted, where iOS keeps it for 30 days.');
+    expect(question()).toHaveTextContent('This cannot be undone.Everything in PhotoSense Removed (212.0 MB) goes to Recently Deleted, where iOS keeps it for 30 days.');
     expect(question()).toHaveTextContent('Undo can no longer bring these back, and they leave Recently moved.');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 37 items' }));
     expect(onErase).not.toHaveBeenCalled();
@@ -299,10 +325,10 @@ describe('Delete permanently', () => {
 
 describe('PhotoSense on a phone', () => {
   const notify = vi.fn(), onSettings = vi.fn(), onAbout = vi.fn();
-  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles' };
+  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
   beforeEach(() => {
     localStorage.setItem('photosense-first-run', 'done');
-    settings = { eraseAskTwice: true, distanceUnit: 'miles' };
+    settings = { eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
     for (const f of [notify, onSettings, onAbout]) f.mockReset();
   });
 
@@ -324,8 +350,8 @@ describe('PhotoSense on a phone', () => {
     const tabs = screen.getByRole('navigation', { name: 'Tabs' });
     await userEvent.click(within(tabs).getByRole('button', { name: 'Organize' }));
     expect(screen.getByText('Sort Phone into folders by place and date')).toBeInTheDocument();
-    await userEvent.click(within(tabs).getByRole('button', { name: 'Send' }));
-    expect(screen.getByText('Copy or move to PhotoSense on a Windows PC or Mac')).toBeInTheDocument();
+    await userEvent.click(within(tabs).getByRole('button', { name: 'Backup' }));
+    expect(screen.getByText('Copies photos and videos to your computer over Wi-Fi')).toBeInTheDocument();
     await userEvent.click(within(tabs).getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
 
@@ -333,22 +359,105 @@ describe('PhotoSense on a phone', () => {
     const settings = screen.getByRole('dialog', { name: 'Settings' });
     await userEvent.click(within(settings).getByRole('radio', { name: 'Dark' }));
     expect(within(settings).getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
-    await userEvent.click(within(settings).getByRole('button', { name: 'Done' }));
+    await userEvent.click(within(settings).getByRole('button', { name: 'Back' }));
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
-  it('sends what is chosen in Library: Send opens Library choosing, and Send in Library comes back with the choice', async () => {
+  it('sends what is chosen in Library: Choose photos to send opens Library choosing, and Send there backs them up now', async () => {
     width(false);
+    api.useBackup.mockReturnValue({ data: backupState() });
+    api.backUpIfDue.mockClear();
+    api.startBackup.mockClear();
     render(<App />);
+    await waitFor(() => expect(api.backUpIfDue).toHaveBeenCalledOnce());
     const tabs = () => screen.getByRole('navigation', { name: 'Tabs' });
-    await userEvent.click(within(tabs()).getByRole('button', { name: 'Send' }));
-    await userEvent.click(screen.getByRole('radio', { name: /^What you chose in LibraryNothing chosen yet/ }));
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Backup' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
     // Library, choosing: its selection bar in place of the tabs.
     expect(screen.getByRole('toolbar')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'IMG_1.JPG' }));
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
-    expect(screen.getByRole('radio', { name: 'What you chose in Library1 item' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('button', { name: 'Offer 1 item to a computer' })).toBeEnabled();
+    expect(api.startBackup).toHaveBeenCalledExactlyOnceWith(['IMG_1']);
+    expect(notify).toHaveBeenCalledWith('Sending 1 item to Studio iMac.', 'ok');
+    expect(screen.getByRole('heading', { name: 'Backup' })).toBeInTheDocument();
+    // Turned down by the phone, it says why, and stays where it was.
+    api.startBackup.mockRejectedValueOnce(new Error('Pair with a computer first: in Settings, choose Computer.'));
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Select' }));
+    await userEvent.click(screen.getByRole('button', { name: 'IMG_2.JPG' }));
+    await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
+    expect(notify).toHaveBeenLastCalledWith('Pair with a computer first: in Settings, choose Computer.', 'error');
+    api.useBackup.mockReturnValue({});
+  });
+
+  it('opens Safe to delete from Library, and once removed says how much was freed; Done goes back to Library', async () => {
+    width(false);
+    api.useBackup.mockReturnValue({ data: backupState() });
+    api.useLibraryBackup.mockReturnValue({ data: { computer: 'Studio iMac', onComputer: ['IMG_1'], waiting: ['IMG_2'], lastChecked: null } });
+    api.useSafeReview.mockReturnValue({ data: safeReview() });
+    api.removeSafe.mockResolvedValue({ removed: 5998, bytes: 28.1e9, left: 0, storageTotal: 128e9, storageFreeBefore: 16e9 });
+    render(<App start="library" />);
+    await userEvent.click(within(screen.getByRole('region', { name: 'On Studio iMac' })).getByRole('button', { name: 'Review' }));
+    // Back takes it away; opened again, it removes.
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Safe to delete' })).getByRole('button', { name: 'Back' }));
+    expect(screen.queryByRole('dialog', { name: 'Safe to delete' })).not.toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('region', { name: 'On Studio iMac' })).getByRole('button', { name: 'Review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove 5,998 items' }));
+    const freed = await screen.findByRole('dialog', { name: 'Space freed' });
+    expect(freed).toHaveTextContent("The copies are on Studio iMac in Pictures/PhotoSense/Alex's iPhone.");
+    await userEvent.click(within(freed).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Space freed' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
+    for (const f of [api.useBackup, api.useLibraryBackup, api.useSafeReview]) f.mockReturnValue({});
+  });
+
+  it('after the free plan let only some go, Get Pro opens the Pro sheet; with no computer named, the copies are on the computer', async () => {
+    width(false);
+    api.usePlan.mockReturnValue({ data: plan() });
+    api.useSafeReview.mockReturnValue({ data: safeReview() });
+    api.useBackup.mockReturnValue({ data: backupState({ computer: 'Studio iMac' }) });
+    api.useLibraryBackup.mockReturnValue({ data: { computer: 'Studio iMac', onComputer: ['IMG_1'], waiting: [], lastChecked: null } });
+    api.removeSafe.mockResolvedValue({ removed: 38, bytes: 3e9, left: 5960, storageTotal: 128e9, storageFreeBefore: 16e9 });
+    render(<App start="library" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove 5,998 items' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'PhotoSense Pro' })).getByRole('button', { name: 'Remove the 38 largest now' }));
+    const freed = await screen.findByRole('dialog', { name: 'Space freed' });
+    api.useBackup.mockReturnValue({});
+    await userEvent.click(within(freed).getByRole('button', { name: 'Get Pro' }));
+    expect(screen.getByRole('dialog', { name: 'PhotoSense Pro' })).toBeInTheDocument();
+    for (const f of [api.useBackup, api.useLibraryBackup, api.useSafeReview, api.usePlan]) f.mockReturnValue({});
+  });
+
+  it('names the computer in Settings once the phone has one, and pairs one from there when it has none', async () => {
+    width(false);
+    api.useBackup.mockReturnValue({ data: backupState() });
+    const { unmount } = render(<App />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    expect(within(screen.getByRole('region', { name: 'Computer' })).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Studio iMac Paired', "Backup folder Pictures/PhotoSense/Alex's iPhone"]);
+    unmount();
+    api.useBackup.mockReturnValue({ data: backupState({ stage: 'unpaired', computer: null }) });
+    render(<App />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
+    expect(screen.getByRole('region', { name: 'Connect your computer' })).toBeInTheDocument();
+    api.useBackup.mockReturnValue({});
+  });
+
+  it('pairs a computer from Backup when it has none, and Not now puts pairing away', async () => {
+    width(false);
+    api.useBackup.mockReturnValue({ data: backupState({ stage: 'unpaired', computer: null }) });
+    render(<App start="backup" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
+    const pairing = screen.getByRole('region', { name: 'Connect your computer' });
+    expect(within(pairing).queryByRole('progressbar')).not.toBeInTheDocument();
+    await userEvent.click(within(pairing).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('region', { name: 'Connect your computer' })).not.toBeInTheDocument();
+    // Back puts it away too.
+    await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.queryByRole('region', { name: 'Connect your computer' })).not.toBeInTheDocument();
+    api.useBackup.mockReturnValue({});
   });
 
   describe('from Settings', () => {
@@ -360,6 +469,24 @@ describe('PhotoSense on a phone', () => {
       width(false);
       api.useRemoved.mockImplementation((roots: string[] | null) => ({ data: roots ? waiting : undefined }));
       api.eraseRemoved.mockResolvedValue({ erased: 37, bytes: 212 * MB, skipped: 0, problems: [] });
+    });
+
+    it('opens Subscription from the plan, and goes back to Settings from it, and away by Back', async () => {
+      api.usePlan.mockReturnValue({ data: plan({ tier: 'trial', kind: 'yearly', started: '2098-12-01T00:00:00Z', until: '2099-01-10T00:00:00Z', leftToday: null }) });
+      render(<App />);
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'PhotoSense Pro trial. Subscription' }));
+      const page = screen.getByRole('dialog', { name: 'Subscription' });
+      expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+      await userEvent.click(within(page).getByRole('switch', { name: /^Remind me 2 days before it ends/ }));
+      expect(onSettings).toHaveBeenLastCalledWith({ remindTrialEnd: false });
+      await userEvent.click(within(page).getByRole('button', { name: 'Terms' }));
+      await userEvent.click(within(page).getByRole('button', { name: 'Privacy policy' }));
+      expect(onAbout.mock.calls).toEqual([['terms'], ['privacy']]);
+      await userEvent.click(within(page).getByRole('button', { name: 'Back' }));
+      expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+      await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      api.usePlan.mockReturnValue({});
     });
 
     it('deletes permanently after both questions, remembering not to ask twice again when told', async () => {
@@ -378,7 +505,7 @@ describe('PhotoSense on a phone', () => {
     });
 
     it('asks once when told not to ask twice, and says what could not be deleted, that nothing was left, or what went wrong', async () => {
-      settings = { eraseAskTwice: false, distanceUnit: 'miles' };
+      settings = { eraseAskTwice: false, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
       api.eraseRemoved.mockClear();
       api.eraseRemoved.mockResolvedValueOnce({ erased: 35, bytes: 1, skipped: 2, problems: ['You chose not to delete them.'] });
       render(<App platform="android" />);
@@ -430,7 +557,7 @@ describe('PhotoSense on a phone', () => {
       expect(screen.getByRole('dialog', { name: 'Recently moved' })).toHaveTextContent('Nothing to undo.');
       await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Done' }));
 
-      await userEvent.click(within(await gear()).getByRole('button', { name: 'Privacy' }));
+      await userEvent.click(within(await gear()).getByRole('button', { name: 'Privacy policy' }));
       await userEvent.click(within(await gear()).getByRole('button', { name: 'About PhotoSense 1.4.0' }));
       expect(onAbout.mock.calls).toEqual([['privacy'], []]);
       await userEvent.click(within(await gear()).getByRole('radio', { name: 'Kilometers' }));

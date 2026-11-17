@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
+import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles, usePlan } from '../../lib/apiClient';
+import { largest, limitLine, overLimit } from '../../lib/plan';
 import { formatBytes, leaf, sameFolder } from '../../lib/format';
 import type { DistanceUnit } from '../../lib/distance';
 import {
@@ -10,6 +11,7 @@ import { loadOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
 import { useOrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { LimitDialog } from '../LimitDialog';
 import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
 import type { ToastAction, ToastKind } from '../Toaster';
@@ -87,6 +89,10 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   // For one of two files that share a name, the question also says which of them stays.
   const [deleting, setDeleting] = useState<{ files: FileRef[]; stays?: FileRef }>();
+  // A deletion asks the plan first: more than the free plan has left today waits on its own question, where the largest can go.
+  const plan = usePlan().data;
+  const [limited, setLimited] = useState<{ files: FileRef[]; stays?: FileRef }>();
+  const askDelete = (going: { files: FileRef[]; stays?: FileRef }) => (overLimit(plan, going.files.length) ? setLimited(going) : setDeleting(going));
   const undoable = useRef(new Map<string, Undoable>());
   // The folder that was just chosen, until its files have been read and that has been said.
   const announce = useRef<string | undefined>(undefined);
@@ -319,7 +325,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   // A folder is previewed, and moved, whole: not while more of its files may still turn up.
   const showPreview = (target: Target) => (reading ? notify(`Still reading ${leaf(root!)}. Preview a folder once every file is in.`, 'info') : setPreview(target));
   // Nor are files deleted while the list they are in is still being made.
-  const askToDelete = () => (reading ? notify(`Still reading ${leaf(root!)}. Delete files once every file is in.`, 'info') : setDeleting({ files: files.filter(f => picked.has(f.id)) }));
+  const askToDelete = () => (reading ? notify(`Still reading ${leaf(root!)}. Delete files once every file is in.`, 'info') : askDelete({ files: files.filter(f => picked.has(f.id)) }));
   const suggestedNames = byKey;
 
   return (
@@ -381,11 +387,15 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
           name={previewed?.name ?? previewedOwn!.name} base={ownPreviewed?.base} direct={ownPreviewed?.direct} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={onPhone ? 'move' : mode} canCopy={!onPhone} companions={companions} busy={busy} asking={deleting !== undefined}
           placeOf={id => { const f = files.find(x => x.id === id); return f?.place == null ? undefined : `${places[f.place].town}, ${places[f.place].state}`; }}
           onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move(request, going)}
-          onDelete={(file, stays) => setDeleting({ files: [file], stays })} onClose={() => setPreview(undefined)} />
+          onDelete={(file, stays) => askDelete({ files: [file], stays })} onClose={() => setPreview(undefined)} />
+      )}
+      {limited && (
+        <LimitDialog plan={plan!} count={limited.files.length} label="files" partial={plan!.leftToday!} busy={busy}
+          onCancel={() => setLimited(undefined)} onPartial={() => { setDeleting({ files: largest(limited.files, plan!.leftToday!), stays: limited.stays }); setLimited(undefined); }} />
       )}
       {deleting && (
         <ConfirmDialog busy={busy} title={deleting.files.length === 1 ? `Delete ${deleting.files[0].name}?` : `Delete ${countFiles(deleting.files.length)}?`} confirmLabel={`Delete ${countFiles(deleting.files.length)}`}
-          note={<>Nothing is erased. The files are moved to <span className="font-mono">{REMOVED_FOLDER}</span> inside {leaf(root!)}, where Clean up puts what it removes. Undo this from Recently moved, or use Delete permanently in the menu to free the space.</>}
+          note={<>Nothing is erased. The files are moved to <span className="font-mono">{REMOVED_FOLDER}</span> inside {leaf(root!)}, where Clean up puts what it removes. Undo this from Recently moved, or use Delete permanently in the menu to free the space.{limitLine(plan) && ` ${limitLine(plan)}`}</>}
           onCancel={() => setDeleting(undefined)} onConfirm={() => void remove(deleting.files)}>
           {deleting.stays ? (
             <>

@@ -26,13 +26,15 @@ public sealed class PhotosOnAPhoneTests : IDisposable
     private readonly ServiceProvider _services;
     /// <summary>What the phone tells the network.</summary>
     internal FakeAdvertiser Advertiser { get; } = new();
+    /// <summary>The phone's store.</summary>
+    internal FakeAppStore App { get; } = new();
     private readonly ApiRouter _router;
 
     public PhotosOnAPhoneTests()
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, App, new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for PhotoSense for iPhone and iPad"))
             .AddStandInStores()

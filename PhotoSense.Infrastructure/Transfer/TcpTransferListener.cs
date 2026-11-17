@@ -15,6 +15,9 @@ public sealed class TcpTransferListener(int port = TcpTransferListener.Port) : I
     /// <summary>The port a phone waits on, where a computer looks for it through a cable.</summary>
     public const int Port = 47615;
 
+    /// <summary>The port a computer waits for phones on, or any free one should another program have it.</summary>
+    public const int ComputerPort = 47616;
+
     private TcpListener? _listener;
     private CancellationTokenSource? _stop;
     private readonly List<TcpClient> _open = [];

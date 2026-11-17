@@ -6,11 +6,14 @@ import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
 import { AboutWindow, type AboutTopic } from '../components/AboutWindow';
 import { HelpWindow } from '../components/HelpWindow';
+import { LimitDialog } from '../components/LimitDialog';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
+import { firstScanShown } from '../components/phone/FirstRun';
 import { PhoneApp } from '../components/phone/PhoneApp';
+import { PairWindow } from '../components/PairWindow';
+import { PhonesView } from '../components/PhonesView';
 import { PhotoWindow } from '../components/PhotoWindow';
-import { ReceiveWindow } from '../components/ReceiveWindow';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { SettingsWindow } from '../components/SettingsWindow';
 import { SetupScreen } from '../components/SetupScreen';
@@ -18,9 +21,11 @@ import { PHONE_TOAST_MS, Toaster, TOAST_MS, useToasts, type ToastAction } from '
 import { TopBar } from '../components/TopBar';
 import {
   clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, stopScan, undoChange, useGroups,
-  useAbout, useScanProgress, useScanStatus,
+  useAbout, usePlan, useScanProgress, useScanStatus,
 } from '../lib/apiClient';
+import { someGroups } from '../lib/cleanup';
 import { formatBytes, linkedFiles } from '../lib/format';
+import { limitLine, overLimit } from '../lib/plan';
 import type { GuidePlace } from '../lib/guide';
 import { loadLastScan, loadOrganizeRoot } from '../lib/lastScan';
 import { useAppSettings } from '../lib/settings';
@@ -45,7 +50,9 @@ type Pending =
   // The copies of every group that is ticked.
   | { scope: 'ticked' }
   // Erasing what was removed: the warning first, then the question that makes sure.
-  | { scope: 'erase'; sure: boolean };
+  | { scope: 'erase'; sure: boolean }
+  // More chosen than the free plan has left today: the groups that fit, which "Delete N now" takes.
+  | { scope: 'limit'; count: number; some: { keys: string[]; count: number } };
 
 const files = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'file' : 'files'}`;
 // As many names as a confirmation has room for.
@@ -76,7 +83,12 @@ export default function HomePage() {
   // Clean up or Organize. Organize is made the first time it is turned to and then kept, with all that was arranged in it.
   const [area, setArea] = useState<Area>('clean');
   const [organizing, setOrganizing] = useState(false);
-  const turnTo = (next: Area) => { setArea(next); setTab(next === 'organize' ? 'organize' : 'cleanup'); if (next === 'organize') setOrganizing(true); };
+  const turnTo = (next: Area) => {
+    setArea(next);
+    if (next === 'phones') { if (!settings.phonesSeen) changeSettings({ phonesSeen: true }); return; }
+    setTab(next === 'organize' ? 'organize' : 'cleanup');
+    if (next === 'organize') setOrganizing(true);
+  };
   // On a phone, the tab showing. Clean up and Organize are the two areas; turning to the tab showing goes back to its first screen.
   const [tab, setTab] = useState<TabId>('cleanup');
   const turnToTab = (next: TabId) => {
@@ -106,7 +118,7 @@ export default function HomePage() {
   const [helpOpen, setHelpOpen] = useState(false);
   // About, open at the topic it was opened for.
   const [aboutOpen, setAboutOpen] = useState<AboutTopic>();
-  const [receiveOpen, setReceiveOpen] = useState(false);
+  const [pairOpen, setPairOpen] = useState(false);
   // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
   // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
@@ -174,6 +186,8 @@ export default function HomePage() {
     fetchGroupTotals().then(
       t => {
         if (!onPhone) { push(`Scan finished: ${groupsOf(t.duplicates, 'duplicate')} and ${groupsOf(t.similar, 'similar')}`, 'ok'); return; }
+        // First launch says what its first scan found on a screen of its own.
+        if (firstScanShown()) return;
         // A phone shows its library once the scan is done, and Review takes the person to what was found.
         setTab('library');
         push(found(t), 'ok', t.copies + t.similar > 0 ? { label: 'Review', run: () => { setArea('clean'); setTab('cleanup'); } } : undefined);
@@ -219,6 +233,15 @@ export default function HomePage() {
   const tickedGroups = [...ticked.values()].map(g => items.find(x => x.key === g.key) ?? g);
   const tickedFiles = tickedGroups.reduce((n, g) => n + g.members.filter(m => !m.photo.kept).length, 0);
   const tickedBytes = tickedGroups.reduce((n, g) => n + g.reclaimableBytes, 0);
+  // Every removal asks the plan first: more than the free plan has left today opens its own question, with the groups that fit.
+  const plan = usePlan().data;
+  const copiesOf = (g: DuplicateGroupDto) => g.members.filter(m => !m.photo.kept).length;
+  function ask(next: Pending & { scope: 'all' | 'group' | 'copy' | 'ticked' }) {
+    const count = next.scope === 'all' ? next.count : next.scope === 'copy' ? 1 : next.scope === 'group' ? copiesOf(next.group) : tickedFiles;
+    if (!overLimit(plan, count)) { setPending(next); return; }
+    const groups = next.scope === 'all' ? items : next.scope === 'group' ? [next.group] : next.scope === 'ticked' ? tickedGroups : [];
+    setPending({ scope: 'limit', count, some: someGroups(groups, plan!.leftToday!) });
+  }
   function turnPage(next: number) { setPage(next); setSelection({ index: 0 }); setCopyIndex(0); }
 
   const openExternally = (photo: PhotoDto) => run(() => openInViewer(photo.id));
@@ -261,8 +284,8 @@ export default function HomePage() {
     if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}${stays}`, 'ok', undoAction(result.batchId, kind, going.length === 1 ? going[0].photo.fileName : undefined));
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
-  const removeTicked = () => run(async () => {
-    const result = await removeGroups([...ticked.keys()], mode);
+  const removeTicked = (keys = [...ticked.keys()]) => run(async () => {
+    const result = await removeGroups(keys, mode);
     setPending(undefined);
     setCopyIndex(0);
     setTicked(new Map());
@@ -321,7 +344,8 @@ export default function HomePage() {
   }
   const offline = !!(groups.error || status.error);
   const cancel = () => setPending(undefined);
-  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.</>;
+  const limit = limitLine(plan);
+  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.{limit && ` ${limit}`}</>;
   const best = mode === 'similar' ? 'best shot' : 'original';
   // Once there is no group left to review, a narrow screen goes back to the list.
   const showReview = reviewing && selected !== undefined;
@@ -371,7 +395,7 @@ export default function HomePage() {
                     </p>
                     <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
                   </div>
-                  <button type="button" disabled={busy || removable === 0} onClick={() => setPending({ scope: 'all', count: removable, bytes: reclaimable })}
+                  <button type="button" disabled={busy || removable === 0} onClick={() => ask({ scope: 'all', count: removable, bytes: reclaimable })}
                     className="pill-rose my-auto h-11 shrink-0 px-[22px] text-[15px] max-lg:order-2">Delete all duplicates</button>
                 </>
               ) : (
@@ -389,14 +413,14 @@ export default function HomePage() {
                       <span className="font-semibold">{ticked.size.toLocaleString()} {ticked.size === 1 ? 'group' : 'groups'} selected</span>
                       <span className="text-t2"> · {tickedFiles > 0 ? `${files(tickedFiles)}, ${formatBytes(tickedBytes)}` : 'every copy is marked keep'}</span>
                     </span>
-                    <button type="button" disabled={busy || tickedFiles === 0} onClick={() => setPending({ scope: 'ticked' })} className="pill-rose h-9 px-4 text-[13.5px]">Delete their {mode === 'similar' ? 'similar shots' : 'duplicates'}</button>
+                    <button type="button" disabled={busy || tickedFiles === 0} onClick={() => ask({ scope: 'ticked' })} className="pill-rose h-9 px-4 text-[13.5px]">Delete their {mode === 'similar' ? 'similar shots' : 'duplicates'}</button>
                     <button type="button" onClick={() => setTicked(new Map())} className="pill-outline h-9 px-3.5 text-[13.5px] font-medium">Clear</button>
                   </div>
                 )} />
               <ReviewPanel className={showReview ? 'flex' : 'hidden lg:flex'} onBack={() => setReviewing(false)} group={selected} mode={mode} busy={busy} copyIndex={copyIndex} onSelectCopy={setCopyIndex}
                 onCompare={() => selected && setComparing(selected.key)} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
-                onDeleteCopy={member => selected && setPending({ scope: 'copy', group: selected, member })}
-                onDeleteGroup={group => setPending({ scope: 'group', group })} />
+                onDeleteCopy={member => selected && ask({ scope: 'copy', group: selected, member })}
+                onDeleteGroup={group => ask({ scope: 'group', group })} />
             </div>
           </>
         );
@@ -412,14 +436,13 @@ export default function HomePage() {
           onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} />
       ) : (
         <>
-        <TopBar area={area} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
+        <TopBar plan={plan} area={area} fresh={settings.phonesSeen ? [] : ['phones']} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
           errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
           onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
           {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
           {menuOpen && (
             <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
-              onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase}
-              onReceive={() => setReceiveOpen(true)} />
+              onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase} />
           )}
           {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
 
@@ -430,7 +453,8 @@ export default function HomePage() {
             <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} unit={settings.distanceUnit} notify={push} /></div>
           )}
 
-          {area === 'organize' ? null : cleanScreen}
+          {area === 'phones' && <PhonesView notify={push} onPair={() => setPairOpen(true)} />}
+          {area === 'clean' && cleanScreen}
         </main>
         </>
       )}
@@ -438,7 +462,8 @@ export default function HomePage() {
 
       {compared && (
         <PhotoWindow key={compared.key} original={compared.keeper} member={compared.members[comparedIndex]} index={comparedIndex} count={compared.members.length} mode={mode} busy={busy}
-          onClose={() => setComparing(undefined)} onSelectCopy={setCopyIndex} onToggleKeep={toggleKeep} onRemove={removeOne} onOpenInViewer={openExternally} />
+          onClose={() => setComparing(undefined)} onSelectCopy={setCopyIndex} onToggleKeep={toggleKeep} onOpenInViewer={openExternally}
+          onRemove={(photo, stays) => (overLimit(plan, 1) ? setPending({ scope: 'limit', count: 1, some: { keys: [], count: 0 } }) : removeOne(photo, stays))} />
       )}
 
       {pending?.scope === 'all' && (
@@ -457,11 +482,15 @@ export default function HomePage() {
       )}
       {pending?.scope === 'ticked' && (
         <ConfirmDialog busy={busy} title={`Delete the ${mode === 'similar' ? 'similar shots' : 'duplicates'} of ${ticked.size.toLocaleString()} ${ticked.size === 1 ? 'group' : 'groups'}?`}
-          confirmLabel={`Delete ${files(tickedFiles)}`} note={note} onCancel={cancel} onConfirm={removeTicked}>
+          confirmLabel={`Delete ${files(tickedFiles)}`} note={note} onCancel={cancel} onConfirm={() => removeTicked()}>
           <p>{files(tickedFiles)} taking {formatBytes(tickedBytes)} will be removed.</p>
           <p>The {best} of each group stays. Copies you marked keep are skipped.</p>
           {mode === 'similar' && <p>These are different shots or edited versions, not copies of one file.</p>}
         </ConfirmDialog>
+      )}
+      {pending?.scope === 'limit' && (
+        <LimitDialog plan={plan!} count={pending.count} label={mode === 'similar' ? 'similar shots' : 'duplicates'} partial={pending.some.count} busy={busy}
+          onCancel={cancel} onPartial={() => removeTicked(pending.some.keys)} />
       )}
       {pending?.scope === 'clear' && (
         <ConfirmDialog busy={busy} tone="brand" title="Clear the scan results?" confirmLabel="Clear results" onCancel={cancel} onConfirm={clear}
@@ -505,7 +534,7 @@ export default function HomePage() {
       {helpOpen && <HelpWindow onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {aboutOpen && <AboutWindow start={aboutOpen} onClose={() => setAboutOpen(undefined)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
-      {receiveOpen && <ReceiveWindow folder={loadOrganizeRoot() || loadLastScan().root} notify={push} onClose={() => setReceiveOpen(false)} />}
+      {pairOpen && <PairWindow notify={push} onClose={() => setPairOpen(false)} />}
 
       {!platform && <Toaster toasts={toasts} remove={remove} />}
     </div>

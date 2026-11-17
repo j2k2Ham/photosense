@@ -178,3 +178,64 @@ internal sealed class TransferApi(TestApi api)
     /// <summary>POST /receive/stop.</summary>
     public Task<ApiResponse> StopReceivingAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "receive/stop");
 }
+
+/// <summary>The addresses of the plan, by the names of the endpoints behind them.</summary>
+internal sealed class PlanApi(TestApi api)
+{
+    /// <summary>GET /plan.</summary>
+    public Task<ApiResponse> GetAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "plan");
+    /// <summary>POST /plan/buy.</summary>
+    public Task<ApiResponse> BuyAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "plan/buy");
+    /// <summary>POST /plan/restore.</summary>
+    public Task<ApiResponse> RestoreAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "plan/restore");
+    /// <summary>POST /plan/manage.</summary>
+    public Task<ApiResponse> ManageAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "plan/manage");
+}
+
+/// <summary>The addresses of pairing a phone with a computer, and of what a scan found, by the names of the endpoints behind them.</summary>
+internal sealed class PairingApi(TestApi api)
+{
+    /// <summary>POST /pairing/open.</summary>
+    public Task<ApiResponse> OpenAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/open");
+    /// <summary>POST /pairing/close.</summary>
+    public Task<ApiResponse> CloseAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/close");
+    /// <summary>POST /pairing/scan.</summary>
+    public Task<ApiResponse> ScanAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/scan");
+    /// <summary>POST /pairing/code.</summary>
+    public Task<ApiResponse> CodeAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/code");
+    /// <summary>GET /pairing/state.</summary>
+    public Task<ApiResponse> StateAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/state");
+    /// <summary>POST /pairing/confirm.</summary>
+    public Task<ApiResponse> ConfirmAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/confirm");
+    /// <summary>POST /pairing/stop.</summary>
+    public Task<ApiResponse> StopAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/stop");
+    /// <summary>GET /scan/found.</summary>
+    public Task<ApiResponse> FoundAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "scan/found");
+}
+
+/// <summary>The backup addresses, by the names of the endpoints that answer them.</summary>
+internal sealed class BackupApi(TestApi api)
+{
+    /// <summary>GET /backup.</summary>
+    public Task<ApiResponse> StateAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup");
+    /// <summary>POST /backup/start.</summary>
+    public Task<ApiResponse> StartAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/start");
+    /// <summary>POST /backup/pause.</summary>
+    public Task<ApiResponse> PauseAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/pause");
+    /// <summary>POST /backup/auto.</summary>
+    public Task<ApiResponse> AutomaticAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/auto");
+    /// <summary>POST /backup/settings.</summary>
+    public Task<ApiResponse> SettingsAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/settings");
+    /// <summary>GET /backup/library.</summary>
+    public Task<ApiResponse> LibraryAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/library");
+    /// <summary>GET /backup/safe.</summary>
+    public Task<ApiResponse> SafeAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/safe");
+    /// <summary>POST /backup/remove.</summary>
+    public Task<ApiResponse> RemoveAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/remove");
+    /// <summary>GET /backup/phones.</summary>
+    public Task<ApiResponse> PhonesAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/phones");
+    /// <summary>POST /backup/phones/{id}/folder.</summary>
+    public Task<ApiResponse> FolderAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/folder");
+    /// <summary>POST /backup/phones/{id}/pause.</summary>
+    public Task<ApiResponse> PausePhoneAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/pause");
+}

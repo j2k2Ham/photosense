@@ -26,6 +26,8 @@ public class PhotoStorageOptions
     public string DatabasePath { get; set; } = "photosense.db";
     /// <summary>Where preview images are cached. Defaults to a folder beside the database.</summary>
     public string ThumbnailPath { get; set; } = string.Empty;
+    /// <summary>The folder each paired phone's backups get a folder in. Defaults to PhotoSense in the person's Pictures.</summary>
+    public string BackupPath { get; set; } = string.Empty;
     /// <summary>Set to CameraOriginal (PhotoStorage__KeepFormat) to keep HEIC originals instead of their JPEG conversions.</summary>
     public FormatPreference KeepFormat { get; set; } = FormatPreference.WidelyCompatible;
 
@@ -46,6 +48,11 @@ public class PhotoStorageOptions
 
     /// <summary>The folder the database is in.</summary>
     public string ResolveDatabaseFolder() => Path.GetDirectoryName(ResolveDatabasePath()) ?? DefaultDataFolder;
+
+    /// <summary>The full path of the folder each paired phone's backups get a folder in.</summary>
+    /// <param name="pictures">The person's Pictures folder.</param>
+    public string ResolveBackupPath(string pictures)
+        => string.IsNullOrWhiteSpace(BackupPath) ? Path.Combine(pictures, "PhotoSense") : Path.GetFullPath(BackupPath, pictures);
 
     /// <summary>The full path of the folder previews are cached in.</summary>
     public string ResolveThumbnailPath()

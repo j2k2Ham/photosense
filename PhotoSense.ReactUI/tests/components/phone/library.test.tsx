@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LIBRARY_PAGE, LibraryScreen } from '../../../components/phone/Library';
 import type { Album, Library, LibraryFilter } from '../../../lib/library';
 import type { PhoneFrame, Platform } from '../../../lib/phone';
-import type { OrganizeApplyDto, OrganizeFileDto } from '../../../types';
-import { organizeFile, organizePlace } from '../../fixtures';
-import { frame, inFrame } from './frame';
+import type { LibraryBackupDto, OrganizeApplyDto, OrganizeFileDto, SafeReviewDto } from '../../../types';
+import { organizeFile, organizePlace, plan, safeReview } from '../../fixtures';
+import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({
   usePhotoAccess: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), chooseMorePhotos: vi.fn(),
@@ -25,6 +25,9 @@ const library = (more: Partial<Library> = {}): Library => ({
   root: ROOT, files, listing: { root: ROOT, fromScan: true, places: [organizePlace({ area: 'West Glacier' })], files }, ...more,
 });
 
+// The plan's gate: no plan known, every removal going ahead, unless a test gives its own.
+let planGate = gate();
+beforeEach(() => { planGate = gate(); });
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset();
   api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } });
@@ -36,17 +39,17 @@ beforeEach(() => {
   api.undoChange.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
 });
 
-interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[] }
+interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[]; backup?: LibraryBackupDto; safe?: SafeReviewDto; onReview?: () => void }
 
 /** Library in a phone's frame, holding whether it is choosing as PhoneApp does. */
-function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false, made }: ShowProps = {}) {
+function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false, made, backup, safe, onReview }: ShowProps = {}) {
   const notify = vi.fn(), onSelecting = vi.fn(), onSend = vi.fn();
   function Holder() {
     const [selecting, setSelecting] = React.useState(start);
     const [filter, setFilter] = React.useState<LibraryFilter>('all');
-    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} onSend={onSend} />;
+    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} onSend={onSend} backup={backup} safe={safe} onReview={onReview} />;
   }
-  const view = inFrame(<Holder />, frame(platform, more));
+  const view = inFrame(<Holder />, frame(platform, more), planGate);
   return { ...view, notify, onSelecting, onSend };
 }
 
@@ -172,6 +175,18 @@ describe('choosing in Library', () => {
     await act(async () => toastAction(notify)());
     expect(api.undoChange).toHaveBeenCalledWith('b1');
     expect(notify).toHaveBeenLastCalledWith('Moved 2 items back.', 'ok');
+  });
+
+  it('on the free plan asks the plan first, deletes the largest when fewer are left, and says the removals left in the question', async () => {
+    planGate = gate({ plan: plan({ leftToday: 2 }), remove: vi.fn((_count: number, _label: string, run: (allowed: number) => void) => run(2)) });
+    show({ selecting: true });
+    for (const name of ['IMG_9154.HEIC', 'IMG_9080.MOV', 'IMG_9043.HEIC']) await userEvent.click(tile(name));
+    await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Delete' }));
+    expect(planGate.remove).toHaveBeenCalledWith(3, 'items', expect.any(Function));
+    const question = sheet('Delete 2 items?');
+    expect(question).toHaveTextContent('Free plan: 2 removals left today.');
+    await userEvent.click(within(question).getByRole('button', { name: 'Delete 2 items' }));
+    expect(api.removeOrganize).toHaveBeenCalledWith(ROOT, ['f1', 'f2']);
   });
 
   it('puts what is chosen in an album, each under a name nothing has, and Undo takes it back', async () => {
@@ -314,3 +329,48 @@ describe('the viewer', () => {
     expect(screen.queryByRole('dialog', { name: 'IMG_9154.HEIC' })).not.toBeInTheDocument();
   });
 });
+
+describe('Library, once the phone backs up to a computer', () => {
+  const backup = (more: Partial<LibraryBackupDto> = {}): LibraryBackupDto => ({ computer: 'Studio iMac', onComputer: ['f1', 'f3'], waiting: ['f2'], lastChecked: new Date().toISOString(), ...more });
+
+  it('says how many are on the computer and how much removing them frees, Review opens Safe to delete, and it can be hidden', async () => {
+    const onReview = vi.fn();
+    show({ backup: backup(), safe: safeReview(), onReview });
+    const banner = screen.getByRole('region', { name: 'On Studio iMac' });
+    expect(banner).toHaveTextContent('6,561 items are on Studio iMacRemove them from this iPhone to free up to 31.1 GB.');
+    await userEvent.click(within(banner).getByRole('button', { name: 'Review' }));
+    expect(onReview).toHaveBeenCalledOnce();
+    await userEvent.click(within(banner).getByRole('button', { name: 'Hide' }));
+    expect(screen.queryByRole('region', { name: 'On Studio iMac' })).not.toBeInTheDocument();
+  });
+
+  it('says one is on the computer, on a phone, and has no banner while nothing is or while choosing', () => {
+    const { again } = show({ backup: backup(), safe: safeReview({ checked: { count: 1, bytes: 1 } }), platform: 'android' });
+    expect(screen.getByRole('region', { name: 'On Studio iMac' })).toHaveTextContent('1 item is on Studio iMacRemove them from this phone');
+    again(<LibraryScreen library={library()} selecting={false} onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()} backup={backup()} safe={safeReview({ checked: { count: 0, bytes: 0 } })} />);
+    expect(screen.queryByRole('region', { name: 'On Studio iMac' })).not.toBeInTheDocument();
+    again(<LibraryScreen library={library()} selecting onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()} backup={backup()} safe={safeReview()} />);
+    expect(screen.queryByRole('region', { name: 'On Studio iMac' })).not.toBeInTheDocument();
+  });
+
+  it('ticks what is on the computer, filters by it and by what waits, and says when it was checked', async () => {
+    show({ backup: backup() });
+    const filters = within(screen.getByRole('group', { name: 'Show' })).getAllByRole('button');
+    expect(filters.map(b => b.textContent)).toEqual(['All 3', 'On Studio iMac 2', 'Waiting 1', 'Not organized 2', 'No location 2', 'Videos 1']);
+    expect(within(tile('IMG_9154.HEIC')).getByRole('img', { name: 'On the computer' })).toBeInTheDocument();
+    expect(within(tile('IMG_9080.MOV')).queryByRole('img', { name: 'On the computer' })).not.toBeInTheDocument();
+    expect(screen.getByText(/^On Studio iMac, checked today at /)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Waiting 1' }));
+    expect(screen.getAllByRole('button', { name: /^IMG_/ }).map(b => b.getAttribute('aria-label'))).toEqual(['IMG_9080.MOV']);
+    await userEvent.click(screen.getByRole('button', { name: 'On Studio iMac 2' }));
+    expect(screen.getAllByRole('button', { name: /^IMG_/ }).map(b => b.getAttribute('aria-label'))).toEqual(['IMG_9154.HEIC', 'IMG_9043.HEIC']);
+  });
+
+  it('with no computer, or never checked, has neither the filters nor the line', () => {
+    const { again } = show({ backup: backup({ computer: null }) });
+    expect(within(screen.getByRole('group', { name: 'Show' })).getAllByRole('button')).toHaveLength(4);
+    again(<LibraryScreen library={library()} selecting={false} onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()} backup={backup({ lastChecked: null })} />);
+    expect(screen.queryByText(/checked/)).not.toBeInTheDocument();
+  });
+});
+

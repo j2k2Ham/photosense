@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -54,6 +55,7 @@ public sealed class PhoneReceiving
     private readonly FileChanges _changes;
     private readonly string _name;
     private readonly TimeProvider _clock;
+    private readonly Subscription _plan;
     private readonly object _lock = new();
     private ReceiveState _state = new(ReceiveStage.Idle, null, null, 0, 0, 0, 0, 0, null, null);
     private IReadOnlyList<FoundPhone> _found = [];
@@ -65,10 +67,12 @@ public sealed class PhoneReceiving
     /// <param name="pairs">The devices this computer has been paired with.</param>
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="changes">Gives each arriving file a name nothing has yet.</param>
+    /// <param name="plan">Keeps the plan the phone says it has, which covers this computer too.</param>
     /// <param name="name">What this computer is called, as the phone shows it.</param>
     /// <param name="clock">Times how long the phone has been silent (<see cref="TimedConnection"/>).</param>
-    public PhoneReceiving(IPhoneFinder finder, IPairingStore pairs, IPhotoFileSystem files, FileChanges changes, string name, TimeProvider clock)
+    public PhoneReceiving(IPhoneFinder finder, IPairingStore pairs, IPhotoFileSystem files, FileChanges changes, Subscription plan, string name, TimeProvider clock)
     {
+        _plan = plan;
         _finder = finder;
         _pairs = pairs;
         _files = files;
@@ -140,10 +144,11 @@ public sealed class PhoneReceiving
         {
             await using var connection = await TimedConnection.WithinAsync(phone.Connect, _clock, ct);
             var stream = new TimedConnection(connection, _clock);
-            var linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ct);
+            var linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, invitation: null, strangers: true, ct);
             using var channel = linked.Channel;
             await channel.SendAsync(new JsonObject { ["t"] = "offer?" }, ct);
             var offer = await channel.ReceiveAsync(ct, "offer");
+            if (PlanMessage.Read(offer["plan"]) is { } plan) await _plan.ShareFromAsync(linked.Other.Name, plan, ct);
             var files = (offer["files"] as JsonArray ?? []).OfType<JsonObject>().Select(f => (Id: Wire.Text(f, "id"), Name: Plain(Wire.Text(f, "name")), Size: Size(f))).ToList();
             Set(s => s with { Stage = ReceiveStage.Receiving, Code = null, Phone = linked.Other.Name, Total = files.Count, TotalBytes = files.Sum(f => f.Size) });
 

@@ -82,10 +82,10 @@ describe('what Clean up says on a phone', () => {
   it('asks before every duplicate goes, with what they take', () => {
     expect(allQuestion(264, 795 * 1024 ** 2, android)).toEqual({
       title: 'Delete all duplicates?',
-      lines: ['264 copies go to Pictures/PhotoSense Removed (795.0 MB).', 'The best copy of each picture or video stays. Copies marked keep are skipped.', 'Similar shots are not included.'],
+      lines: ['264 copies go to Pictures/PhotoSense Removed (795.0 MB), where Undo can still bring them back.', 'The best copy of each picture or video stays. Copies marked keep are skipped.', 'Similar shots are not included.'],
       button: 'Delete 264 duplicates',
     });
-    expect(allQuestion(1, 1024, ios).lines[0]).toBe('1 copy goes to PhotoSense Removed (1 KB).');
+    expect(allQuestion(1, 1024, ios).lines[0]).toBe('1 copy goes to PhotoSense Removed (1 KB), where Undo can still bring it back.');
     expect(allQuestion(1, 1024, ios).button).toBe('Delete 1 duplicate');
   });
 

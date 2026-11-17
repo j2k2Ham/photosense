@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { appIconUrl } from '../../lib/apiClient';
 import { PhoneContext, useForm, WORDS, type Foot, type PhoneFrame, type Platform, type TabId } from '../../lib/phone';
 import type { Toast } from '../Toaster';
-import { CleanUpIcon, FolderIcon, LibraryIcon, SendIcon, SidebarIcon } from './Icons';
+import { BackupIcon, CleanUpIcon, FolderIcon, LibraryIcon, SidebarIcon } from './Icons';
 import { PhoneToaster } from './PhoneToaster';
 
 /** The four tabs, in their order, with their names and icons. */
@@ -10,7 +10,7 @@ export const TABS: readonly { readonly id: TabId; readonly name: string; readonl
   { id: 'library', name: 'Library', Icon: LibraryIcon },
   { id: 'cleanup', name: 'Clean up', Icon: CleanUpIcon },
   { id: 'organize', name: 'Organize', Icon: FolderIcon },
-  { id: 'send', name: 'Send', Icon: SendIcon },
+  { id: 'backup', name: 'Backup', Icon: BackupIcon },
 ];
 
 interface Props {

@@ -1,23 +1,24 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
-import { eraseRemoved, openPhotoSettings, useOrganizeBatches, usePhotoAccess, useRemoved } from '../../lib/apiClient';
+import { backUpIfDue, eraseRemoved, openPhotoSettings, startBackup, useBackup, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview } from '../../lib/apiClient';
 import type { AppSettings } from '../../lib/settings';
 import type { AboutTopic } from '../AboutWindow';
 import type { ThemeChoice } from '../../lib/theme';
 import { useCleanUp } from '../../lib/cleanup';
-import type { ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
+import type { SafeRemovalDto, ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
 import type { Toast, ToastAction, ToastKind } from '../Toaster';
 import { CleanUpScreen } from './CleanUp';
-import { useFirstRun, usePhoneScan } from './FirstRun';
+import { Pair, useFirstRun, usePhoneScan } from './FirstRun';
+import { BackupScreen, SafeToDelete, SpaceFreed } from './Backup';
 import { LibraryScreen } from './Library';
-import { useLibrary, type Album, type LibraryFilter } from '../../lib/library';
+import { items as itemsSaid, useLibrary, type Album, type LibraryFilter } from '../../lib/library';
 import { useOrganize } from '../../lib/phoneOrganize';
-import { useSend } from '../../lib/send';
 import { OrganizeScreen, RecentSheet, undoMove } from './Organize';
-import { SendScreen } from './Send';
 import { PhoneShell } from './PhoneShell';
 import { DeletePermanently, items, SettingsSheet } from './SettingsSheet';
+import { PlanProvider, usePlanSheet } from './ProSheet';
+import { SubscriptionScreen } from './Subscription';
 
 interface Props {
   readonly platform: Platform;
@@ -30,7 +31,7 @@ interface Props {
   readonly theme: ThemeChoice;
   readonly version?: string;
   readonly errorCount: number;
-  /** How the person has set PhotoSense to behave: the unit of distance, and whether Delete permanently asks twice. */
+  /** How the person has set PhotoSense to behave: the unit of distance, whether Delete permanently asks twice, and the trial's reminder. */
   readonly settings: AppSettings;
   /** A scan is under way. */
   readonly scanning: boolean;
@@ -55,12 +56,13 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /**
  * PhotoSense on a phone or tablet: the four tabs in the shell, each with its header and the gear that opens Settings,
  * with Welcome, the photo access screen and Scanning over them when they are called for. A phone scans its whole
- * library, the one folder it has.
+ * library, the one folder it has, and backs up to the computer it was paired with, by itself when one is due as the app
+ * opens.
  */
 export function PhoneApp(props: Props) {
   const { platform, tab, status, notice, toasts, theme, version, errorCount, removeToast, notify } = props;
   const { starting, scan } = usePhoneScan(props.onStarted, notify);
-  const cover = useFirstRun({ scanning: props.scanning, progress: props.progress, starting, scan, onStop: props.onStopScan, notify });
+  const cover = useFirstRun({ scanning: props.scanning, progress: props.progress, starting, scan, onStop: props.onStopScan, onCleanUp: () => props.onTab('cleanup'), notify });
   // The library is read once the first run is through, and again after each scan; Library keeps whether it is choosing.
   const library = useLibrary(!cover);
   const [selecting, setSelecting] = useState(false);
@@ -68,8 +70,10 @@ export function PhoneApp(props: Props) {
   // Albums or folders named in Organize, made once files are first put in them from Library.
   const [made, setMade] = useState<readonly Album[]>([]);
   const libraryCount = library.listing && library.files.length.toLocaleString();
-  // The sheet over everything: Settings, or what a row of it leads to.
-  const [sheet, setSheet] = useState<'settings' | 'erase' | 'recent'>();
+  // What is over everything: Settings, or what a row of it leads to.
+  const [sheet, setSheet] = useState<'settings' | 'subscription' | 'erase' | 'recent' | 'safe' | 'pair'>();
+  // What Safe to delete last deleted, for Space freed.
+  const [freed, setFreed] = useState<{ removed: SafeRemovalDto; partial: boolean }>();
   const openSettings = useCallback(() => setSheet('settings'), []);
   const closeSheet = () => setSheet(undefined);
   // On a phone a review is pushed over the list, and Back, or a swipe from the edge, takes it back; a tablet shows both.
@@ -84,8 +88,23 @@ export function PhoneApp(props: Props) {
   const endPreview = () => organize.look(undefined);
   useBackLayer(previewing, endPreview);
   const pushed = reviewing || previewing;
-  // Send keeps its offer while other tabs show, so that a move finishes wherever the person is.
-  const send = useSend(library, platform, tab === 'send', notify, WORDS[platform].bin);
+  // Backing up: asked while the app shows its tabs; a backup due runs by itself as they first show.
+  const ready = !cover;
+  const backup = useBackup(ready).data;
+  const paired = !!backup?.computer;
+  const libraryBackup = useLibraryBackup(ready && paired).data;
+  const safe = useSafeReview((ready && paired) || sheet === 'safe').data;
+  useEffect(() => { if (ready) void backUpIfDue().catch(() => undefined); }, [ready]);
+  useBackLayer(sheet === 'pair', () => setSheet(undefined));
+  async function send(ids: string[]) {
+    try {
+      await startBackup(ids);
+      props.onTab('backup');
+      notify(`Sending ${itemsSaid(ids.length)} to ${backup?.computer}.`, 'ok');
+    } catch (e) {
+      notify(said(e), 'error');
+    }
+  }
   // Tapping the tab showing goes back to its first screen.
   const onTab = (next: TabId) => {
     if (next === tab && next === 'cleanup') endReview();
@@ -100,6 +119,8 @@ export function PhoneApp(props: Props) {
   const batches = useOrganizeBatches().data;
   const [busy, setBusy] = useState(false);
   const bin = WORDS[platform].bin;
+  // The plan: every removal asks it first, and the Pro sheet opens when the free plan has too few left today.
+  const { gate, sheet: proSheet } = usePlanSheet(notify);
 
   async function erase(askOnce: boolean) {
     setBusy(true);
@@ -123,25 +144,42 @@ export function PhoneApp(props: Props) {
   }
 
   return (
+    <PlanProvider value={gate}>
     <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : tab === 'library' && selecting ? 'selection' : 'tabs'} counts={{ library: libraryCount, cleanup: removable > 0 ? removable.toLocaleString() : undefined, organize: organize.toMove > 0 ? organize.toMove.toLocaleString() : undefined }} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
       notice={notice} cover={cover}
       screens={{
         library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
-          onSend={ids => { send.choose(ids); props.onTab('send'); }} />,
+          backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} />,
         cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
-        send: <SendScreen send={send} reading={!!library.reading || !library.listing} onChoose={() => { setSelecting(true); props.onTab('library'); }} />,
+        backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')} />,
       }}
       sheet={<>
         {sheet === 'settings' && (
           <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
+            plan={gate.plan} onSubscription={() => setSheet('subscription')}
+            computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
             onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
             onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
             onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} />
         )}
+        {sheet === 'subscription' && gate.plan && (
+          <SubscriptionScreen plan={gate.plan} remind={props.settings.remindTrialEnd} onRemind={remindTrialEnd => props.onSettings({ remindTrialEnd })} notify={notify}
+            onTerms={() => props.onAbout('terms')} onPrivacy={() => props.onAbout('privacy')} onBack={() => setSheet('settings')} />
+        )}
         {sheet === 'erase' && removed && <DeletePermanently removed={removed} askTwice={props.settings.eraseAskTwice} busy={busy} onErase={askOnce => void erase(askOnce)} onCancel={closeSheet} />}
         {sheet === 'recent' && <RecentSheet batches={batches ?? []} root={library.root} busy={busy} onUndo={b => void undo(b.id)} onClose={closeSheet} />}
+        {sheet === 'safe' && (
+          <SafeToDelete safe={safe} notify={notify} onBack={closeSheet} onRemoved={(removed, partial) => { setSheet(undefined); setFreed({ removed, partial }); }} />
+        )}
+        {sheet === 'pair' && <Pair later notify={notify} onNext={closeSheet} />}
+        {freed && (
+          <SpaceFreed removed={freed.removed} partial={freed.partial} computer={backup?.computer ?? 'the computer'} folder={backup?.folder ?? ''}
+            onPro={() => gate.offer('none')} onDone={() => { setFreed(undefined); props.onTab('library'); }} />
+        )}
+        {proSheet}
       </>} />
+    </PlanProvider>
   );
 }

@@ -42,8 +42,8 @@ public sealed class PairingTests
     private async Task<(Linked Phone, Linked Computer)> PairAsync(Func<string, Device, CancellationToken, Task<bool>> phoneAsks, Func<string, Device, CancellationToken, Task<bool>> computerAsks, CancellationToken ct)
     {
         var (near, far) = await Loopback.PairAsync(ct);
-        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, phoneAsks, ct));
-        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, computerAsks, ct));
+        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, phoneAsks, null, ct));
+        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, computerAsks, null, true, ct));
         return (await phone, await computer);
     }
 
@@ -105,8 +105,8 @@ public sealed class PairingTests
     {
         await PairedBeforeAsync(RandomNumberGenerator.GetBytes(32), RandomNumberGenerator.GetBytes(32), ct);
         var (near, far) = await Loopback.PairAsync(ct);
-        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, NeverAsked, CancellationToken.None));
-        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, NeverAsked, CancellationToken.None));
+        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, NeverAsked, null, CancellationToken.None));
+        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, NeverAsked, null, true, CancellationToken.None));
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => phone))!.Message).IsEqualTo("DESKTOP-1 is not the computer this phone was paired with. Pair them again.");
         await Assert.That((await Assert.ThrowsAsync<TransferException>(() => computer))!.Message).IsEqualTo("The other device stopped answering.");
     }
@@ -116,8 +116,8 @@ public sealed class PairingTests
     {
         var (near, far) = await Loopback.PairAsync(ct);
         var computerAnswer = new TaskCompletionSource<bool>();
-        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, Answering("phone", same: false), CancellationToken.None));
-        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, (_, _, _) => computerAnswer.Task, CancellationToken.None));
+        var phone = Ending(near, Pairing.PhoneAsync(near, Phone, _phonePairs, Answering("phone", same: false), null, CancellationToken.None));
+        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, (_, _, _) => computerAnswer.Task, null, true, CancellationToken.None));
         // The phone said no while the computer still asks; the computer says yes after.
         await Task.Delay(100, ct);
         computerAnswer.SetResult(true);
@@ -160,7 +160,7 @@ public sealed class PairingTests
     private async Task<(Task Phone, Task<Linked> Computer)> WithPhoneAsync(Func<Stream, Task> phone, CancellationToken ct)
     {
         var (near, far) = await Loopback.PairAsync(ct);
-        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, Answering("computer"), CancellationToken.None));
+        var computer = Ending(far, Pairing.ComputerAsync(far, Computer, _computerPairs, Answering("computer"), null, true, CancellationToken.None));
         return (Holding(near, phone(near), computer), computer);
     }
 
@@ -217,7 +217,7 @@ public sealed class PairingTests
     public async Task A_Computer_Whose_Key_Is_Not_A_Key_Is_Stopped(CancellationToken ct)
     {
         var (near, far) = await Loopback.PairAsync(ct);
-        var phone = Pairing.PhoneAsync(near, Phone, _phonePairs, NeverAsked, CancellationToken.None);
+        var phone = Pairing.PhoneAsync(near, Phone, _phonePairs, NeverAsked, null, CancellationToken.None);
         await Wire.ReceiveAsync(far, "phone", CancellationToken.None);
         await Wire.SendAsync(far, new JsonObject { ["t"] = "hello", ["id"] = "someone", ["name"] = "Someone's computer", ["key"] = Base64([1, 2, 3]) }, CancellationToken.None);
         await Wire.ReceiveAsync(far, "key", CancellationToken.None);

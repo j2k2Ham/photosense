@@ -7,10 +7,19 @@ let made = 0;
 let listening = false;
 // Entries of layers closed some other way than by Back, not yet taken out of the history.
 let unwanted = 0;
+// Steps back the page has taken itself and whose arrival the browser has not yet said; and the entries of layers opened
+// meanwhile, put in the history once they have arrived, so that arriving does not close them.
+let going = 0;
+const waiting: number[] = [];
 
 // Each entry is numbered as it is made. Going back to one closes every layer made after it: one for a Back, none for an
 // entry the page took out itself, and all of them should a Back land on an entry left over from before.
 function onPop(e: PopStateEvent) {
+  if (going > 0) {
+    going--;
+    if (going === 0) for (const entry of waiting.splice(0)) history.pushState({ photosense: entry }, '');
+    return;
+  }
   const landed = (e.state as { photosense?: number } | null)?.photosense ?? 0;
   while ((layers.at(-1)?.entry ?? 0) > landed) layers.pop()!.close();
 }
@@ -19,7 +28,9 @@ function onPop(e: PopStateEvent) {
 function takeOut() {
   const n = unwanted;
   unwanted = 0;
-  if (n > 0) history.go(-n);
+  if (n === 0) return;
+  going++;
+  history.go(-n);
 }
 
 /**
@@ -39,14 +50,18 @@ export function useBackLayer(open: boolean, onBack: () => void): void {
     if (unwanted > 0) {
       unwanted--;
       history.replaceState({ photosense: layer.entry }, '');
+    } else if (going > 0) {
+      waiting.push(layer.entry);
     } else {
       history.pushState({ photosense: layer.entry }, '');
     }
     return () => {
       const at = layers.indexOf(layer);
-      // Closed by Back, its entry has gone already; closed any other way, it is taken out.
+      // Closed by Back, its entry has gone already; closed any other way, it is taken out, or never put in.
       if (at < 0) return;
       layers.splice(at, 1);
+      const queued = waiting.indexOf(layer.entry);
+      if (queued >= 0) { waiting.splice(queued, 1); return; }
       unwanted++;
       queueMicrotask(takeOut);
     };

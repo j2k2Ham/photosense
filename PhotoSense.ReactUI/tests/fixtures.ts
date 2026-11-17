@@ -1,4 +1,4 @@
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto } from '../types';
+import type { BackupPhoneDto, BackupSettingsDto, BackupStateDto, SafeReviewDto, DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto, PlanDto, PlanOfferDto } from '../types';
 
 /** A picture as the server describes it; tests override only what they are about. */
 export function photo(overrides: Partial<PhotoDto> = {}): PhotoDto {
@@ -58,3 +58,44 @@ export function organizeFile(overrides: Partial<OrganizeFileDto> = {}): Organize
 export function organizePlace(overrides: Partial<OrganizePlaceDto> = {}): OrganizePlaceDto {
   return { town: 'Anaconda', state: 'Montana', country: 'US', latitude: 46.1283, longitude: -112.9423, ...overrides };
 }
+
+/** What the store sells, at the prices the design shows. */
+export const OFFERS: PlanOfferDto[] = [
+  { kind: 'yearly', price: '$19.99', amount: 19.99, currency: 'USD' },
+  { kind: 'monthly', price: '$2.99', amount: 2.99, currency: 'USD' },
+  { kind: 'lifetime', price: '$39.00', amount: 39, currency: 'USD' },
+  { kind: 'family', price: '$29.99', amount: 29.99, currency: 'USD' },
+];
+
+/** A plan as the service says it: the free plan with 38 of 50 left today, on an iPhone, unless the test says otherwise. */
+export function plan(overrides: Partial<PlanDto> = {}): PlanDto {
+  return { tier: 'free', kind: null, started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 12, leftToday: 38, offers: OFFERS, ...overrides };
+}
+
+/** How a phone backs up as it starts: by hand, with videos, keeping favorites and the last 30 days. */
+export const BACKUP_SETTINGS: BackupSettingsDto = { automatic: false, onlyWhileCharging: true, includeVideos: true, keepFavorites: true, keepRecent: true };
+
+/** A phone paired with Studio iMac, with 380 items waiting; tests override only what they are about. */
+export function backupState(overrides: Partial<BackupStateDto> = {}): BackupStateDto {
+  return {
+    stage: 'ready', computer: 'Studio iMac', folder: "Pictures/PhotoSense/Alex's iPhone", waiting: 380, waitingBytes: 2.1e9, onComputer: 6561, done: 0, total: 0, bytes: 0, totalBytes: 0,
+    lastChecked: null, lastBackup: null, strip: [], problem: null, settings: BACKUP_SETTINGS, ...overrides,
+  };
+}
+
+/** What Safe to delete could free on a 128 GB phone with 16 GB free; tests override only what they are about. */
+export function safeReview(overrides: Partial<SafeReviewDto> = {}): SafeReviewDto {
+  return {
+    computer: 'Studio iMac', folder: "Pictures/PhotoSense/Alex's iPhone", lastChecked: null, checked: { count: 6561, bytes: 31.1e9 }, favorites: { count: 214, bytes: 1.1e9 },
+    recent: { count: 349, bytes: 1.9e9 }, removable: { count: 5998, bytes: 28.1e9 }, storageTotal: 128e9, storageFree: 16e9, cloudPhotos: false, settings: BACKUP_SETTINGS, ...overrides,
+  };
+}
+
+/** A phone backing up to this computer, as Phones lists it; tests override only what they are about. */
+export function backupPhone(overrides: Partial<BackupPhoneDto> = {}): BackupPhoneDto {
+  return {
+    id: 'phone-1', name: "Alex's iPhone", kind: 'iPhone', folder: "Pictures/PhotoSense/Alex's iPhone", path: "C:\\Users\\alex\\Pictures\\PhotoSense\\Alex's iPhone", paused: false,
+    paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 6747, heldBytes: 32.1e9, safe: 5998, safeBytes: 28.1e9, arriving: null, events: [], ...overrides,
+  };
+}
+

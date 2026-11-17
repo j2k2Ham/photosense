@@ -24,6 +24,14 @@ public sealed class StorageSettingsTests
     }
 
     [Test]
+    public async Task Phones_Back_Up_Into_PhotoSense_In_The_Persons_Pictures_Or_The_Folder_The_Settings_Name(CancellationToken ct)
+    {
+        var pictures = Path.Combine(Path.GetTempPath(), "Pictures");
+        await Assert.That(Read().ResolveBackupPath(pictures)).IsEqualTo(Path.Combine(pictures, "PhotoSense"));
+        await Assert.That(Read("--PhotoStorage:BackupPath=Backups").ResolveBackupPath(pictures)).IsEqualTo(Path.Combine(pictures, "Backups"));
+    }
+
+    [Test]
     public async Task Settings_That_Name_No_Database_Are_Refused(CancellationToken ct)
     {
         var refused = Assert.Throws<OptionsValidationException>(() => Read("--PhotoStorage:DatabasePath= "));

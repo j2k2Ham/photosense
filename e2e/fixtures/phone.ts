@@ -4,15 +4,22 @@ import type { Page, Route } from '@playwright/test';
 
 const json = (route: Route, body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 
-export interface SendState {
-  stage: 'idle' | 'waiting' | 'comparing' | 'sending' | 'sent' | 'failed';
-  code: string | null; computer: string | null; done: number; total: number; bytes: number; totalBytes: number;
-  deletable: string[]; where: string | null; phone: string; problem: string | null; current: string | null;
+export interface BackupState {
+  stage: 'unpaired' | 'ready' | 'running' | 'paused' | 'failed';
+  computer: string | null; folder: string | null; waiting: number; waitingBytes: number; onComputer: number; done: number; total: number; bytes: number; totalBytes: number;
+  lastChecked: string | null; lastBackup: string | null; strip: { id: string; done: boolean }[]; problem: string | null;
+  settings: { automatic: boolean; onlyWhileCharging: boolean; includeVideos: boolean; keepFavorites: boolean; keepRecent: boolean };
 }
 
+/** What Safe to delete could free on the phone stood in for: 2 photos on a 128 GB phone with 16 GB free. */
+export const SAFE = {
+  computer: 'DESKTOP-1', folder: "Pictures/PhotoSense/Jamie's iPhone", lastChecked: null, checked: { count: 2, bytes: 6e9 }, favorites: { count: 0, bytes: 0 },
+  recent: { count: 0, bytes: 0 }, removable: { count: 2, bytes: 6e9 }, storageTotal: 128e9, storageFree: 16e9, cloudPhotos: false,
+};
+
 /**
- * A phone, as the page sees it: which program it is, what it may see of the photos, where its library is, and sending
- * to a computer. It is past its first run unless the test says otherwise.
+ * A phone, as the page sees it: which program it is, what it may see of the photos, where its library is, and backing
+ * up to a computer. It is past its first run unless the test says otherwise.
  */
 export class Phone {
   access: 'everything' | 'selected' | 'nothing';
@@ -22,13 +29,17 @@ export class Phone {
   root?: string;
   /** Whether this is the phone's first run, with Welcome; otherwise it has been through it already. */
   firstRun = false;
-  state: SendState = { stage: 'idle', code: null, computer: null, done: 0, total: 0, bytes: 0, totalBytes: 0, deletable: [], where: null, phone: "Jamie's iPhone", problem: null, current: null };
-  /** What the page asked of the phone, but where sending has got to. */
+  state: BackupState = {
+    stage: 'ready', computer: 'DESKTOP-1', folder: "Pictures/PhotoSense/Jamie's iPhone", waiting: 2, waitingBytes: 6e9, onComputer: 0, done: 0, total: 0, bytes: 0, totalBytes: 0,
+    lastChecked: null, lastBackup: null, strip: [], problem: null,
+    settings: { automatic: false, onlyWhileCharging: true, includeVideos: true, keepFavorites: true, keepRecent: true },
+  };
+  /** What the page asked of the phone's backup, but how it stands. */
   readonly asked: string[] = [];
 
   constructor(access: Phone['access'] = 'everything') { this.access = access; }
 
-  set(changes: Partial<SendState>) { this.state = { ...this.state, ...changes }; }
+  set(changes: Partial<BackupState>) { this.state = { ...this.state, ...changes }; }
 
   async attach(page: Page) {
     if (!this.firstRun) await page.addInitScript(() => { if (!localStorage.getItem('photosense-first-run')) localStorage.setItem('photosense-first-run', 'done'); });
@@ -46,43 +57,18 @@ export class Phone {
       if (what === 'open-settings') return route.fulfill({ status: 204 });
       return json(route, { access: this.access });
     });
-    await page.route('**/api/send/**', async route => {
-      const what = new URL(route.request().url()).pathname.split('/').pop()!;
-      if (what !== 'state') this.asked.push(`send/${what} ${route.request().postData() ?? ''}`.trim());
-      if (what === 'start') this.set({ stage: 'waiting', total: (JSON.parse(route.request().postData() ?? '{}').files ?? []).length });
-      if (what === 'stop') this.set({ stage: 'idle' });
-      // Numbers said to be different stop it, as the phone does.
-      if (what === 'confirm' && !JSON.parse(route.request().postData() ?? '{}').same) this.set({ stage: 'failed', code: null, problem: 'The numbers did not match, so nothing was sent. Try again, and look that both show the same number.' });
-      if (what === 'delete-sent') {
-        const deleted = this.state.deletable.length;
-        this.set({ deletable: [] });
-        return json(route, { deleted });
-      }
+    await page.route(url => url.pathname.includes('/api/backup'), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/backup').pop()!.replace(/^\//, '');
+      const body = route.request().postData();
+      if (route.request().method() === 'POST') this.asked.push(`${what} ${body ?? ''}`.trim());
+      if (what === 'library') return json(route, { computer: this.state.computer, onComputer: [], waiting: [], lastChecked: null });
+      if (what === 'safe') return json(route, { ...SAFE, settings: this.state.settings });
+      if (what === 'remove') return json(route, { removed: 2, bytes: 6e9, left: 0, storageTotal: 128e9, storageFreeBefore: 16e9 });
+      if (what === 'start') this.set({ stage: 'running', total: 2, totalBytes: 6e9 });
+      if (what === 'pause') this.set({ stage: 'paused' });
+      if (what === 'settings') this.set({ settings: JSON.parse(body!) });
       return json(route, this.state);
     });
   }
 }
 
-export interface ReceiveState {
-  stage: 'idle' | 'connecting' | 'comparing' | 'receiving' | 'done' | 'failed';
-  code: string | null; phone: string | null; done: number; total: number; bytes: number; totalBytes: number; alreadyThere: number; folder: string | null; problem: string | null;
-}
-
-/** A phone on the network offering photos, as the computer sees it. */
-export class PhoneNearby {
-  state: ReceiveState = { stage: 'idle', code: null, phone: null, done: 0, total: 0, bytes: 0, totalBytes: 0, alreadyThere: 0, folder: null, problem: null };
-  readonly asked: string[] = [];
-
-  set(changes: Partial<ReceiveState>) { this.state = { ...this.state, ...changes }; }
-
-  async attach(page: Page) {
-    await page.route('**/api/phones', route => json(route, { phones: [{ key: 'wifi:phone-1', name: "Jamie's iPhone", via: 'wifi' }] }));
-    await page.route('**/api/receive/**', async route => {
-      const what = new URL(route.request().url()).pathname.split('/').pop()!;
-      if (what !== 'state') this.asked.push(`receive/${what} ${route.request().postData() ?? ''}`.trim());
-      if (what === 'start') this.set({ stage: 'connecting', phone: "Jamie's iPhone", folder: JSON.parse(route.request().postData() ?? '{}').folder });
-      if (what === 'stop') this.set({ stage: 'failed', problem: 'Receiving was stopped. What had arrived is kept.' });
-      return json(route, this.state);
-    });
-  }
-}

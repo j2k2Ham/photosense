@@ -31,6 +31,14 @@ internal static class Stores
     public static IOrganizeBatchStore Batches(this LiteDatabase db) => On(db).GetRequiredService<IOrganizeBatchStore>();
     /// <summary>The devices paired with this one, each stamped from <paramref name="time"/>.</summary>
     public static IPairingStore Pairings(this LiteDatabase db, TimeProvider time) => On(db, time).GetRequiredService<IPairingStore>();
+    /// <summary>Each day's count of removals, and the plan a paired phone shared.</summary>
+    public static IPlanStore Plan(this LiteDatabase db) => On(db).GetRequiredService<IPlanStore>();
+
+    /// <summary>The phones backing up to a computer, kept in <paramref name="db"/>.</summary>
+    public static IBackupStore Backups(this LiteDatabase db) => On(db).GetRequiredService<IBackupStore>();
+
+    /// <summary>A phone's own record of its backups, kept in <paramref name="db"/>.</summary>
+    public static IBackupLedger Ledger(this LiteDatabase db) => On(db).GetRequiredService<IBackupLedger>();
     /// <summary>What has been read from each file for Organize.</summary>
     public static IMediaDetailsStore MediaDetails(this LiteDatabase db) => On(db).GetRequiredService<IMediaDetailsStore>();
 }

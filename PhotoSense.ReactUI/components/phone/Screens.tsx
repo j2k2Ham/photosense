@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import { useBackLayer } from '../../lib/backStack';
 import { usePhone } from '../../lib/phone';
 import { HeaderTextButton, IconButton } from './Controls';
 import { ArrowBackIcon, ChevronBackIcon, CloseIcon, GearIcon } from './Icons';
@@ -129,5 +130,38 @@ export function SplitView({ list, detail }: { readonly list: React.ReactNode; re
       <div className={`flex min-h-0 shrink-0 flex-col overflow-y-auto border-r border-sep ${ios ? 'w-[360px]' : 'w-[400px]'}`}>{list}</div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{detail}</div>
     </div>
+  );
+}
+
+interface LayerProps {
+  readonly label: string;
+  readonly children: React.ReactNode;
+  /** What stays at its foot while the rest scrolls, such as its main button. */
+  readonly footer?: React.ReactNode;
+  /** Takes it away: its back button, Back, a swipe from the edge, or Escape. */
+  onBack(): void;
+}
+
+/**
+ * A screen over every tab, as Settings and Subscription are: it slides in from the right, covers the tab bar, and goes
+ * back to the screen it was opened from. Messages and sheets still show over it.
+ */
+export function LayerScreen({ label, children, footer, onBack }: LayerProps) {
+  const { ios } = usePhone();
+  const back = useRef(onBack);
+  useLayoutEffect(() => { back.current = onBack; });
+  useBackLayer(true, () => back.current());
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') back.current(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return (
+    <section role="dialog" aria-modal aria-label={label} className={`fixed inset-x-0 z-40 flex animate-push-in flex-col bg-bg font-ui text-t1 ${ios ? 'inset-y-0' : 'bottom-[var(--safe-b)] top-[var(--safe-t)]'}`}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>
+      {footer && (
+        <div className={`flex shrink-0 flex-col gap-2 border-t border-sep px-4 pt-3 ${ios ? 'pb-[calc(var(--safe-b)+12px)]' : 'pb-4'}`}>{footer}</div>
+      )}
+    </section>
   );
 }

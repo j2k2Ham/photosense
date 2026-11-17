@@ -6,10 +6,11 @@ import { CleanUpScreen } from '../../../components/phone/CleanUp';
 import { useCleanUp } from '../../../lib/cleanup';
 import type { Platform } from '../../../lib/phone';
 import type { DuplicateGroupDto, GroupMode, ScanStatusDto } from '../../../types';
-import { frame, inFrame } from './frame';
+import { frame, gate, inFrame } from './frame';
 import { group, groupsPage, photo } from './groups';
+import { plan } from '../../fixtures';
 
-const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), setKept: vi.fn(), undoChange: vi.fn() }));
+const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), setKept: vi.fn(), undoChange: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 const ROOT = '/Photo Library';
@@ -27,6 +28,9 @@ function useVersion() {
 const sameBytes = () => group(photo('DLWL2718.MP4', { isVideo: true, fileSizeBytes: 4.5 * 1024 ** 2, durationSeconds: 47 }),
   [photo('DLWL2718 (8E01B7C2).MP4', { isVideo: true, fileSizeBytes: 4.5 * 1024 ** 2, durationSeconds: 47 }), photo('DLWL2718 (1).MP4', { isVideo: true, fileSizeBytes: 4.5 * 1024 ** 2, durationSeconds: 47 })], 'identical');
 
+// The plan's gate: no plan known, every removal going ahead, unless a test gives its own.
+let planGate = gate();
+beforeEach(() => { planGate = gate(); });
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset();
   groups = {
@@ -63,7 +67,7 @@ function show({ platform = 'ios', tablet = false, status, root = ROOT }: ShowPro
     const cleanUp = useCleanUp(tablet);
     return <CleanUpScreen cleanUp={cleanUp} root={root} status={status} notify={notify} onScanAgain={onScanAgain} />;
   }
-  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }));
+  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }), planGate);
   return { ...view, notify, onScanAgain };
 }
 
@@ -272,11 +276,36 @@ describe('deleting on a phone', () => {
     expect(sheet('Delete IMG_4299.HEIC?')).toBeInTheDocument();
   });
 
+  it('on the free plan with fewer left than there are duplicates, deletes the groups that free the most, as many as are left, saying how many are left', async () => {
+    planGate = gate({ plan: plan({ leftToday: 2 }), remove: vi.fn((_count: number, _label: string, run: (allowed: number) => void) => run(2)) });
+    api.removeGroups.mockResolvedValue({ removed: 1, bytes: 12 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: 'b3' });
+    const { notify } = show();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
+    expect(planGate.remove).toHaveBeenCalledWith(3, 'duplicates', expect.any(Function));
+    const asked = sheet('Delete 1 duplicate?');
+    expect(asked).toHaveTextContent('1 copy goes to PhotoSense Removed (12.0 MB), where Undo can still bring it back.');
+    expect(asked).toHaveTextContent('The largest go first. The best copy of each picture or video stays.');
+    expect(asked).toHaveTextContent('Free plan: 2 removals left today.');
+    await userEvent.click(within(asked).getByRole('button', { name: 'Delete 1 duplicate' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['group-IMG_4299.JPG'], 'duplicates');
+    expect(api.removeDuplicates).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenLastCalledWith('1 duplicate deleted. The best copy of each stays.', 'ok', expect.objectContaining({ label: 'Undo' }));
+  });
+
+  it('asks the plan before a copy goes, and says the removals left in the question', async () => {
+    planGate = gate({ plan: plan({ leftToday: 38 }) });
+    show();
+    await userEvent.click(rows()[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
+    expect(planGate.remove).toHaveBeenCalledWith(1, 'items', expect.any(Function));
+    expect(sheet('Delete IMG_4299.HEIC?')).toHaveTextContent('Free plan: 38 removals left today.');
+  });
+
   it('asks before deleting every duplicate, then says how many went, with Undo, and how many were left alone', async () => {
     const { notify } = show();
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     const asked = sheet('Delete all duplicates?');
-    expect(asked).toHaveTextContent('3 copies go to PhotoSense Removed (21.0 MB).');
+    expect(asked).toHaveTextContent('3 copies go to PhotoSense Removed (21.0 MB), where Undo can still bring them back.');
     expect(asked).toHaveTextContent('The best copy of each picture or video stays. Copies marked keep are skipped.');
     expect(asked).toHaveTextContent('Similar shots are not included.');
     api.removeDuplicates.mockResolvedValueOnce({ removed: 3, bytes: 1, skipped: 1, companions: 2, problems: ['IMG_1.JPG is open elsewhere.'], batchId: 'b2' });

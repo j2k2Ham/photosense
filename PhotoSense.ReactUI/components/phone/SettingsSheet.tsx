@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
+import { appIconUrl } from '../../lib/apiClient';
 import { DISTANCE_UNITS, type DistanceUnit } from '../../lib/distance';
 import { formatBytes } from '../../lib/format';
-import { deviceName, usePhone } from '../../lib/phone';
+import { planLine, planTitle } from '../../lib/plan';
+import { usePhone } from '../../lib/phone';
 import type { ThemeChoice } from '../../lib/theme';
-import type { PhotoAccessDto, RemovedFilesDto } from '../../types';
+import type { PhotoAccessDto, PlanDto, RemovedFilesDto } from '../../types';
 import { ListGroup, ListRow, PhoneSwitch, Segmented } from './Controls';
-import { ConfirmSheet, Sheet } from './Sheet';
+import { ChevronIcon } from './Icons';
+import { LayerScreen, PushedHeader } from './Screens';
+import { ConfirmSheet } from './Sheet';
 
 const UNITS = DISTANCE_UNITS.map(u => ({ id: u.value, label: u.name }));
 const THEMES = [{ id: 'auto', label: 'Auto' }, { id: 'dark', label: 'Dark' }, { id: 'light', label: 'Light' }] as const;
@@ -26,6 +30,14 @@ interface Props {
   readonly removed?: RemovedFilesDto;
   /** How many moves and deletions Undo can still put back, once known. */
   readonly moves?: number;
+  /** The plan, once the service has said. */
+  readonly plan?: PlanDto;
+  /** The computer the phone backs up to, and where its backups go there; null when it has none; absent until the phone has said. */
+  readonly computer?: { readonly name: string; readonly folder: string | null } | null;
+  /** Pairs with a computer. */
+  onPair(): void;
+  /** Opens the Subscription page. */
+  onSubscription(): void;
   onTheme(theme: ThemeChoice): void;
   onUnit(unit: DistanceUnit): void;
   /** Opens the phone's own settings for PhotoSense, where its access to the photos is changed. */
@@ -41,46 +53,76 @@ interface Props {
 }
 
 /**
- * Settings, from the gear: the theme and the unit of distance; the photos PhotoSense may see and scanning again; what
- * waits in PhotoSense Removed and Delete permanently; what was moved and what went wrong; and help, about and privacy.
+ * Settings, from the gear, over every tab: the plan, which opens Subscription; the computer backups go to, or pairing
+ * one; the theme and the unit of distance; the
+ * photos PhotoSense may see and scanning again; what waits in PhotoSense Removed and Delete permanently; what was moved
+ * and what went wrong; and help, about and privacy.
  */
 export function SettingsSheet(p: Props) {
-  const { platform, tablet, ios } = usePhone();
-  const device = deviceName(platform, tablet);
-  // What a row leads to opens over the screen once the sheet has gone.
+  const { ios } = usePhone();
+  // What a row leads to opens over the screen once Settings has gone.
   const then = (go: () => void) => () => { p.onClose(); go(); };
   const access = p.access === undefined ? undefined
     : p.access === 'everything' ? (ios ? 'Full access' : 'All photos and videos') : p.access === 'selected' ? 'Some chosen' : 'None';
   const empty = p.removed !== undefined && p.removed.files === 0;
   return (
-    <Sheet title="Settings" onClose={p.onClose}>
-      <div className="flex flex-col gap-5 px-4 pb-3 pt-2">
-        <ListGroup header="Appearance" inSheet>
+    <LayerScreen label="Settings" onBack={p.onClose}>
+      <PushedHeader title="Settings" onBack={p.onClose} />
+      <div className="flex flex-col gap-5 px-4 pb-6 pt-2">
+        {p.plan && <PlanSummary plan={p.plan} onOpen={p.onSubscription} />}
+        {p.computer !== undefined && (
+          <ListGroup header="Computer">
+            {p.computer
+              ? <>
+                <ListRow detail={<span className="flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 rounded-full bg-keep" />Paired</span>}>{p.computer.name}</ListRow>
+                <ListRow detail={p.computer.folder ?? undefined}>Backup folder</ListRow>
+              </>
+              : <ListRow chevron onClick={then(p.onPair)}>Connect your computer</ListRow>}
+          </ListGroup>
+        )}
+        <ListGroup header="Appearance">
           <ListRow detail={<Segmented<ThemeChoice> label="Theme" options={THEMES} value={p.theme} onChange={p.onTheme} className="w-[220px]" />}>Theme</ListRow>
           <ListRow detail={<Segmented<DistanceUnit> label="Distances" options={UNITS} value={p.unit} onChange={p.onUnit} className="w-[220px]" />}>Distances</ListRow>
         </ListGroup>
-        <ListGroup header="Photos" inSheet>
+        <ListGroup header="Photos">
           <ListRow chevron detail={access} onClick={then(p.onPhotoAccess)}>Photo access</ListRow>
           <ListRow onClick={then(p.onScanAgain)}><span className="text-acc">Scan again</span></ListRow>
         </ListGroup>
-        <ListGroup header="Removed files" inSheet>
+        <ListGroup header="Removed files">
           <ListRow detail={p.removed === undefined ? '…' : empty ? 'Empty' : `${items(p.removed.files)} · ${formatBytes(p.removed.bytes)}`}>PhotoSense Removed</ListRow>
           <ListRow danger={!empty} disabled={p.removed === undefined || empty} onClick={then(p.onDeletePermanently)}>
             <span className={empty ? 'text-t3' : undefined}>Delete permanently…</span>
           </ListRow>
         </ListGroup>
-        <ListGroup header="History" inSheet>
+        <ListGroup header="History">
           <ListRow chevron detail={p.moves === undefined ? undefined : p.moves.toLocaleString()} onClick={then(p.onRecent)}>Recently moved</ListRow>
           <ListRow detail={p.errorCount === 0 ? 'None' : p.errorCount.toLocaleString()} onClick={then(p.onErrors)}>Errors</ListRow>
         </ListGroup>
-        <ListGroup header="About" inSheet>
+        <ListGroup header="About">
           <ListRow chevron onClick={then(p.onHelp)}>Help</ListRow>
           <ListRow chevron detail={p.version} onClick={then(p.onAbout)}>About PhotoSense</ListRow>
-          <ListRow chevron onClick={then(p.onPrivacy)}>Privacy</ListRow>
+          <ListRow chevron onClick={then(p.onPrivacy)}>Privacy policy</ListRow>
         </ListGroup>
-        <p className="px-1 text-center text-[13px] text-t2">{p.version ? `PhotoSense ${p.version} · ` : ''}Runs on this {device}. Nothing is uploaded.</p>
+        <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">Your photos stay on your own devices. PhotoSense has no ads and does not track what is in your photos.</p>
       </div>
-    </Sheet>
+    </LayerScreen>
+  );
+}
+
+/** The plan at the top of Settings: what it is and what it comes to, with Get Pro on the free plan. It opens Subscription. */
+function PlanSummary({ plan, onOpen }: { readonly plan: PlanDto; onOpen(): void }) {
+  const title = planTitle(plan);
+  return (
+    <button type="button" onClick={onOpen} aria-label={`${title}. Subscription`} className="flex items-center gap-3.5 rounded-cell bg-cell p-4 text-left">
+      <img src={appIconUrl} alt="" className="h-12 w-12 shrink-0 rounded-[12px]" />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-[17px] font-semibold">{title}</span>
+        <span className="text-[14px] text-t2">{planLine(plan, new Date())}</span>
+      </span>
+      {plan.tier === 'free'
+        ? <span className="flex h-9 shrink-0 items-center rounded-full bg-acc-soft px-3.5 text-[14px] font-semibold text-on-acc-soft">Get Pro</span>
+        : <span className="shrink-0 text-t3"><ChevronIcon /></span>}
+    </button>
   );
 }
 
@@ -108,6 +150,7 @@ export function DeletePermanently({ removed, askTwice, busy, onErase, onCancel }
       <ConfirmSheet title={`Delete ${n} permanently?`} confirmLabel={`Delete ${n}`} busy={busy} onCancel={onCancel}
         onConfirm={() => (askTwice ? setSure(true) : onErase(false))}
         lines={[
+          'This cannot be undone.',
           `Everything in ${words.removed} (${formatBytes(removed.bytes)}) goes to ${words.bin}, where ${ios ? 'iOS' : 'Android'} keeps it for 30 days.`,
           'Undo can no longer bring these back, and they leave Recently moved.',
         ]} />

@@ -86,7 +86,7 @@ export const GUIDE: GuideTopic[] = [
           '**Organize** suggests an album for each place, or each year, for the photos in no album yet. **Options** sets how: nearby places together or apart, landmark or town names, and what goes inside each album. Tap a suggestion to preview it: rename it, choose where it is made, and tap any photo to leave it where it is. Nothing moves until **Move**, and **Undo**, or **Recently moved**, puts it back. A name already taken in the album gets a number; **Review each name** lets you rename a file, leave it out, or delete one of the two.',
           'There, a folder is an album. Organizing a photo puts it in an album, inside a folder of albums when you choose one, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied. An album left empty, by **Undo** or otherwise, stays in Photos until you delete it there.',
           'What you delete waits in an album called **PhotoSense Removed**, where **Undo** can still take it back. **Delete permanently** sends it to the phone\'s **Recently Deleted**, which keeps it for 30 days; the phone asks you first.',
-          '**Settings**, the gear at the top of each tab, has the theme, **Distances**, **Photo access** (which opens the phone\'s own settings for PhotoSense), **Scan again**, what waits in **PhotoSense Removed** with **Delete permanently**, **Recently moved** with **Undo**, **Errors**, **Help**, **About PhotoSense** and **Privacy**. Delete permanently asks twice unless you turned the second question off as it was asked.',
+          '**Settings**, the gear at the top of each tab, has your plan first (it opens **Subscription**, with the plans, **Restore purchases** and **Manage**), then the theme, **Distances**, **Photo access** (which opens the phone\'s own settings for PhotoSense), **Scan again**, what waits in **PhotoSense Removed** with **Delete permanently**, **Recently moved** with **Undo**, **Errors**, **Help**, **About PhotoSense** and **Privacy policy**. Delete permanently asks twice unless you turned the second question off as it was asked.',
         ],
       },
       {
@@ -311,37 +311,60 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'phone',
-    title: 'Sending photos from a phone to a computer',
-    summary: 'Moving photos off an iPhone or iPad to PhotoSense on a computer, over Wi-Fi or a cable, and then off the phone.',
+    title: 'Backing up a phone to a computer',
+    summary: 'Pairing a phone with a computer, backing up its photos and videos over Wi-Fi, each checked, and then freeing space on the phone.',
     sections: [
       {
         text: [
-          'PhotoSense on the phone sends photos straight to PhotoSense on your computer. They go over your own Wi-Fi, or from an iPhone or iPad through a cable plugged into the computer, never through the internet, and no one else on the network can read them.',
-          'On Windows, sending through a cable needs Apple’s **Apple Devices** app or iTunes on the computer. Over Wi-Fi the phone and the computer need to be on the same network.',
+          'PhotoSense on the phone backs up photos and videos straight to PhotoSense on your computer, over your own Wi-Fi, never through the internet; no one else on the network can read them. Both need to be on the same Wi-Fi, with PhotoSense open on the computer.',
         ],
       },
       {
-        heading: 'Sending',
+        heading: 'Pairing',
         steps: [
-          'On the phone, open **Send**. Choose what to send: everything not in an album yet, what you chose in **Library**, or everything; their Live Photo videos and edits go with them. To send only some, select them in Library and choose **Send**. Choose **Copy** to keep them on the phone as well, or **Move** to have them deleted from the phone once they are on the computer, and press **Offer**. Keep PhotoSense open on the phone; its screen stays on meanwhile.',
-          'On the computer, choose **Receive from phone** in the menu. Pick the phone, and the folder the photos go to with **Change**, then press **Receive into** that folder.',
-          'The first time, the phone and the computer each show a six-digit number. If they are the same, press **It’s the same number** on the phone and **They match** on the computer. If not, press **It’s different** and **They don’t match**: something else may be trying to connect. After that the two know each other and do not ask again.',
-          'The photos arrive. Each is checked, and only a photo that arrived whole is kept. One the very same as a file already in the folder is not copied again, and one whose name is taken there arrives under a new name: nothing on the computer is replaced.',
+          'On the computer, open **Phones** and choose **Pair a phone**. It shows a QR code and a six-digit code, which change every 5 minutes.',
+          'On the phone, choose **Connect your computer**: when PhotoSense first opens, or in **Backup**. **Scan the code** with the camera, and the two are paired at once. Or choose **Enter the code instead**, type the six digits, and check that both show the same number before pairing.',
+          'After that the two know each other and do not ask again. Backups go to **Pictures/PhotoSense**, in a folder named after the phone.',
         ],
       },
       {
-        heading: 'Copy or move',
-        tips: [
-          'With **Move**, once they have all arrived the phone deletes them from itself, and says what went where.',
-          'With **Copy**, the phone offers afterwards to **Delete** them **from this phone**, naming what goes and saying the copies on the computer stay. Press **Done** instead to keep them on the phone too.',
-          'Either way, only photos that are safely on the computer, with every file that belongs to them, are deleted. They go to **Recently Deleted** on the phone, where they stay for 30 days, and the phone asks you first.',
-          'Photos are copied to a computer, never onto the phone: in Organize on a phone, photos are moved between albums only.',
+        heading: 'Backing up',
+        steps: [
+          '**Backup**, on the phone, says how many photos and videos are waiting. Press **Back up now**. Only what is not on the computer yet is sent, with each Live Photo\'s video.',
+          'Each file is checked by its SHA-256 checksum as it arrives, and only a file that arrived whole is kept. One whose name is taken in the folder arrives under a new name: nothing on the computer is replaced.',
+          '**Pause** stops a backup part way; **Resume** carries on from there.',
+          '**Send now** sends only the photos you choose in **Library**: select them, then **Send**.',
         ],
       },
       {
-        heading: 'If sending stops',
+        heading: 'Automatic backup (Pro)',
         tips: [
-          'If the phone or the computer hears nothing from the other for a minute, as when the phone loses the Wi-Fi or its screen locks, sending stops and says **The other device stopped answering**. What had arrived is kept, and nothing that had not arrived is deleted from the phone. Send again: what is already on the computer is not copied twice.',
+          '**Back up automatically** backs up whenever PhotoSense is open and the computer is on the same Wi-Fi; on Android also about once an hour on Wi-Fi with PhotoSense closed. It backs up only while the phone is charging if **Only while charging** is on. **Include videos** leaves videos out when it is off; a Live Photo\'s video always goes with it.',
+          'Sending photos yourself, with **Back up now** or **Send now**, stays free.',
+        ],
+      },
+      {
+        heading: 'Phones, on the computer',
+        tips: [
+          '**Phones** lists every phone and tablet paired with the computer. Choose one to see the backup arriving, how many of its files are on the computer, that each matched its checksum, and how many it could delete.',
+          '**Change…** sends its backups to another folder from then on; what is there already stays. **Pause backups** turns the phone away until **Resume backups**.',
+          'Every time the phone backs up, the computer first checks the files it holds for it. One moved, deleted or changed there is sent again.',
+        ],
+      },
+      {
+        heading: 'Safe to delete',
+        tips: [
+          'Once photos are on the computer, **Library** says how many and how much space removing them would free. **Review** opens **Safe to delete**, which lists only photos and videos whose every file matched its copy on the computer at the last backup.',
+          '**Keep on this iPhone** leaves your **Favorites**, and what you took in the **Last 30 days**, on the phone. Turn either off to remove those too.',
+          '**Remove** sends them to the phone\'s **Recently Deleted**, or the bin on Android, where they stay for 30 days; the phone asks you first. The copies on the computer stay.',
+          'On an iPhone with iCloud Photos on, removing them here also removes them from iCloud and your other Apple devices. The copies on the computer are not affected.',
+          'On the free plan, each one removed counts toward the day\'s free removals; past them, **Remove the largest now** removes as many as are left today, the largest first.',
+        ],
+      },
+      {
+        heading: 'If a backup stops',
+        tips: [
+          'If the phone or the computer hears nothing from the other for a minute, as when the phone loses the Wi-Fi or its screen locks, the backup stops and says why. What arrived whole is kept; press **Try again** to carry on.',
           'A photo kept only in iCloud is fetched to the phone first, which can take a while. The computer is told meanwhile, and waits.',
         ],
       },
@@ -383,6 +406,27 @@ export const GUIDE: GuideTopic[] = [
     ],
   },
   {
+    id: 'plan',
+    title: 'The free plan and Pro',
+    summary: 'How many files the free plan removes each day, and what Pro adds.',
+    sections: [
+      {
+        text: [
+          'PhotoSense is free. The free plan removes **50 photos and videos a day**, in Clean up, Organize and Library alike. Each one you delete counts, once it has gone to **_PhotoSense_Removed**. **Undo** brings it back, and gives back the removal the same day; the count starts again at midnight. Each device has its own 50.',
+          'Before you delete more than are left today, PhotoSense says how many you chose and how many are left, and offers **Delete … now** for as many as are left, the largest first. A question before deleting also says how many are left today.',
+        ],
+      },
+      {
+        heading: 'PhotoSense Pro',
+        tips: [
+          'Pro has no daily limit. It is bought in PhotoSense on an iPhone, iPad or Android phone, in **Settings**, from the plan at the top, through the App Store or Google Play, at their own prices. The yearly plan starts with a 7-day free trial.',
+          'One purchase covers PhotoSense on your phone, tablet and computer. A computer learns of it from the phone the next time the phone backs up to it, and shows the plan beside the menu.',
+          '**Restore purchases**, on the Subscription page, finds what was bought with the same Apple Account or Google account. **Manage** opens the store, where a subscription is changed or cancelled.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'menu',
     title: 'Settings, theme, errors and About',
     summary: 'What the menu holds besides the things described elsewhere.',
@@ -393,7 +437,6 @@ export const GUIDE: GuideTopic[] = [
           '**Theme** switches between dark and light.',
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
           '**Settings** has the switch for the second question before deleting permanently, and **Distances**: miles, or kilometers, for Organize and its map. Settings are kept in this browser.',
-          '**Receive from phone**, on a computer, takes in photos a phone with PhotoSense sends.',
           '**Help** opens this guide.',
           '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
         ],

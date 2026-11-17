@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -97,6 +97,13 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         await using var part = await OpenReadAsync(copy, ct);
         await using var whole = await OpenReadAsync(original, ct);
         return await Copies.BeginsWithAsync(whole, part, ct);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FavoritesAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlySet<string>>(Look().Files.Where(f => f.Value.Item.Favorite).Select(f => f.Key).ToHashSet(PhotoPath.Comparer));
     }
 
     /// <inheritdoc />

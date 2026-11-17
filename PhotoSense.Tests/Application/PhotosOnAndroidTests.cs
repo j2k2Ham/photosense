@@ -29,7 +29,7 @@ public sealed class PhotosOnAndroidTests : IDisposable
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddPhotoSenseAndroid(_store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), "Pixel 8", _root, new TcpTransferListener(0))
+            .AddPhotoSenseAndroid(_store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice { Kind = "Android phone" }, "Pixel 8", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("android", "1.2.0.57", () => "Third-party notices for PhotoSense for Android"))
             .AddStandInStores()
@@ -123,6 +123,11 @@ public sealed class PhotosOnAndroidTests : IDisposable
 
         await JsonAsync("POST", $"organize/undo/{moved.GetProperty("batchId").GetString()}", ct);
         await Assert.That(_store.Places().Values.Order(StringComparer.Ordinal)).IsEquivalentTo(["DCIM/Camera/IMG_0001.jpg", "DCIM/Camera/IMG_0002.jpg"], CollectionOrdering.Matching);
+
+        // Android keeps no favorites PhotoSense can see: Safe to delete keeps none for being one.
+        var safe = await JsonAsync("GET", "backup/safe", ct);
+        await Assert.That((safe.GetProperty("favorites").GetProperty("count").GetInt32(), safe.GetProperty("cloudPhotos").GetBoolean())).IsEqualTo((0, false));
+        await Assert.That(await _services.GetRequiredService<PhotoSense.Application.Transfer.PhoneBackup>().RemovableAsync(ct)).IsEmpty();
 
         // The phone's storage itself holds no folder of photos, and a copy is not made on the phone.
         var outside = await JsonAsync("POST", "organize/apply", ct, new { basePath = _root, folderName = "Butte", direct = false, mode = "move", companions = true, label = "Butte", files });

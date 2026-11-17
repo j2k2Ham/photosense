@@ -2,10 +2,16 @@ import React from 'react';
 import { appIconUrl } from '../lib/apiClient';
 import { leaf } from '../lib/format';
 import { ModeSwitch, type Area } from './ModeSwitch';
+import { PlanPill } from './LimitDialog';
+import type { PlanDto } from '../types';
 
 interface Props {
+  /** The plan, once the service has said: on the free plan, with the removals left today. */
+  readonly plan?: PlanDto;
   /** Which of the two areas is showing. */
   readonly area: Area;
+  /** The areas that are new to this browser, each with a dot until first opened. */
+  readonly fresh?: readonly Area[];
   onArea(area: Area): void;
   /** There are results: the chip that names them, with the way back to the folders, is shown. */
   readonly showScan: boolean;
@@ -23,8 +29,8 @@ interface Props {
   readonly children?: React.ReactNode;
 }
 
-/** The bar along the top: Clean up or Organize, the folders scanned, the error count and the menu. */
-export function TopBar({ area, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu, children }: Props) {
+/** The bar along the top: Clean up, Organize or Phones, the folders scanned, the error count and the menu. */
+export function TopBar({ plan, area, fresh, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu, children }: Props) {
   return (
     // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)
     // and the note that nothing leaves the device.
@@ -34,7 +40,7 @@ export function TopBar({ area, onArea, showScan, folders, files, scanned, errorC
 
         <h1 className="text-[17px] font-semibold max-sm:sr-only">PhotoSense</h1>
       </div>
-      <ModeSwitch area={area} onArea={onArea} />
+      <ModeSwitch area={area} fresh={fresh} onArea={onArea} />
 
       {showScan && (
         <div className="hidden h-10 min-w-0 items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2 md:flex">
@@ -60,6 +66,8 @@ export function TopBar({ area, onArea, showScan, folders, files, scanned, errorC
           <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-rose" />{errorCount} {errorCount === 1 ? 'error' : 'errors'}
         </button>
       )}
+
+      {plan && <PlanPill plan={plan} />}
 
       <button type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={onToggleMenu}
         className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-1 rounded-full border border-line ${menuOpen ? 'bg-s3' : 'bg-s1 hover:bg-s2'}`}>

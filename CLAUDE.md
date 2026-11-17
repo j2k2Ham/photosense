@@ -61,7 +61,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 2. **Nothing is ever replaced, and nothing is erased except by "Delete permanently".**
    - Removing a file moves it into `_PhotoSense_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
    - The only code that erases files is `RemovedFiles.EraseAsync`, through `IPhotoFileSystem.Erase`, which nothing else calls. It only empties folders named `_PhotoSense_Removed`.
-   - The one exception, Jamie's decision of 2026-10-29: on a phone, after sending to a computer, `PhoneSending.DeleteSent` sends to the phone's Recently Deleted or bin (`IPhotoChangesTogether.EraseAll`) the pictures every file of which the computer has confirmed by its SHA-256, once the person confirms or chose Move. Nothing on a computer is erased that way.
+   - The one exception, Jamie's decision of 2026-10-29: on a phone, after sending to a computer, `PhoneSending.DeleteSent` sends to the phone's Recently Deleted or bin (`IPhotoChangesTogether.EraseAll`) the pictures every file of which the computer has confirmed by its SHA-256, once the person confirms or chose Move. Jamie extended it on 2026-11-13 to **Safe to delete**: `PhoneBackup.RemoveAsync` sends to the same place the pictures and videos every file of which the computer confirmed by its SHA-256 at the last backup, less the keep rules, after the system's own question; each counts toward the day's free removals. Nothing on a computer is erased that way.
    - A file arriving under a taken name gets a number.
    - The last copy of a picture is never removed as a duplicate.
 3. **Every removal question and message names the file that goes and the file that stays**, by folder when the names are alike. Jamie has twice taken two files for one.
@@ -116,5 +116,6 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Name what the person sees, in short plain sentences, without jargon or apologies.
   - Buttons say exactly what happens ("Delete 3 files"), and the message after says what happened.
   - Errors say what went wrong and what to do.
+- **The user guide** (`PhotoSense.ReactUI/lib/guide.ts`, shown by Help) covers every feature built, completely and in detail, on each platform in its own words (Jamie, 2026-11-16). Any change that adds, renames, removes or changes what a person sees or does updates the guide in the same piece of work, never later.
 - **The README** documents behaviour and the API table. Update it with any endpoint or user-visible change.
 - **Reports to Jamie:** say what changed, what was verified and how, what was not verified, and any decision Jamie has not confirmed. Use they/them for Jamie.

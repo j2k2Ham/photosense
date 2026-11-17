@@ -10,8 +10,8 @@ import type { Platform } from '../../../lib/phone';
 import { useOrganize } from '../../../lib/phoneOrganize';
 import type { OrganizeApplyDto, OrganizeBatchDto, OrganizeClashDto, OrganizeDestination, OrganizeFileDto, OrganizePlanFile } from '../../../types';
 import { deferred } from '../../deferred';
-import { organizeFile, organizePlace } from '../../fixtures';
-import { frame, inFrame } from './frame';
+import { organizeFile, organizePlace, plan } from '../../fixtures';
+import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({ planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), useOrganizeBatches: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
@@ -33,6 +33,9 @@ function changed() { version++; watching.forEach(f => f()); }
 const useVersion = () => React.useSyncExternalStore(f => { watching.add(f); return () => watching.delete(f); }, () => version);
 const applied = (more: Partial<OrganizeApplyDto> = {}): OrganizeApplyDto => ({ batchId: 'b1', done: 4, bytes: 4 * 1024 ** 2, companions: 0, renamed: 0, skipped: 0, problems: [], items: [], ...more });
 
+// The plan's gate: no plan known, every removal going ahead, unless a test gives its own.
+let planGate = gate();
+beforeEach(() => { planGate = gate(); });
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset();
   files = [
@@ -77,7 +80,7 @@ function show({ platform = 'ios', tablet = false, made = [], unit = 'miles' }: S
     const organize = useOrganize(listing, platform, tablet, unit);
     return <OrganizeScreen organize={organize} library={library} made={made} onMade={onMade} onNoLocation={onNoLocation} notify={notify} />;
   }
-  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }));
+  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }), planGate);
   return { ...view, notify, onMade, onNoLocation };
 }
 
@@ -458,6 +461,18 @@ describe('names already taken', () => {
     // No name is taken any longer, so the sheet has gone.
     expect(await screen.findByText('3 of 3 files will move. Tap a file to leave it where it is.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks the plan before deleting either file, and says where it goes and the removals left on the free plan', async () => {
+    planGate = gate({ plan: plan({ leftToday: 38 }) });
+    show();
+    await userEvent.click(row('Anaconda'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Review each name' }));
+    await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete a2.JPG, already there' }));
+    expect(planGate.remove).toHaveBeenCalledWith(1, 'items', expect.any(Function));
+    const asked = within(sheet('Name taken')).getByRole('alertdialog', { name: 'Delete a2.JPG?' });
+    expect(asked).toHaveTextContent('a2.JPG goes to PhotoSense Removed, where Undo can still bring it back.');
+    expect(asked).toHaveTextContent('Free plan: 38 removals left today.');
   });
 
   it('says when a file could not be deleted, or why', async () => {
