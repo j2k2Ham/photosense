@@ -58,10 +58,13 @@ export function referencedPackages(csproj) {
   return [...csproj.matchAll(/<PackageReference Include="([^"]+)" Version="([^"]+)"/g)].map(([, id, version]) => ({ id, version }));
 }
 
-/** What the page ships: its packages and theirs, but none of the tools that only build it, and the styles Tailwind writes. */
+/**
+ * What the page ships: its packages and theirs, but none of the tools that only build it, and the styles Tailwind
+ * writes. A package of PhotoSense's own, kept in the page's folder and linked in (stubs/sharp), is no one else's.
+ */
 export function pagePackages(lock) {
   return Object.entries(lock.packages)
-    .filter(([path, entry]) => path && ((!entry.dev && !entry.optional && !entry.devOptional) || SHIPPED_FROM_BUILD.includes(path.replace(/^.*node_modules\//, ''))))
+    .filter(([path, entry]) => path.includes('node_modules/') && !entry.link && ((!entry.dev && !entry.optional && !entry.devOptional) || SHIPPED_FROM_BUILD.includes(path.replace(/^.*node_modules\//, ''))))
     .map(([path, entry]) => ({ name: path.replace(/^.*node_modules\//, ''), path, version: entry.version, license: entry.license }));
 }
 

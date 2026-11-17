@@ -63,6 +63,32 @@ jobs:
         working-directory: e2e
         run: npm run typecheck
 
+      # Every test starts the program, so one that does not start would only time out, test after test. Started once
+      # first, as Jamie starts it, a program that does not answer within a minute is shown here: what it said, and
+      # where each of its threads is, read with dotnet-stack.
+      - name: Start the program once
+        working-directory: e2e/.cache/server
+        env:
+          PhotoStorage__DatabasePath: ${{ runner.temp }}/photosense/photosense.db
+          PhotoStorage__ThumbnailPath: ${{ runner.temp }}/photosense/thumbnails
+          PhotoStorage__BackupPath: ${{ runner.temp }}/photosense/backups
+        run: |
+          dotnet PhotoSense.Server.dll --urls http://localhost:7199 > "$RUNNER_TEMP/said.txt" 2>&1 &
+          program=$!
+          for second in $(seq 60); do
+            if curl -sf --max-time 2 http://localhost:7199/api/health > /dev/null; then
+              echo "PhotoSense answered after about $second seconds."
+              kill $program; wait $program || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::PhotoSense did not answer within a minute."
+          echo "It said:"; cat "$RUNNER_TEMP/said.txt"
+          dotnet tool install --global dotnet-stack > /dev/null && "$HOME/.dotnet/tools/dotnet-stack" report --process-id $program || true
+          kill -9 $program
+          exit 1
+
       - name: Run the tests
         working-directory: e2e
         run: npx playwright test

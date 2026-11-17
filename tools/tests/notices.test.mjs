@@ -61,6 +61,8 @@ function fixture({ unknownLicence = false } = {}) {
     'node_modules/vitest': { version: '4.1.12', license: 'MIT', dev: true },
     'node_modules/sharp': { version: '0.34.0', license: 'Apache-2.0', optional: true },
     'node_modules/fsevents': { version: '2.3.3', license: 'MIT', devOptional: true },
+    'node_modules/stand-in': { resolved: 'stubs/stand-in', link: true },
+    'stubs/stand-in': { version: '0.0.0', license: 'MIT' },
   } }));
   for (const [path, text] of [['react', 'React licence'], ['next/node_modules/postcss', 'PostCSS licence'], ['tailwindcss', 'Tailwind licence']]) write(join(page, 'node_modules', ...path.split('/'), 'LICENSE'), text);
   return { root, nuget };
@@ -80,7 +82,7 @@ describe('the packages a program ships', () => {
       [{ id: 'A.B', version: '1.2.3' }, { id: 'C', version: '4.0.0' }]);
   });
 
-  it('for the page, are its own and theirs, and the styles Tailwind writes, but no tool that only builds or tests it', () => {
+  it('for the page, are its own and theirs, and the styles Tailwind writes, but no tool that only builds or tests it, nor a stand-in of its own', () => {
     const { root } = fixture();
     const names = pagePackages(JSON.parse(readFileSync(join(root, 'PhotoSense.ReactUI', 'package-lock.json'), 'utf8'))).map(p => p.name);
     assert.deepEqual(names, ['react', 'postcss', 'tailwindcss']);

@@ -171,7 +171,8 @@ public sealed class PhonePairingTests : IDisposable
         var open = await computer.OpenAsync(ct);
         _finder.Computers.Add(Found("Studio iMac", PortOf(open)));
         _phone.EnterCode(open.Code!);
-        await Until(() => _phone.State.Stage == PhonePairingStage.Comparing, "comparing");
+        // Both must be asking: an answer given on the computer before it asks is not an answer to anything.
+        await Until(() => _phone.State.Stage == PhonePairingStage.Comparing && computer.State.Stage == ComputerPairingStage.Comparing, "comparing");
 
         // Each side hears the other's answer once its own person has answered.
         _phone.Confirm(false);

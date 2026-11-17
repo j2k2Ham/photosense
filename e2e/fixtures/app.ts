@@ -37,7 +37,8 @@ async function freePort(): Promise<number> {
 async function started(url: string, child: ChildProcess, said: string[]) {
   for (let waited = 0; waited < 300; waited++) {
     if (child.exitCode !== null) throw new Error(`PhotoSense ended before it answered:\n${said.join('')}`);
-    try { if ((await fetch(`${url}/api/health`)).ok) return; } catch { /* not yet listening */ }
+    // Each ask is given a second, so that a program taking the connection and never answering still ends the wait.
+    try { if ((await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(1000) })).ok) return; } catch { /* not yet listening */ }
     await new Promise(r => setTimeout(r, 100));
   }
   throw new Error(`PhotoSense did not answer within 30 seconds:\n${said.join('')}`);
@@ -144,7 +145,11 @@ export const test = base.extend<{ program: Program; photos: Photos; service: Ser
       await use({ url, data, said });
     } finally {
       child.kill();
-      await new Promise(r => (child.exitCode !== null ? r(null) : child.once('exit', r)));
+      // A program stuck past being asked to stop is ended outright, so that what it said is still kept below.
+      const ended = new Promise(r => (child.exitCode !== null ? r(null) : child.once('exit', r)));
+      const stuck = setTimeout(() => child.kill('SIGKILL'), 10_000);
+      await ended;
+      clearTimeout(stuck);
       if (testInfo.status !== testInfo.expectedStatus) await testInfo.attach('PhotoSense said', { body: said.join(''), contentType: 'text/plain' });
       removeAll(data);
     }

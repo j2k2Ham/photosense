@@ -22,6 +22,7 @@ description: Use before changing or relying on PhotoSense's build tools and rele
 3. A package naming a licence without its text needs `tools/licenses/<SPDX>.txt`, or a `NAMED_ONLY` entry in `notices.mjs`.
 4. A font added to `app/layout.tsx` needs its licence in `tools/fonts`.
 5. The end-to-end suite's packages (`e2e/`) are not shipped and need no notices.
+6. Next.js's sharp is never installed: `PhotoSense.ReactUI/stubs/sharp` stands in for it (`file:stubs/sharp` in `dependencies`, `"sharp": "$sharp"` in `overrides`), as its libvips is LGPL, which the dependency review refuses. Keep both lines when updating Next.js; an override naming the folder itself is resolved by npm relative to Next.js's folder and breaks the lock file.
 
 ## Testing the tools (100% of lines, branches and functions)
 

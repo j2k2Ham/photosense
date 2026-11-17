@@ -16,6 +16,7 @@
     "qrcode-generator": "^2.0.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "sharp": "file:stubs/sharp",
     "swr": "2.5.1"
   },
   "devDependencies": {
@@ -36,5 +37,8 @@
     "tailwindcss": "3.4.19",
     "typescript": "5.9.3",
     "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "sharp": "$sharp"
   }
 }
