@@ -5,9 +5,9 @@ name: Dependencies
 # project it finds, and the phone apps cannot be restored on Linux without their workloads, so it failed on every
 # push once they were added. It is turned off (Settings, Code security, Dependency graph) in favour of this one,
 # which restores the solution only. The phone apps' own one package is still read from their project files.
+# It runs on a push to any branch, so that the dependency review (dependency-review.yml) sees both sides of a change.
 on:
   push:
-    branches: [ master, main, feature/mobile-and-mac ]
   workflow_dispatch:
 
 permissions:

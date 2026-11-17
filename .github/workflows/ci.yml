@@ -12,6 +12,10 @@ permissions:
   contents: read
 
 jobs:
+  dependency-review:
+    # Every run fails on a package it brings in under the GPL, LGPL or AGPL, or with a known vulnerability.
+    uses: ./.github/workflows/dependency-review.yml
+
   build-test:
     runs-on: ubuntu-latest
     steps:
