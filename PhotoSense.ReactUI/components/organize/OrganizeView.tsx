@@ -7,7 +7,7 @@ import {
   GALLERY_PAGE, defaultSettings, fileTag, joinPath, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
   type FileRef, type OrganizeChoices, type OrganizeSettings, type OrganizedMark,
 } from '../../lib/organize';
-import { loadOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
+import { saveOrganizeRoot, useOrganizeRoot } from '../../lib/lastScan';
 import { useOrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
@@ -54,8 +54,8 @@ const Where = ({ children }: { readonly children: string }) => <span className="
 export function OrganizeView({ startRoot, unit, notify }: Props) {
   const [chosen, setChosen] = useState<string>();
   // What this browser remembers is read once the page is in the browser.
-  useEffect(() => setChosen(c => c ?? (loadOrganizeRoot() || undefined)), []);
-  const root = chosen ?? startRoot;
+  const remembered = useOrganizeRoot();
+  const root = chosen ?? (remembered || undefined) ?? startRoot;
   const listing = useOrganizeFiles(root);
   const batches = useOrganizeBatches();
   // A phone keeps each picture once, in one of PhotoSense's albums at a time: there it can be moved, not copied.
@@ -237,7 +237,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   const ownPreviewed = previewedOwn && folders.find(f => f.id === previewedOwn.id);
   // A folder whose last file was deleted from the preview has nothing left to preview.
   const nothingPreviewed = preview !== undefined && !(previewed ?? previewedOwn)?.files.length;
-  useEffect(() => { if (nothingPreviewed) setPreview(undefined); }, [nothingPreviewed]);
+  if (nothingPreviewed) setPreview(undefined);
   function renamePreviewed(name: string) {
     if (preview!.kind === 'suggested') setChoices(c => ({ ...c, renames: { ...c.renames, [preview!.key]: name } }));
     else setFolders(f => f.map(x => (x.id === preview!.key ? { ...x, name } : x)));

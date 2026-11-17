@@ -27,8 +27,6 @@ export function useOrganizeReading(root: string | undefined, reading: boolean): 
   const [soFar, setSoFar] = useState<OrganizeReading & { root: string }>();
 
   useEffect(() => {
-    // What was read of another folder, or before the whole list came, is of no more use.
-    setSoFar(undefined);
     if (!root || !reading) return undefined;
     let stopped = false, timer: ReturnType<typeof setTimeout> | undefined;
     let files: OrganizeFileDto[] = [], places: OrganizePlaceDto[] = [], listing: OrganizeFilesDto | undefined, readingId: string | null | undefined;
@@ -59,7 +57,12 @@ export function useOrganizeReading(root: string | undefined, reading: boolean): 
       if (!stopped) timer = setTimeout(() => void ask(folder), wait);
     }
     void ask(root);
-    return () => { stopped = true; clearTimeout(timer); };
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      // What was read of another folder, or before the whole list came, is of no more use.
+      setSoFar(undefined);
+    };
   }, [root, reading]);
 
   return soFar?.root === root ? soFar : undefined;

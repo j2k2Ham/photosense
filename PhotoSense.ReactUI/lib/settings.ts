@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import type { DistanceUnit } from './distance';
+import { readStored, useStored } from './stored';
 
 /** How the person has set PhotoSense to behave. Kept in this browser. */
 export interface AppSettings {
@@ -18,24 +19,21 @@ export const defaultAppSettings: AppSettings = { eraseAskTwice: true, distanceUn
 
 const KEY = 'photosense-settings';
 
-/** The settings as this browser remembers them, with the default of any added since. */
-export function loadAppSettings(): AppSettings {
-  // A setting added since the others were saved has its default.
-  try { return { ...defaultAppSettings, ...JSON.parse(localStorage.getItem(KEY) ?? '{}') }; } catch { return defaultAppSettings; }
+// The settings in what was kept, with the default of any added since; the defaults when nothing readable was.
+function settingsIn(kept: string | null | undefined): AppSettings {
+  try { return { ...defaultAppSettings, ...JSON.parse(kept ?? '{}') }; } catch { return defaultAppSettings; }
 }
 
-/** The settings in use, and a way to change some of them. */
+/** The settings as this browser remembers them, with the default of any added since. */
+export function loadAppSettings(): AppSettings {
+  return settingsIn(readStored(KEY));
+}
+
+/** The settings in use, and a way to change some of them. The defaults until the browser's storage is read. */
 export function useAppSettings(): [AppSettings, (change: Partial<AppSettings>) => void] {
-  const [settings, setSettings] = useState(defaultAppSettings);
-  // Read after mounting: the server has nothing saved to render with.
-  useEffect(() => { setSettings(loadAppSettings()); }, []);
-
-  const change = useCallback((next: Partial<AppSettings>) => setSettings(before => {
-    const now = { ...before, ...next };
-    // A browser that refuses storage still gets the setting for this visit.
-    try { localStorage.setItem(KEY, JSON.stringify(now)); } catch { /* not remembered */ }
-    return now;
-  }), []);
-
+  const [kept, keepSettings] = useStored(KEY);
+  const settings = useMemo(() => settingsIn(kept), [kept]);
+  // A browser that refuses storage still gets the setting for this visit.
+  const change = useCallback((next: Partial<AppSettings>) => keepSettings(before => JSON.stringify({ ...settingsIn(before), ...next })), [keepSettings]);
   return [settings, change];
 }

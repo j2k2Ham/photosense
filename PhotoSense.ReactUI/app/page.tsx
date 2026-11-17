@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppMenu } from '../components/AppMenu';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
@@ -27,7 +27,7 @@ import { someGroups } from '../lib/cleanup';
 import { formatBytes, linkedFiles } from '../lib/format';
 import { limitLine, overLimit } from '../lib/plan';
 import type { GuidePlace } from '../lib/guide';
-import { loadLastScan, loadOrganizeRoot } from '../lib/lastScan';
+import { loadLastScan, loadOrganizeRoot, useLastScan } from '../lib/lastScan';
 import { useAppSettings } from '../lib/settings';
 import { platformOf, type TabId } from '../lib/phone';
 import { useSkin } from '../lib/skin';
@@ -100,7 +100,6 @@ export default function HomePage() {
   const [instanceId, setInstanceId] = useState<string>();
   // Where the person chose to be; until they choose, the screen follows whether there is anything to show.
   const [chosen, setChosen] = useState<'setup' | 'results'>();
-  const [folders, setFolders] = useState<string[]>([]);
   const [mode, setMode] = useState<GroupMode>('duplicates');
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -133,16 +132,18 @@ export default function HomePage() {
 
   useEffect(() => connectLogStream(line => setLogs(l => [...l.slice(-199), line])), []);
 
-  const readFolders = useCallback(() => {
-    const last = loadLastScan();
-    setFolders([last.root, last.second].filter(Boolean));
-  }, []);
-  useEffect(readFolders, [readFolders]);
+  // The folders of the last scan started in this browser, read once the page is in it, and again when a scan starts.
+  const lastScan = useLastScan();
+  const folders = useMemo(() => [lastScan.root, lastScan.second].filter(Boolean), [lastScan]);
 
   // A scan the service is running that this page did not start, as after the page was loaded again, is followed all
   // the same: without that the results would show half made, with nothing to say a scan was still at work.
   const running = status.data?.instanceId && !status.data.completed ? status.data.instanceId : undefined;
-  useEffect(() => { if (running) setInstanceId(running); }, [running]);
+  const [followed, setFollowed] = useState<string>();
+  if (running !== followed) {
+    setFollowed(running);
+    if (running) setInstanceId(running);
+  }
 
   const scanning = !!instanceId && !progress.data?.completedUtc;
   const hasResults = (status.data?.totalPhotos ?? 0) > 0;
@@ -162,9 +163,7 @@ export default function HomePage() {
 
   // Removing the last groups of the last page leaves that page empty: step back to one that exists.
   const lastPage = data?.totalPages;
-  useEffect(() => {
-    if (lastPage !== undefined && page > Math.max(1, lastPage)) setPage(Math.max(1, lastPage));
-  }, [lastPage, page]);
+  if (lastPage !== undefined && page > Math.max(1, lastPage)) setPage(Math.max(1, lastPage));
 
   // The pages either side of this one are fetched ahead, pictures and all, so that turning to one is immediate.
   // Done again whenever this page's own contents change, which is when theirs may have too.
@@ -329,8 +328,7 @@ export default function HomePage() {
   const started = useCallback((id: string) => {
     setInstanceId(id);
     setLogs([]);
-    readFolders();
-  }, [readFolders]);
+  }, []);
 
   // Scanning is part of Clean up, wherever it is asked for from.
   const changeFolders = () => { turnTo('clean'); setChosen('setup'); };
@@ -531,7 +529,7 @@ export default function HomePage() {
         </ConfirmDialog>
       )}
 
-      {helpOpen && <HelpWindow onGo={goTo} onClose={() => setHelpOpen(false)} />}
+      {helpOpen && <HelpWindow platform={platform ?? 'computer'} onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {aboutOpen && <AboutWindow start={aboutOpen} onClose={() => setAboutOpen(undefined)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
       {pairOpen && <PairWindow notify={push} onClose={() => setPairOpen(false)} />}

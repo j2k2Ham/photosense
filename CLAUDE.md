@@ -116,6 +116,6 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Name what the person sees, in short plain sentences, without jargon or apologies.
   - Buttons say exactly what happens ("Delete 3 files"), and the message after says what happened.
   - Errors say what went wrong and what to do.
-- **The user guide** (`PhotoSense.ReactUI/lib/guide.ts`, shown by Help) covers every feature built, completely and in detail, on each platform in its own words (Jamie, 2026-11-16). Any change that adds, renames, removes or changes what a person sees or does updates the guide in the same piece of work, never later.
+- **The user guide** (`PhotoSense.ReactUI/lib/guide.ts`, shown by Help) covers every feature built, completely and in detail, on each platform in its own words (Jamie, 2026-11-16). Any change that adds, renames, removes or changes what a person sees or does updates the guide in the same piece of work, never later. Each topic and section names the platforms it is for (`only`: `computer`, `ios`, `android`), and Help shows only the device's own; every topic has `keywords`, the words a person might search for it by. `tests/components/HelpWindow.test.tsx` checks each platform's topics, its words, and that search finds each feature.
 - **The README** documents behaviour and the API table. Update it with any endpoint or user-visible change.
 - **Reports to Jamie:** say what changed, what was verified and how, what was not verified, and any decision Jamie has not confirmed. Use they/them for Jamie.

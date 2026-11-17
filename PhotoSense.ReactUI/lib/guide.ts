@@ -1,10 +1,16 @@
 // The user guide, as the Help window shows it. Text between ** and ** names something on screen and is shown bold.
 
-/** A place in PhotoSense a topic of the guide can take the reader to. */
+/** A place in PhotoSense a topic of the guide can take the reader to, on a computer. */
 export type GuidePlace = 'scan' | 'duplicates' | 'similar' | 'organize' | 'settings';
 
+/** Where PhotoSense runs, as the guide speaks of it: a Windows PC or Mac, an iPhone or iPad, or an Android phone or tablet. */
+export type GuidePlatform = 'computer' | 'ios' | 'android';
+
+/** Only on these platforms; on every one when not said. */
+type Only = { readonly only?: readonly GuidePlatform[] };
+
 /** A part of a topic of the user guide: a heading with paragraphs, steps or notes. */
-export interface GuideSection {
+export interface GuideSection extends Only {
   heading?: string;
   /** Paragraphs. */
   text?: string[];
@@ -15,27 +21,40 @@ export interface GuideSection {
 }
 
 /** A topic of the user guide, as Help lists it. */
-export interface GuideTopic {
+export interface GuideTopic extends Only {
   id: string;
   title: string;
   /** What the topic is about, in a line. */
   summary: string;
-  /** The button that takes the reader to what the topic describes. */
+  /** The button that takes the reader to what the topic describes, on a computer. */
   go?: { label: string; place: GuidePlace };
+  /** Other words a person might search for it by, which the text itself does not use. Every topic has some. */
+  keywords: string[];
   sections: GuideSection[];
 }
 
-/** The user guide shown by Help, topic by topic. It changes whenever something on screen is renamed, added or removed. */
+const COMPUTER = ['computer'] as const;
+const PHONES = ['ios', 'android'] as const;
+const IOS = ['ios'] as const;
+const ANDROID = ['android'] as const;
+
+/**
+ * The user guide shown by Help, topic by topic, for every platform. It changes whenever something on screen is
+ * renamed, added or removed (CLAUDE.md, "The user guide"); `guideFor` gives one platform's part.
+ */
 export const GUIDE: GuideTopic[] = [
+  // ——— On a computer ———
   {
     id: 'start',
+    only: COMPUTER,
     title: 'Getting started',
     summary: 'What PhotoSense does, and how to find your way around it.',
+    keywords: ['overview', 'introduction', 'how to', 'first time', 'begin', 'windows', 'mac', 'pc'],
     sections: [
       {
         text: [
-          'PhotoSense tidies a folder of pictures and videos in two ways. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken.',
-          'Everything happens on this device, the computer or the phone PhotoSense runs on. Nothing is uploaded.',
+          'PhotoSense tidies a folder of pictures and videos. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken. **Phones** is where phones and tablets with PhotoSense back up to this computer.',
+          'Everything happens on this computer. Nothing is uploaded.',
           'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Delete permanently**.',
           'A move, copy or deletion happens in full or not at all. Should one file not go, the files that had gone go back, and the message says which file stopped it. One cut short because PhotoSense stopped is put back the next time it starts.',
         ],
@@ -43,10 +62,11 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Finding your way',
         tips: [
-          'The switch at the top left, **Clean up | Organize**, moves between the two areas. Each keeps what you were doing in it.',
+          'The switch at the top left, **Clean up | Organize | Phones**, moves between the three areas. Each keeps what you were doing in it. A dot on **Phones** says it is new, until you first open it.',
           'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help**, **About PhotoSense** and **Delete permanently**.',
-          'Messages appear at the bottom right, or across the bottom on a phone. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
-          'On a phone, or in a narrow window, the screen rearranges itself to fit. In **Clean up**, tap a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and tapping a folder shows its files. Make the window wider and the two sit side by side again.',
+          'Beside the menu, your plan: **PhotoSense Free**, with how many free removals are left today, or **PhotoSense Pro**. Point at it for more.',
+          'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
+          'In a narrow window the screen rearranges itself to fit. In **Clean up**, click a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and clicking a folder shows its files. Make the window wider and the two sit side by side again.',
         ],
       },
       {
@@ -63,39 +83,19 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'scan',
+    only: COMPUTER,
     title: 'Scanning for duplicates',
     summary: 'Choosing the folders, starting a scan, and what happens while it runs.',
     go: { label: 'Go to the scan screen', place: 'scan' },
+    keywords: ['rescan', 'search', 'find copies', 'folder', 'drive', 'disk', 'backup folder', 'subfolders'],
     sections: [
       {
         steps: [
           'Open **Clean up**. The first time, it shows the scan screen; later, press **Change or rescan** at the top, or choose **Change folders or rescan** in the menu.',
-          'Give the **Root folder**: type its path, or press **Browse** and pick it. The folders listed are those of the computer PhotoSense runs on.',
+          'Give the **Root folder**: type its path, or press **Browse** and pick it. The folders listed are those of this computer.',
           'If you like, give a **Secondary folder** too, a backup for example. Copies are then found between the two as well as inside each.',
           'Leave **Recursive** ticked to include the folders inside the folder.',
           'Press **Scan**.',
-        ],
-      },
-      {
-        heading: 'On an iPhone or iPad',
-        text: [
-          '**Library** shows every photo and video, newest first, by month. Tap one to see it whole; **Select** chooses several to send, add to an album or delete. **Not organized** shows those in no album yet.',
-          '**Clean up** lists the copies found. Tap one to put it beside the photo that stays, see what differs, and **Delete** it, or keep it with **Keep this copy too**. Tap either picture to see it full screen, and tap again to flip between the two. **Delete all duplicates** deletes every copy at once and keeps the best of each. Everything deleted waits in PhotoSense Removed, and **Undo** brings it back.',
-          'The first time, **Continue** asks the phone\'s own question of which photos PhotoSense may see, and then reads them all. If you said no, **Open Settings** goes to where access is turned on; come back, and the reading starts.',
-          'The phone\'s photos are the one folder, **Photo Library**, read whole: **Scan again** in Settings reads it again, and **Stop** ends a scan, keeping what it read. If you let PhotoSense see only some of them, Library says so: **Choose more** opens the phone\'s own picker.',
-          '**Organize** suggests an album for each place, or each year, for the photos in no album yet. **Options** sets how: nearby places together or apart, landmark or town names, and what goes inside each album. Tap a suggestion to preview it: rename it, choose where it is made, and tap any photo to leave it where it is. Nothing moves until **Move**, and **Undo**, or **Recently moved**, puts it back. A name already taken in the album gets a number; **Review each name** lets you rename a file, leave it out, or delete one of the two.',
-          'There, a folder is an album. Organizing a photo puts it in an album, inside a folder of albums when you choose one, and takes it out of the other albums PhotoSense made; your own albums are left as they are. A photo is kept once on a phone, so it can be moved but not copied. An album left empty, by **Undo** or otherwise, stays in Photos until you delete it there.',
-          'What you delete waits in an album called **PhotoSense Removed**, where **Undo** can still take it back. **Delete permanently** sends it to the phone\'s **Recently Deleted**, which keeps it for 30 days; the phone asks you first.',
-          '**Settings**, the gear at the top of each tab, has your plan first (it opens **Subscription**, with the plans, **Restore purchases** and **Manage**), then the theme, **Distances**, **Photo access** (which opens the phone\'s own settings for PhotoSense), **Scan again**, what waits in **PhotoSense Removed** with **Delete permanently**, **Recently moved** with **Undo**, **Errors**, **Help**, **About PhotoSense** and **Privacy policy**. Delete permanently asks twice unless you turned the second question off as it was asked.',
-        ],
-      },
-      {
-        heading: 'On an Android phone',
-        text: [
-          'As on an iPhone, the first time **Continue** asks which photos PhotoSense may see, and then reads them all; **Scan again** in Settings reads them again.',
-          'The phone\'s storage is the one folder, **Phone**, holding its own folders: **DCIM** (with the camera\'s **Camera**), **Pictures**, **Movies** and the rest. Android keeps photos only inside DCIM, Pictures or Movies, so a folder made in Organize goes in **Pictures** unless you choose DCIM or a folder made there earlier. Organize sorts what is in no folder yet, and what is still where the camera put it, in **DCIM/Camera**.',
-          'What you delete waits in **_PhotoSense_Removed** inside the folder it was in, where **Undo** can still take it back; what you delete from the whole phone waits in **Pictures/PhotoSense Removed**. **Delete permanently** sends it to the phone\'s bin, which keeps it for 30 days. Android asks you once before each set of photos is moved or put in the bin.',
-          'A photo can be moved on the phone, not copied; to copy photos, send them to a computer.',
         ],
       },
       {
@@ -119,9 +119,11 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'duplicates',
+    only: COMPUTER,
     title: 'Reviewing duplicates',
     summary: 'Looking at each picture beside its copies, and removing the copies.',
     go: { label: 'Show the duplicates', place: 'duplicates' },
+    keywords: ['copies', 'copy', 'same photo', 'twice', 'dupes', 'identical', 'compare', 'keep', 'original'],
     sections: [
       {
         text: [
@@ -162,9 +164,11 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'similar',
+    only: COMPUTER,
     title: 'Similar shots',
     summary: 'Burst frames and edited versions: pictures that look alike but are not copies.',
     go: { label: 'Show the similar shots', place: 'similar' },
+    keywords: ['burst', 'edited', 'look alike', 'near duplicates', 'best shot'],
     sections: [
       {
         text: [
@@ -183,9 +187,11 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'organize',
+    only: COMPUTER,
     title: 'Organize: suggested folders',
     summary: 'Sorting a folder by place and date, with the map and the ways to narrow what is shown.',
     go: { label: 'Open Organize', place: 'organize' },
+    keywords: ['sort', 'arrange', 'tidy', 'location', 'gps', 'year', 'month', 'trip', 'map', 'kilometres', 'miles', 'filter'],
     sections: [
       {
         steps: [
@@ -220,9 +226,11 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'own',
+    only: COMPUTER,
     title: 'Organize: folders of your own',
     summary: 'Making your own folders, or using ones already there, and putting files in them.',
     go: { label: 'Open Organize', place: 'organize' },
+    keywords: ['new folder', 'create folder', 'drag', 'drop', 'existing folder'],
     sections: [
       {
         steps: [
@@ -244,9 +252,11 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'move',
+    only: COMPUTER,
     title: 'Organize: previewing and moving',
     summary: 'Checking a folder before anything moves, names that are already taken, and undoing.',
     go: { label: 'Open Organize', place: 'organize' },
+    keywords: ['preview', 'copy', 'rename', 'name taken', 'clash', 'conflict', 'undo', 'history', 'recently moved'],
     sections: [
       {
         steps: [
@@ -283,9 +293,11 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'select',
+    only: COMPUTER,
     title: 'Organize: selecting and deleting files',
     summary: 'Selecting one file, a range or all of them, and deleting what is selected.',
     go: { label: 'Open Organize', place: 'organize' },
+    keywords: ['choose', 'pick', 'shift', 'select all', 'remove', 'trash', 'open file', 'viewer'],
     sections: [
       {
         tips: [
@@ -310,71 +322,55 @@ export const GUIDE: GuideTopic[] = [
     ],
   },
   {
-    id: 'phone',
+    id: 'phones',
+    only: COMPUTER,
     title: 'Backing up a phone to a computer',
-    summary: 'Pairing a phone with a computer, backing up its photos and videos over Wi-Fi, each checked, and then freeing space on the phone.',
+    summary: 'Pairing a phone or tablet with this computer, where its backups go, and what Phones shows of each.',
+    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive'],
     sections: [
       {
         text: [
-          'PhotoSense on the phone backs up photos and videos straight to PhotoSense on your computer, over your own Wi-Fi, never through the internet; no one else on the network can read them. Both need to be on the same Wi-Fi, with PhotoSense open on the computer.',
+          'PhotoSense on an iPhone, iPad or Android phone backs up its photos and videos straight to PhotoSense on this computer, over your own Wi-Fi, never through the internet; no one else on the network can read them. Both need to be on the same Wi-Fi, with PhotoSense open on this computer.',
+          'This computer waits for the phones paired with it whenever PhotoSense runs. A phone it does not know is turned away, unless **Pair a phone** is open.',
         ],
       },
       {
-        heading: 'Pairing',
+        heading: 'Pairing a phone',
         steps: [
-          'On the computer, open **Phones** and choose **Pair a phone**. It shows a QR code and a six-digit code, which change every 5 minutes.',
-          'On the phone, choose **Connect your computer**: when PhotoSense first opens, or in **Backup**. **Scan the code** with the camera, and the two are paired at once. Or choose **Enter the code instead**, type the six digits, and check that both show the same number before pairing.',
-          'After that the two know each other and do not ask again. Backups go to **Pictures/PhotoSense**, in a folder named after the phone.',
+          'Open **Phones**, at the top left, and choose **Pair a phone**.',
+          'It shows a QR code, and under **Or enter this code on the phone**, a six-digit code. Both change every 5 minutes.',
+          'On the phone, choose **Connect your computer**, then **Scan the code** and point the phone at the QR code: the two are paired at once.',
+          'Or, on the phone, choose **Enter the code instead** and type the six digits. Both then show the same number: check that they match before pairing on each.',
+          'Once paired, **Done** closes the window. The two know each other from then on, and do not ask again.',
         ],
       },
       {
-        heading: 'Backing up',
-        steps: [
-          '**Backup**, on the phone, says how many photos and videos are waiting. Press **Back up now**. Only what is not on the computer yet is sent, with each Live Photo\'s video.',
-          'Each file is checked by its SHA-256 checksum as it arrives, and only a file that arrived whole is kept. One whose name is taken in the folder arrives under a new name: nothing on the computer is replaced.',
-          '**Pause** stops a backup part way; **Resume** carries on from there.',
-          '**Send now** sends only the photos you choose in **Library**: select them, then **Send**.',
-        ],
-      },
-      {
-        heading: 'Automatic backup (Pro)',
+        heading: 'Where backups go',
         tips: [
-          '**Back up automatically** backs up whenever PhotoSense is open and the computer is on the same Wi-Fi; on Android also about once an hour on Wi-Fi with PhotoSense closed. It backs up only while the phone is charging if **Only while charging** is on. **Include videos** leaves videos out when it is off; a Live Photo\'s video always goes with it.',
-          'Sending photos yourself, with **Back up now** or **Send now**, stays free.',
+          'Each phone’s backups go to **Pictures/PhotoSense**, in a folder named after the phone.',
+          'Each file is checked by its SHA-256 checksum as it arrives, and only a file that arrived whole is kept. One whose name is taken in the folder arrives under a new name: nothing on this computer is replaced.',
+          'Every time a phone backs up, this computer first checks the files it holds for it. One moved, deleted or changed here is sent again by the phone.',
         ],
       },
       {
-        heading: 'Phones, on the computer',
+        heading: 'What Phones shows',
         tips: [
-          '**Phones** lists every phone and tablet paired with the computer. Choose one to see the backup arriving, how many of its files are on the computer, that each matched its checksum, and how many it could delete.',
-          '**Change…** sends its backups to another folder from then on; what is there already stays. **Pause backups** turns the phone away until **Resume backups**.',
-          'Every time the phone backs up, the computer first checks the files it holds for it. One moved, deleted or changed there is sent again.',
-        ],
-      },
-      {
-        heading: 'Safe to delete',
-        tips: [
-          'Once photos are on the computer, **Library** says how many and how much space removing them would free. **Review** opens **Safe to delete**, which lists only photos and videos whose every file matched its copy on the computer at the last backup.',
-          '**Keep on this iPhone** leaves your **Favorites**, and what you took in the **Last 30 days**, on the phone. Turn either off to remove those too.',
-          '**Remove** sends them to the phone\'s **Recently Deleted**, or the bin on Android, where they stay for 30 days; the phone asks you first. The copies on the computer stay.',
-          'On an iPhone with iCloud Photos on, removing them here also removes them from iCloud and your other Apple devices. The copies on the computer are not affected.',
-          'On the free plan, each one removed counts toward the day\'s free removals; past them, **Remove the largest now** removes as many as are left today, the largest first.',
-        ],
-      },
-      {
-        heading: 'If a backup stops',
-        tips: [
-          'If the phone or the computer hears nothing from the other for a minute, as when the phone loses the Wi-Fi or its screen locks, the backup stops and says why. What arrived whole is kept; press **Try again** to carry on.',
-          'A photo kept only in iCloud is fetched to the phone first, which can take a while. The computer is told meanwhile, and waits.',
+          '**Phones and tablets**, on the left, lists every phone paired with this computer, with when it last backed up. Choose one to see it.',
+          '**Backup** shows a backup arriving, file by file, each with a tick once it matched its checksum, and otherwise when the last one was.',
+          '**On this computer** says how many of its photos and videos are here; **Checked** that each matched its SHA-256 checksum; **Safe to delete on the phone** how many the phone could remove, and how much space that frees there.',
+          '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays.',
+          '**Pause backups** turns the phone away until **Resume backups**. **Activity** lists what happened.',
         ],
       },
     ],
   },
   {
     id: 'removed',
+    only: COMPUTER,
     title: 'Removed files and deleting permanently',
     summary: 'Where deleted files wait, how to put one back, and how to erase them for good.',
     go: { label: 'Open Settings', place: 'settings' },
+    keywords: ['trash', 'recycle bin', 'bin', 'deleted', 'restore', 'recover', 'get back', 'undelete', 'erase', 'free space', 'empty'],
     sections: [
       {
         text: [
@@ -407,30 +403,40 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'plan',
+    only: COMPUTER,
     title: 'The free plan and Pro',
-    summary: 'How many files the free plan removes each day, and what Pro adds.',
+    summary: 'How many files the free plan removes each day on this computer, and how Pro reaches it.',
+    keywords: ['price', 'cost', 'pay', 'buy', 'purchase', 'subscription', 'upgrade', 'limit', 'daily', '50', 'premium'],
     sections: [
       {
         text: [
-          'PhotoSense is free. The free plan removes **50 photos and videos a day**, in Clean up, Organize and Library alike. Each one you delete counts, once it has gone to **_PhotoSense_Removed**. **Undo** brings it back, and gives back the removal the same day; the count starts again at midnight. Each device has its own 50.',
-          'Before you delete more than are left today, PhotoSense says how many you chose and how many are left, and offers **Delete … now** for as many as are left, the largest first. A question before deleting also says how many are left today.',
+          'PhotoSense is free. The free plan removes **50 photos and videos a day** on this computer, in Clean up and Organize alike. Each one you delete counts, once it has gone to **_PhotoSense_Removed**. **Undo** brings it back, and gives back the removal the same day; the count starts again at midnight. Each device has its own 50.',
+          'The plan beside the menu says how many are left today, as in **PhotoSense Free · 38 left today**. A question before deleting says it too.',
+        ],
+      },
+      {
+        heading: 'Deleting more than are left',
+        tips: [
+          'Before you delete more than are left today, a question says how many you chose and how many are left.',
+          '**Delete … now** deletes as many as are left: in Clean up, the groups of copies that free the most first; elsewhere, the largest files first. **Not now** deletes nothing.',
         ],
       },
       {
         heading: 'PhotoSense Pro',
         tips: [
-          'Pro has no daily limit. It is bought in PhotoSense on an iPhone, iPad or Android phone, in **Settings**, from the plan at the top, through the App Store or Google Play, at their own prices. The yearly plan starts with a 7-day free trial.',
-          'One purchase covers PhotoSense on your phone, tablet and computer. A computer learns of it from the phone the next time the phone backs up to it, and shows the plan beside the menu.',
-          '**Restore purchases**, on the Subscription page, finds what was bought with the same Apple Account or Google account. **Manage** opens the store, where a subscription is changed or cancelled.',
+          'Pro has no daily limit. It is bought in PhotoSense on an iPhone, iPad or Android phone, not on a computer.',
+          'One purchase covers PhotoSense on your phone, tablet and computer. This computer learns of it from the phone the next time the phone backs up here, and the plan beside the menu then says **PhotoSense Pro**.',
         ],
       },
     ],
   },
   {
     id: 'menu',
+    only: COMPUTER,
     title: 'Settings, theme, errors and About',
     summary: 'What the menu holds besides the things described elsewhere.',
     go: { label: 'Open Settings', place: 'settings' },
+    keywords: ['preferences', 'options', 'dark mode', 'light mode', 'version', 'privacy', 'terms', 'support', 'faq', 'licences', 'kilometers', 'miles'],
     sections: [
       {
         tips: [
@@ -445,13 +451,15 @@ export const GUIDE: GuideTopic[] = [
   },
   {
     id: 'trouble',
+    only: COMPUTER,
     title: 'If something looks wrong',
     summary: 'What the commonest puzzles mean, and what to do about them.',
+    keywords: ['problem', 'error', 'not working', 'stuck', 'help', 'fix', 'broken', 'missing'],
     sections: [
       {
         heading: 'A red bar says the PhotoSense service is not answering',
         text: [
-          'The page is still open but the program behind it has stopped, so what is shown may be out of date. Start PhotoSense again (dev-start.ps1) and press **Retry**.',
+          'The page is still open but the program behind it has stopped, so what is shown may be out of date. Start PhotoSense again and press **Retry**.',
         ],
       },
       {
@@ -469,13 +477,19 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Folder not found',
         text: [
-          'Folders are those of the computer PhotoSense runs on, by their full path. Use **Browse** to pick one. A disk that is not plugged in is not found either.',
+          'Folders are those of this computer, by their full path. Use **Browse** to pick one. A disk that is not plugged in is not found either.',
         ],
       },
       {
         heading: 'A file was left where it is',
         text: [
           'It is open in another program, or it has changed since the scan. A file that cannot be moved stops the whole move or deletion, so nothing went and everything is where it was. Close the program, or scan again, and try once more. The reason is kept under **Errors**.',
+        ],
+      },
+      {
+        heading: 'A phone cannot find this computer',
+        text: [
+          'PhotoSense must be open on this computer, and both must be on the same Wi-Fi. A phone not yet paired is turned away until **Pair a phone** is open in **Phones**. If scanning the QR code does not find it, try **Enter the code instead** on the phone.',
         ],
       },
       {
@@ -486,14 +500,512 @@ export const GUIDE: GuideTopic[] = [
       },
     ],
   },
+
+  // ——— On an iPhone, iPad or Android phone or tablet ———
+  {
+    id: 'phone-start',
+    only: PHONES,
+    title: 'Getting started',
+    summary: 'The first launch, the four tabs, Settings, and finding your way back.',
+    keywords: ['overview', 'introduction', 'welcome', 'first time', 'begin', 'setup', 'tabs', 'back', 'tablet', 'sidebar'],
+    sections: [
+      {
+        text: [
+          'PhotoSense frees up space and keeps your photos tidy. **Clean up** finds the copies of each photo or video and helps you remove all but the best one. **Organize** sorts your photos by where and when they were taken. **Backup** copies them to PhotoSense on your own computer, and then shows what is safe to delete here.',
+          'Everything happens on this device and on your own computer. Nothing is uploaded to PhotoSense.',
+        ],
+      },
+      {
+        heading: 'The first launch',
+        steps: [
+          '**Get started**, on the welcome screen.',
+          '**Continue** asks the phone’s own question of which photos PhotoSense may see. Allow them all: with only some, PhotoSense checks only those, so most of Clean up and Safe to delete cannot work. If you said no, **Open Settings** goes to where access is turned on; come back, and PhotoSense carries on.',
+          '**Connect your computer** pairs this device with PhotoSense on your Mac or PC, for backups. **Skip for now** leaves it for later, from **Backup** or **Settings**.',
+          'PhotoSense then reads your library, saying how many photos and videos it has read and what it has found so far. **Stop** ends the scan, keeping what it read.',
+          '**Scan complete** says how much space could be freed, and from what: duplicates, similar shots and large videos. **Continue**.',
+          'On the free plan, with something to free, PhotoSense Pro is offered once. **Continue with Free**, or the ×, carries on without it. The first launch ends in **Clean up**.',
+        ],
+      },
+      {
+        heading: 'Finding your way',
+        tips: [
+          'The tabs, **Library**, **Clean up**, **Organize** and **Backup**, are at the foot of the screen. Each keeps where you were in it; tap the tab you are on to go back to its first screen.',
+          'The gear at the top right of each tab opens **Settings**.',
+          'Messages appear at the bottom of the screen. One that offers **Undo** stays a little longer; an error stays until you press OK, and is listed under **Errors** in Settings.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'Swipe from the left edge, or tap the back arrow, to go back from a screen opened over another.',
+          'On an iPad the tabs are in a sidebar on the left. **Hide sidebar** gives the screen its whole width, with the tabs at the top; **Show sidebar** brings it back. In **Clean up** and **Organize**, the list and what you open from it sit side by side.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'The phone’s Back gesture or button goes back from a screen opened over another, and puts away a sheet.',
+          'On a tablet the tabs are down the left side. In **Clean up** and **Organize**, the list and what you open from it sit side by side.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'library',
+    only: PHONES,
+    title: 'Library',
+    summary: 'Every photo and video, by month: viewing one, choosing several, and what can be done with them.',
+    keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month'],
+    sections: [
+      {
+        text: [
+          '**Library** shows every photo and video, newest first, by month. The title says how many there are. A Live Photo is shown once, its video going with its picture.',
+          'Tap one to see it whole, with when and where it was taken, where it is kept and its size. The three buttons under it are **Send**, the way to put it somewhere, and **Delete**. A video shows its details, but PhotoSense does not play videos yet.',
+        ],
+      },
+      {
+        heading: 'Seeing only some',
+        tips: [
+          '**All**, **Not organized**, **No location** and **Videos**, under the title, each show only those, with how many there are.',
+          'Once this device backs up to a computer, **On** the computer (by its name) and **Waiting** show what is there already and what is still to go. A tick on a photo says it is on the computer, and the foot of the list says when the computer last checked them.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          '**Not organized** shows the photos in no album yet.',
+          'If you let PhotoSense see only some of your photos, a note says so, and **Choose more** opens the phone’s own picker. Copies among the others are not found.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          '**Not organized** shows the photos in no folder yet, and those still where the camera put them, in **DCIM/Camera**.',
+          'If you let PhotoSense see only some of your photos, a note says so, and **Choose more** lets you choose others. Copies among the others are not found.',
+        ],
+      },
+      {
+        heading: 'Choosing several',
+        steps: [
+          'Tap **Select**, then tap each photo or video you want. The title says how many are chosen.',
+          'The bar at the foot then offers **Send**, the way to put them somewhere, and **Delete**.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          '**Add to album** lists your albums, or **+ New album…** makes one. A name already taken in the album gets a number: nothing is replaced.',
+          '**Cancel** stops choosing.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          '**Move to folder** lists your folders, or **+ New folder…** makes one in **Pictures**. A name already taken in the folder gets a number: nothing is replaced.',
+          'The × at the top, or Back, stops choosing.',
+        ],
+      },
+      {
+        heading: 'Sending and deleting',
+        tips: [
+          '**Send** backs up the chosen photos and videos to your computer now, and opens **Backup** to show them going. It copies them; nothing leaves this device.',
+          '**Delete** asks first, naming what goes. Each message after has **Undo**.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'What you delete waits in the album **PhotoSense Removed**, where **Undo** can still bring it back, until **Delete permanently** in Settings.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'What you delete waits in **Pictures/PhotoSense Removed**, where **Undo** can still bring it back, until **Delete permanently** in Settings.',
+        ],
+      },
+      {
+        heading: 'Once your computer has them',
+        text: [
+          'When photos are on your computer, a card at the top of Library says how many, and how much space removing them here would free. **Review** opens **Safe to delete**; the × hides the card. See **Backing up to your computer**.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone-cleanup',
+    only: PHONES,
+    title: 'Clean up',
+    summary: 'The copies found and the similar shots: reviewing each, keeping some, and deleting the rest.',
+    keywords: ['duplicates', 'copies', 'copy', 'same photo', 'twice', 'dupes', 'similar', 'burst', 'compare', 'keep', 'original', 'free space', 'scan again'],
+    sections: [
+      {
+        text: [
+          '**Clean up** has two lists. **Duplicates** are copies of the same photo or video; **Similar** are shots that look alike, such as the frames of a burst. Each row is a group, with two of its pictures, the file that stays and how much there is to delete.',
+          'In each group one stays: the **Original** for copies, the best copy, with the most detail; the **Best shot** for similar shots.',
+        ],
+      },
+      {
+        heading: 'Reviewing a group',
+        steps: [
+          'Tap a group. The original is shown beside a copy, with where each is kept, **What differs** between them and **The same in both**.',
+          'With more than one copy, **Copy 1**, **Copy 2** and so on show each in turn.',
+          'Tap either picture to see it full screen. Tap again to flip between the two in the same spot; with several copies, the arrows go to the previous or next one.',
+          '**Delete** and the copy’s name removes the copy shown, after a question naming the file that goes and the file that stays.',
+          '**Keep this copy too** marks a copy to keep, which **Delete all duplicates** then skips. **Marked keep. Tap to unmark** takes the mark off.',
+        ],
+      },
+      {
+        heading: 'All at once',
+        tips: [
+          'At the top of **Duplicates**, **Delete all duplicates** deletes every copy in every group, keeping the best copy of each, after a question saying how many go and how much they take.',
+          'Similar shots are different pictures, so they are never deleted all at once: go through them a group at a time.',
+          'The foot of the list says when PhotoSense last read your library, and **Scan again** reads it again. A scan reads only what has changed since.',
+        ],
+      },
+      {
+        heading: 'Good to know',
+        tips: [
+          'Each message after a deletion has **Undo**, which puts the files back where they were.',
+          'The last copy of a photo is never deleted as a duplicate.',
+          'When nothing is left, Clean up says so, and where what you deleted waits.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone-organize',
+    only: PHONES,
+    title: 'Organize',
+    summary: 'Suggestions by place and date, previewing one, names already taken, moving and undoing.',
+    keywords: ['sort', 'arrange', 'tidy', 'albums', 'folders', 'location', 'place', 'year', 'month', 'trip', 'map', 'preview', 'move', 'undo', 'recently moved', 'miles', 'kilometres'],
+    sections: [
+      {
+        text: [
+          '**Organize** suggests where to put what is not sorted yet, by **Place** or by **Date**. What you move drops out of the suggestions.',
+        ],
+      },
+      {
+        only: IOS,
+        text: [
+          'On an iPhone or iPad, a suggestion is an album. Only photos in none of your albums are suggested; your own albums are left as they are. A photo is kept once, so it can be moved but not copied.',
+        ],
+      },
+      {
+        only: ANDROID,
+        text: [
+          'On Android, a suggestion is a folder, made in **Pictures** unless you choose another place. Android keeps photos only inside DCIM, Pictures or Movies. Only photos in no folder of yours yet, and those still in **DCIM/Camera**, are suggested. A photo can be moved on the phone, not copied; to copy photos, send them to a computer.',
+        ],
+      },
+      {
+        heading: 'The suggestions',
+        tips: [
+          'By place, each suggestion is a place, with some of its photos, how many and how large, and when they were taken. By date, each is a year, with the places in it.',
+          '**Options** sets how: **Group by**; **Nearby places**, **Combine** within 1, 5, 15, 25 or 50 miles (or kilometers, as **Distances** in Settings says) or **Keep separate**; names after the **Landmark or area** or the **Town**; what goes inside each, by **Year**, **Month** or **Nothing**; and whether to sort **Photos & videos**, **Photos** or **Videos**.',
+          'The map button at the top shows the suggestions as dots on a plain map; tap a dot to see that suggestion under the map. The map is drawn on this device, and no position is sent anywhere. The list button goes back.',
+          'Photos with no location stay where they are when grouping by place. The row that counts them opens Library’s **No location**.',
+        ],
+      },
+      {
+        heading: 'Previewing and moving',
+        steps: [
+          'Tap **Preview** on a suggestion. Nothing moves yet.',
+          'Change its name if you like, and **Change**, beside **Made inside**, to choose where it is made.',
+          'Its files are shown by year, month or place. Tap any file to leave it where it is; it shows **Stays**. **Show more** shows more of them.',
+          'Tap **Move**, which says how many files go. The message after has **Undo**, and the suggestion shows **Moved**.',
+        ],
+      },
+      {
+        heading: 'Names already taken',
+        tips: [
+          'Nothing is ever replaced. A file arriving where its name is taken gets a number, as in IMG_4299 (1).HEIC, and the preview says how many names are taken.',
+          '**Review each name** shows each such file, **Going in**, beside the one **Already there**, and says when the two are byte for byte the same file. For each, choose **Add a number**, **Give it another name** or **Leave it where it is**; **Delete** under either removes that one, after a question saying which stays. **Next name** goes on; **Done** ends it.',
+        ],
+      },
+      {
+        heading: 'Your own, and undoing',
+        tips: [
+          '**Recently moved** lists what was moved or deleted, in Organize, Library or Clean up, each with **Undo**. Files go back under the names they had.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'Under **Your albums**, **New album** names an album of your own. Put photos in it from Library, with **Add to album**.',
+          'An album left empty by **Undo** stays in Photos until you delete it there: iOS asks you before an app deletes an album.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'Under **Your folders**, **New folder** names a folder of your own. Put photos in it from Library, with **Move to folder**.',
+          'Android asks you once before each set of photos is moved.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'backup',
+    only: PHONES,
+    title: 'Backing up to your computer',
+    summary: 'Pairing with your computer, backing up over Wi-Fi with each file checked, and then freeing space here.',
+    keywords: ['back up', 'transfer', 'sync', 'copy to computer', 'pc', 'mac', 'windows', 'pair', 'connect', 'qr code', 'wifi', 'wi-fi', 'send', 'automatic', 'safe to delete', 'free space', 'storage'],
+    sections: [
+      {
+        text: [
+          'PhotoSense backs up your photos and videos straight to PhotoSense on your own Mac or PC, over your own Wi-Fi, never through the internet; no one else on the network can read them. Both need to be on the same Wi-Fi, with PhotoSense open on the computer.',
+        ],
+      },
+      {
+        heading: 'Connecting your computer',
+        steps: [
+          'On the computer, open **Phones** and choose **Pair a phone**. It shows a QR code and a six-digit code.',
+          'Here, choose **Connect your computer**: in **Backup**, or under **Computer** in **Settings**.',
+          '**Scan the code** and point the camera at the QR code: the two are paired at once.',
+          'Or choose **Enter the code instead**, type the six digits and tap **Pair**. Both then show a number: tap **It’s the same number** only if the computer shows the same one.',
+          'Once paired, PhotoSense says where on the computer your backups go: **Pictures/PhotoSense**, in a folder named after this device. The folder is changed on the computer, in **Phones**.',
+        ],
+      },
+      {
+        heading: 'Backing up',
+        tips: [
+          '**Backup** says how many new photos and videos are waiting. **Back up now** sends only what is not on the computer yet, with each Live Photo’s video.',
+          'Each file is checked by its SHA-256 checksum as it arrives, and only a file that arrived whole is kept. Nothing on the computer is replaced: a name already taken there gets a new one.',
+          '**Pause** stops a backup part way; **Resume** carries on from there.',
+          '**Send now**, **Choose photos to send**, opens Library to choose some; **Send** then backs up just those.',
+        ],
+      },
+      {
+        heading: 'Automatic backup (Pro)',
+        tips: [
+          '**Back up automatically** backs up by itself; **Only while charging** waits for the charger; with **Include videos** off, videos stay behind, though a Live Photo’s video always goes with its picture.',
+          'Backing up yourself, with **Back up now** or **Send now**, stays free.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'An iPhone or iPad backs up by itself whenever PhotoSense is open and the computer is on the same Wi-Fi.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'An Android phone backs up by itself on Wi-Fi about once an hour, with PhotoSense closed too, and whenever it is open.',
+        ],
+      },
+      {
+        heading: 'Safe to delete',
+        tips: [
+          'Once photos are on the computer, **Review**, on Library’s card, opens **Safe to delete**. It lists only photos and videos whose every file matched its copy on the computer at the last backup, and shows how much of this device’s storage removing them frees.',
+          'Under **Keep on this** device, **Last 30 days** leaves what you took lately here. Turn it off to remove those too.',
+          '**Remove** removes them, the largest first, after the phone’s own question. The copies on the computer stay. **Space freed** then shows the storage before and now.',
+          'On the free plan each counts toward the day’s free removals; past them, **Remove the largest now** removes as many as are left today.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          '**Favorites**, under **Keep on this iPhone**, leaves your favorite photos here too.',
+          'Removed photos go to **Recently Deleted**, which keeps them for 30 days. If iCloud Photos is on, removing them here also removes them from iCloud and your other Apple devices; the copies on the computer are not affected.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'Removed photos go to the phone’s bin, which keeps them for 30 days.',
+        ],
+      },
+      {
+        heading: 'If a backup stops',
+        tips: [
+          'If the phone or the computer hears nothing from the other for a minute, as when the phone loses the Wi-Fi or its screen locks, the backup stops and says why. What arrived whole is kept; **Try again** carries on.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'A photo kept only in iCloud is fetched first, which can take a while; the computer is told meanwhile, and waits.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone-removed',
+    only: PHONES,
+    title: 'Removed photos and deleting permanently',
+    summary: 'Where deleted photos wait, putting them back, and sending them to the phone’s own bin.',
+    keywords: ['trash', 'bin', 'recently deleted', 'deleted', 'restore', 'recover', 'get back', 'undelete', 'erase', 'free space', 'empty'],
+    sections: [
+      {
+        only: IOS,
+        text: [
+          'What you delete in Library, Clean up or Organize waits in an album called **PhotoSense Removed**. Photos there are not gone: **Undo** brings them back.',
+        ],
+      },
+      {
+        only: ANDROID,
+        text: [
+          'What you delete in Library, Clean up or Organize waits in **Pictures/PhotoSense Removed**. Photos there are not gone: **Undo** brings them back.',
+        ],
+      },
+      {
+        heading: 'Putting photos back',
+        tips: [
+          'Press **Undo** in the message that says what was deleted.',
+          'Later, open **Recently moved**, in Settings or in Organize, and press **Undo** beside the deletion.',
+        ],
+      },
+      {
+        heading: 'Deleting permanently',
+        steps: [
+          'In **Settings**, **PhotoSense Removed** says how many items wait there and how much space they take.',
+          'Tap **Delete permanently…**. A question says how many go and where; nothing has gone yet.',
+          'Confirm, and a second question asks **Are you sure?** Confirm there too.',
+        ],
+        tips: [
+          'Undo can no longer bring them back, and they leave **Recently moved**.',
+          'The second question has a switch, **Do not ask me this second time again**.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'They go to the phone’s **Recently Deleted**, which keeps them for 30 days; iOS asks you first.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'They go to the phone’s bin, which keeps them for 30 days; Android asks you first.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone-plan',
+    only: PHONES,
+    title: 'The free plan and Pro',
+    summary: 'How many photos the free plan removes each day, what Pro adds, and buying, restoring or cancelling it.',
+    keywords: ['price', 'cost', 'pay', 'buy', 'purchase', 'subscription', 'upgrade', 'limit', 'daily', '50', 'trial', 'cancel', 'restore', 'family', 'lifetime', 'monthly', 'yearly', 'premium'],
+    sections: [
+      {
+        text: [
+          'PhotoSense is free. The free plan removes **50 photos and videos a day**, in Library, Clean up, Organize and Safe to delete alike. **Undo** gives back the removal the same day, and the count starts again at midnight. Each device has its own 50. Every question before deleting says how many are left today.',
+          'Before you delete more than are left, the **PhotoSense Pro** sheet says how many you chose and how many are left. **Delete … now** deletes as many as are left, the largest first; **Not now** deletes nothing.',
+        ],
+      },
+      {
+        heading: 'PhotoSense Pro',
+        tips: [
+          'Pro removes as many as you like each day, and backs up automatically. One purchase covers your phone, tablet and computer; a computer learns of it the next time this device backs up to it.',
+          'The plans: **Yearly**, with a 7-day free trial; **Monthly**; and **Lifetime**, paid once. **Family** covers up to 6 people. Prices are the store’s own, in your currency.',
+          '**Settings** shows your plan at the top; tap it for **Subscription**, with what each plan includes, the free removals left today, and the plans.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'Pro is bought through the App Store. **Restore purchases** finds what was bought with the same Apple Account. **Manage in App Store** is where a subscription is changed or cancelled; you keep Pro until it ends.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'Pro is bought through Google Play. **Restore purchases** finds what was bought with the same Google account. **Manage in Google Play** is where a subscription is changed or cancelled; you keep Pro until it ends.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone-settings',
+    only: PHONES,
+    title: 'Settings',
+    summary: 'Everything under the gear: your plan, the computer, the theme, photo access and the rest.',
+    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles'],
+    sections: [
+      {
+        tips: [
+          'Your plan, at the top, opens **Subscription**.',
+          '**Computer**: the computer this device is paired with, and its **Backup folder**; or **Connect your computer**.',
+          '**Theme**: **Auto** follows the phone’s own light or dark setting; **Dark** or **Light** keeps one. **Distances**: miles or kilometers, for Organize.',
+          '**Photo access** says what PhotoSense may see, and opens the phone’s own settings for PhotoSense to change it. **Scan again** reads your library again.',
+          '**PhotoSense Removed** says what waits there; **Delete permanently…** empties it.',
+          '**Recently moved** lists what can still be undone. **Errors** lists what went wrong.',
+          '**Help** opens this guide. **About PhotoSense** shows the version and who makes it, with the support page, the terms and what others made that PhotoSense uses. **Privacy policy** opens the privacy policy.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          '**Photo access** says **Full access**, **Some chosen** or **None**.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          '**Photo access** says **All photos and videos**, **Some chosen** or **None**.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'phone-trouble',
+    only: PHONES,
+    title: 'If something looks wrong',
+    summary: 'What the commonest puzzles mean, and what to do about them.',
+    keywords: ['problem', 'error', 'not working', 'stuck', 'help', 'fix', 'broken', 'missing', 'permission', 'cannot find'],
+    sections: [
+      {
+        heading: 'PhotoSense cannot see my photos',
+        text: [
+          'You said no when the phone asked. In **Settings**, **Photo access** opens the phone’s own settings for PhotoSense: allow all photos, and come back.',
+        ],
+      },
+      {
+        heading: 'Clean up misses copies',
+        text: [
+          'With access to only some photos, PhotoSense checks only those. Allow them all, or **Choose more** in Library. **Scan again**, in Settings, then reads the library again.',
+        ],
+      },
+      {
+        heading: 'The computer is not found',
+        text: [
+          'PhotoSense must be open on the computer, and both must be on the same Wi-Fi. To pair, **Pair a phone** must be open in **Phones** on the computer. If scanning the code does not find it, try **Enter the code instead**.',
+        ],
+      },
+      {
+        heading: 'A backup stopped',
+        text: [
+          'The phone or the computer heard nothing from the other for a minute, as when the phone left the Wi-Fi or its screen locked. What arrived whole is kept: **Try again** carries on from there.',
+        ],
+      },
+      {
+        heading: 'A photo was left where it is',
+        text: [
+          'The message says why. Nothing else was changed for it: a move or deletion happens in full or not at all. The reason is also kept under **Errors**, in Settings.',
+        ],
+      },
+    ],
+  },
 ];
 
-const plain = (topic: GuideTopic) => [topic.title, topic.summary, ...topic.sections.flatMap(s => [s.heading ?? '', ...(s.text ?? []), ...(s.steps ?? []), ...(s.tips ?? [])])]
-  .join(' ').replaceAll('**', '').toLowerCase();
-const TEXT = new Map(GUIDE.map(topic => [topic.id, plain(topic)]));
+const shownOn = (platform: GuidePlatform) => (part: Only) => !part.only || part.only.includes(platform);
 
-/** The topics that mention every word looked for, in the guide's own order; all of them when nothing is looked for. */
-export function searchGuide(query: string): GuideTopic[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  return GUIDE.filter(topic => words.every(word => TEXT.get(topic.id)!.includes(word)));
+/** The guide as one platform shows it: its own topics, each with its own sections. */
+export function guideFor(platform: GuidePlatform): GuideTopic[] {
+  const shown = shownOn(platform);
+  return GUIDE.filter(shown).map(topic => ({ ...topic, sections: topic.sections.filter(shown) }));
+}
+
+const plain = (topic: GuideTopic) => [topic.title, topic.summary, ...topic.keywords, ...topic.sections.flatMap(s => [s.heading ?? '', ...(s.text ?? []), ...(s.steps ?? []), ...(s.tips ?? [])])]
+  .join(' ').replaceAll('**', '').replaceAll('’', "'").toLowerCase();
+
+/**
+ * One platform's topics that mention every word looked for, or are known by it, in the guide's own order; all of
+ * them when nothing is looked for.
+ */
+export function searchGuide(query: string, platform: GuidePlatform): GuideTopic[] {
+  const words = query.toLowerCase().replaceAll('’', "'").split(/\s+/).filter(Boolean);
+  return guideFor(platform).filter(topic => { const text = plain(topic); return words.every(word => text.includes(word)); });
 }

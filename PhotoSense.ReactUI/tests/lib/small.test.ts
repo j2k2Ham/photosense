@@ -1,8 +1,9 @@
 import { act, renderHook } from '@testing-library/react';
 import { createElement } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadLastScan, loadOrganizeRoot, saveLastScan, saveOrganizeRoot } from '../../lib/lastScan';
+import { loadLastScan, loadOrganizeRoot, saveLastScan, saveOrganizeRoot, useLastScan, useOrganizeRoot } from '../../lib/lastScan';
 import { loadAppSettings, useAppSettings } from '../../lib/settings';
 import { skinOf, useSkin } from '../../lib/skin';
 import { useTheme } from '../../lib/theme';
@@ -90,6 +91,25 @@ describe('the theme', () => {
     expect(renderToStaticMarkup(createElement(Probe))).toBe('<p>dark</p>');
   });
 
+  it('changes nothing while the page wakes from what the server made, so that a page saved light never flashes dark', async () => {
+    localStorage.setItem(THEME_KEY, 'light');
+    // As the script in the page's head leaves it, before React has woken.
+    document.documentElement.classList.add('light');
+    function Probe() { return createElement('p', null, useTheme()[0]); }
+    const holder = document.createElement('div');
+    holder.innerHTML = renderToString(createElement(Probe));
+    document.body.append(holder);
+    const toggle = vi.spyOn(document.documentElement.classList, 'toggle');
+
+    const root = await act(async () => hydrateRoot(holder, createElement(Probe)));
+    expect(toggle).not.toHaveBeenCalledWith('light', false);
+    expect(toggle).toHaveBeenCalledWith('light', true);
+    expect(holder.textContent).toBe('light');
+    act(() => root.unmount());
+    holder.remove();
+    toggle.mockRestore();
+  });
+
   it('still works for this visit where the browser refuses to remember it', () => {
     refuseStorage();
     const { result } = renderHook(() => useTheme());
@@ -133,6 +153,21 @@ describe('the settings', () => {
     expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false });
   });
 
+  it('change where they are shown when changed elsewhere on the page or in another tab', () => {
+    const { result } = renderHook(() => useAppSettings());
+    const other = renderHook(() => useAppSettings());
+    act(() => other.result.current[1]({ distanceUnit: 'km' }));
+    expect(result.current[0].distanceUnit).toBe('km');
+
+    // Another tab writes the browser's storage itself, and the browser says so.
+    act(() => {
+      localStorage.setItem('photosense-settings', JSON.stringify({ distanceUnit: 'miles' }));
+      window.dispatchEvent(new StorageEvent('storage', { key: 'photosense-settings' }));
+    });
+    expect(result.current[0].distanceUnit).toBe('miles');
+    other.unmount();
+  });
+
   it('have their defaults for anything not saved, or saved in a way that cannot be read', () => {
     localStorage.setItem('photosense-settings', '{"somethingOlder":1}');
     expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false, somethingOlder: 1 });
@@ -165,6 +200,14 @@ describe('the last scan', () => {
     expect(loadLastScan()).toEqual({ root: '', second: '', recursive: true });
     saveLastScan({ root: 'C:\\photos', second: 'D:\\backup', recursive: false });
     expect(loadLastScan()).toEqual({ root: 'C:\\photos', second: 'D:\\backup', recursive: false });
+  });
+
+  it('is shown again as soon as a scan is started, and the folder last organized too', () => {
+    const scan = renderHook(() => useLastScan());
+    const organized = renderHook(() => useOrganizeRoot());
+    expect([scan.result.current.root, organized.result.current]).toEqual(['', '']);
+    act(() => { saveLastScan({ root: 'C:\\photos', second: '', recursive: true }); saveOrganizeRoot('C:\\photos\\2024'); });
+    expect([scan.result.current.root, organized.result.current]).toEqual(['C:\\photos', 'C:\\photos\\2024']);
   });
 
   it('is simply not known when what was stored cannot be read, or storage is refused', () => {

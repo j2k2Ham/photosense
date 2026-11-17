@@ -13,11 +13,11 @@ Next.js 16 (a static export), React 19, SWR, Tailwind 3, Vitest with Testing Lib
 npm test                      # Vitest
 npm run test:coverage         # fails below 100% of branches, lines, functions and statements
 npx tsc --noEmit              # then delete the tsconfig.tsbuildinfo it leaves
-npm run lint                  # ESLint 9, Next's rules and jsx-a11y strict: 0 errors; the 17 react-hooks warnings are known
+npm run lint                  # ESLint 9, Next's rules and jsx-a11y strict: no errors and no warnings
 ```
 
 - **`npm run build`** catches what tsc does not, such as `app/layout.tsx` importing a module that uses SWR. Never run it, or a second `next dev`, in `PhotoSense.ReactUI` while Jamie's app is running (`Get-NetTCPConnection -LocalPort 7071,3000`): build in a copy instead (`photosense-verify`).
-- **A change that adds lint warnings is not done.** The known 17 stay 17. Most new ones come from calling `setState` synchronously in an effect; set state in a promise's callback instead.
+- **Lint has no warnings, and stays so.** React's `set-state-in-effect` and `refs` rules are errors (Jamie, 2026-11-17). Instead of setting state straight from an effect: read browser storage with `useStored` (`lib/stored.ts`, on `useSyncExternalStore`); keep an answer with the question it answers and drop it when the question changes (`MovePreview`); adjust state while rendering when something it follows changes (`app/page.tsx`, the scan followed); or clear it in the effect's cleanup (`useOrganizeReading`). A callback an effect hands to something outside React is a `useEffectEvent`, not a ref written while rendering (`GoogleFolderMap`).
 
 ## Every change keeps these
 

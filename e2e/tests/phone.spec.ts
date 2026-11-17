@@ -172,6 +172,27 @@ test.describe('on a phone', () => {
     expect(photos.exists('IMG_0002.JPG')).toBe(true);
   });
 
+  test('Help, from Settings, is the phone\'s own guide, in its words, and finds a feature by the words a person would use @phone', async ({ page }) => {
+    await new Phone().attach(page);
+    await page.goto('/');
+    const settings = await phoneSettings(page);
+    await settings.getByRole('button', { name: 'Help' }).click();
+    const help = page.getByRole('dialog', { name: 'Help' });
+    const topics = help.getByRole('navigation', { name: 'Topics' }).getByRole('button');
+    await expect(topics).toHaveCount(9);
+    await expect(help.getByRole('article')).toHaveAccessibleName('Getting started');
+    await expect(help.getByRole('article')).toContainText('The first launch');
+    // An iPhone's words: albums, PhotoSense Removed and Recently Deleted; nothing of a computer's screens.
+    await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /^Removed photos and deleting permanently/ }).click();
+    await expect(help.getByRole('article')).toContainText('an album called PhotoSense Removed');
+    await expect(help.getByRole('article')).toContainText('Recently Deleted');
+    await expect(help.getByRole('article')).not.toContainText('_PhotoSense_Removed');
+    await help.getByRole('textbox', { name: 'Search the guide' }).fill('cancel subscription');
+    await expect(topics).toHaveCount(1);
+    await expect(help.getByRole('article')).toHaveAccessibleName('The free plan and Pro');
+    await expect(help.getByRole('article')).toContainText('Manage in App Store');
+  });
+
   test('Settings says what waits in PhotoSense Removed, and Delete permanently erases it after two questions @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { googleMapsId, loadGoogleMaps, onGoogleMapsRefused, type GoogleMap, type GoogleMaps, type GoogleMarker } from '../../lib/googleMaps';
 import type { MapDot } from '../../lib/organize';
 import { Segmented } from '../ModeSwitch';
@@ -46,19 +46,17 @@ export function GoogleFolderMap({ mapsKey, dots, focus, view, large = false, onV
   const [map, setMap] = useState<GoogleMap>();
   // The folders the map was last drawn to take in: it is drawn to fit again only when they are others.
   const fitted = useRef('');
-  const unavailable = useRef(onUnavailable);
-  unavailable.current = onUnavailable;
-  const focusOn = useRef(onFocus);
-  focusOn.current = onFocus;
-  const enlarge = useRef(onEnlarge);
-  enlarge.current = onEnlarge;
+  // What the map calls back is always the page's latest, without the map being made again when it changes.
+  const unavailable = useEffectEvent((why: string) => onUnavailable(why));
+  const focusOn = useEffectEvent((key: string | undefined) => onFocus(key));
+  const enlarge = useEffectEvent(() => onEnlarge?.());
 
   useEffect(() => {
     let wanted = true;
     loadGoogleMaps(mapsKey).then(
       library => { if (wanted) setMaps(library); },
-      (e: Error) => { if (wanted) unavailable.current(e.message); });
-    const stop = onGoogleMapsRefused(() => unavailable.current('Google did not accept the map key.'));
+      (e: Error) => { if (wanted) unavailable(e.message); });
+    const stop = onGoogleMapsRefused(() => unavailable('Google did not accept the map key.'));
     return () => { wanted = false; stop(); };
   }, [mapsKey]);
 
@@ -72,7 +70,7 @@ export function GoogleFolderMap({ mapsKey, dots, focus, view, large = false, onV
       mapTypeControl: false, zoomControl: true, fullscreenControl: large, clickableIcons: large, streetViewControl: false, gestureHandling: 'greedy',
     });
     // A click on a dot is the dot's own and does not reach the map.
-    made.addListener('click', () => enlarge.current?.());
+    made.addListener('click', () => enlarge());
     setMap(made);
   }, [maps, large]);
 
@@ -86,7 +84,7 @@ export function GoogleFolderMap({ mapsKey, dots, focus, view, large = false, onV
       const marker = new maps.marker.AdvancedMarkerElement({
         map, position: { lat: d.latitude, lng: d.longitude }, title: d.tip, zIndex: on ? 2 : 1, content: dotOf(d.size, on), gmpClickable: true, anchorLeft: '-50%', anchorTop: '-50%',
       });
-      marker.addEventListener('gmp-click', () => focusOn.current(on ? undefined : d.key));
+      marker.addEventListener('gmp-click', () => focusOn(on ? undefined : d.key));
       return marker;
     });
 

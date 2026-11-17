@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { planOrganize } from '../../lib/apiClient';
 import { formatBytes, leaf } from '../../lib/format';
 import {
@@ -65,8 +65,9 @@ export function MovePreview({ kind, root, files, places, name, base: home, direc
   const [page, setPage] = useState(1);
   const [choosing, setChoosing] = useState(false);
   const [reviewing, setReviewing] = useState<number>();
-  const [plan, setPlan] = useState<OrganizePlanDto>();
-  const [problem, setProblem] = useState<string>();
+  // The service's answer, kept with the question it answers: what was worked out for the folder as it was says
+  // nothing about the folder as it is now.
+  const [answer, setAnswer] = useState<{ readonly to: object; readonly plan?: OrganizePlanDto; readonly problem?: string }>();
 
   // Typed as the check's answer, so that every kind of answer is known to say whether there is an error.
   // A folder that is already there has no name to change here: a new folder made from its preview is named in the preview alone.
@@ -78,17 +79,17 @@ export function MovePreview({ kind, root, files, places, name, base: home, direc
   const asked = useMemo(() => files.map(f => ({ id: f.id, subfolder: subfolderOf?.(f) })), [files, subfolderOf]);
 
   // Asked afresh whenever where the files go changes; an answer to an earlier question is dropped.
+  const question = useMemo(() => ({ basePath, folderName, direct, asked }), [basePath, folderName, direct, asked]);
+  const answered = answer?.to === question ? answer : undefined;
+  const plan = answered?.plan, problem = answered?.problem;
   useEffect(() => {
-    // What was worked out for the folder as it was says nothing about the folder as it is now.
-    setPlan(undefined);
-    setProblem(undefined);
-    if (folderName === undefined) return;
+    if (question.folderName === undefined) return;
     let latest = true;
-    planOrganize({ basePath, folderName, direct }, asked).then(
-      answer => { if (latest) setPlan(answer); },
-      e => { if (latest) setProblem(messageOf(e)); });
+    planOrganize({ basePath: question.basePath, folderName: question.folderName, direct: question.direct }, question.asked).then(
+      worked => { if (latest) setAnswer({ to: question, plan: worked }); },
+      e => { if (latest) setAnswer({ to: question, problem: messageOf(e) }); });
     return () => { latest = false; };
-  }, [basePath, folderName, direct, asked]);
+  }, [question]);
 
   // A file already in the folder it would go to has nowhere to be moved, and is not part of the plan.
   const planned = useMemo(() => (plan ? new Set(plan.items.map(i => i.id)) : undefined), [plan]);
@@ -99,9 +100,9 @@ export function MovePreview({ kind, root, files, places, name, base: home, direc
   // What is already there is being asked about: at first, and again whenever the files or where they go change.
   const waiting = folderName !== undefined && !plan && !problem;
   // While it is asked about again, as after one of two files with a name was deleted, the names being gone through stay as they were.
-  const settled = useRef<Clash[]>([]);
-  if (!waiting) settled.current = clashes;
-  const reviewed = waiting ? settled.current : clashes;
+  const [settled, setSettled] = useState<readonly Clash[]>([]);
+  if (!waiting && settled !== clashes) setSettled(clashes);
+  const reviewed = waiting ? settled : clashes;
   const all = going.length === movable.length, verb = copy ? 'be copied' : 'move';
   const pages = Math.max(1, Math.ceil(files.length / PREVIEW_PAGE)), from = (Math.min(page, pages) - 1) * PREVIEW_PAGE;
 
@@ -124,7 +125,7 @@ export function MovePreview({ kind, root, files, places, name, base: home, direc
   });
   // With no name left to go through, the going through is over: it does not start again by itself should one turn up later.
   const none = !waiting && clashes.length === 0;
-  useEffect(() => { if (none) setReviewing(undefined); }, [none]);
+  if (none && reviewing !== undefined) setReviewing(undefined);
 
   const toggle = (id: string) => setExcluded(x => ({ ...x, [id]: !x[id] }));
   const resolve = (clash: Clash, how: 'auto' | 'rename' | 'skip') => {

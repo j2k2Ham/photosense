@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useStored } from './stored';
 import { SYSTEM_LIGHT, THEME_KEY } from './themeKey';
 
 /** The page's colours: dark or light. */
@@ -10,12 +11,7 @@ export type ThemeChoice = Theme | 'auto';
 const CHOICES: readonly string[] = ['dark', 'light', 'auto'];
 
 // Nothing saved, or what is saved is not a theme: undefined, so that the caller's own choice applies.
-function saved(): ThemeChoice | undefined {
-  try {
-    const choice = localStorage.getItem(THEME_KEY) ?? '';
-    return CHOICES.includes(choice) ? (choice as ThemeChoice) : undefined;
-  } catch { return undefined; }
-}
+const choiceIn = (kept: string | null): ThemeChoice | undefined => (kept !== null && CHOICES.includes(kept) ? (kept as ThemeChoice) : undefined);
 
 function watchSystem(changed: () => void) {
   const query = window.matchMedia(SYSTEM_LIGHT);
@@ -33,8 +29,8 @@ const lightOnTheServer = () => false;
 export function useTheme(unchosen: ThemeChoice = 'dark'): [Theme, (choice: ThemeChoice) => void, ThemeChoice] {
   // Null until the saved choice is read: the server has none to render with, and the page must not change theme
   // before it knows, or a page saved light would flash dark.
-  const [chosen, setChosen] = useState<ThemeChoice | undefined | null>(null);
-  useEffect(() => { setChosen(saved()); }, []);
+  const [kept, keepChoice] = useStored(THEME_KEY);
+  const chosen = kept === undefined ? null : choiceIn(kept);
   const systemLight = useSyncExternalStore(watchSystem, systemIsLight, lightOnTheServer);
 
   const choice = chosen ?? unchosen;
@@ -44,11 +40,8 @@ export function useTheme(unchosen: ThemeChoice = 'dark'): [Theme, (choice: Theme
     if (known) document.documentElement.classList.toggle('light', theme === 'light');
   }, [known, theme]);
 
-  const choose = useCallback((next: ThemeChoice) => {
-    setChosen(next);
-    // A browser that refuses storage still gets the theme for this visit.
-    try { localStorage.setItem(THEME_KEY, next); } catch { /* not remembered */ }
-  }, []);
+  // A browser that refuses storage still gets the theme for this visit.
+  const choose = useCallback((next: ThemeChoice) => keepChoice(() => next), [keepChoice]);
 
   return [theme, choose, choice];
 }
