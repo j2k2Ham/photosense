@@ -25,7 +25,7 @@ public sealed class IosDevice : IDeviceStatus
     {
         get
         {
-            var attributes = NSFileManager.DefaultManager.GetFileSystemAttributes(NSFileManager.HomeDirectory, out _);
+            var attributes = NSFileManager.DefaultManager.GetFileSystemAttributes(NSFileManager.HomeDirectory ?? "/", out _);
             return attributes is null ? new DeviceStorage(0, 0) : new DeviceStorage((long)attributes.Size, (long)attributes.FreeSize);
         }
     }

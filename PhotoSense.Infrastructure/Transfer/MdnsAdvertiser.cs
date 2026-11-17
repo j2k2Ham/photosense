@@ -80,13 +80,17 @@ public sealed class MdnsAdvertiser : ITransferAdvertiser
     /// <summary>The task answering questions, for whoever waits for it to end.</summary>
     public Task Answering { get; private set; } = Task.CompletedTask;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Starts telling the network that this computer waits for phones. Where the port cannot be had, as when the system's
+    /// own responder holds it and will not share, nothing is said: the computer still waits, and a phone that scans its QR
+    /// code still finds it by the addresses the code carries.
+    /// </summary>
     public void Start(string id, string name, int port)
     {
         lock (_lock)
         {
             Stop();
-            var socket = _open();
+            if (!TryOpen(out var socket)) return;
             var stop = new CancellationTokenSource();
             _socket = socket;
             _stop = stop;
@@ -107,18 +111,46 @@ public sealed class MdnsAdvertiser : ITransferAdvertiser
         }
     }
 
+    private bool TryOpen(out IMdnsSocket socket)
+    {
+        try
+        {
+            socket = _open();
+            return true;
+        }
+        catch (SocketException)
+        {
+            socket = null!;
+            return false;
+        }
+    }
+
+    // Sends one message; one that cannot go, as to everyone on a machine with no route for it, is no reason to stop answering.
+    private static async Task<bool> TrySendAsync(IMdnsSocket socket, byte[] message, IPEndPoint to, CancellationToken stop)
+    {
+        try
+        {
+            await socket.SendAsync(message, to, stop);
+            return true;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
     // Says it is there once, then answers each question about it until stopped.
     private static async Task AnswerAsync(IMdnsSocket socket, byte[] answer, string id, CancellationToken stop)
     {
         try
         {
-            await socket.SendAsync(answer, Mdns.Everyone, stop);
+            await TrySendAsync(socket, answer, Mdns.Everyone, stop);
             while (true)
             {
                 var (question, from) = await socket.ReceiveAsync(stop);
                 if (Asks(question, id) is not { } direct) continue;
                 // Asked to be answered directly, or from a port other than mDNS's own, it is answered to the asker; otherwise to everyone.
-                await socket.SendAsync(answer, direct || from.Port != Mdns.Everyone.Port ? from : Mdns.Everyone, stop);
+                await TrySendAsync(socket, answer, direct || from.Port != Mdns.Everyone.Port ? from : Mdns.Everyone, stop);
             }
         }
         // Stopped, or the socket was closed by Stop: there is no one left to answer.

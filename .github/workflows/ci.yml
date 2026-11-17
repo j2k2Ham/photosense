@@ -51,6 +51,23 @@ jobs:
         working-directory: PhotoSense.ReactUI
         run: npm ci
 
+      # The phone apps cannot be restored on Linux, so the packages only they use are fetched as they are, for their notices.
+      - name: Fetch the phone apps' own packages
+        run: |
+          for project in PhotoSense.iOS/PhotoSense.iOS.csproj PhotoSense.Android/PhotoSense.Android.csproj; do
+            grep -o '<PackageReference Include="[^"]*" Version="[^"]*"' "$project" | sed -E 's/.*Include="([^"]+)" Version="([^"]+)"/\1 \2/' |
+            while read -r id version; do
+              lower=$(echo "$id" | tr '[:upper:]' '[:lower:]')
+              folder="$HOME/.nuget/packages/$lower/$version"
+              [ -f "$folder/$lower.nuspec" ] && continue
+              mkdir -p "$folder"
+              curl -sSfL --retry 3 "https://api.nuget.org/v3-flatcontainer/$lower/$version/$lower.$version.nupkg" -o "$RUNNER_TEMP/package.nupkg"
+              unzip -qo "$RUNNER_TEMP/package.nupkg" -d "$folder"
+              # NuGet keeps the package's description under its id in lower case, which the notices read.
+              for nuspec in "$folder"/*.nuspec; do [ "$nuspec" = "$folder/$lower.nuspec" ] || mv "$nuspec" "$folder/$lower.nuspec"; done
+            done
+          done
+
       - name: Test the build tools, and that the third-party notices are up to date (fails below 100% coverage)
         run: >-
           node --test --experimental-test-coverage --test-coverage-include="tools/*.mjs"

@@ -1,4 +1,4 @@
-# Handoff: PhotoSense growth features (Phases 1–4, first launch, settings and subscription, tablet, desktop)
+# Handoff: PhotoSense growth features (Phases 1–4, first launch, settings and subscription, cloud storage, tablet, desktop)
 
 ## Overview
 
@@ -8,6 +8,7 @@ This package adds the features in `prototype/PhotoSense Product Plan.dc.html` to
 - **Phase 2:** more Clean up categories, video compression, low-storage alerts, the share card.
 - **Phase 3:** on-device search, trips and the travel map, fixing dates and places, sharing without location, the hidden vault, widgets and app shortcuts.
 - **Phase 4:** the Family plan and Year in review.
+- **Cloud storage:** back up to Google Drive, OneDrive, Dropbox and Box, and to your own servers (Amazon S3, S3-compatible, Azure Blob Storage, WebDAV, SFTP, SMB), then delete from the device once the copy is checked.
 - **Also:** first launch, Settings and the Subscription page, tablet layouts, and the desktop Phones and Family tabs.
 
 It builds on `design_handoff_photosense_mobile/`, which is still the source for the shell, the four Native skins and the shared components. This README only covers what is new or changed. Where it says "as in the mobile handoff", follow that README.
@@ -40,13 +41,14 @@ Behaviour lives in three files:
 
 - `FeaturePhone.dc.html`, for phones. `seed()` lists every named start state; `renderVals()` derives each screen.
 - `FeatureTablet.dc.html`, for tablets.
+- `FeatureCloud.dc.html`, for cloud storage on phones and tablets (`device` prop: phone or tablet). `seed()` lists its start states.
 - `DesktopPhones.dc.html`, for the desktop.
 
 `prototype/PhotoSense Product Plan.dc.html` holds the product reasons, pricing and trust rules. Read its Pricing and Trust rules sections before building anything with a limit or a paywall.
 
 ## Screenshots
 
-There are 228 in all. Phones have one file per state, numbered the same in all four folders: `screenshots/iphone/{dark,light}/NN-iphone-{theme}.jpg` and `screenshots/android/{dark,light}/NN-android-{theme}.jpg`.
+There are 304 in all. Phones have one file per state, numbered the same in all four folders: `screenshots/iphone/{dark,light}/NN-iphone-{theme}.jpg` and `screenshots/android/{dark,light}/NN-android-{theme}.jpg`.
 
 | # | State | # | State |
 |---|---|---|---|
@@ -75,10 +77,18 @@ There are 228 in all. Phones have one file per state, numbered the same in all f
 | 23 | Low-storage notification | 48 | Subscription, Free |
 | 24 | Free up space | 49 | Subscription, Trial |
 | 25 | Share card | 50 | Subscription, Pro |
+| 51 | Backup tab | 59 | Connect to server, Azure Blob Storage |
+| 52 | Backing up to every location | 60 | Connect to server, can’t write |
+| 53 | Backup locations | 61 | Location details, Google Drive |
+| 54 | ••• menu with Connect to server | 62 | Location details, Amazon S3 server |
+| 55 | Sign in to OneDrive | 63 | Choose photos to send |
+| 56 | Second location on the free plan (Pro sheet) | 64 | Send to |
+| 57 | Connect to server on the free plan (Pro sheet) | 65 | Sent and checked, delete from device |
+| 58 | Connect to server, Amazon S3 | | |
 
 The tablet and desktop screenshots are named by screen:
 
-- **Tablet:** `screenshots/ipad/{dark,light}/` and `screenshots/android-tablet/{dark,light}/` each hold T1 Library, T2 Clean up, T3 Swipe, T4 Trips and T5 Subscription.
+- **Tablet:** `screenshots/ipad/{dark,light}/` and `screenshots/android-tablet/{dark,light}/` each hold T1 Library, T2 Clean up, T3 Swipe, T4 Trips, T5 Subscription, T6 Backup, T7 Connect to server, T8 Send to and T9 Sent.
 - **Desktop:** `screenshots/desktop/{dark,light}/` holds D1 Phones, D2 Pair a phone, D3 Rename by date and D4 Family.
 
 ---
@@ -121,7 +131,19 @@ The tablet and desktop screenshots are named by screen:
   - Search: "Searching for what is in photos is part of Pro. Searching by date and place stays free."
   - Fix: "Fixing dates, places and file names is part of Pro."
   - Vault: "The hidden vault is part of Pro."
-- Purchases go through StoreKit 2 and Google Play Billing. After a purchase, the action that opened the sheet carries on: the delete, turning on automatic backup, compressing, or applying the fix.
+  - Second backup location: "The free plan backs up to one location, and [name] is on. Pro adds as many as you like." Adds a secondary button "Use [new location] instead", which turns the current one off and the new one on.
+  - Connect to server: "Connecting your own server, like Amazon S3, Azure or a home NAS, is part of Pro."
+- For the two cloud contexts the feature list is: "Back up to as many locations as you like", "Your own servers: S3, Azure, WebDAV, SFTP and SMB", "Automatic backup", "Unlimited removals every day".
+- Purchases go through StoreKit 2 and Google Play Billing. After a purchase, the action that opened the sheet carries on: the delete, turning on automatic backup, compressing, applying the fix, turning on the second location (through its sign-in if needed) or opening Connect to server.
+
+### Backup locations and the free plan
+
+- **Free:** one backup location at a time: the computer, one cloud service or nothing. Back up now and Send now stay free. Automatic backup is Pro.
+- **Pro, Trial and Family:** any number of locations, plus your own servers.
+- Turning on a second location on the free plan opens the Pro sheet with the second-location context. Turning one off is always allowed.
+- Connect to server is Pro only. In the ••• menu it carries a PRO pill on the free plan and opens the Pro sheet. The Servers group note starts "Your own servers are part of Pro."
+- If Pro ends, keep the most recently used location on and turn the rest off. Their connections and files stay; nothing is deleted.
+- PhotoSense has no servers of its own in this flow. Files go straight from the device to the location the person connected.
 
 ### System dialogs (real, not built in HTML)
 
@@ -344,6 +366,33 @@ Headers, lists, buttons, toasts, sheets and the tab bars are as in the mobile ha
   - Change plan, with the current one marked "Current". Choosing another shows "Switch to Monthly for $2.99".
 - All three states show Restore purchases, Terms and Privacy policy. The note: "One purchase covers PhotoSense on your phone, tablet and computer when you sign in with the same [Apple Account]."
 
+### Cloud storage (51–65)
+
+Lists, switches, sheets and headers are as in the mobile handoff. Copy is in `FeatureCloud.dc.html` (`PROV`, `TYPES`, `ERR` and `renderVals()`).
+
+- **Backup tab (51–52):** subtitle "Copies photos and videos to your computer, cloud storage and servers". The status card counts across every location that is on ("Backing up N to 3 locations. Every copy is checked."). A Backup locations row leads to 53. While running (52), each location row shows its own progress.
+- **Backup locations (53):**
+  - Intro: on Free, "Turn on the place that should keep a copy of your photos and videos. The free plan backs up to one location. Pro adds as many as you like." On Pro, "Turn on the places that should keep a copy of your photos and videos. PhotoSense backs up to every one that is on."
+  - Three groups: **Computer** (the paired Mac or PC), **Cloud storage** (Google Drive, OneDrive, Dropbox, Box, always listed with a switch) and **Servers** (ones the person added, then Add a location).
+  - Rows: a 36 px tile (brand letter for services, computer and server glyphs otherwise), name, a status line (account and free space, "Not connected", or type and host), and a switch. Tapping the row opens details (61–62).
+  - Servers note: "To add Amazon S3, Azure Blob Storage, WebDAV, SFTP or SMB, choose Connect to server in the ••• menu."
+  - **Safe to delete:** "Count a photo as backed up when its copy is checked on" with a segmented control, Any location / 2 locations, and the matching note.
+  - **Automatic backup** (PRO pill on Free): Back up automatically, Only while charging, Include videos, and Use cellular data ("Cloud storage and online servers only"). Note: "Computers and home servers back up on Home Wi-Fi. Cloud storage and online servers back up on any Wi-Fi…"
+- **••• menu (54):** Connect to server, Check all backups. iOS uses the glass menu at the top right; Android uses the M3 overflow menu.
+- **Sign in (55):** turning on a service that is not connected opens the system web authentication sheet (ASWebAuthenticationSession / Custom Tabs) at the provider's own page. PhotoSense never sees the password. Ask only for the narrowest scope each service offers: Google Drive `drive.file` in My Drive/PhotoSense, OneDrive and Dropbox app folders (Apps/PhotoSense), Box a folder named PhotoSense. On success the switch turns on and the row shows the account.
+- **Pro sheets (56–57):** see Pro sheet and Backup locations and the free plan above.
+- **Connect to server (58–60):**
+  - A full page with a type picker: Amazon S3, S3-compatible, Azure Blob, WebDAV, SFTP, SMB. The grouped fields change with the type (see `TYPES`); required fields are marked. Each type has one help line, for example "Use an access key that only reaches this bucket. PhotoSense needs to list, read and write files in its folder."
+  - Keys and passwords: "Keys and passwords are saved in the Keychain on this iPhone and are only sent to this server." On Android, "the Android Keystore on this phone".
+  - **Connect** lists the folder, writes a small test file, reads it back, compares checksums and deletes it. Only then is the server added and turned on.
+  - On failure (60) the page stays filled in and shows a plain error that says what to change, such as "This access key can list the bucket but can’t write to it. Allow s3:PutObject on photos-archive/PhotoSense/* and try again."
+  - SMB backs up only on the same network as the server.
+- **Location details (61–62):** status, a storage bar (PhotoSense, other, free) where the service reports quota, the folder, checked copies ("PhotoSense compares each file’s checksum with the copy in [location] before it counts as backed up."), and per-location backup settings. Servers show their connection details with masked keys, plus Edit. At the bottom, Turn off / Disconnect / Remove server with "Files on the server are not deleted. Photos backed up only here stop counting as safe to delete."
+- **Send and delete (63–65):**
+  - Choose photos (63), then **Send to** (64): a sheet listing every location that is on as radio rows. The selected one is the default for next time.
+  - After sending (65), every copy is checked by checksum. The result says "Each one matches the copy in [location]" and offers to delete the originals from this device.
+  - With iCloud Photos on, show the iCloud warning before the system dialog. Deleting goes through the system dialog and counts toward the free plan's 50 removals a day; the remaining count is shown next to the button.
+
 ---
 
 ## Screens: tablet
@@ -362,6 +411,11 @@ These use the iPad sidebar (280 px glass panel) and the Android rail (96 px) fro
   - A 320 px side panel: amount marked, the 15 newest marked thumbnails, the streak, and "Free plan: 50 removals left today. Deletions here count toward it."
 - **T4 Trips:** a 380 px list, the map filling the rest, and a 360 px floating card for the selected trip with Open trip and Make a folder on Studio iMac.
 - **T5 Subscription:** a 380 px Settings list on the left (plan card selected). On the right, the Free subscription page with the comparison table and the plans side by side.
+- **T6 Backup:** two panes. The 380 px list holds the title with the ••• button, the status card with its 6-thumbnail strip, every location group with switches, Safe to delete, Automatic backup and Send now. Phone screens 51 and 53 merge into this list. The selected location is filled `--sel` and its details fill the right pane.
+- **T7 Connect to server:** the server form fills the right pane, with Cancel and Connect in its header. The ••• menu anchors to the list header.
+- **T8 Send to:** the photo picker fills the right pane (4 columns on iPad, 6 on Android); Send to is a 540 px centered form sheet.
+- **T9 Sent:** the result and delete offer fill the right pane.
+- On tablets every bottom sheet becomes a centered 540 px form sheet (no grabber), including the Pro sheet. Sign-in is a 580 × 700 form sheet on iPad and a 520 px side sheet from the right on Android. Toasts sit over the right pane.
 
 ## Screens: desktop
 
@@ -403,6 +457,10 @@ New services the in-process API needs:
 | Metadata fixes | Date shift and copying a location from the nearest photo (PHAssetChangeRequest / MediaStore write request). Renaming runs on the computer. |
 | Vault | Encrypted storage inside the app, removed from the library after a verified encrypted copy exists. Biometric unlock. |
 | Family | Members, seats, the shared folder on the family computer, and finding duplicates across members by checksum. |
+| Backup locations | A list of locations (computer, service, server), each with on/off, last check and per-location settings. The free plan allows one on. Uploads run from the device in the background (BGProcessingTask / URLSession background uploads on iOS, WorkManager on Android) and resume after interruption. |
+| Cloud services | OAuth 2 with PKCE through the system browser. Google Drive, Microsoft Graph (OneDrive), Dropbox and Box APIs with resumable uploads. Tokens in the Keychain / Android Keystore. Quota from each API. |
+| Servers | Amazon S3 and S3-compatible (SigV4, multipart), Azure Blob (SAS or account key, block blobs), WebDAV, SFTP and SMB 2/3. Connect runs the list, write, read and delete test. |
+| Remote verification | After upload, read back the checksum: S3 `x-amz-checksum-sha256`, Azure `Content-MD5` set on upload, the provider's content hash for Drive, OneDrive and Dropbox, or download and hash for WebDAV, SFTP and SMB. An item counts as backed up only after this check. |
 
 UI state added on phones:
 
@@ -419,6 +477,7 @@ UI state added on phones:
 - vault lock state
 - the year-in-review card index
 - the theme choice (Auto, Dark, Light)
+- backup locations and which are on, the server form, the Send to destination, and the Safe to delete rule (any location or 2 locations)
 
 ## Assets
 
@@ -431,6 +490,7 @@ UI state added on phones:
 - `prototype/PhotoSense Growth Features.dc.html`: the clickable overview of every state.
 - `prototype/FeaturePhone.dc.html`: phone behaviour and markup.
 - `prototype/FeatureTablet.dc.html`: tablet layouts.
+- `prototype/FeatureCloud.dc.html`: cloud storage and servers on phones and tablets.
 - `prototype/DesktopPhones.dc.html`: desktop Phones and Family.
 - `prototype/PhotoSense Product Plan.dc.html`: features, pricing, trust rules, metrics, risks.
 - `prototype/ios-frame.jsx`, `android-frame.jsx`, `doc-page.js`, `support.js`: prototype support only.

@@ -16,10 +16,16 @@ public class MdnsAdvertiserTests
         public Channel<(byte[], IPEndPoint)> Heard { get; } = Channel.CreateUnbounded<(byte[], IPEndPoint)>();
         public Channel<(byte[] Message, IPEndPoint To)> Sent { get; } = Channel.CreateUnbounded<(byte[], IPEndPoint)>();
         public bool Disposed { get; private set; }
+        /// <summary>Where nothing can be sent, as to everyone on a machine with no route for multicast.</summary>
+        public Func<IPEndPoint, bool> Unreachable { get; init; } = _ => false;
 
         public async Task<(byte[] Message, IPEndPoint From)> ReceiveAsync(CancellationToken ct) => await Heard.Reader.ReadAsync(ct);
 
-        public async Task SendAsync(byte[] message, IPEndPoint to, CancellationToken ct) => await Sent.Writer.WriteAsync((message, to), ct);
+        public async Task SendAsync(byte[] message, IPEndPoint to, CancellationToken ct)
+        {
+            if (Unreachable(to)) throw new SocketException((int)SocketError.NetworkUnreachable);
+            await Sent.Writer.WriteAsync((message, to), ct);
+        }
 
         public void Dispose() => Disposed = true;
     }
@@ -104,6 +110,32 @@ public class MdnsAdvertiserTests
         await Assert.That(sockets[1].Disposed).IsFalse();
         advertiser.Stop();
         await Assert.That(new MdnsAdvertiser()).IsNotNull();
+    }
+
+    [Test]
+    public async Task A_Port_That_Cannot_Be_Had_Leaves_The_Computer_Unannounced_But_Running(CancellationToken ct)
+    {
+        var advertiser = new MdnsAdvertiser(() => throw new SocketException((int)SocketError.AddressAlreadyInUse), () => Addresses);
+        advertiser.Start("abc123", "Studio iMac", 47616);
+        await advertiser.Answering;
+        advertiser.Stop();
+        await Assert.That(advertiser.Answering.IsCompletedSuccessfully).IsTrue();
+    }
+
+    [Test]
+    public async Task With_No_Route_To_Everyone_It_Still_Answers_Each_Phone_That_Asks_Directly(CancellationToken ct)
+    {
+        var socket = new FakeSocket { Unreachable = to => to.Equals(Mdns.Everyone) };
+        var advertiser = new MdnsAdvertiser(() => socket, () => Addresses);
+        advertiser.Start("abc123", "Studio iMac", 47616);
+        var phone = new IPEndPoint(IPAddress.Parse("192.168.1.30"), 5353);
+        // Asked to everyone, the answer cannot go; asked directly, it goes to the phone.
+        await socket.Heard.Writer.WriteAsync((Question(MdnsComputerFinder.Service, direct: false), phone), ct);
+        await socket.Heard.Writer.WriteAsync((Question(MdnsComputerFinder.Service, direct: true), phone), ct);
+        var (_, to) = await socket.Sent.Reader.ReadAsync(ct);
+        await Assert.That(to).IsEqualTo(phone);
+        advertiser.Stop();
+        await advertiser.Answering;
     }
 
     [Test]

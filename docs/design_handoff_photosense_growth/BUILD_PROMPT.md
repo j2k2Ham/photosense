@@ -12,7 +12,7 @@ Load the `photosense-page` and `photosense-phone-apps` skills. Read `docs/design
 
 Each comes in dark and light.
 
-To see the behaviour, open `docs/design_handoff_photosense_growth/prototype/PhotoSense Growth Features.dc.html` in a browser. The specs for state and transitions are the logic classes in `prototype/FeaturePhone.dc.html` (`seed`, `reqDel`, `sysOk`, `buyPro`, `renderVals`), `prototype/FeatureTablet.dc.html` and `prototype/DesktopPhones.dc.html`. Do not copy the prototype code. Rebuild it in our stack. `prototype/PhotoSense Product Plan.dc.html` holds the pricing and trust rules; follow them exactly.
+To see the behaviour, open `docs/design_handoff_photosense_growth/prototype/PhotoSense Growth Features.dc.html` in a browser. The specs for state and transitions are the logic classes in `prototype/FeaturePhone.dc.html` (`seed`, `reqDel`, `sysOk`, `buyPro`, `renderVals`), `prototype/FeatureTablet.dc.html`, `prototype/FeatureCloud.dc.html` (`seed`, `wantOn`, `buyPro`, `useInstead`, `renderVals`) and `prototype/DesktopPhones.dc.html`. Do not copy the prototype code. Rebuild it in our stack. `prototype/PhotoSense Product Plan.dc.html` holds the pricing and trust rules; follow them exactly.
 
 **Where it goes.**
 
@@ -50,7 +50,12 @@ To see the behaviour, open `docs/design_handoff_photosense_growth/prototype/Phot
 11. **Hidden vault (33–34).** Encryption, biometric unlock, and including vault items in backups.
 12. **Widgets and app shortcuts (35–36)** on both platforms.
 13. **Family (37–40, D4).** Family Sharing on iOS and invite links on Android. Duplicates across members are found by checksum.
-14. **Tablet layouts (T1–T5).**
+14. **Cloud storage (51–65).**
+    - Backup locations with Google Drive, OneDrive, Dropbox and Box, signed in through the system browser with the narrowest scope.
+    - Connect to server (Pro): S3, S3-compatible, Azure Blob, WebDAV, SFTP and SMB, with the connect test.
+    - Checksum checks on each location, the Safe to delete rule, Send to, and deleting after a checked send.
+    - The free plan allows one location; the second opens the Pro sheet.
+15. **Tablet layouts (T1–T9).**
 
 **Rules that apply here** (from `CLAUDE.md`, plus this design):
 
@@ -58,7 +63,7 @@ To see the behaviour, open `docs/design_handoff_photosense_growth/prototype/Phot
 - TSDoc on everything exported.
 - Every deletion goes through the system dialog and stays recoverable for 30 days. Nothing is erased by PhotoSense itself.
 - Every number shown before payment is real. The free daily limit is shown next to it.
-- No paywall during a swipe session. No ads. Photos and search queries never leave the person's devices.
+- No paywall during a swipe session. No ads. Photos go only to the computer, cloud storage and servers the person connects, never to PhotoSense. Search queries never leave the device. Keys and tokens stay in the Keychain or Android Keystore.
 - Keep the copy in the README exact, with the platform words from its table.
 - Keep `STEPS.md` current: add these steps and tick each one once it is done and verified.
 - Commit or push only when I ask.
