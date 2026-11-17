@@ -50,9 +50,14 @@ public class PhotoStorageOptions
     public string ResolveDatabaseFolder() => Path.GetDirectoryName(ResolveDatabasePath()) ?? DefaultDataFolder;
 
     /// <summary>The full path of the folder each paired phone's backups get a folder in.</summary>
-    /// <param name="pictures">The person's Pictures folder.</param>
-    public string ResolveBackupPath(string pictures)
-        => string.IsNullOrWhiteSpace(BackupPath) ? Path.Combine(pictures, "PhotoSense") : Path.GetFullPath(BackupPath, pictures);
+    /// <param name="pictures">The person's Pictures folder; empty where the system names none, as on a Linux account without one.</param>
+    /// <param name="home">The person's own folder, whose Pictures folder stands in when the system names none; empty for an account that has none.</param>
+    public string ResolveBackupPath(string pictures, string home)
+    {
+        // An empty base would be refused even for a full path, and the program would not start.
+        var folder = string.IsNullOrEmpty(pictures) ? Path.Combine(string.IsNullOrEmpty(home) ? Path.GetTempPath() : home, "Pictures") : pictures;
+        return string.IsNullOrWhiteSpace(BackupPath) ? Path.Combine(folder, "PhotoSense") : Path.GetFullPath(BackupPath, folder);
+    }
 
     /// <summary>The full path of the folder previews are cached in.</summary>
     public string ResolveThumbnailPath()

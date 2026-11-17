@@ -26,9 +26,21 @@ public sealed class StorageSettingsTests
     [Test]
     public async Task Phones_Back_Up_Into_PhotoSense_In_The_Persons_Pictures_Or_The_Folder_The_Settings_Name(CancellationToken ct)
     {
-        var pictures = Path.Combine(Path.GetTempPath(), "Pictures");
-        await Assert.That(Read().ResolveBackupPath(pictures)).IsEqualTo(Path.Combine(pictures, "PhotoSense"));
-        await Assert.That(Read("--PhotoStorage:BackupPath=Backups").ResolveBackupPath(pictures)).IsEqualTo(Path.Combine(pictures, "Backups"));
+        var home = Path.Combine(Path.GetTempPath(), "photosense-home");
+        var pictures = Path.Combine(home, "My Pictures");
+        await Assert.That(Read().ResolveBackupPath(pictures, home)).IsEqualTo(Path.Combine(pictures, "PhotoSense"));
+        await Assert.That(Read("--PhotoStorage:BackupPath=Backups").ResolveBackupPath(pictures, home)).IsEqualTo(Path.Combine(pictures, "Backups"));
+    }
+
+    [Test]
+    public async Task Where_The_System_Names_No_Pictures_Folder_The_One_In_The_Persons_Home_Stands_In(CancellationToken ct)
+    {
+        // As on a Linux account without one: the program still starts, with a full path in the settings or none.
+        var home = Path.Combine(Path.GetTempPath(), "photosense-home");
+        var elsewhere = Path.Combine(Path.GetTempPath(), "photosense-backups");
+        await Assert.That(Read().ResolveBackupPath("", home)).IsEqualTo(Path.Combine(home, "Pictures", "PhotoSense"));
+        await Assert.That(Read($"--PhotoStorage:BackupPath={elsewhere}").ResolveBackupPath("", home)).IsEqualTo(elsewhere);
+        await Assert.That(Read().ResolveBackupPath("", "")).IsEqualTo(Path.Combine(Path.GetTempPath(), "Pictures", "PhotoSense"));
     }
 
     [Test]

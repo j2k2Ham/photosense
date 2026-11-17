@@ -42,7 +42,7 @@ internal static class PhotoSenseServices
         // Phones back up to this computer: it waits for them on a port of its own while it runs, and says so on the network.
         s.AddSingleton(new PhoneDoor(new TcpTransferListener(TcpTransferListener.ComputerPort), new MdnsAdvertiser()));
         s.AddSingleton(sp => new ComputerBackup(sp.GetRequiredService<IBackupStore>(), sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<FileChanges>(),
-            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveBackupPath(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures)),
+            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveBackupPath(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
             Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), sp.GetRequiredService<TimeProvider>()));
         // Pair a phone: the computer shows a code, and a phone it does not know may pair with it.
         s.AddSingleton(sp => new ComputerPairing(sp.GetRequiredService<PhoneDoor>().Listener, sp.GetRequiredService<PhoneDoor>().Advertiser, sp.GetRequiredService<IPairingStore>(),
