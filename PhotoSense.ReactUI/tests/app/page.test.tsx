@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(), useRemoved: vi.fn((): { data?: unknown } => ({ data: undefined })),
   useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
   usePlan: vi.fn((): { data?: PlanDto } => ({ data: undefined })),
+  useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
+  useCategoryPhotos: vi.fn(() => ({ data: [] })),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
@@ -324,6 +326,27 @@ describe('similar shots', () => {
     currentMode = 'duplicates';
     await userEvent.click(tab(/Duplicates/));
     expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe("Clean up's categories on a computer", () => {
+  it('are a tab of their own, with how many files they hold, in place of the groups and their search', async () => {
+    api.useCategories.mockReturnValue({ data: { categories: [{ category: 'screenshots', count: 3, bytes: 30 }, { category: 'blurry', count: 2, bytes: 20 }, { category: 'duplicates', count: 9, bytes: 90 }],
+      unmeasured: 0, storageTotal: null, storageFree: null } });
+    open();
+    expect(tab(/Categories/)).toHaveTextContent('Categories5');
+    expect(tab(/Categories/)).toHaveAttribute('aria-selected', 'false');
+    await userEvent.click(tab(/Categories/));
+    expect(tab(/Categories/)).toHaveAttribute('aria-selected', 'true');
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('navigation', { name: 'Categories' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Screenshots' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Groups')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Search by file name or folder' })).not.toBeInTheDocument();
+    expect(screen.getByText(/^Large videos, screenshots, bursts, blurry shots and what messaging apps saved\./)).toBeInTheDocument();
+    await userEvent.click(tab(/Duplicates/));
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
+    expect(gallery()).toBeInTheDocument();
   });
 });
 

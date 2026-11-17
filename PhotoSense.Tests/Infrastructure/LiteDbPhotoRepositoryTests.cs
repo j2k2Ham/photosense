@@ -57,6 +57,26 @@ public sealed class LiteDbPhotoRepositoryTests
     }
 
     [Test]
+    public async Task What_Clean_Ups_Categories_Need_Is_Read_Back_As_It_Was_Saved(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var photo = TestPhotos.Make("IMG_0001.JPG");
+        photo.Sharpness = 412.5;
+        photo.IsScreenshot = true;
+        photo.BurstId = "BURST-A";
+        await db.Photos().AddOrUpdateAsync(photo, ct);
+        var plain = TestPhotos.Make("IMG_0002.JPG");
+        await db.Photos().AddOrUpdateAsync(plain, ct);
+
+        var back = await db.Photos().GetAsync(photo.Id, ct);
+        await Assert.That((back!.Sharpness, back.IsScreenshot, back.BurstId)).IsEqualTo(((double?)412.5, true, (string?)"BURST-A"));
+        var moved = back.MovedTo(Path.Combine(Path.GetTempPath(), "Trips", "IMG_0001.JPG"));
+        await Assert.That((moved.Sharpness, moved.IsScreenshot, moved.BurstId)).IsEqualTo(((double?)412.5, true, (string?)"BURST-A"));
+        var none = await db.Photos().GetAsync(plain.Id, ct);
+        await Assert.That((none!.Sharpness, none.IsScreenshot, none.BurstId)).IsEqualTo(((double?)null, false, (string?)null));
+    }
+
+    [Test]
     public async Task A_File_Has_One_Record_However_It_Is_Saved(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());

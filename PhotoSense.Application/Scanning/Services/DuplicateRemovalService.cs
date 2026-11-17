@@ -96,6 +96,28 @@ public class DuplicateRemovalService : IDuplicateRemovalService
     }
 
     /// <inheritdoc />
+    public async Task<BulkRemovalResult> RemovePhotosAsync(IReadOnlyCollection<PhotoId> ids, CancellationToken ct)
+    {
+        var removal = new Removal(this);
+        var skipped = 0;
+        var problems = new List<string>();
+        var photos = new List<Photo>();
+        foreach (var id in ids)
+            if (await _repo.GetAsync(id, ct) is { } photo) photos.Add(photo);
+        // Pictures first: a picture takes its Live Photo video with it.
+        foreach (var photo in photos.OrderBy(p => p.IsVideo))
+        {
+            if (await removal.AddAsync(photo, null, ct) != RemovalOutcome.Changed) continue;
+            skipped++;
+            problems.Add($"Changed since the scan, left alone: {photo.SourcePath}");
+        }
+        var done = await removal.CarryOutAsync(ct);
+        if (!done.Done) return new BulkRemovalResult(0, 0, skipped + removal.Asked, [done.Problem!, .. problems]);
+        var removed = removal.Removed.Concat(removal.Forgotten).ToList();
+        return new BulkRemovalResult(removed.Count, removed.Sum(p => p.FileSizeBytes), skipped, problems, removal.Companions.Count, removal.BatchId);
+    }
+
+    /// <inheritdoc />
     public async Task<RemovalResult> RemoveAsync(PhotoId id, bool deleteFile, CancellationToken ct)
     {
         if (await _repo.GetAsync(id, ct) is not { } photo) return new RemovalResult(RemovalOutcome.NotFound);

@@ -25,7 +25,7 @@ const ids = (query: string, platform: GuidePlatform) => searchGuide(query, platf
 describe('the guide itself', () => {
   it('has a topic for each part of PhotoSense on a computer, each told from the others, and says where its buttons go', () => {
     expect(COMPUTER.map(t => t.title)).toEqual([
-      'Getting started', 'Scanning for duplicates', 'Reviewing duplicates', 'Similar shots', 'Organize: suggested folders', 'Organize: folders of your own',
+      'Getting started', 'Scanning for duplicates', 'Reviewing duplicates', 'Similar shots', 'Large videos, screenshots, bursts and blurry shots', 'Organize: suggested folders', 'Organize: folders of your own',
       'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Backing up a phone to a computer', 'Removed files and deleting permanently', 'The free plan and Pro', 'Settings, theme, errors and About', 'If something looks wrong',
     ]);
     expect(new Set(GUIDE.map(t => t.id)).size).toBe(GUIDE.length);
@@ -93,6 +93,9 @@ describe('the guide itself', () => {
     expect(ids('price', 'computer')).toEqual(['plan']);
     expect(ids('dark mode', 'computer')).toEqual(['menu']);
     expect(ids('copies', 'computer')).toContain('duplicates');
+    expect(ids('screenshot', 'computer')).toContain('categories');
+    expect(ids('out of focus', 'computer')).toEqual(['categories']);
+    expect(ids('whatsapp', 'computer')).toEqual(['categories']);
 
     for (const platform of ['ios', 'android'] as const) {
       expect(ids('recover', platform)).toEqual(['phone-removed']);
@@ -104,6 +107,9 @@ describe('the guide itself', () => {
       expect(ids('dark mode', platform)).toEqual(['phone-settings']);
       expect(ids('qr code', platform)).toContain('backup');
       expect(ids('sidebar', platform)).toEqual(['phone-start']);
+      expect(ids('screenshot', platform)).toEqual(['phone-cleanup']);
+      expect(ids('big videos', platform)).toEqual(['phone-cleanup']);
+      expect(ids('free up space', platform)).toContain('phone-cleanup');
     }
     // What another platform has is not found.
     expect(ids('google play', 'ios')).toEqual([]);
@@ -120,12 +126,12 @@ describe('the help window', () => {
     expect(topic('Getting started')).toHaveAttribute('aria-current', 'page');
     expect(topic('Similar shots')).not.toHaveAttribute('aria-current');
     expect(page()).toHaveAccessibleName('Getting started');
-    expect(page()).toHaveTextContent('1 of 13');
+    expect(page()).toHaveTextContent('1 of 14');
     expect(within(page()).getByText('What PhotoSense does, and how to find your way around it.')).toBeInTheDocument();
     expect(within(page()).getAllByText('Clean up')[0].tagName).toBe('STRONG');
     expect(page()).not.toHaveTextContent('**');
     // A numbered list for what is done in order, a plain one for what is worth knowing.
-    expect(within(page()).getByRole('heading', { level: 3, name: 'A good first run' }).parentElement!.querySelector('ol')!.children).toHaveLength(5);
+    expect(within(page()).getByRole('heading', { level: 3, name: 'A good first run' }).parentElement!.querySelector('ol')!.children).toHaveLength(6);
     expect(within(page()).getByRole('heading', { level: 3, name: 'Finding your way' }).parentElement!.querySelector('ul')!.children).toHaveLength(5);
     // The first topic describes no one place, so it has no button to one.
     expect(within(page()).queryByRole('button', { name: /^(Go to|Show|Open)/ })).not.toBeInTheDocument();
@@ -148,7 +154,7 @@ describe('the help window', () => {
     expect(within(page()).queryByRole('button', { name: /^Previous/ })).not.toBeInTheDocument();
     await userEvent.click(within(page()).getByRole('button', { name: /^Next\s*Scanning for duplicates$/ }));
     expect(reading()).toBe('Scanning for duplicates');
-    expect(page()).toHaveTextContent('2 of 13');
+    expect(page()).toHaveTextContent('2 of 14');
     await userEvent.click(within(page()).getByRole('button', { name: /^Previous\s*Getting started$/ }));
     expect(reading()).toBe('Getting started');
     await userEvent.click(topic('If something looks wrong'));

@@ -579,3 +579,41 @@ export interface SwipeStateDto {
   /** Photos and videos never swiped, today's set aside. */
   unswiped: number;
 }
+
+/** A category of Clean up beside duplicates and similar shots (PhotoSense.Contracts.Cleaning). */
+export type CategoryName = 'largeVideos' | 'screenshots' | 'bursts' | 'blurry' | 'messaging' | 'duplicates';
+
+/** How many of a category there are, and what they take (PhotoSense.Contracts.Cleaning.CategorySummaryDto). */
+export interface CategorySummaryDto {
+  category: CategoryName;
+  /** Pictures or videos; for bursts, the shots that would go. */
+  count: number;
+  bytes: number;
+}
+
+/** What Clean up's categories hold (PhotoSense.Contracts.Cleaning.CategoryReportDto). */
+export interface CategoryReportDto {
+  /** Largest first. */
+  categories: CategorySummaryDto[];
+  /** Pictures no scan has measured the sharpness of yet. */
+  unmeasured: number;
+  /** A phone's storage; null on a computer. */
+  storageTotal: number | null;
+  storageFree: number | null;
+}
+
+/** A burst, every shot in the order taken, with the one kept (PhotoSense.Contracts.Cleaning.BurstDto). */
+export interface BurstDto {
+  keeper: string;
+  shots: PhotoDto[];
+}
+
+/** What deleting from Clean up's categories did (PhotoSense.Contracts.Cleaning.CategoryRemovalDto). */
+export interface CategoryRemovalDto {
+  deleted: number;
+  bytes: number;
+  skipped: number;
+  problems: string[];
+  /** On a computer, what Undo puts them back by; null on a phone, where they went to its own bin. */
+  batchId: string | null;
+}

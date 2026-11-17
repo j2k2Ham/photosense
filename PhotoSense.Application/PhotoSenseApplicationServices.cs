@@ -43,6 +43,9 @@ public static class PhotoSenseApplicationServices
         s.AddSingleton<OrganizePlanner>();
         s.AddSingleton<OrganizeMover>();
         s.AddSingleton<RemovedFiles>();
+        // Clean up's categories; a phone's storage where there is a phone.
+        s.AddSingleton(sp => new CleanUpCategories(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<ICompanionFileFinder>(),
+            sp.GetRequiredService<IDuplicateRemovalService>(), sp.GetRequiredService<IDuplicateAnalysisService>(), sp.GetRequiredService<DailyRemovals>(), sp.GetService<IDeviceStatus>()));
         s.AddSingleton<IScanProgressStore, InMemoryScanProgressStore>();
         s.AddSingleton<IScanLogSink, InMemoryScanLogSink>();
         s.AddSingleton<IScanExecutionService>(sp => new ScanExecutionService(

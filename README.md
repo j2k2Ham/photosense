@@ -122,6 +122,9 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 | `/swipe/undo` | POST | On a phone: takes back the last decision of today. 409 when nothing was swiped today |
 | `/swipe/spare` | POST | On a phone: body `{ id, spared }`: on the summary, keeps a photo marked to delete after all, or marks it again |
 | `/swipe/delete` | POST | On a phone: body `{ atMost }` (optional): deletes what is marked, the largest first, to the phone's Recently Deleted or bin after its own question, each counting toward the day's free removals; the rest stay marked. Returns `{ deleted, bytes, left }`. 409 over the free plan's limit, or when the person said no |
+| `/cleanup/categories` | GET | Clean up's categories, largest first: `{ categories: [{ category, count, bytes }], unmeasured, storageTotal, storageFree }`. `category` is `largeVideos`, `screenshots`, `bursts` (count: the shots that would go), `blurry`, `messaging` or `duplicates` (the copies the groups would let go); `unmeasured` is how many pictures no scan has measured the sharpness of yet; the storage is the phone's, null on a computer. Nothing marked keep is counted |
+| `/cleanup/categories/{category}` | GET | The pictures and videos of a category, as photos: large videos and duplicates' copies largest first, the rest latest first. For `bursts`, `[{ keeper, shots }]`, each burst's shots in the order taken and the id of the sharpest. 404 for a name it does not know |
+| `/cleanup/categories/delete` | POST | Body `{ ids }`: deletes those pictures and videos with their Live Photo videos and sidecars. On a phone, to its Recently Deleted or bin after its own question, each counting toward the day's free removals; on a computer, into `_PhotoSense_Removed` as one change. Returns `{ deleted, bytes, skipped, problems, batchId }`, `batchId` (a computer's) for `organize/undo/{id}`. 400 with no ids; 409 over the free plan's limit, or when the person said no |
 | `/send/start` | POST | On a phone: offer files to a computer. Body `{ files: [id] }`, the ids `/organize/files` gave; their Live Photo videos and edit files go with them. The phone waits for a computer, on the network and on a cable, until stopped. Returns the state below; 404 when none of the files is there any more, and on a computer always 404 |
 | `/send/state` | GET | Where sending has got to: `{ stage, code, computer, done, total, bytes, totalBytes, deletable, where, phone, problem, current }`. `stage` is `idle`, `waiting`, `comparing`, `sending`, `sent` or `failed`; `code` is the number to compare while comparing; `deletable` names the pictures and videos every file of which is safely on the computer; `current` names the file going now, none between files |
 | `/send/confirm` | POST | Body `{ same }`: whether the computer shows the same number |
@@ -235,6 +238,19 @@ On either tab the review desk offers **Delete this copy**, which takes the one f
 Groups can also be selected: each tile has a tick box, and **Select all**, above the tiles, ticks every group on the page (ticks stay over a turn of the page, and go when the other tab is turned to). A bar under the tiles says how many groups are ticked and what their copies come to, and deletes the duplicates, or on the Similar tab the similar shots, of all of them together after asking. The best of each group stays, and copies marked keep are skipped.
 
 Removing never erases anything. Files are moved to a `_PhotoSense_Removed` folder inside the scanned folder, keeping their relative path. **Undo**, on the message after a removal, puts every file it took back where it was, and the copies are listed in their groups again; Organize's **Recently moved** lists Clean up's removals too, for undoing later. **Delete permanently** (below) frees the space. Every question asked before a removal, and the message after it, names the file that goes and the file that stays.
+
+### Clean up's categories
+
+Beside duplicates and similar shots, Clean up finds kinds of file that are often safe to let go (`CleanUpCategories` in `PhotoSense.Application/Removal`, the rules in `MediaKinds` and `Bursts` in `PhotoSense.Domain`; Jamie, 2026-11-17). Nothing marked keep is listed.
+
+- **Large videos:** videos over 200 MB.
+- **Screenshots:** on an iPhone, what Photos marks as a screenshot; anywhere, a file named "Screenshot…" or "Screen Shot…", or in a folder called Screenshots.
+- **Bursts:** on an iPhone, the two or more shots Photos groups as a burst; anywhere else, three or more pictures taken by one camera no more than a second apart. The sharpest is kept (then the one with the most pixels, then the first).
+- **Blurry:** pictures whose sharpest part is still soft. A scan measures each picture's sharpness: the variance of the Laplacian in the sharpest of a 4 × 4 grid of tiles, at 512 pixels on the long side, so that a sharp subject on a soft background is not called blurry. Below 400 is blurry, about 2% of a sample of 600 of Jamie's photos. Screenshots are never called blurry. The first scan after this was added reads every picture again, to measure it.
+- **Messaging apps:** what WhatsApp and Telegram saved, in folders named after them.
+- **Duplicates:** the copies the duplicate groups would let go, for Free up space.
+
+On a computer they are the **Categories** tab beside Duplicates and Similar: each kind with how many and how much space, and its files to tick (large videos none to start with, the rest all), deleted into `_PhotoSense_Removed` after a question naming them, with Undo. On a phone they are rows of Clean up's **Find**, largest first, with the phone's storage as a bar at the top, which opens **Free up space**: duplicates, screenshots and blurry shots together, each photo counted once. What a phone deletes from them goes to its Recently Deleted or bin after its own question, each counting toward the day's free removals (rule 2's exception, extended by Jamie on 2026-11-17).
 
 ### Every change happens in full or not at all
 

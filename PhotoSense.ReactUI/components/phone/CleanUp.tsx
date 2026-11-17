@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange, useGroups } from '../../lib/apiClient';
+import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange, useCategories, useGroups } from '../../lib/apiClient';
+import { FIND_HUES, FIND_LABELS, findRows, freeable, percentFull, rowLine, type FindId, type FindRow } from '../../lib/categories';
+import { ofStorage } from '../../lib/backup';
 import { useBackLayer } from '../../lib/backStack';
 import {
   allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, someGroups, whereOf, type CleanUp, type DetailRow, type Question,
@@ -9,10 +11,11 @@ import { limitLine } from '../../lib/plan';
 import { formatBytes, groupSummary, matchLabel } from '../../lib/format';
 import type { Library } from '../../lib/library';
 import { usePhone } from '../../lib/phone';
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
+import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton, StickyFooter } from './Controls';
-import { ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ImageIcon } from './Icons';
+import { BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ImageIcon, ScreenshotIcon, VideoIcon } from './Icons';
+import { BurstsScreen, CategoryGrid, FreeUpSpace, LargeVideosScreen } from './Categories';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet } from './Sheet';
@@ -50,7 +53,7 @@ interface Props {
  * between the original and its copy.
  */
 export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swipe, library, onSwipe }: Props) {
-  const { tablet, words } = usePhone();
+  const { tablet, words, platform } = usePhone();
   const { mode, data, items, group, copy } = cleanUp;
   const [asked, setAsked] = useState<Asked>();
   const [comparing, setComparing] = useState<'original' | 'copy'>();
@@ -112,13 +115,20 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
     notify(keepSaid(photo, !photo.kept, mode), 'ok');
   });
 
+  const report = useCategories(true).data;
+  const similar = similarRow(useGroups('similar', '', 1, false).data);
+  const found = freeable(report);
   const home = (
     <>
-      <RootHeader title="Clean up" subtitle="Daily swipes, duplicates and similar shots" />
+      <RootHeader title="Clean up" subtitle={found > 0 ? `${formatBytes(found)} can be freed` : 'Daily swipes, duplicates and similar shots'} />
       <div className="flex flex-col gap-4 px-4 pb-4">
+        {report?.storageTotal != null && report.storageFree != null && (
+          <Storage found={found} total={report.storageTotal} free={report.storageFree} onOpen={() => cleanUp.open('free')} />
+        )}
         <FreeRow />
         <SwipePanel state={swipe} library={library} onOpen={onSwipe} />
-        <Find onOpen={cleanUp.openList} />
+        <Find unmeasured={report?.unmeasured ?? 0} rows={findRows(report, similar, platform === 'android')}
+          onOpen={id => (id === 'duplicates' || id === 'similar' ? cleanUp.openList(id) : cleanUp.open(id))} />
         {status?.completed && (
           <div className="flex flex-col items-start gap-1 px-1">
             <p className="text-[14px] text-t2">{scannedLine(status.totalPhotos, status.completed, new Date())}</p>
@@ -165,7 +175,14 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
 
   return (
     <>
-      {!cleanUp.listing ? <Screen label="Clean up">{home}</Screen>
+      {cleanUp.opened ? (
+        <PushedScreen label={cleanUp.opened === 'free' ? 'Free up space' : FIND_LABELS[cleanUp.opened]}>
+          {cleanUp.opened === 'free' ? <FreeUpSpace notify={notify} onBack={cleanUp.close} />
+            : cleanUp.opened === 'bursts' ? <BurstsScreen notify={notify} onBack={cleanUp.close} />
+              : cleanUp.opened === 'largeVideos' ? <LargeVideosScreen notify={notify} onBack={cleanUp.close} />
+                : <CategoryGrid category={cleanUp.opened} title={FIND_LABELS[cleanUp.opened]} notify={notify} onBack={cleanUp.close} />}
+        </PushedScreen>
+      ) : !cleanUp.listing ? <Screen label="Clean up">{home}</Screen>
         : tablet ? (
           <Screen label="Clean up" fixed>
             <SplitView list={list} detail={review ?? (
@@ -205,26 +222,52 @@ function FreeRow() {
   );
 }
 
-/** Find: Duplicates and Similar shots, each with how many there are to delete and what they take, opening its list. */
-function Find({ onOpen }: { onOpen(mode: GroupMode): void }) {
-  const duplicates = useGroups('duplicates', '', 1, false).data;
-  const similar = useGroups('similar', '', 1, false).data;
-  const line = (page: typeof duplicates) => (!page ? '…' : page.removableCount === 0 ? 'Nothing left to review' : `${page.removableCount.toLocaleString()} ${page.removableCount === 1 ? 'item' : 'items'} \u00b7 ${formatBytes(page.reclaimableBytes)}`);
-  const rows: [GroupMode, typeof duplicates, typeof CleanUpIcon][] = [['duplicates', duplicates, CleanUpIcon], ['similar', similar, ImageIcon]];
+/** The similar shots as one of Find's rows: how many could go, and what they take. */
+const similarRow = (page: GroupsPageDto | undefined) => page && { count: page.removableCount, bytes: page.reclaimableBytes };
+
+const FIND_ICONS: Record<FindId, typeof CleanUpIcon> = {
+  largeVideos: VideoIcon, similar: ImageIcon, messaging: ChatIcon, duplicates: CleanUpIcon, bursts: BurstIcon, screenshots: ScreenshotIcon, blurry: BlurryIcon,
+};
+
+/**
+ * Find: every category of Clean up and the similar shots, largest first, each with what there is to delete and what it
+ * takes. On an iPhone each has a coloured tile; Android shows the icon alone.
+ */
+function Find({ rows, unmeasured, onOpen }: { readonly rows: readonly FindRow[]; readonly unmeasured: number; onOpen(id: FindId): void }) {
+  const { ios } = usePhone();
   return (
     <ListGroup header="Find">
-      {rows.map(([mode, page, Icon]) => (
-        <ListRow key={mode} chevron onClick={() => onOpen(mode)}>
-          <span className="flex items-center gap-3">
-            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-acc-soft text-on-acc-soft"><Icon size={19} /></span>
-            <span className="min-w-0">
-              <span className="block text-[16px] font-semibold">{KINDS[mode]}</span>
-              <span className="block text-[13.5px] text-t2">{line(page)}</span>
+      {rows.map(row => {
+        const Icon = FIND_ICONS[row.id];
+        return (
+          <ListRow key={row.id} chevron onClick={() => onOpen(row.id)}>
+            <span className="flex items-center gap-3">
+              {ios
+                ? <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-white" style={{ background: `oklch(0.62 0.13 ${FIND_HUES[row.id]})` }}><Icon size={19} /></span>
+                : <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center text-t2"><Icon size={22} /></span>}
+              <span className="min-w-0">
+                <span className="block text-[16px] font-semibold">{FIND_LABELS[row.id]}</span>
+                <span className="block text-[13.5px] text-t2">{rowLine(row, unmeasured)}</span>
+              </span>
             </span>
-          </span>
-        </ListRow>
-      ))}
+          </ListRow>
+        );
+      })}
     </ListGroup>
+  );
+}
+
+/** The phone's storage as a bar: what Clean up found, and the rest used. Tapping it opens Free up space. */
+function Storage({ found, total, free, onOpen }: { readonly found: number; readonly total: number; readonly free: number; onOpen(): void }) {
+  const used = total - free;
+  return (
+    <button type="button" onClick={onOpen} aria-label={`Storage ${percentFull(total, free)}% full. Free up space`} className="flex flex-col gap-1.5 text-left">
+      <span aria-hidden className="flex h-2 w-full overflow-hidden rounded-full bg-fill">
+        <span className="bg-acc" style={{ width: `${(Math.min(found, used) / total) * 100}%` }} />
+        <span className="bg-t3" style={{ width: `${(Math.max(0, used - found) / total) * 100}%` }} />
+      </span>
+      <span className="flex justify-between text-[12.5px] text-t2"><span>{formatBytes(found)} found</span><span>{ofStorage(used, total)} used</span></span>
+    </button>
   );
 }
 

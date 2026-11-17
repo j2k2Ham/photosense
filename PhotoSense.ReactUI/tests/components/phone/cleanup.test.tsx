@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CleanUpScreen } from '../../../components/phone/CleanUp';
 import { useCleanUp } from '../../../lib/cleanup';
 import type { Platform } from '../../../lib/phone';
-import type { DuplicateGroupDto, GroupMode, ScanStatusDto, SwipeStateDto } from '../../../types';
+import type { CategoryName, CategoryReportDto, DuplicateGroupDto, GroupMode, ScanStatusDto, SwipeStateDto } from '../../../types';
 import { frame, gate, inFrame } from './frame';
 import { group, groupsPage, photo } from './groups';
 import { plan } from '../../fixtures';
 
-const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), useGroups: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), setKept: vi.fn(), undoChange: vi.fn() }));
+const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), useGroups: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), setKept: vi.fn(), undoChange: vi.fn(), useCategories: vi.fn(),
+  useCategoryPhotos: vi.fn(), useBursts: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 const ROOT = '/Photo Library';
@@ -58,7 +59,16 @@ beforeEach(() => {
   api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
   // Find's rows: how many there are to delete of each kind, and what they take.
   api.useGroups.mockImplementation((mode: GroupMode) => ({ data: groupsPage(mode, groups[mode], mode === 'duplicates' ? { removableCount: 3, reclaimableBytes: 21 * 1024 ** 2 } : { removableCount: 1, reclaimableBytes: 1024 }) }));
+  api.useCategories.mockReturnValue({ data: report({ duplicates: [3, 21 * 1024 ** 2] }) });
+  api.useCategoryPhotos.mockReturnValue({ data: [] });
+  api.useBursts.mockReturnValue({ data: [] });
 });
+
+/** What Clean up's categories hold: those named, with how many and what they take, and nothing of the rest. */
+function report(found: Partial<Record<CategoryName, [number, number]>>, more: Partial<CategoryReportDto> = {}): CategoryReportDto {
+  const names: CategoryName[] = ['largeVideos', 'screenshots', 'bursts', 'blurry', 'messaging', 'duplicates'];
+  return { categories: names.map(category => ({ category, count: found[category]?.[0] ?? 0, bytes: found[category]?.[1] ?? 0 })), unmeasured: 0, storageTotal: null, storageFree: null, ...more };
+}
 
 interface ShowProps { platform?: Platform; tablet?: boolean; status?: ScanStatusDto; root?: string; home?: boolean; swipe?: SwipeStateDto }
 
@@ -97,14 +107,15 @@ describe('Clean up\'s first screen', () => {
     planGate = gate({ plan: plan() });
     const { onScanAgain } = show({ home: true, status: { instanceId: 's', completed: new Date().toISOString(), totalPhotos: 6941 } });
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
-    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
+    expect(screen.getByText('21.0 MB can be freed')).toBeInTheDocument();
     expect(screen.getByText('38 of 50 free removals left today')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Get Pro' }));
     expect(planGate.offer).toHaveBeenCalledWith('none');
     // Swipe to clean says so while today's set is being drawn.
     expect(screen.getByRole('region', { name: 'Swipe to clean' })).toHaveTextContent('Drawing today\'s set…');
     const find = within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent);
-    expect(find).toEqual(['Duplicates3 items · 21.0 MB', 'Similar shots1 item · 1 KB']);
+    expect(find).toEqual(['Duplicates3 items · 21.0 MB', 'Similar shots1 item · 1 KB', 'Large videosNothing left to review', 'ScreenshotsNothing left to review',
+      'BurstsNothing left to review', 'BlurryNothing left to review']);
     expect(screen.getByText(/^Scanned 6,941 photos and videos today at/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Scan again' }));
     expect(onScanAgain).toHaveBeenCalledOnce();
@@ -112,10 +123,56 @@ describe('Clean up\'s first screen', () => {
 
   it('says nothing of the plan on Pro, nor of a kind with nothing left, and waits for the service to say what there is', () => {
     planGate = gate({ plan: plan({ tier: 'pro', leftToday: null }) });
-    api.useGroups.mockImplementation((mode: GroupMode) => ({ data: mode === 'duplicates' ? groupsPage(mode, [], { removableCount: 0 }) : undefined }));
-    show({ home: true });
+    api.useGroups.mockReturnValue({});
+    api.useCategories.mockReturnValue({ data: report({}) });
+    const { again } = show({ home: true });
     expect(screen.queryByText(/free removals left today/)).not.toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent)).toEqual(['DuplicatesNothing left to review', 'Similar shots…']);
+    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent)).toEqual(['Large videosNothing left to review',
+      'ScreenshotsNothing left to review', 'BurstsNothing left to review', 'BlurryNothing left to review', 'DuplicatesNothing left to review']);
+    api.useCategories.mockReturnValue({});
+    again(<CleanUpScreen cleanUp={{ ...stub(), listing: false }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /^Duplicates/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Clean up's categories, from its first screen", () => {
+  const MB = 1024 ** 2;
+  const find = () => within(screen.getByRole('region', { name: 'Find' }));
+
+  it("lists every kind largest first, says what can be freed, and opens each kind's screen over the first screen, which Back closes", async () => {
+    api.useCategories.mockReturnValue({ data: report({ largeVideos: [1, 300 * MB], screenshots: [2, 5 * MB], bursts: [1, 2 * MB], duplicates: [3, 21 * MB] }, { unmeasured: 4 }) });
+    show({ home: true });
+    expect(screen.getByText('328.0 MB can be freed')).toBeInTheDocument();
+    expect(find().getAllByRole('button').map(b => b.textContent)).toEqual(['Large videos1 item · 300.0 MB', 'Duplicates3 items · 21.0 MB', 'Screenshots2 items · 5.0 MB',
+      'Bursts1 extra shot · 2.0 MB', 'Similar shots1 item · 1 KB', 'BlurryScan again to find blurry shots']);
+    expect(screen.queryByRole('button', { name: /Free up space/ })).not.toBeInTheDocument();
+    for (const row of ['Large videos', 'Screenshots', 'Bursts', 'Blurry']) {
+      await userEvent.click(find().getByRole('button', { name: new RegExp(`^${row}`) }));
+      expect(screen.getByRole('heading', { level: 1, name: row })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Find' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    }
+  });
+
+  it('on a phone that has said its storage, shows it as a bar that opens Free up space', async () => {
+    api.useCategories.mockReturnValue({ data: report({ duplicates: [3, 100 * MB] }, { storageTotal: 1000 * MB, storageFree: 130 * MB }) });
+    show({ home: true });
+    expect(screen.getByText('100.0 MB found')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Storage 87% full. Free up space' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Free up space' })).toBeInTheDocument();
+    expect(screen.getByText('iPhone storage is 87% full')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+  });
+
+  it('on Android lists Messaging apps, whose folders are where it looks, each with its icon alone', async () => {
+    api.useCategories.mockReturnValue({ data: report({ messaging: [2, 4 * MB], duplicates: [3, 21 * MB] }) });
+    show({ home: true, platform: 'android' });
+    expect(find().getByRole('button', { name: /^Messaging apps/ })).toHaveTextContent('WhatsApp and Telegram · 2 items · 4.0 MB');
+    await userEvent.click(find().getByRole('button', { name: /^Messaging apps/ }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Messaging apps' })).toBeInTheDocument();
   });
 });
 
@@ -177,7 +234,7 @@ describe('Clean up\'s list', () => {
 
 /** A Clean up state with nothing in it, for drawing the screen as it is before anything is read. */
 function stub() {
-  return { mode: 'duplicates' as const, items: [], more: false, copy: 0, listing: true, openList: vi.fn(), closeList: vi.fn(), showMore: vi.fn(), review: vi.fn(), chooseCopy: vi.fn() };
+  return { mode: 'duplicates' as const, items: [], more: false, copy: 0, listing: true, openList: vi.fn(), closeList: vi.fn(), open: vi.fn(), close: vi.fn(), showMore: vi.fn(), review: vi.fn(), chooseCopy: vi.fn() };
 }
 
 describe('a group\'s review', () => {

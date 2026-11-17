@@ -117,3 +117,18 @@ export const LaptopIcon = (p: IconProps) => (
 export const WifiIcon = (p: IconProps) => (
   <Line size={22} stroke={1.9} {...p}><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0" /><path d="M12 19.5h.01" strokeWidth={3} /></Line>
 );
+
+/** Large videos: a film camera. */
+export const VideoIcon = (p: IconProps) => <Line {...p}><rect x="3" y="6.5" width="12.5" height="11" rx="2.5" /><path d="m15.5 10.5 5-3v9l-5-3" /></Line>;
+
+/** Bursts: three frames, one behind another. */
+export const BurstIcon = (p: IconProps) => <Line {...p}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M5.5 16V6.5a1 1 0 0 1 1-1H16" /><path d="M3 13.5V4a1 1 0 0 1 1-1h9.5" /></Line>;
+
+/** Screenshots: a phone's screen. */
+export const ScreenshotIcon = (p: IconProps) => <Line {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></Line>;
+
+/** Blurry: a picture's outline, doubled as if shaken. */
+export const BlurryIcon = (p: IconProps) => <Line {...p}><circle cx="10.5" cy="12" r="6" /><path d="M16.5 7.5a6 6 0 0 1 0 9" opacity=".6" /><path d="M19 9a6 6 0 0 1 0 6" opacity=".35" /></Line>;
+
+/** Messaging apps: a speech bubble. */
+export const ChatIcon = (p: IconProps) => <Line {...p}><path d="M4 11.5a7.5 7 0 1 1 3.5 6l-3.5 1 1-3.2A6.8 6.8 0 0 1 4 11.5z" /></Line>;

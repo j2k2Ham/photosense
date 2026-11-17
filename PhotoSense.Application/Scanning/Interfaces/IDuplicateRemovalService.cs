@@ -69,6 +69,15 @@ public interface IDuplicateRemovalService
     Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar, CancellationToken ct);
 
     /// <summary>
+    /// Removes the photos chosen, as Clean up's categories choose them, all as one change, with their Live Photo videos
+    /// and sidecars. Each is the person's own choice, not a copy of another, so none waits on another staying; one
+    /// changed since the scan is left alone, and one whose file has gone is forgotten.
+    /// </summary>
+    /// <param name="ids">The photos.</param>
+    /// <param name="ct">Stops the removal before any file has moved.</param>
+    Task<BulkRemovalResult> RemovePhotosAsync(IReadOnlyCollection<PhotoId> ids, CancellationToken ct);
+
+    /// <summary>
     /// Removes one photo. A photo in a duplicate group goes only while another file of the group stays
     /// behind as it was scanned: the photo kept for one of its copies, a copy for the photo kept. Without
     /// <paramref name="deleteFile"/> only the record is forgotten and the file stays where it is.

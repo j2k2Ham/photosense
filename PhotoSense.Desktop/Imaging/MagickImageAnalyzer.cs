@@ -53,11 +53,14 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
         using var thumbnail = image.Clone();
         if (thumbnail.Width > ImageFingerprint.ThumbnailEdge || thumbnail.Height > ImageFingerprint.ThumbnailEdge) thumbnail.Resize(new MagickGeometry(ImageFingerprint.ThumbnailEdge, ImageFingerprint.ThumbnailEdge));
 
+        // Decoded at the size sharpness is measured at (ImageFingerprint.SharpnessEdge is WorkEdge), so it is measured as it is.
+        var sharpness = ImageFingerprint.Sharpness(Required(image.GetPixels().ToByteArray(PixelMapping.RGB)), (int)image.Width, (int)image.Height);
+
         // Stretched to a square on purpose: aspect ratio is checked separately, and a fixed grid lets two signatures be compared cell by cell.
         image.Resize(new MagickGeometry(ImageFingerprint.SignatureEdge, ImageFingerprint.SignatureEdge) { IgnoreAspectRatio = true });
         var signature = Required(image.GetPixels().ToByteArray(PixelMapping.RGB));
 
-        return new ImageAnalysis(width, height, format, quality, ImageFingerprint.PerceptualHash(signature), signature, ToJpeg(thumbnail, 82));
+        return new ImageAnalysis(width, height, format, quality, ImageFingerprint.PerceptualHash(signature), signature, ToJpeg(thumbnail, 82), sharpness);
     }
 
     // The pixels read from an image. Magick.NET says it may hand back none, for an image it could not unpack; no

@@ -17,7 +17,7 @@ public class ScanExecutionService : IScanExecutionService
     /// Raised whenever a scan starts recording something new about a file. Records written by an earlier
     /// version are read again rather than trusted as "unchanged".
     /// </summary>
-    public const int AnalysisVersion = 2;
+    public const int AnalysisVersion = 3;
 
     private readonly IPhotoRepository _repo;
     private readonly IImageHashingService _hash;
@@ -189,7 +189,11 @@ public class ScanExecutionService : IScanExecutionService
             ContentHash = needsHash ? await _hash.ComputeHashAsync(stream, ct) : null,
             AnalysisVersion = AnalysisVersion,
             Set = set,
-            IsKept = existing?.IsKept ?? false
+            IsKept = existing?.IsKept ?? false,
+            // What the phone's own library says of it, where it says anything, beside what its name and folder say. Only a
+            // picture is a screenshot or a shot of a burst: a Live Photo's video shares its picture's marks, and is neither.
+            IsScreenshot = !isVideo && (MediaKinds.IsScreenshot(file) || (_files is IPhotoKinds marked && marked.IsScreenshot(file))),
+            BurstId = isVideo ? null : (_files as IPhotoKinds)?.BurstOf(file),
         };
 
         if (isVideo)
@@ -214,6 +218,7 @@ public class ScanExecutionService : IScanExecutionService
             photo.EncodedQuality = analysis.EncodedQuality;
             photo.PerceptualHash = analysis.PerceptualHash.ToString("X16");
             photo.Signature = analysis.Signature;
+            photo.Sharpness = analysis.Sharpness;
             await _thumbnails.SaveAsync(photo.ContentHash!, analysis.ThumbnailJpeg, ct);
             Interlocked.Increment(ref run.Analyzed);
         }

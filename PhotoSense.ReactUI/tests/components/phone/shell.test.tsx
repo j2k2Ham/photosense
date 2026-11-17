@@ -20,6 +20,8 @@ const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn
   useRemoved: vi.fn<(roots: string[] | null) => { data?: unknown }>(() => ({})), eraseRemoved: vi.fn(), openPhotoSettings: vi.fn(), undoChange: vi.fn(),
   usePlan: vi.fn<() => { data?: PlanDto }>(() => ({})),
   useSwipe: vi.fn<() => { data?: SwipeStateDto }>(() => ({})), decideSwipe: vi.fn(),
+  useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }, { category: 'screenshots', count: 0, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
+  useCategoryPhotos: vi.fn(() => ({ data: [] })),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
@@ -685,5 +687,23 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Clean up/ }));
     expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'IMG_4299.JPG' })).not.toBeInTheDocument();
+  });
+
+  it("pushes a category opened from Find over Clean up's first screen, which Back, or on a tablet the tab, takes back", async () => {
+    width(false);
+    const { unmount } = render(<App start="cleanup" />);
+    const screenshots = () => userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Screenshots/ }));
+    await screenshots();
+    expect(screen.getByRole('heading', { level: 1, name: 'Screenshots' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    unmount();
+    width(true);
+    render(<App start="cleanup" />);
+    await screenshots();
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Clean up/ }));
+    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Screenshots' })).not.toBeInTheDocument();
   });
 });

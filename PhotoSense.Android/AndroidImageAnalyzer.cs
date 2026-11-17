@@ -26,7 +26,9 @@ public sealed class AndroidImageAnalyzer : IImageAnalyzer
         using var work = Decode(bytes, ImageFingerprint.WorkEdge, out var size, out var type);
         using var thumbnail = Decode(bytes, ImageFingerprint.ThumbnailEdge, out _, out _);
         var signature = Grid(work);
-        return new ImageAnalysis(size.Width, size.Height, FormatOf(type), null, ImageFingerprint.PerceptualHash(signature), signature, Jpeg(thumbnail, 82));
+        // Decoded at the size sharpness is measured at (ImageFingerprint.SharpnessEdge), so it is measured as it is.
+        var sharpness = ImageFingerprint.Sharpness(Rgb(work), work.Width, work.Height);
+        return new ImageAnalysis(size.Width, size.Height, FormatOf(type), null, ImageFingerprint.PerceptualHash(signature), signature, Jpeg(thumbnail, 82), sharpness);
     }
 
     private static byte[] Bytes(Stream imageStream)
@@ -73,10 +75,17 @@ public sealed class AndroidImageAnalyzer : IImageAnalyzer
     {
         const int n = ImageFingerprint.SignatureEdge;
         using var square = Bitmap.CreateScaledBitmap(image, n, n, filter: true)!;
-        var pixels = new int[n * n];
-        square.GetPixels(pixels, 0, n, 0, 0, n, n);
-        var rgb = new byte[n * n * 3];
-        for (var i = 0; i < n * n; i++)
+        return Rgb(square);
+    }
+
+    // A picture's pixels, three bytes each, row by row.
+    private static byte[] Rgb(Bitmap image)
+    {
+        int width = image.Width, height = image.Height;
+        var pixels = new int[width * height];
+        image.GetPixels(pixels, 0, width, 0, 0, width, height);
+        var rgb = new byte[pixels.Length * 3];
+        for (var i = 0; i < pixels.Length; i++)
         {
             rgb[i * 3] = (byte)(pixels[i] >> 16);
             rgb[i * 3 + 1] = (byte)(pixels[i] >> 8);

@@ -5,6 +5,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
 import { AboutWindow, type AboutTopic } from '../components/AboutWindow';
+import { CategoriesView } from '../components/CategoriesView';
 import { HelpWindow } from '../components/HelpWindow';
 import { LimitDialog } from '../components/LimitDialog';
 import type { Area } from '../components/ModeSwitch';
@@ -21,7 +22,7 @@ import { PHONE_TOAST_MS, Toaster, TOAST_MS, useToasts, type ToastAction } from '
 import { TopBar } from '../components/TopBar';
 import {
   clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, stopScan, undoChange, useGroups,
-  useAbout, usePlan, useScanProgress, useScanStatus,
+  useAbout, useCategories, usePlan, useScanProgress, useScanStatus,
 } from '../lib/apiClient';
 import { someGroups } from '../lib/cleanup';
 import { formatBytes, linkedFiles } from '../lib/format';
@@ -101,6 +102,8 @@ export default function HomePage() {
   // Where the person chose to be; until they choose, the screen follows whether there is anything to show.
   const [chosen, setChosen] = useState<'setup' | 'results'>();
   const [mode, setMode] = useState<GroupMode>('duplicates');
+  // Clean up's categories (large videos, screenshots, bursts, blurry, messaging apps) in place of the groups.
+  const [categories, setCategories] = useState(false);
   const [filter, setFilter] = useState('');
   const [page, setPage] = useState(1);
   const [hideKept, setHideKept] = useState(false);
@@ -152,6 +155,8 @@ export default function HomePage() {
   // While the other tab's groups are still loading, the previous tab's are not shown in its place.
   const data = groups.data?.mode === mode ? groups.data : undefined;
   const otherTotal = others.data?.mode === mode ? undefined : others.data?.total;
+  // How many files Clean up's categories hold, for their tab; the duplicates have their own.
+  const categoryCount = useCategories(!onPhone).data?.categories.reduce((n, c) => n + (c.category === 'duplicates' ? 0 : c.count), 0);
   const totals = { duplicates: mode === 'duplicates' ? data?.total : otherTotal, similar: mode === 'similar' ? data?.total : otherTotal };
   const items = data?.items ?? [];
   // When the selected group is gone, as it is once its duplicates are removed, the one that took its place is shown.
@@ -218,7 +223,7 @@ export default function HomePage() {
     setReviewing(true);
   }
   // A tick is on a group of one kind: the other tab starts with none.
-  function switchMode(next: GroupMode) { setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); setTicked(new Map()); setReviewing(false); }
+  function switchMode(next: GroupMode) { setCategories(false); setMode(next); setPage(1); setSelection({ index: 0 }); setCopyIndex(0); setTicked(new Map()); setReviewing(false); }
   const untick = (key?: string) => setTicked(before => new Map([...before].filter(([k]) => k !== key)));
   const tick = (group: DuplicateGroupDto) => (ticked.has(group.key) ? untick(group.key) : setTicked(before => new Map(before).set(group.key, group)));
   function tickAll(all: boolean) {
@@ -362,13 +367,21 @@ export default function HomePage() {
             <div className={`min-h-[72px] shrink-0 flex-wrap items-stretch gap-x-5 gap-y-2.5 border-b border-line px-4 pb-3 lg:flex-nowrap lg:px-6 lg:pb-0 ${showReview ? 'hidden lg:flex' : 'flex'}`}>
               <div className="flex h-12 gap-6 lg:h-auto" role="tablist">
                 {(['duplicates', 'similar'] as const).map(m => (
-                  <button key={m} type="button" role="tab" aria-selected={mode === m} onClick={() => switchMode(m)}
-                    className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${mode === m ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
+                  <button key={m} type="button" role="tab" aria-selected={!categories && mode === m} onClick={() => switchMode(m)}
+                    className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${!categories && mode === m ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
                     {m === 'duplicates' ? 'Duplicates' : 'Similar'}
                     <span className="font-mono text-[12px] font-normal text-t3">{totals[m]?.toLocaleString()}</span>
                   </button>
                 ))}
+                <button type="button" role="tab" aria-selected={categories} onClick={() => setCategories(true)}
+                  className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${categories ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
+                  Categories
+                  <span className="font-mono text-[12px] font-normal text-t3">{categoryCount?.toLocaleString()}</span>
+                </button>
               </div>
+              {categories ? (
+                <p className="my-auto flex-1 text-[13px] text-t2 max-lg:order-2 lg:text-right lg:text-[14px]">Large videos, screenshots, bursts, blurry shots and what messaging apps saved. Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
+              ) : (<>
               <label className="my-auto flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-4 max-lg:order-1 lg:w-[clamp(220px,22vw,380px)]">
                 <span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-2 border-t3" />
                 <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
@@ -399,8 +412,10 @@ export default function HomePage() {
               ) : (
                 <p className="my-auto text-[13px] text-t2 max-lg:order-2 lg:max-w-[520px] lg:text-right lg:text-[14px]">Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.</p>
               )}
+              </>)}
             </div>
 
+            {categories ? <CategoriesView plan={plan} notify={push} /> : (
             <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[clamp(380px,32vw,620px)_1fr]">
               <GroupList className={showReview ? 'hidden lg:flex' : 'flex'} groups={items} mode={mode} total={data?.total} page={page} totalPages={data?.totalPages ?? 1} query={filter}
                 selectedKey={selected?.key} otherTotal={mode === 'duplicates' ? totals.similar : totals.duplicates} onSelect={select} onPage={turnPage}
@@ -420,6 +435,7 @@ export default function HomePage() {
                 onDeleteCopy={member => selected && ask({ scope: 'copy', group: selected, member })}
                 onDeleteGroup={group => ask({ scope: 'group', group })} />
             </div>
+            )}
           </>
         );
 

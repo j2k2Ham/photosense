@@ -67,13 +67,15 @@ interface PushedHeaderProps {
   readonly onBack?: () => void;
   /** The gear, which a tablet's detail carries for the whole split view. */
   readonly gear?: boolean;
+  /** What stands on the header's right in place of the gear, such as Select all. */
+  readonly trailing?: React.ReactNode;
 }
 
 /**
  * The header of a screen pushed over a tab's first one, or of a tablet's detail beside the list. On an iPhone a round
  * back button and the title in the middle; on Android a back arrow and the title beside it.
  */
-export function PushedHeader({ title, subtitle, onBack, gear }: PushedHeaderProps) {
+export function PushedHeader({ title, subtitle, onBack, gear, trailing }: PushedHeaderProps) {
   const { ios } = usePhone();
   const top = useHeaderTop();
   if (ios) {
@@ -85,7 +87,8 @@ export function PushedHeader({ title, subtitle, onBack, gear }: PushedHeaderProp
           {subtitle && <p className="truncate text-[13px] text-t2">{subtitle}</p>}
         </div>
         {/* Keeps the title in the middle, across from the back button. */}
-        {onBack && !gear && <span aria-hidden className="w-[var(--ib)] shrink-0" />}
+        {onBack && !gear && !trailing && <span aria-hidden className="w-[var(--ib)] shrink-0" />}
+        {trailing}
         {gear && <GearButton />}
       </header>
     );
@@ -95,6 +98,7 @@ export function PushedHeader({ title, subtitle, onBack, gear }: PushedHeaderProp
       <div className="flex h-16 items-center gap-1 pl-4 pr-1">
         {onBack && <span className="-ml-3"><IconButton label="Back" onClick={onBack}><ArrowBackIcon /></IconButton></span>}
         <h1 className="min-w-0 flex-1 truncate font-title text-[22px] font-normal">{title}</h1>
+        {trailing}
         {gear && <GearButton />}
       </div>
       {/* Android says the subtitle under the bar, as it does a root screen's. */}

@@ -36,6 +36,20 @@ test.describe('every screen can be used with assistive technology and read in ei
     await accessible(page, 'The compare window');
   });
 
+  test("Clean up's categories, a burst among them, and the question before deleting", async ({ page, photos, service }) => {
+    photos.png('Screenshots/Screenshot 2024-01-02 at 09.15.00.png', { seed: 5 });
+    for (const seed of [1, 2, 3]) photos.picture(`Trip/IMG_000${seed}.JPG`, { seed, taken: new Date(2023, 6, 4, 10, 0, 0) });
+    await service.scan(photos.root);
+    await page.goto('/');
+    await page.getByRole('tab', { name: /^Categories/ }).click();
+    await expect(page.getByRole('region', { name: 'Screenshots' })).toBeVisible();
+    await accessible(page, 'Categories');
+    await page.getByRole('navigation', { name: 'Categories' }).getByRole('button', { name: /^Bursts/ }).click();
+    await page.getByRole('button', { name: 'Delete 2 extra shots' }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await accessible(page, 'The question before deleting from a category');
+  });
+
   test('Organize, its preview and the folder dialog', async ({ page, photos }) => {
     photos.picture('Trips/IMG_0001.JPG', { seed: 1, at: PLACES.butte });
     photos.picture('Trips/IMG_0002.JPG', { seed: 2 });

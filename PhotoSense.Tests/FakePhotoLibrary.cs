@@ -45,6 +45,13 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
         _items[at] = _items[at] with { Favorite = true };
     }
 
+    /// <summary>Marks a picture as Photos would: a picture of the screen, or a shot of a burst.</summary>
+    public void Mark(string id, bool screenshot = false, string? burst = null)
+    {
+        var at = _items.FindIndex(i => i.Id == id);
+        _items[at] = _items[at] with { Screenshot = screenshot, BurstId = burst };
+    }
+
     /// <summary>Takes a picture or video out of the library, as deleting it in Photos would.</summary>
     public void Remove(string id) => _items.RemoveAll(i => i.Id == id);
 

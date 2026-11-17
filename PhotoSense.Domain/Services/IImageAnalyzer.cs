@@ -8,6 +8,7 @@ namespace PhotoSense.Domain.Services;
 /// <param name="PerceptualHash">The 64-bit hash of <see cref="ImageFingerprint.PerceptualHash"/>.</param>
 /// <param name="Signature">The picture reduced to a grid of <see cref="ImageFingerprint.SignatureEdge"/> by <see cref="ImageFingerprint.SignatureEdge"/> colours.</param>
 /// <param name="ThumbnailJpeg">A JPEG preview no larger than <see cref="ImageFingerprint.ThumbnailEdge"/> on its long side.</param>
+/// <param name="Sharpness">How sharp the picture is (<see cref="ImageFingerprint.Sharpness"/>); null where the decoder did not measure it.</param>
 public sealed record ImageAnalysis(
     int Width,
     int Height,
@@ -15,7 +16,8 @@ public sealed record ImageAnalysis(
     int? EncodedQuality,
     ulong PerceptualHash,
     byte[] Signature,
-    byte[] ThumbnailJpeg);
+    byte[] ThumbnailJpeg,
+    double? Sharpness = null);
 
 /// <summary>Decodes pictures: to compare them, and to show them where a browser cannot.</summary>
 /// <remarks>

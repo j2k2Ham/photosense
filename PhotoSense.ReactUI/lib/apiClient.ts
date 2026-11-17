@@ -1,7 +1,7 @@
 import useSWR, { mutate } from 'swr';
 import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -36,8 +36,9 @@ async function send(url: string, method: 'POST' | 'DELETE'): Promise<Response> {
 }
 
 const planUrl = `${API_BASE}/plan`;
-// A removal counts toward the free plan's limit each day, so the plan is asked again after one, with the groups.
-const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status') || key === planUrl));
+// A removal counts toward the free plan's limit each day, so the plan is asked again after one, with the groups and
+// Clean up's categories, which leave out what is gone or marked keep.
+const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status') || key.includes('/cleanup/categories') || key === planUrl));
 
 /** Asks again for everything on screen, for when the service has been out of reach. */
 export const retryNow = () => mutate(() => true);
@@ -497,4 +498,31 @@ export async function deleteSwiped(atMost?: number): Promise<SwipeFreedDto> {
   const freed = await json<SwipeFreedDto>(`${swipeUrl}/delete`, { method: 'POST', ...(atMost === undefined ? {} : { body: JSON.stringify({ atMost }) }) });
   await Promise.all([mutate(swipeUrl), refreshOrganize(), refreshBackup(), mutate(planUrl)]);
   return freed;
+}
+
+const categoriesUrl = `${API_BASE}/cleanup/categories`;
+
+/** What Clean up's categories hold, and a phone's storage; nothing is asked while `on` is false. */
+export function useCategories(on: boolean) {
+  return useSWR<CategoryReportDto>(on ? categoriesUrl : null, json);
+}
+
+/** The pictures or videos of a category: duplicates' copies and large videos largest first, the rest latest first. */
+export function useCategoryPhotos(category: Exclude<CategoryName, 'bursts'>) {
+  return useSWR<PhotoDto[]>(`${categoriesUrl}/${category}`, json);
+}
+
+/** The bursts, latest first, each with the shot kept; nothing is asked while `on` is false. */
+export function useBursts(on: boolean) {
+  return useSWR<BurstDto[]>(on ? `${categoriesUrl}/bursts` : null, json);
+}
+
+/**
+ * Deletes the pictures and videos chosen from Clean up's categories: on a phone to its own bin after its question, on a
+ * computer into _PhotoSense_Removed with Undo. The categories, the groups, Library and the plan's count are read again.
+ */
+export async function deleteChosen(ids: readonly string[]): Promise<CategoryRemovalDto> {
+  const done = await json<CategoryRemovalDto>(`${categoriesUrl}/delete`, { method: 'POST', body: JSON.stringify({ ids }) });
+  await refreshOrganize();
+  return done;
 }

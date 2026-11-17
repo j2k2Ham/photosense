@@ -644,6 +644,39 @@ describe('Swipe to clean on a phone', () => {
   });
 });
 
+describe("Clean up's categories", () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it("asks what each holds only while wanted, a category's photos, and the bursts only while wanted", async () => {
+    const api = await load();
+    api.useCategories(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useCategories(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/cleanup/categories`);
+    api.useCategoryPhotos('screenshots');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/cleanup/categories/screenshots`);
+    api.useBursts(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useBursts(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/cleanup/categories/bursts`);
+  });
+
+  it('deletes those chosen, then reads the categories, the groups, Library and the plan again', async () => {
+    const done = { deleted: 2, bytes: 900, skipped: 0, problems: [] };
+    answering(done);
+    const api = await load();
+    await expect(api.deleteChosen(['a', 'b'])).resolves.toEqual(done);
+    expect(lastRequest()).toEqual({ url: `${API}/cleanup/categories/delete`, init: { method: 'POST', body: JSON.stringify({ ids: ['a', 'b'] }), headers: json } });
+    const predicates = swr.mutate.mock.calls.map(c => c[0]).filter((k): k is (key: unknown) => boolean => typeof k === 'function');
+    const read = (key: unknown) => predicates.some(f => f(key));
+    expect(read(`${API}/cleanup/categories`)).toBe(true);
+    expect(read(`${API}/cleanup/categories/blurry`)).toBe(true);
+    expect(read(`${API}/scan/groups?mode=duplicates`)).toBe(true);
+    expect(read(`${API}/plan`)).toBe(true);
+    expect(read(42)).toBe(false);
+  });
+});
+
 describe('the plan', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };

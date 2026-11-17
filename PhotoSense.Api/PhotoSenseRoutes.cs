@@ -10,7 +10,7 @@ public sealed class PhotoSenseRoutes
     /// <summary>The addresses, each answered by one of the endpoints given; <see cref="PhotoSenseApiServices.AddPhotoSenseApi"/> makes it.</summary>
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
-        RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe)
+        RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -47,6 +47,9 @@ public sealed class PhotoSenseRoutes
             .Get("backup/phones", (r, _, ct) => backup.PhonesAsync(r, ct))
             .Post("backup/phones/{id}/folder", (r, v, ct) => backup.FolderAsync(r, v["id"], ct))
             .Post("backup/phones/{id}/pause", (r, v, ct) => backup.PausePhoneAsync(r, v["id"], ct))
+            .Get("cleanup/categories", (r, _, ct) => categories.ReportAsync(r, ct))
+            .Post("cleanup/categories/delete", (r, _, ct) => categories.DeleteAsync(r, ct))
+            .Get("cleanup/categories/{category}", (r, v, ct) => categories.PhotosAsync(r, v["category"], ct))
             .Get("swipe", (r, _, ct) => swipe.StateAsync(r, ct))
             .Post("swipe/decide", (r, _, ct) => swipe.DecideAsync(r, ct))
             .Post("swipe/undo", (r, _, ct) => swipe.UndoAsync(r, ct))

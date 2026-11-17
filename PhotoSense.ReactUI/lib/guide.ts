@@ -75,6 +75,7 @@ export const GUIDE: GuideTopic[] = [
           'Scan the folder your pictures are in.',
           'Look through the **Duplicates** and delete the copies you do not need.',
           'Look through the **Similar** shots, a group at a time.',
+          'Look through **Categories**: large videos, screenshots, bursts and blurry shots.',
           'Switch to **Organize** and sort what is left into folders.',
           'When you are sure nothing is missed, use **Delete permanently** to free the space.',
         ],
@@ -181,6 +182,41 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'Tick the groups you have looked at, or **Select all** on the page, and use the bar under the tiles to delete their similar shots together. The best shot of each group stays.',
           'The question asked first says that these are not copies of one file. They go to **_PhotoSense_Removed** like anything else, so a shot you miss can be put back.',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'categories',
+    only: COMPUTER,
+    title: 'Large videos, screenshots, bursts and blurry shots',
+    summary: 'The Categories tab: kinds of file that are often safe to let go, each to look through and delete.',
+    keywords: ['categories', 'screenshot', 'screen shot', 'large files', 'big videos', 'burst', 'blur', 'out of focus', 'whatsapp', 'telegram', 'free space', 'storage'],
+    sections: [
+      {
+        text: [
+          'The **Categories** tab, beside **Duplicates** and **Similar**, lists kinds of file that are often safe to let go, largest first, each with how many there are and how much space they take: **Large videos**, **Screenshots**, **Bursts**, **Blurry**, and **Messaging apps** when WhatsApp or Telegram saved files in the folder. The number on the tab is how many files they hold in all.',
+          'Click a kind to see its files. Hover over a file for the folder it is in.',
+        ],
+      },
+      {
+        heading: 'Each kind',
+        tips: [
+          '**Large videos** are videos over 200 MB, largest first, each with its size and how sharp its picture is (4K, 1080p, 720p). None is chosen to start with: click the ones to delete.',
+          '**Screenshots** are pictures of a screen, found by their name or by a folder called Screenshots. All are chosen to start with: click one to keep it.',
+          '**Bursts** are three or more shots taken within a second of each other by one camera. PhotoSense keeps the sharpest shot of each burst, framed and marked **Keep**; click another shot to keep it instead. The other shots are deleted.',
+          '**Blurry** are pictures whose sharpest part is still soft. All are chosen to start with: click one to keep it. A scan measures how sharp each picture is; until one has, Blurry says **Scan again to find blurry shots**.',
+          '**Messaging apps** are the files WhatsApp and Telegram saved, in folders named after them. All are chosen to start with.',
+          '**Select all** and **Select none** choose every file of the kind shown, or none.',
+        ],
+      },
+      {
+        heading: 'Deleting',
+        tips: [
+          'The button says how many files go: **Delete 12 files**, or for bursts **Delete 4 extra shots**. The question asked first names the files that go and, for bursts, the shot that stays.',
+          'They go to **_PhotoSense_Removed** like anything else, and the message after has **Undo**, which puts them back.',
+          'A file marked keep in **Duplicates** or **Similar** is never listed here.',
+          'On the free plan, the question says how many free removals are left today. Choose more than that and PhotoSense says so, with **Delete … now** to delete the largest that fit.',
         ],
       },
     ],
@@ -636,13 +672,23 @@ export const GUIDE: GuideTopic[] = [
     id: 'phone-cleanup',
     only: PHONES,
     title: 'Clean up',
-    summary: 'Swipe to clean, a set of photos a day; and the copies found and the similar shots: reviewing each, keeping some, and deleting the rest.',
-    keywords: ['duplicates', 'copies', 'copy', 'same photo', 'twice', 'dupes', 'similar', 'burst', 'compare', 'keep', 'original', 'free space', 'scan again', 'swipe', 'streak', 'daily', 'tinder', 'left', 'right'],
+    summary: 'Swipe to clean, a set of photos a day; what Find finds, from copies and similar shots to large videos, screenshots, bursts and blurry shots; and Free up space.',
+    keywords: ['duplicates', 'copies', 'copy', 'same photo', 'twice', 'dupes', 'similar', 'burst', 'compare', 'keep', 'original', 'free space', 'scan again', 'swipe', 'streak', 'daily', 'tinder', 'left', 'right',
+      'screenshot', 'large videos', 'big videos', 'blur', 'out of focus', 'whatsapp', 'telegram', 'storage', 'full', 'space'],
     sections: [
       {
         text: [
-          '**Clean up** starts with how many free removals are left today, on the free plan, with **Get Pro**; then **Swipe to clean**; then **Find**, whose **Duplicates** and **Similar shots** each say how many there are to delete and how much space they take, and open their list.',
+          '**Clean up** says at the top how much space it has found to free, with the phone’s storage as a bar. Then come how many free removals are left today, on the free plan, with **Get Pro**; **Swipe to clean**; and **Find**.',
+          '**Find** lists what PhotoSense found, largest first, each with how many there are to delete and how much space they take: **Large videos**, **Duplicates**, **Screenshots**, **Bursts**, **Similar shots** and **Blurry**. Tap one to open it.',
         ],
+      },
+      {
+        only: ANDROID,
+        text: ['Find also lists **Messaging apps**: the photos and videos WhatsApp and Telegram saved in their folders.'],
+      },
+      {
+        only: IOS,
+        text: ['Find also lists **Messaging apps** when WhatsApp or Telegram saved photos in your library.'],
       },
       {
         heading: 'Swipe to clean',
@@ -670,6 +716,39 @@ export const GUIDE: GuideTopic[] = [
         only: ANDROID,
         tips: [
           'What Swipe to clean deletes goes straight to the phone’s bin, which keeps it for 30 days; it does not wait in Pictures/PhotoSense Removed, and PhotoSense’s Undo cannot bring it back.',
+        ],
+      },
+      {
+        heading: 'Large videos, screenshots, bursts and blurry shots',
+        tips: [
+          '**Screenshots** and **Blurry** show their pictures in a grid, all chosen to start with: tap one to keep it. **Deselect all** and **Select all** are at the top right. **Messaging apps** works the same way.',
+          '**Blurry** pictures are those whose sharpest part is still soft. A scan measures how sharp each picture is; until one has, Blurry says **Scan again to find blurry shots**.',
+          '**Bursts** shows each burst with its shots, the one kept framed and marked **Keep**: PhotoSense keeps the sharpest. Tap another shot to keep it instead. **Delete** and the number of extra shots deletes the rest.',
+          '**Large videos** lists the videos over 200 MB, largest first, with where and when each was taken, how sharp its picture is (4K, 1080p, 720p) and its size. Tap the ones to delete.',
+          'The button at the foot says how many go, and on the free plan how many free removals are left today.',
+        ],
+      },
+      {
+        heading: 'Free up space',
+        steps: [
+          'Tap the storage bar at the top of Clean up.',
+          'It says how full the phone is, and how much the three quickest kinds to check would free: **Duplicates**, **Screenshots** and **Blurry**. A photo that is two of them counts once.',
+          'Untick any you want to keep, then tap **Delete** and the number of items.',
+        ],
+        tips: ['Large videos and similar shots are worth a look one by one, so they are in Clean up, not here.'],
+      },
+      {
+        only: IOS,
+        tips: [
+          'What these screens and Free up space delete goes straight to the phone’s **Recently Deleted**, after the phone’s own question, and waits there for 30 days. It does not wait in PhotoSense Removed, and PhotoSense’s Undo cannot bring it back.',
+          'Each counts toward the day’s free removals. Choose more than are left and PhotoSense says so, with the choice to delete the largest that fit.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'What these screens and Free up space delete goes straight to the phone’s bin, after the phone’s own question, and waits there for 30 days. It does not wait in Pictures/PhotoSense Removed, and PhotoSense’s Undo cannot bring it back.',
+          'Each counts toward the day’s free removals. Choose more than are left and PhotoSense says so, with the choice to delete the largest that fit.',
         ],
       },
       {

@@ -132,6 +132,36 @@ test.describe('on a phone', () => {
     await expect(page.getByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.').first()).toBeVisible();
   });
 
+  test('Find opens a kind of its own, whose files go in one confirmation, and the storage bar opens Free up space @phone', async ({ page, photos, service }) => {
+    photos.png('Screenshots/Screenshot 2024-01-02 at 09.15.00.png', { seed: 5 });
+    photos.png('Screenshots/Screenshot 2024-01-03 at 18.40.00.png', { seed: 6 });
+    photos.picture('IMG_0001.JPG', { seed: 1 });
+    await service.scan(photos.root);
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    await page.goto('/');
+    const find = page.getByRole('region', { name: 'Find' });
+    await expect(find.getByRole('button', { name: /^Screenshots/ })).toContainText('2 items');
+    await find.getByRole('button', { name: /^Screenshots/ }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Screenshots' })).toBeVisible();
+    await expect(page.getByText('selected from 2 screenshots')).toBeVisible();
+    await page.getByRole('button', { name: 'Delete 2 items' }).click();
+    await expect(message(page, '2 items deleted. They wait in Recently Deleted for 30 days.')).toBeVisible();
+    // The program answering is a computer's, which removes into _PhotoSense_Removed where a phone uses its own bin.
+    expect(photos.exists('Screenshots/Screenshot 2024-01-02 at 09.15.00.png')).toBe(false);
+    await expect(page.getByText('Nothing left to review.')).toBeVisible();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+
+    await page.getByRole('button', { name: 'Storage 88% full. Free up space' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Free up space' })).toBeVisible();
+    // An iPad at a computer's width.
+    await expect(page.getByText(/^(iPhone|iPad) storage is 88% full$/)).toBeVisible();
+    await expect(page.getByRole('list', { name: 'What to delete' }).getByRole('checkbox')).toHaveCount(3);
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    await expect(find).toBeVisible();
+  });
+
   test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
@@ -148,6 +178,8 @@ test.describe('on a phone', () => {
     await expect(swiping).toContainText('1 of 2');
     await expect(swiping).toContainText('Swipe left to delete, right to keep');
     const card = swiping.getByRole('img', { name: /^IMG_000/ });
+    // Hovered first, which waits for the card to have settled where it is drawn.
+    await card.hover();
     const box = (await card.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();

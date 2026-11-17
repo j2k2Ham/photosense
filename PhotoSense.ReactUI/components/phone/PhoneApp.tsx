@@ -84,8 +84,10 @@ export function PhoneApp(props: Props) {
   const reviewing = !!cleanUp.group && tab === 'cleanup' && form === 'phone';
   const endReview = () => cleanUp.review(undefined);
   // A list opened from Find is pushed over Clean up's first screen, and goes back to it.
-  const listing = cleanUp.listing && tab === 'cleanup';
-  useBackLayer(listing, cleanUp.closeList);
+  const listing = (cleanUp.listing || !!cleanUp.opened) && tab === 'cleanup';
+  useBackLayer(cleanUp.listing && tab === 'cleanup', cleanUp.closeList);
+  // So is a category's screen, or Free up space.
+  useBackLayer(!!cleanUp.opened && tab === 'cleanup', cleanUp.close);
   useBackLayer(reviewing, endReview);
   // So is a suggestion's preview over Organize's list.
   const organize = useOrganize(library.listing, platform, form === 'tablet', props.settings.distanceUnit);
@@ -116,7 +118,7 @@ export function PhoneApp(props: Props) {
   }
   // Tapping the tab showing goes back to its first screen.
   const onTab = (next: TabId) => {
-    if (next === tab && next === 'cleanup') { endReview(); cleanUp.closeList(); }
+    if (next === tab && next === 'cleanup') { endReview(); cleanUp.closeList(); cleanUp.close(); }
     if (next === tab && next === 'organize') endPreview();
     props.onTab(next);
   };

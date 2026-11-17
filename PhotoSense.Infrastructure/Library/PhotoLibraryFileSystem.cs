@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -105,6 +105,12 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         ct.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlySet<string>>(Look().Files.Where(f => f.Value.Item.Favorite).Select(f => f.Key).ToHashSet(PhotoPath.Comparer));
     }
+
+    /// <inheritdoc />
+    public bool IsScreenshot(string path) => Look().Files.TryGetValue(path, out var file) && file.Item.Screenshot;
+
+    /// <inheritdoc />
+    public string? BurstOf(string path) => Look().Files.TryGetValue(path, out var file) ? file.Item.BurstId : null;
 
     /// <inheritdoc />
     public void Move(string from, string to) => MoveAll([new FileMove(from, to)]);

@@ -69,6 +69,14 @@ export class Phone {
       if (what === 'settings') this.set({ settings: JSON.parse(body!) });
       return json(route, this.state);
     });
+    // Clean up's categories are the program's own, with the phone's storage, which only a phone knows. Deleting from
+    // them goes through the program too, into _PhotoSense_Removed, where a phone would use its own bin.
+    await page.route(url => url.pathname.endsWith('/api/cleanup/categories'), async route => {
+      // The test may have ended while the program was answering.
+      let real: object;
+      try { real = await (await route.fetch()).json(); } catch { return; }
+      await json(route, { ...real, storageTotal: SAFE.storageTotal, storageFree: SAFE.storageFree });
+    });
     await page.route(url => url.pathname.includes('/api/swipe'), async route => {
       const what = new URL(route.request().url()).pathname.split('/api/swipe').pop()!.replace(/^\//, '');
       const body = route.request().postData();
