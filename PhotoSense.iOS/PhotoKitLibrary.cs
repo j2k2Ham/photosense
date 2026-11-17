@@ -31,7 +31,7 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
                 if (KindOf(resource.ResourceType) is { } kind) files.Add(new LibraryFile(kind, resource.OriginalFilename, SizeOf(resource)));
             var created = asset.CreationDate is { } taken ? (DateTime)taken : DateTime.UnixEpoch;
             items.Add(new LibraryItem(asset.LocalIdentifier, created, asset.ModificationDate is { } changed ? (DateTime)changed : created, files, asset.Favorite,
-                asset.MediaSubtypes.HasFlag(PHAssetMediaSubtype.PhotoScreenshot), string.IsNullOrEmpty(asset.BurstIdentifier) ? null : asset.BurstIdentifier));
+                asset.MediaSubtypes.HasFlag(PHAssetMediaSubtype.Screenshot), string.IsNullOrEmpty(asset.BurstIdentifier) ? null : asset.BurstIdentifier));
         }
         return items;
     }

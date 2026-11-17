@@ -16,6 +16,7 @@ public class CleanUpKindsTests
     [Arguments("C:/Pictures/screenshot_1.PNG", true)]
     [Arguments("C:/Pictures/IMG_0001.JPG", false)]
     [Arguments("C:/Pictures/My screenshots of maps/IMG_0001.JPG", false)]
+    [Arguments("/", false)]
     public async Task A_Screenshot_Is_Told_By_Its_Name_Or_Its_Folder(string path, bool screenshot, CancellationToken ct)
         => await Assert.That(MediaKinds.IsScreenshot(path)).IsEqualTo(screenshot);
 

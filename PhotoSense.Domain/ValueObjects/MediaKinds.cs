@@ -17,7 +17,8 @@ public static class MediaKinds
     /// </summary>
     public static bool IsScreenshot(string path)
     {
-        var name = Path.GetFileName(path);
+        // Split on either separator, as a phone's path and a Windows path are told apart on any system.
+        var name = Segments(path).LastOrDefault() ?? string.Empty;
         if (name.StartsWith("Screenshot", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Screen Shot", StringComparison.OrdinalIgnoreCase)) return true;
         return Segments(path).Any(s => s.Equals("Screenshots", StringComparison.OrdinalIgnoreCase));
     }
