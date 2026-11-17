@@ -10,8 +10,8 @@ import type { Platform, TabId } from '../../../lib/phone';
 import type { AppSettings } from '../../../lib/settings';
 import { frame, inFrame, width } from './frame';
 import { group, groupsPage, photo } from './groups';
-import { backupState, plan, safeReview } from '../../fixtures';
-import type { PlanDto } from '../../../types';
+import { backupState, plan, safeReview, swipeCard, swipeState } from '../../fixtures';
+import type { PlanDto, SwipeStateDto } from '../../../types';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
 // tested on its own, has one group of duplicates.
@@ -19,6 +19,7 @@ const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn
   useBackup: vi.fn(() => ({})), useLibraryBackup: vi.fn(() => ({})), useSafeReview: vi.fn(() => ({})), backUpIfDue: vi.fn(async () => ({})), startBackup: vi.fn(async () => ({})), removeSafe: vi.fn(), stopPairing: vi.fn(async () => undefined), usePairing: vi.fn(() => ({})),
   useRemoved: vi.fn<(roots: string[] | null) => { data?: unknown }>(() => ({})), eraseRemoved: vi.fn(), openPhotoSettings: vi.fn(), undoChange: vi.fn(),
   usePlan: vi.fn<() => { data?: PlanDto }>(() => ({})),
+  useSwipe: vi.fn<() => { data?: SwipeStateDto }>(() => ({})), decideSwipe: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
@@ -342,11 +343,42 @@ describe('PhotoSense on a phone', () => {
     );
   }
 
+  /** Opens the duplicates' list from Find, on Clean up's first screen. */
+  async function openDuplicates() {
+    await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Duplicates/ }));
+  }
+
+  it('opens Swipe to clean from Clean up over everything, and its summary when the set is through, or when it is closed with something marked', async () => {
+    width(false);
+    let today = swipeState({ set: [swipeCard('a'), swipeCard('b')] });
+    api.useSwipe.mockImplementation(() => ({ data: today }));
+    render(<App />);
+    // Closed with nothing marked, Clean up is back.
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Swipe to clean' })).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // Back, with something marked: the summary, which closes to Clean up.
+    today = swipeState({ set: [swipeCard('a', { delete: true }), swipeCard('b')] });
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('dialog', { name: 'Swipe summary' })).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Swipe summary' })).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    // The last of the set swiped: the summary follows.
+    api.decideSwipe.mockResolvedValue(swipeState({ set: [swipeCard('a', { delete: true }), swipeCard('b', { delete: false })] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Keep' }));
+    expect(screen.getByRole('dialog', { name: 'Swipe summary' })).toBeInTheDocument();
+    api.useSwipe.mockReturnValue({});
+  });
+
   it('gives each tab its header, in the platform\'s words, and the gear opens Settings', async () => {
     width(false);
     render(<App platform="android" />);
     expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
-    expect(screen.getByText('Copies of the same photo or video')).toBeInTheDocument();
+    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
     const tabs = screen.getByRole('navigation', { name: 'Tabs' });
     await userEvent.click(within(tabs).getByRole('button', { name: 'Organize' }));
     expect(screen.getByText('Sort Phone into folders by place and date')).toBeInTheDocument();
@@ -565,13 +597,17 @@ describe('PhotoSense on a phone', () => {
     });
   });
 
-  it('pushes a review over the list on a phone, without the tabs, and Back takes it back', async () => {
+  it('pushes a list from Find, and a review over the list, on a phone, without the tabs, and Back takes each back', async () => {
     width(false);
     render(<App />);
+    await openDuplicates();
+    expect(screen.getByRole('heading', { name: 'Duplicates' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     await userEvent.click(within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: /IMG_4299\.JPG/ }));
     expect(screen.getByRole('region', { name: 'Review' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Clean up' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Duplicates' })).not.toBeInTheDocument();
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('heading', { name: 'Duplicates' })).toBeInTheDocument();
     await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
     expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Tabs' })).toBeInTheDocument();
@@ -639,11 +675,15 @@ describe('PhotoSense on a phone', () => {
     expect(screen.getByRole('toolbar', { name: 'What is selected' })).toBeInTheDocument();
   });
 
-  it('shows a review beside the list on a tablet, so nothing is pushed', () => {
+  it('shows a review beside the list on a tablet, so nothing is pushed, and tapping the tab goes back to Clean up\'s first screen', async () => {
     width(true);
     render(<App start="cleanup" />);
-    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    await openDuplicates();
+    expect(screen.getAllByRole('heading', { name: 'Duplicates' })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'IMG_4299.JPG' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Tabs' })).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Clean up/ }));
+    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'IMG_4299.JPG' })).not.toBeInTheDocument();
   });
 });

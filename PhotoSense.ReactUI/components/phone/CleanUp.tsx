@@ -1,25 +1,28 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange } from '../../lib/apiClient';
+import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange, useGroups } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
 import {
   allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, someGroups, whereOf, type CleanUp, type DetailRow, type Question,
 } from '../../lib/cleanup';
 import { limitLine } from '../../lib/plan';
 import { formatBytes, groupSummary, matchLabel } from '../../lib/format';
+import type { Library } from '../../lib/library';
 import { usePhone } from '../../lib/phone';
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, ScanStatusDto } from '../../types';
+import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
-import { Chip, PhoneButton, Segmented, StickyFooter } from './Controls';
-import { ChevronBackIcon, ChevronIcon, CloseIcon } from './Icons';
+import { Chip, ListGroup, ListRow, PhoneButton, StickyFooter } from './Controls';
+import { ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ImageIcon } from './Icons';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet } from './Sheet';
+import { SwipePanel } from './Swipe';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const KINDS: readonly { readonly id: GroupMode; readonly label: string }[] = [{ id: 'duplicates', label: 'Duplicates' }, { id: 'similar', label: 'Similar' }];
+/** What Find lists, by kind, as its rows and the lists they open name them. */
+const KINDS: Record<GroupMode, string> = { duplicates: 'Duplicates', similar: 'Similar shots' };
 
 /** What is waiting for a yes or no: one copy, every duplicate, or the duplicates of some groups, as many as the free plan has left today. */
 type Asked = { readonly kind: 'copy'; readonly group: DuplicateGroupDto; readonly member: GroupMemberDto } | { readonly kind: 'all'; readonly count: number; readonly bytes: number }
@@ -32,14 +35,21 @@ interface Props {
   readonly status?: ScanStatusDto;
   notify: Notify;
   onScanAgain(): void;
+  /** How Swipe to clean stands today, once the service has said. */
+  readonly swipe?: SwipeStateDto;
+  /** The library, for the swipe card's pictures. */
+  readonly library: Library;
+  /** Opens swiping, or its summary. */
+  onSwipe(where: 'cards' | 'summary'): void;
 }
 
 /**
- * Clean up on a phone or tablet: what deleting the duplicates would free, the groups of duplicates or similar shots,
+ * Clean up on a phone or tablet. Its first screen (12): on the free plan the removals left today, Swipe to clean, and
+ * Find, whose Duplicates and Similar shots each open their list: what deleting the duplicates would free, the groups,
  * and a group's review, pushed over the list on a phone and beside it on a tablet, with the picture full screen to flip
  * between the original and its copy.
  */
-export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Props) {
+export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swipe, library, onSwipe }: Props) {
   const { tablet, words } = usePhone();
   const { mode, data, items, group, copy } = cleanUp;
   const [asked, setAsked] = useState<Asked>();
@@ -102,10 +112,27 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
     notify(keepSaid(photo, !photo.kept, mode), 'ok');
   });
 
+  const home = (
+    <>
+      <RootHeader title="Clean up" subtitle="Daily swipes, duplicates and similar shots" />
+      <div className="flex flex-col gap-4 px-4 pb-4">
+        <FreeRow />
+        <SwipePanel state={swipe} library={library} onOpen={onSwipe} />
+        <Find onOpen={cleanUp.openList} />
+        {status?.completed && (
+          <div className="flex flex-col items-start gap-1 px-1">
+            <p className="text-[14px] text-t2">{scannedLine(status.totalPhotos, status.completed, new Date())}</p>
+            <button type="button" onClick={onScanAgain} className="py-1 text-[15px] font-semibold text-acc">Scan again</button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   const subtitle = mode === 'duplicates' ? 'Copies of the same photo or video' : 'Shots that look alike';
   const list = (
     <>
-      <RootHeader title="Clean up" subtitle={subtitle} noGear={tablet} />
+      <PushedHeader title={KINDS[mode]} subtitle={subtitle} onBack={cleanUp.closeList} />
       <div className="flex flex-col gap-4 px-4 pb-4">
         {mode === 'duplicates' && removable > 0 && (
           <section aria-label="Duplicates to delete" className="flex flex-col gap-1.5 rounded-cell bg-cell p-[18px]">
@@ -114,7 +141,6 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
             <PhoneButton kind="danger" disabled={busy} className="mt-3" onClick={askAll}>Delete all duplicates</PhoneButton>
           </section>
         )}
-        <Segmented label="Show" options={KINDS} value={mode} onChange={cleanUp.turnTo} />
         {items.length > 0 && <GroupRows groups={items} mode={mode} selected={tablet ? group?.key : undefined} onOpen={cleanUp.review} />}
         {data && items.length === 0 && (
           <p className="px-1 py-6 text-[15px] leading-[1.45] text-t2">
@@ -122,12 +148,6 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
           </p>
         )}
         <div ref={end} />
-        {status?.completed && (
-          <div className="flex flex-col items-start gap-1 px-1">
-            <p className="text-[14px] text-t2">{scannedLine(status.totalPhotos, status.completed, new Date())}</p>
-            <button type="button" onClick={onScanAgain} className="py-1 text-[15px] font-semibold text-acc">Scan again</button>
-          </div>
-        )}
       </div>
     </>
   );
@@ -145,16 +165,17 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
 
   return (
     <>
-      {tablet ? (
-        <Screen label="Clean up" fixed>
-          <SplitView list={list} detail={review ?? (
-            <>
-              <PushedHeader title="Clean up" gear />
-              {data && <p className="px-6 py-16 text-center text-[15px] leading-[1.45] text-t2">{mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.removed} until you delete it permanently.` : 'No similar shots left to review.'}</p>}
-            </>
-          )} />
-        </Screen>
-      ) : review ? <PushedScreen label="Review">{review}</PushedScreen> : <Screen label="Clean up">{list}</Screen>}
+      {!cleanUp.listing ? <Screen label="Clean up">{home}</Screen>
+        : tablet ? (
+          <Screen label="Clean up" fixed>
+            <SplitView list={list} detail={review ?? (
+              <>
+                <PushedHeader title={KINDS[mode]} gear />
+                {data && <p className="px-6 py-16 text-center text-[15px] leading-[1.45] text-t2">{mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.removed} until you delete it permanently.` : 'No similar shots left to review.'}</p>}
+              </>
+            )} />
+          </Screen>
+        ) : review ? <PushedScreen label="Review">{review}</PushedScreen> : <PushedScreen label={KINDS[mode]}>{list}</PushedScreen>}
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
         {comparing && group && member && (
@@ -168,6 +189,42 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
         )}
       </>, document.body)}
     </>
+  );
+}
+
+/** On the free plan, how many removals are left today, with Get Pro; nothing on Pro, or before the plan is known. */
+function FreeRow() {
+  const gate = usePlanGate();
+  const plan = gate.plan;
+  if (plan?.leftToday == null) return null;
+  return (
+    <div className="flex items-center gap-3 rounded-cell bg-cell py-2 pl-4 pr-2">
+      <p className="min-w-0 flex-1 text-[14px] text-t2">{plan.leftToday.toLocaleString()} of {plan.removalsPerDay.toLocaleString()} free removals left today</p>
+      <button type="button" onClick={() => gate.offer('none')} className="h-8 shrink-0 rounded-full bg-acc-soft px-3.5 text-[14px] font-semibold text-on-acc-soft">Get Pro</button>
+    </div>
+  );
+}
+
+/** Find: Duplicates and Similar shots, each with how many there are to delete and what they take, opening its list. */
+function Find({ onOpen }: { onOpen(mode: GroupMode): void }) {
+  const duplicates = useGroups('duplicates', '', 1, false).data;
+  const similar = useGroups('similar', '', 1, false).data;
+  const line = (page: typeof duplicates) => (!page ? '…' : page.removableCount === 0 ? 'Nothing left to review' : `${page.removableCount.toLocaleString()} ${page.removableCount === 1 ? 'item' : 'items'} \u00b7 ${formatBytes(page.reclaimableBytes)}`);
+  const rows: [GroupMode, typeof duplicates, typeof CleanUpIcon][] = [['duplicates', duplicates, CleanUpIcon], ['similar', similar, ImageIcon]];
+  return (
+    <ListGroup header="Find">
+      {rows.map(([mode, page, Icon]) => (
+        <ListRow key={mode} chevron onClick={() => onOpen(mode)}>
+          <span className="flex items-center gap-3">
+            <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-acc-soft text-on-acc-soft"><Icon size={19} /></span>
+            <span className="min-w-0">
+              <span className="block text-[16px] font-semibold">{KINDS[mode]}</span>
+              <span className="block text-[13.5px] text-t2">{line(page)}</span>
+            </span>
+          </span>
+        </ListRow>
+      ))}
+    </ListGroup>
   );
 }
 

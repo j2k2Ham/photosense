@@ -636,12 +636,46 @@ export const GUIDE: GuideTopic[] = [
     id: 'phone-cleanup',
     only: PHONES,
     title: 'Clean up',
-    summary: 'The copies found and the similar shots: reviewing each, keeping some, and deleting the rest.',
-    keywords: ['duplicates', 'copies', 'copy', 'same photo', 'twice', 'dupes', 'similar', 'burst', 'compare', 'keep', 'original', 'free space', 'scan again'],
+    summary: 'Swipe to clean, a set of photos a day; and the copies found and the similar shots: reviewing each, keeping some, and deleting the rest.',
+    keywords: ['duplicates', 'copies', 'copy', 'same photo', 'twice', 'dupes', 'similar', 'burst', 'compare', 'keep', 'original', 'free space', 'scan again', 'swipe', 'streak', 'daily', 'tinder', 'left', 'right'],
     sections: [
       {
         text: [
-          '**Clean up** has two lists. **Duplicates** are copies of the same photo or video; **Similar** are shots that look alike, such as the frames of a burst. Each row is a group, with two of its pictures, the file that stays and how much there is to delete.',
+          '**Clean up** starts with how many free removals are left today, on the free plan, with **Get Pro**; then **Swipe to clean**; then **Find**, whose **Duplicates** and **Similar shots** each say how many there are to delete and how much space they take, and open their list.',
+        ],
+      },
+      {
+        heading: 'Swipe to clean',
+        steps: [
+          'Each day brings a set of up to 50 photos and videos, picked at random from those you have never swiped. The set stays the same all day, and a photo you kept or deleted never comes back in another.',
+          'Tap **Start**, or **Continue** where you left off. One photo shows at a time, with when and where it was taken, what it is and its size, and **On** your computer when it is backed up there.',
+          'Swipe left, or tap **Delete**, to mark it to delete; swipe right, or tap **Keep**, to keep it. **Undo**, at the top right, takes back the last one. Nothing is deleted while you swipe.',
+          'At the foot, what you have marked so far, and how much space it would free.',
+          'When the set is through, or you close it with something marked, the summary shows what is marked and how much it frees, your streak, and how many you reviewed, kept and marked. Tap any photo marked to keep it after all.',
+          'Tap **Delete** and the number of items. Everything marked is deleted together, after the phone’s own question, and the summary then says how much space was freed.',
+        ],
+        tips: [
+          'The streak counts the days in a row you swiped; the dots show the last seven days.',
+          'Swipe to clean never stops you to sell anything. On the free plan the foot says how many free removals are left today; once you have marked more than that, it says the rest wait.',
+          'If more are marked than the free plan has left today, the summary says so: **Delete … now** deletes the largest that fit, and the rest stay marked for tomorrow. **Delete all … with Pro** deletes them all once Pro is bought.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'What Swipe to clean deletes goes straight to the phone’s **Recently Deleted**, which keeps it for 30 days; it does not wait in PhotoSense Removed, and PhotoSense’s Undo cannot bring it back.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'What Swipe to clean deletes goes straight to the phone’s bin, which keeps it for 30 days; it does not wait in Pictures/PhotoSense Removed, and PhotoSense’s Undo cannot bring it back.',
+        ],
+      },
+      {
+        heading: 'Duplicates and similar shots',
+        text: [
+          '**Duplicates** are copies of the same photo or video; **Similar shots** are shots that look alike, such as the frames of a burst. Each row is a group, with two of its pictures, the file that stays and how much there is to delete.',
           'In each group one stays: the **Original** for copies, the best copy, with the most detail; the **Best shot** for similar shots.',
         ],
       },
@@ -660,7 +694,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'At the top of **Duplicates**, **Delete all duplicates** deletes every copy in every group, keeping the best copy of each, after a question saying how many go and how much they take.',
           'Similar shots are different pictures, so they are never deleted all at once: go through them a group at a time.',
-          'The foot of the list says when PhotoSense last read your library, and **Scan again** reads it again. A scan reads only what has changed since.',
+          'The foot of Clean up says when PhotoSense last read your library, and **Scan again** reads it again. A scan reads only what has changed since.',
         ],
       },
       {
@@ -891,7 +925,7 @@ export const GUIDE: GuideTopic[] = [
     sections: [
       {
         text: [
-          'PhotoSense is free. The free plan removes **50 photos and videos a day**, in Library, Clean up, Organize and Safe to delete alike. **Undo** gives back the removal the same day, and the count starts again at midnight. Each device has its own 50. Every question before deleting says how many are left today.',
+          'PhotoSense is free. The free plan removes **50 photos and videos a day**, in Library, Clean up, Swipe to clean, Organize and Safe to delete alike. **Undo** gives back the removal the same day, and the count starts again at midnight. Each device has its own 50. Every question before deleting says how many are left today.',
           'Before you delete more than are left, the **PhotoSense Pro** sheet says how many you chose and how many are left. **Delete … now** deletes as many as are left, the largest first; **Not now** deletes nothing.',
         ],
       },

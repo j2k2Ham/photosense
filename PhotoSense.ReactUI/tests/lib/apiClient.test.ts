@@ -606,6 +606,44 @@ describe('backing up from a phone to a computer', () => {
   });
 });
 
+describe('Swipe to clean on a phone', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const state = { date: '2026-11-17', set: [], earlier: [], week: [], streak: 0, freed: null, unswiped: 0 };
+
+  it('asks for today only while it is wanted, and not again each time the page has the focus', async () => {
+    const api = await load();
+    api.useSwipe(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useSwipe(true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/swipe`, expect.any(Function), { revalidateOnFocus: false });
+  });
+
+  it('decides, takes back and spares, showing each answer at once', async () => {
+    answering(state);
+    const api = await load();
+    await expect(api.decideSwipe('a', true)).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/decide`, init: { method: 'POST', body: JSON.stringify({ id: 'a', delete: true }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/swipe`, state, { revalidate: false });
+    await api.undoSwipe();
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/undo`, init: { method: 'POST', headers: json } });
+    await api.spareSwipe('a', false);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/spare`, init: { method: 'POST', body: JSON.stringify({ id: 'a', spared: false }), headers: json } });
+  });
+
+  it('deletes what is marked, all of it or the largest few, and then reads Swipe to clean, Library, the backup and the plan again', async () => {
+    const freed = { deleted: 2, bytes: 900, left: 1 };
+    answering(freed);
+    const api = await load();
+    await expect(api.deleteSwiped()).resolves.toEqual(freed);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/delete`, init: { method: 'POST', headers: json } });
+    const keys = swr.mutate.mock.calls.map(c => c[0]);
+    expect(keys).toContain(`${API}/swipe`);
+    expect(keys).toContain(`${API}/plan`);
+    await api.deleteSwiped(30);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/delete`, init: { method: 'POST', body: JSON.stringify({ atMost: 30 }), headers: json } });
+  });
+});
+
 describe('the plan', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };

@@ -70,6 +70,9 @@ export const ChevronIcon = (p: IconProps) => <Line size={14} stroke={2.2} {...p}
 /** Close, or stop selecting: a cross. */
 export const CloseIcon = (p: IconProps) => <Line size={22} stroke={2} {...p}><path d="M6 6l12 12M18 6 6 18" /></Line>;
 
+/** Undo: an arrow turning back on itself. */
+export const UndoIcon = (p: IconProps) => <Line size={22} stroke={2} {...p}><path d="M9 14 4.5 9.5 9 5" /><path d="M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3" /></Line>;
+
 /** Hiding or showing an iPad's sidebar: a window with a column. */
 export const SidebarIcon = (p: IconProps) => <Line size={22} stroke={1.8} {...p}><rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="M9 4.5v15" /></Line>;
 

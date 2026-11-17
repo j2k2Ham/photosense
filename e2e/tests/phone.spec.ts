@@ -40,7 +40,7 @@ test.describe('on a phone', () => {
 
     const tabs = page.getByRole('navigation', { name: 'Tabs' });
     await expect(tabs.getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('list', { name: 'Groups' }).getByRole('listitem')).toHaveCount(1);
+    await expect(page.getByRole('region', { name: 'Find' }).getByRole('button', { name: /^Duplicates/ })).toContainText('1 item');
   });
 
   test('refused its photos, it says so and where access is turned on, and goes on to pairing once it is on and the app opens again @phone', async ({ page, photos }) => {
@@ -87,6 +87,7 @@ test.describe('on a phone', () => {
     phone.root = photos.root;
     await phone.attach(page);
     await page.goto('/');
+    await page.getByRole('region', { name: 'Find' }).getByRole('button', { name: /^Duplicates/ }).click();
     const groups = page.getByRole('list', { name: 'Groups' });
     await expect(page.getByRole('region', { name: 'Duplicates to delete' })).toContainText('2 duplicates');
     await expect(groups.getByRole('listitem')).toHaveCount(2);
@@ -129,6 +130,48 @@ test.describe('on a phone', () => {
     expect([photos.exists('IMG_0002.JPG'), photos.exists('Saved again/IMG_0002.JPG')].filter(Boolean)).toHaveLength(1);
     // Said under the list, and beside it too at a tablet's width.
     await expect(page.getByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.').first()).toBeVisible();
+  });
+
+  test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1 });
+    photos.picture('IMG_0002.JPG', { seed: 2 });
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    await page.goto('/');
+    const panel = page.getByRole('region', { name: 'Swipe to clean' });
+    await expect(panel).toContainText('Today\u2019s set of 2 photos is ready');
+    await panel.getByRole('button', { name: 'Start' }).click();
+
+    // Dragged far enough to the left, the photo is marked to delete; nothing is deleted yet.
+    const swiping = page.getByRole('dialog', { name: 'Swipe to clean' });
+    await expect(swiping).toContainText('1 of 2');
+    await expect(swiping).toContainText('Swipe left to delete, right to keep');
+    const card = swiping.getByRole('img', { name: /^IMG_000/ });
+    const box = (await card.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 - 160, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(swiping).toContainText('2 of 2');
+    await expect(swiping).toContainText(/to free from 1 item/);
+    await swiping.getByRole('button', { name: 'Undo' }).click();
+    await expect(swiping).toContainText('1 of 2');
+    await swiping.getByRole('button', { name: 'Delete' }).click();
+    await swiping.getByRole('button', { name: 'Keep' }).click();
+
+    // The set through, the summary: one marked, deleted after one confirmation.
+    const summary = page.getByRole('dialog', { name: 'Swipe summary' });
+    await expect(summary).toContainText('Today\u2019s set is done');
+    await expect(summary).toContainText('ready to free from 1 item');
+    await expect(summary).toContainText('1-day streak');
+    await expect(summary.getByRole('region', { name: 'Marked to delete' }).getByRole('button')).toHaveCount(1);
+    await summary.getByRole('button', { name: 'Delete 1 item' }).click();
+    await expect(summary).toContainText('Space freed');
+    await expect(summary).toContainText('A new set is ready tomorrow.');
+    expect(phone.asked.filter(a => a.startsWith('swipe/')).map(a => a.split(' ')[0])).toEqual(['swipe/decide', 'swipe/undo', 'swipe/decide', 'swipe/decide', 'swipe/delete']);
+    await summary.getByRole('button', { name: 'Done' }).click();
+    await expect(panel).toContainText('Done for today. A new set is ready tomorrow.');
   });
 
   test('Library shows every photo by month; chosen ones go into a new album, or are deleted after a question and come back with Undo @phone', async ({ page, photos }) => {

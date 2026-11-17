@@ -533,3 +533,49 @@ export interface BackupPhoneDto {
   arriving: { done: number; total: number; bytes: number; totalBytes: number; started: string; arrived: string[] } | null;
   events: { at: string; text: string }[];
 }
+
+/** A photo or video of Swipe to clean: of today's set, or marked to delete on a day before (PhotoSense.Contracts.Organizing.SwipeCardDto). */
+export interface SwipeCardDto {
+  /** Its id, as Library knows it. */
+  id: string;
+  /** What it takes, a Live Photo's video included. */
+  bytes: number;
+  /** Every file of it is on the computer, checked. */
+  onComputer: boolean;
+  /** Marked to delete (true), kept (false), or not swiped yet (null). */
+  delete: boolean | null;
+  /** Marked to delete, then tapped on the summary to be kept after all. */
+  spared: boolean;
+}
+
+/** A day of the last week, and whether something was swiped on it (PhotoSense.Contracts.Organizing.SwipeDayDto). */
+export interface SwipeDayDto {
+  /** "2026-11-17". */
+  date: string;
+  swiped: boolean;
+}
+
+/** What a deletion at the end of a swipe session did (PhotoSense.Contracts.Organizing.SwipeFreedDto). */
+export interface SwipeFreedDto {
+  deleted: number;
+  bytes: number;
+  /** How many stay marked for another day. */
+  left: number;
+}
+
+/** How Swipe to clean stands today (PhotoSense.Contracts.Organizing.SwipeStateDto). */
+export interface SwipeStateDto {
+  date: string;
+  /** Today's set, in the order shown. */
+  set: SwipeCardDto[];
+  /** Marked to delete on days before, and not deleted yet. */
+  earlier: SwipeCardDto[];
+  /** The last seven days, today last. */
+  week: SwipeDayDto[];
+  /** Days in a row something was swiped. */
+  streak: number;
+  /** What today's last deletion deleted; null before one. */
+  freed: SwipeFreedDto | null;
+  /** Photos and videos never swiped, today's set aside. */
+  unswiped: number;
+}

@@ -39,6 +39,8 @@ public static class PhotoSenseApiServices
         s.AddSingleton(sp => new PairingEndpoints(sp.GetService<ComputerPairing>(), sp.GetService<PhonePairing>()));
         // A phone backs up and a computer keeps the backups: each program has the one half.
         s.AddSingleton(sp => new BackupEndpoints(sp.GetService<PhoneBackup>(), sp.GetService<ComputerBackup>(), sp.GetRequiredService<OrganizeLibrary>()));
+        // Only a phone has Swipe to clean.
+        s.AddSingleton(sp => new SwipeEndpoints(sp.GetService<SwipeToClean>()));
         // A phone sends and a computer receives: each program has the one half.
         s.AddSingleton(sp => new TransferEndpoints(sp.GetService<PhoneSending>(), sp.GetService<PhoneReceiving>()));
         // Made here: the endpoints it is given are this project's own.
@@ -48,7 +50,7 @@ public static class PhotoSenseApiServices
             sp.GetRequiredService<ScanStartEndpoints>(), sp.GetRequiredService<ScanResetEndpoints>(), sp.GetRequiredService<ScanProgressEndpoints>(),
             sp.GetRequiredService<ScanLogsEndpoints>(), sp.GetRequiredService<OrganizeEndpoints>(), sp.GetRequiredService<LibraryEndpoints>(),
             sp.GetRequiredService<RemovedEndpoints>(), sp.GetRequiredService<TransferEndpoints>(), sp.GetRequiredService<PlanEndpoints>(),
-            sp.GetRequiredService<ScanFoundEndpoints>(), sp.GetRequiredService<PairingEndpoints>(), sp.GetRequiredService<BackupEndpoints>()));
+            sp.GetRequiredService<ScanFoundEndpoints>(), sp.GetRequiredService<PairingEndpoints>(), sp.GetRequiredService<BackupEndpoints>(), sp.GetRequiredService<SwipeEndpoints>()));
         return s;
     }
 }

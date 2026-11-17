@@ -5,12 +5,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CleanUpScreen } from '../../../components/phone/CleanUp';
 import { useCleanUp } from '../../../lib/cleanup';
 import type { Platform } from '../../../lib/phone';
-import type { DuplicateGroupDto, GroupMode, ScanStatusDto } from '../../../types';
+import type { DuplicateGroupDto, GroupMode, ScanStatusDto, SwipeStateDto } from '../../../types';
 import { frame, gate, inFrame } from './frame';
 import { group, groupsPage, photo } from './groups';
 import { plan } from '../../fixtures';
 
-const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), setKept: vi.fn(), undoChange: vi.fn() }));
+const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), useGroups: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), setKept: vi.fn(), undoChange: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 const ROOT = '/Photo Library';
@@ -56,19 +56,34 @@ beforeEach(() => {
   api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 21 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: 'b2' });
   api.setKept.mockResolvedValue(undefined);
   api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+  // Find's rows: how many there are to delete of each kind, and what they take.
+  api.useGroups.mockImplementation((mode: GroupMode) => ({ data: groupsPage(mode, groups[mode], mode === 'duplicates' ? { removableCount: 3, reclaimableBytes: 21 * 1024 ** 2 } : { removableCount: 1, reclaimableBytes: 1024 }) }));
 });
 
-interface ShowProps { platform?: Platform; tablet?: boolean; status?: ScanStatusDto; root?: string }
+interface ShowProps { platform?: Platform; tablet?: boolean; status?: ScanStatusDto; root?: string; home?: boolean; swipe?: SwipeStateDto }
 
-/** Clean up in a phone's or tablet's frame, holding its state as PhoneApp does. */
-function show({ platform = 'ios', tablet = false, status, root = ROOT }: ShowProps = {}) {
-  const notify = vi.fn(), onScanAgain = vi.fn();
+/** A library as Library holds it, with nothing read yet: the swipe card has no pictures to show. */
+const LIBRARY = { files: [] };
+
+/**
+ * Clean up in a phone's or tablet's frame, holding its state as PhoneApp does: its first screen with `home`, otherwise
+ * the duplicates' list, opened from Find.
+ */
+function show({ platform = 'ios', tablet = false, status, root = ROOT, home = false, swipe }: ShowProps = {}) {
+  const notify = vi.fn(), onScanAgain = vi.fn(), onSwipe = vi.fn();
   function Holder() {
     const cleanUp = useCleanUp(tablet);
-    return <CleanUpScreen cleanUp={cleanUp} root={root} status={status} notify={notify} onScanAgain={onScanAgain} />;
+    return <CleanUpScreen cleanUp={cleanUp} root={root} status={status} notify={notify} onScanAgain={onScanAgain} swipe={swipe} library={LIBRARY} onSwipe={onSwipe} />;
   }
   const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }), planGate);
-  return { ...view, notify, onScanAgain };
+  if (!home) fireEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Duplicates/ }));
+  return { ...view, notify, onScanAgain, onSwipe };
+}
+
+/** Back to Clean up's first screen, and on to the other kind's list from Find. */
+async function turnTo(kind: 'Duplicates' | 'Similar shots') {
+  await userEvent.click(screen.getAllByRole('button', { name: 'Back' })[0]);
+  await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: new RegExp(`^${kind}`) }));
 }
 
 const rows = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button');
@@ -77,10 +92,37 @@ const sheet = (name: string | RegExp) => screen.getByRole('dialog', { name });
 const toastAction = (notify: ReturnType<typeof vi.fn>) => (notify.mock.calls.at(-1)![2] as { run(): void }).run;
 const table = (name: string) => within(screen.getByRole('table', { name })).getAllByRole('row').map(r => r.textContent);
 
+describe('Clean up\'s first screen', () => {
+  it('has the free removals left today, Swipe to clean, and Find, each kind with what there is to delete, and when the last scan read the library', async () => {
+    planGate = gate({ plan: plan() });
+    const { onScanAgain } = show({ home: true, status: { instanceId: 's', completed: new Date().toISOString(), totalPhotos: 6941 } });
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
+    expect(screen.getByText('38 of 50 free removals left today')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Get Pro' }));
+    expect(planGate.offer).toHaveBeenCalledWith('none');
+    // Swipe to clean says so while today's set is being drawn.
+    expect(screen.getByRole('region', { name: 'Swipe to clean' })).toHaveTextContent('Drawing today\'s set…');
+    const find = within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent);
+    expect(find).toEqual(['Duplicates3 items · 21.0 MB', 'Similar shots1 item · 1 KB']);
+    expect(screen.getByText(/^Scanned 6,941 photos and videos today at/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Scan again' }));
+    expect(onScanAgain).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing of the plan on Pro, nor of a kind with nothing left, and waits for the service to say what there is', () => {
+    planGate = gate({ plan: plan({ tier: 'pro', leftToday: null }) });
+    api.useGroups.mockImplementation((mode: GroupMode) => ({ data: mode === 'duplicates' ? groupsPage(mode, [], { removableCount: 0 }) : undefined }));
+    show({ home: true });
+    expect(screen.queryByText(/free removals left today/)).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent)).toEqual(['DuplicatesNothing left to review', 'Similar shots…']);
+  });
+});
+
 describe('Clean up\'s list', () => {
   it('says what deleting the duplicates would free, and lists each group: the one that stays, what there is to delete, and how many copies', async () => {
-    const { onScanAgain } = show({ status: { instanceId: 's', completed: new Date().toISOString(), totalPhotos: 6941 } });
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    show();
+    expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
     expect(screen.getByText('Copies of the same photo or video')).toBeInTheDocument();
     const card = screen.getByRole('region', { name: 'Duplicates to delete' });
     expect(card).toHaveTextContent('3 duplicates');
@@ -92,11 +134,8 @@ describe('Clean up\'s list', () => {
     // A video has no preview: a play mark in its place.
     expect(row('DLWL2718.MP4').querySelector('img')).toBeNull();
     expect(row('IMG_4299.JPG').querySelectorAll('img')[1]).toHaveAttribute('src', 'http://localhost:7071/api/photos/IMG_4299.JPG/thumbnail');
-    expect(screen.getByText(/^Scanned 6,941 photos and videos today at/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Scan again' }));
-    expect(onScanAgain).toHaveBeenCalledOnce();
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Duplicates to delete' })).not.toBeInTheDocument();
     expect(rows().map(r => r.textContent)).toEqual(['IMG_5101.HEIC3 similar shots+3']);
@@ -115,10 +154,10 @@ describe('Clean up\'s list', () => {
     const { again } = show({ platform: 'android' });
     expect(screen.getByText('No duplicates left. What you deleted waits in Pictures/PhotoSense Removed until you delete it permanently.')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Duplicates to delete' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     expect(screen.getByText('No similar shots left to review.')).toBeInTheDocument();
     api.useGroupsThrough.mockReturnValue({});
-    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} />);
+    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);
     expect(screen.queryByText(/left/)).not.toBeInTheDocument();
   });
 
@@ -138,7 +177,7 @@ describe('Clean up\'s list', () => {
 
 /** A Clean up state with nothing in it, for drawing the screen as it is before anything is read. */
 function stub() {
-  return { mode: 'duplicates' as const, items: [], more: false, copy: 0, turnTo: vi.fn(), showMore: vi.fn(), review: vi.fn(), chooseCopy: vi.fn() };
+  return { mode: 'duplicates' as const, items: [], more: false, copy: 0, listing: true, openList: vi.fn(), closeList: vi.fn(), showMore: vi.fn(), review: vi.fn(), chooseCopy: vi.fn() };
 }
 
 describe('a group\'s review', () => {
@@ -181,7 +220,7 @@ describe('a group\'s review', () => {
 
   it('for similar shots names the best shot and each shot, and offers to keep a shot', async () => {
     show();
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     await userEvent.click(row('IMG_5101.HEIC'));
     expect(screen.getByText('3 similar shots')).toBeInTheDocument();
     expect(screen.getByText('A burst frame or an edited version.')).toBeInTheDocument();
@@ -373,7 +412,7 @@ describe('the picture full screen', () => {
 
   it('names similar shots as shots', async () => {
     show();
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     await userEvent.click(row('IMG_5101.HEIC'));
     await userEvent.click(screen.getByRole('button', { name: 'See IMG_5101.HEIC full screen' }));
     const shown = sheet('IMG_5101.HEIC, full screen');
@@ -398,10 +437,11 @@ describe('the picture full screen', () => {
 describe('Clean up on a tablet', () => {
   it('shows the list and the first group\'s review side by side, the gear with the review, and the next group once one is done', async () => {
     show({ platform: 'android', tablet: true });
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1, name: 'Duplicates' })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'IMG_4299.JPG' })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    // The list goes back to Clean up's first screen; the review beside it is not pushed, and has no way back.
+    expect(screen.getAllByRole('button', { name: 'Back' })).toHaveLength(1);
     expect(row('IMG_4299.JPG')).toHaveAttribute('aria-current', 'true');
     expect(table('What differs').at(-1)).toBe('FolderPhonePhone/Butte');
     await userEvent.click(row('IMG_0712.JPG'));
@@ -415,11 +455,11 @@ describe('Clean up on a tablet', () => {
   it('says there is nothing left beside an empty list, and nothing before the groups are read', async () => {
     groups = { duplicates: [], similar: [] };
     const { again } = show({ tablet: true });
-    expect(screen.getAllByRole('heading', { name: 'Clean up', level: 1 })).toHaveLength(2);
+    expect(screen.getAllByRole('heading', { name: 'Duplicates', level: 1 })).toHaveLength(2);
     expect(screen.getAllByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.')).toHaveLength(2);
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     expect(screen.getAllByText('No similar shots left to review.')).toHaveLength(2);
-    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} />);
+    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);
     expect(screen.queryByText(/left/)).not.toBeInTheDocument();
   });
 

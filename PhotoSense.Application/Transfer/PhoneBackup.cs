@@ -127,12 +127,6 @@ public sealed class PhoneBackup
         public string? Problem;
     }
 
-    // A picture or video as Library shows it: a Live Photo's video goes with its picture.
-    private sealed record Item(LibraryFile Main, IReadOnlyList<LibraryFile> Files)
-    {
-        public long Bytes => Files.Sum(f => f.SizeBytes);
-    }
-
     /// <summary>Backs up the library at <paramref name="root"/> to the computer the phone was paired with.</summary>
     /// <param name="ledger">The computer, the settings, the files' checksums and which of them the computer holds.</param>
     /// <param name="finder">Finds the computer on the Wi-Fi.</param>
@@ -205,8 +199,8 @@ public sealed class PhoneBackup
         var safe = items.Where(i => On(i, on)).ToList();
         var favorites = _favorites is null ? new HashSet<string>() : await _favorites.FavoritesAsync(ct);
         var since = _clock.GetLocalNow().DateTime - Recently;
-        bool Favorite(Item i) => i.Files.Any(f => favorites.Contains(f.Path));
-        bool Recent(Item i) => i.Main.Date >= since;
+        bool Favorite(PhotoItem i) => i.Files.Any(f => favorites.Contains(f.Path));
+        bool Recent(PhotoItem i) => i.Main.Date >= since;
         var removable = safe.Where(i => !(settings.KeepFavorites && Favorite(i)) && !(settings.KeepRecent && Recent(i))).ToList();
         return new SafeReview(computer?.Name, computer?.Folder, computer?.LastChecked, Count(safe), Count(safe.Where(Favorite)), Count(safe.Where(Recent)), Count(removable),
             _device.Storage, _device.CloudPhotos, settings);
@@ -416,33 +410,25 @@ public sealed class PhoneBackup
     }
 
     // Every picture and video in the library, each with its files, and the checksums of those the computer holds.
-    private async Task<(List<Item> Items, HashSet<string> OnComputer)> ItemsAsync(CancellationToken ct)
+    private async Task<(List<PhotoItem> Items, HashSet<string> OnComputer)> ItemsAsync(CancellationToken ct)
     {
         var files = await _library.ListAsync(_root, ct);
         var on = new HashSet<string>(StringComparer.Ordinal);
         var held = await _ledger.OnComputerAsync(ct);
         foreach (var file in files)
             if (await ChecksumAsync(file, ct) is { } sha && held.Contains(sha)) on.Add(file.Id);
-        var pictures = files.Where(f => !f.IsVideo && f.Details.LivePhotoId is not null).GroupBy(f => f.Details.LivePhotoId!).ToDictionary(g => g.Key, g => g.First());
-        var items = new Dictionary<string, (LibraryFile Main, List<LibraryFile> Files)>(StringComparer.Ordinal);
-        foreach (var file in files.OrderBy(f => f.IsVideo))
-        {
-            var main = file.IsVideo && file.Details.LivePhotoId is { } live && pictures.TryGetValue(live, out var picture) ? picture : file;
-            if (!items.TryGetValue(main.Id, out var item)) items[main.Id] = item = (main, []);
-            item.Files.Add(file);
-        }
-        return ([.. items.Values.OrderByDescending(i => i.Main.Date).Select(i => new Item(i.Main, i.Files))], on);
+        return (PhotoItem.Of(files), on);
     }
 
-    private static bool On(Item item, HashSet<string> on) => item.Files.All(f => on.Contains(f.Id));
+    private static bool On(PhotoItem item, HashSet<string> on) => item.Files.All(f => on.Contains(f.Id));
 
-    private static bool Waits(Item item, HashSet<string> on, BackupSettings settings) => !On(item, on) && (settings.IncludeVideos || !item.Main.IsVideo);
+    private static bool Waits(PhotoItem item, HashSet<string> on, BackupSettings settings) => !On(item, on) && (settings.IncludeVideos || !item.Main.IsVideo);
 
     // A scan's checksum is written in upper case; the computer's, as those sent, in lower.
     private async Task<string?> ChecksumAsync(LibraryFile file, CancellationToken ct)
         => file.ContentHash?.ToLowerInvariant() ?? await _ledger.ChecksumAsync(file.Path, file.SizeBytes, file.ModifiedUtc, ct);
 
-    private static ItemCount Count(IEnumerable<Item> items)
+    private static ItemCount Count(IEnumerable<PhotoItem> items)
     {
         var list = items.ToList();
         return new ItemCount(list.Count, list.Sum(i => i.Bytes));

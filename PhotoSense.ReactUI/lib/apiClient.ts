@@ -1,7 +1,7 @@
 import useSWR, { mutate } from 'swr';
 import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -466,3 +466,35 @@ export const moveBackups = (id: string, folder: string) => phoneChange(id, 'fold
 /** On a computer: pauses a phone's backups, or lets them run again. */
 export const pausePhone = (id: string, paused: boolean) => phoneChange(id, 'pause', { paused });
 
+
+const swipeUrl = `${API_BASE}/swipe`;
+
+/** On a phone: how Swipe to clean stands today; nothing is asked while `on` is false. */
+export function useSwipe(on: boolean) {
+  return useSWR<SwipeStateDto>(on ? swipeUrl : null, json, { revalidateOnFocus: false });
+}
+
+async function swiping(what: string, body?: unknown): Promise<SwipeStateDto> {
+  const state = await json<SwipeStateDto>(`${swipeUrl}/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(swipeUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Keeps a photo of today's set, or marks it to delete; nothing is deleted yet. */
+export const decideSwipe = (id: string, del: boolean) => swiping('decide', { id, delete: del });
+
+/** Takes back the last decision of today. */
+export const undoSwipe = () => swiping('undo');
+
+/** On the summary, keeps a photo marked to delete after all, or marks it again. */
+export const spareSwipe = (id: string, spared: boolean) => swiping('spare', { id, spared });
+
+/**
+ * Deletes what is marked, the largest first and no more than `atMost`, to the phone's Recently Deleted or bin after its
+ * own question; the rest stay marked for another day. Library, what is backed up and the plan's count are read again.
+ */
+export async function deleteSwiped(atMost?: number): Promise<SwipeFreedDto> {
+  const freed = await json<SwipeFreedDto>(`${swipeUrl}/delete`, { method: 'POST', ...(atMost === undefined ? {} : { body: JSON.stringify({ atMost }) }) });
+  await Promise.all([mutate(swipeUrl), refreshOrganize(), refreshBackup(), mutate(planUrl)]);
+  return freed;
+}

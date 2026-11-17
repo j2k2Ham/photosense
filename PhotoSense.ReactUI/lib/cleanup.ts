@@ -15,12 +15,16 @@ export interface CleanUp {
   readonly items: readonly DuplicateGroupDto[];
   /** There are more groups than have been read. */
   readonly more: boolean;
+  /** A list of groups is open, from Find; otherwise Clean up's first screen shows. */
+  readonly listing: boolean;
   /** The group being reviewed: on a phone the one pushed over the list, if any; on a tablet the one beside it. */
   readonly group?: DuplicateGroupDto;
   /** Which of its copies is shown beside the one that stays. */
   readonly copy: number;
-  /** Lists duplicates or similar shots, from the first. */
-  turnTo(mode: GroupMode): void;
+  /** Opens the list of duplicates or of similar shots, from Find. */
+  openList(mode: GroupMode): void;
+  /** Goes back from the list to Clean up's first screen. */
+  closeList(): void;
   /** Reads the next groups, as the end of the list comes into view. */
   showMore(): void;
   /** Reviews a group, or, with none, goes back to the list. */
@@ -39,6 +43,7 @@ export function useCleanUp(tablet: boolean): CleanUp {
   const [pages, setPages] = useState(1);
   const [chosen, setChosen] = useState<{ key: string; index: number }>();
   const [copy, setCopy] = useState(0);
+  const [listing, setListing] = useState(false);
   const answer = useGroupsThrough(mode, pages).data;
   // While the other kind is still being read, the groups of the kind before are not shown in its place.
   const data = answer?.mode === mode ? answer : undefined;
@@ -49,14 +54,15 @@ export function useCleanUp(tablet: boolean): CleanUp {
     setChosen(next && { key: next.key, index: chosen.index });
     setCopy(0);
   }
-  const group = found ?? (tablet && !chosen ? items[0] : undefined);
+  const group = found ?? (tablet && listing && !chosen ? items[0] : undefined);
   // The same each time, as the list watches for its end by it.
   const showMore = useCallback(() => setPages(p => p + 1), []);
   return {
-    mode, data, items, group,
+    mode, data, items, group, listing,
     more: !!data && pages < data.totalPages,
     copy: group ? Math.min(copy, group.members.length - 1) : 0,
-    turnTo(next) { setMode(next); setPages(1); setChosen(undefined); setCopy(0); },
+    openList(next) { setMode(next); setPages(1); setChosen(undefined); setCopy(0); setListing(true); },
+    closeList() { setListing(false); setChosen(undefined); setCopy(0); },
     showMore,
     review(key) { setChosen(key === undefined ? undefined : { key, index: items.findIndex(g => g.key === key) }); setCopy(0); },
     chooseCopy: setCopy,

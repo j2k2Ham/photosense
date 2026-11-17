@@ -69,6 +69,46 @@ export class Phone {
       if (what === 'settings') this.set({ settings: JSON.parse(body!) });
       return json(route, this.state);
     });
+    await page.route(url => url.pathname.includes('/api/swipe'), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/swipe').pop()!.replace(/^\//, '');
+      const body = route.request().postData();
+      if (route.request().method() === 'POST') this.asked.push(`swipe/${what} ${body ?? ''}`.trim());
+      // Today's set is the library's pictures and videos, as the program lists them, drawn the first time it is asked for.
+      if (!this.swipe) {
+        let listing: { files: unknown[] } = { files: [] };
+        if (this.root) {
+          const files = new URL(route.request().url());
+          files.pathname = '/api/organize/files';
+          files.search = `?root=${encodeURIComponent(this.root)}`;
+          // A test may end while the library is still being read for it: there is no one left to answer then.
+          try { listing = await (await route.fetch({ url: files.toString(), method: 'GET', postData: undefined })).json(); } catch { return; }
+        }
+        const set = (listing.files as { id: string; sizeBytes: number; livePhoto?: boolean }[]).filter(f => !f.livePhoto)
+          .map(f => ({ id: f.id, bytes: f.sizeBytes, onComputer: false, delete: null as boolean | null, spared: false }));
+        const week = Array.from({ length: 7 }, (_, i) => ({ date: new Date(Date.now() - (6 - i) * 86_400_000).toISOString().slice(0, 10), swiped: false }));
+        this.swipe = { date: week[6].date, set, earlier: [], week, streak: 0, freed: null, unswiped: 0 };
+      }
+      const today = this.swipe;
+      const asked = body ? JSON.parse(body) : {};
+      if (what === 'decide') today.set.find(c => c.id === asked.id)!.delete = asked.delete;
+      if (what === 'undo') [...today.set].reverse().find(c => c.delete !== null)!.delete = null;
+      if (what === 'spare') today.set.find(c => c.id === asked.id)!.spared = asked.spared;
+      const decided = today.set.some(c => c.delete !== null);
+      today.week[6].swiped = decided;
+      today.streak = decided ? 1 : 0;
+      if (what === 'delete') {
+        const going = today.set.filter(c => c.delete === true && !c.spared);
+        this.swipe = { ...today, set: today.set.filter(c => !going.includes(c)), freed: { deleted: going.length, bytes: going.reduce((n, c) => n + c.bytes, 0), left: 0 } };
+        return json(route, this.swipe.freed);
+      }
+      return json(route, this.swipe);
+    });
   }
+
+  /** Swipe to clean today, as the stand-in holds it once the page has first asked. */
+  swipe?: {
+    date: string; set: { id: string; bytes: number; onComputer: boolean; delete: boolean | null; spared: boolean }[]; earlier: unknown[];
+    week: { date: string; swiped: boolean }[]; streak: number; freed: { deleted: number; bytes: number; left: number } | null; unswiped: number;
+  };
 }
 

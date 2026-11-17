@@ -134,8 +134,12 @@ describe('Clean up\'s state on a phone or tablet', () => {
     expect(result.current.group).toBeUndefined();
   });
 
-  it('on a tablet shows the first group, and when the one shown goes, the one that took its place', () => {
+  it('opens a list from Find, and on a tablet shows its first group, and when the one shown goes, the one that took its place', () => {
     const { result, rerender } = renderHook(() => useCleanUp(true));
+    // Clean up's first screen shows until a list is opened from Find.
+    expect([result.current.listing, result.current.group]).toEqual([false, undefined]);
+    act(() => result.current.openList('duplicates'));
+    expect(result.current.listing).toBe(true);
     expect(result.current.group?.keeper.fileName).toBe('A.JPG');
     act(() => result.current.review('group-B.JPG'));
     groups.duplicates = groups.duplicates.filter(g => g.key !== 'group-B.JPG');
@@ -148,6 +152,7 @@ describe('Clean up\'s state on a phone or tablet', () => {
 
   it('keeps the copy chosen within its group, and starts each review and each kind from the first', () => {
     const { result, rerender } = renderHook(() => useCleanUp(true));
+    act(() => result.current.openList('duplicates'));
     act(() => result.current.chooseCopy(1));
     expect(result.current.copy).toBe(1);
     groups.duplicates[0] = group(photo('A.JPG'), [photo('A.HEIC')]);
@@ -156,14 +161,18 @@ describe('Clean up\'s state on a phone or tablet', () => {
     act(() => result.current.chooseCopy(1));
     act(() => result.current.review('group-C.JPG'));
     expect(result.current.copy).toBe(0);
-    act(() => result.current.turnTo('similar'));
+    act(() => result.current.openList('similar'));
     expect([result.current.mode, result.current.group?.keeper.fileName, result.current.copy]).toEqual(['similar', 'S.JPG', 0]);
+    // Going back to the first screen lets the group go.
+    act(() => result.current.chooseCopy(1));
+    act(() => result.current.closeList());
+    expect([result.current.listing, result.current.group, result.current.copy]).toEqual([false, undefined, 0]);
   });
 
   it('shows none of the other kind\'s groups while the kind turned to is being read', () => {
     reading = 'similar';
     const { result } = renderHook(() => useCleanUp(true));
-    act(() => result.current.turnTo('similar'));
+    act(() => result.current.openList('similar'));
     expect([result.current.data, result.current.items, result.current.group, result.current.more]).toEqual([undefined, [], undefined, false]);
   });
 

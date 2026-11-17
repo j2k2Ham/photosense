@@ -1,4 +1,4 @@
-import type { BackupPhoneDto, BackupSettingsDto, BackupStateDto, SafeReviewDto, DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto, PlanDto, PlanOfferDto } from '../types';
+import type { BackupPhoneDto, BackupSettingsDto, BackupStateDto, SafeReviewDto, DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto, PlanDto, PlanOfferDto, SwipeCardDto, SwipeStateDto } from '../types';
 
 /** A picture as the server describes it; tests override only what they are about. */
 export function photo(overrides: Partial<PhotoDto> = {}): PhotoDto {
@@ -99,3 +99,14 @@ export function backupPhone(overrides: Partial<BackupPhoneDto> = {}): BackupPhon
   };
 }
 
+
+/** A photo of Swipe to clean, not swiped yet, of a megabyte; tests override only what they are about. */
+export function swipeCard(id: string, overrides: Partial<SwipeCardDto> = {}): SwipeCardDto {
+  return { id, bytes: 1024 ** 2, onComputer: false, delete: null, spared: false, ...overrides };
+}
+
+/** Swipe to clean on Tuesday 17 November 2026, with the set given, nothing swiped this week and nothing freed. */
+export function swipeState(overrides: Partial<SwipeStateDto> = {}): SwipeStateDto {
+  const week = ['2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-17'].map(date => ({ date, swiped: false }));
+  return { date: '2026-11-17', set: [], earlier: [], week, streak: 0, freed: null, unswiped: 0, ...overrides };
+}

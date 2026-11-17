@@ -95,6 +95,9 @@ public static class PhotoSensePhoneServices
         s.AddSingleton(device);
         s.AddSingleton(sp => new PhoneBackup(sp.GetRequiredService<IBackupLedger>(), computers, sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos,
             sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos as IFavoritePhotos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
+        // Swipe to clean: a set a day, what is marked deleted together at the end.
+        s.AddSingleton(sp => new SwipeToClean(sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos, sp.GetRequiredService<PhoneBackup>(),
+            sp.GetRequiredService<DailyRemovals>(), Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
         return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

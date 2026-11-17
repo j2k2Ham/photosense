@@ -1326,16 +1326,18 @@ describe('on a phone or tablet', () => {
     expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
     expect(within(tabs()).getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
-    expect(screen.getByText('Copies of the same photo or video')).toBeInTheDocument();
+    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
     expect(screen.getByText('Sort Photo Library into albums by place and date')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Similar shots/ }));
     expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
-    // Tapping the tab already showing keeps it, on its first screen.
+    // Back, as the phone's own, goes back to Clean up's first screen; tapping the tab already showing keeps it there.
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
   });
@@ -1367,17 +1369,18 @@ describe('on a phone or tablet', () => {
   it('reviews a group on a screen of its own, which Back, on the phone or on the screen, takes back to the list', async () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
     open();
+    await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Duplicates/ }));
     const row = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button')[0];
     await userEvent.click(row());
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { level: 1, name: 'Clean up' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Duplicates' })).not.toBeInTheDocument();
     await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
 
     await userEvent.click(row());
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     await click('Back');
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
   });
 
   it('leads from Settings to the errors, help, About and the privacy policy, and offers no deleting while nothing waits', async () => {

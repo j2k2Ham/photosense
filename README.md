@@ -117,6 +117,11 @@ The API the UI uses (the service, `http://localhost:7071/api`):
 | `/backup/phones` | GET | On a computer: every phone that backs up to it: `[{ id, name, kind, folder, path, paused, paired, lastBackup, lastChecked, held, heldBytes, safe, safeBytes, arriving, events }]`; `arriving` is `{ done, total, bytes, totalBytes, started, arrived: [id] }` while a backup arrives, `events` what happened, the latest first. On a phone 404 |
 | `/backup/phones/{id}/folder` | POST | On a computer: body `{ folder }`: the phone's backups go there from now on. 400 without one or when it is not there, 404 for a phone not paired |
 | `/backup/phones/{id}/pause` | POST | On a computer: body `{ paused }`: turn the phone's backups away, or let them run again. 404 for a phone not paired |
+| `/swipe` | GET | On a phone: Swipe to clean today, drawing the day's set on its first ask: `{ date, set, earlier, week, streak, freed, unswiped }`. `set` holds up to 50 cards `{ id, bytes, onComputer, delete, spared }` in the order shown (`delete` is null until swiped); `earlier` those marked on days before and not deleted; `week` the last seven days `{ date, swiped }`. 404 on a computer |
+| `/swipe/decide` | POST | On a phone: body `{ id, delete }`: keeps a photo of today's set, or marks it to delete; nothing is deleted. 409 for one not in the set or swiped already |
+| `/swipe/undo` | POST | On a phone: takes back the last decision of today. 409 when nothing was swiped today |
+| `/swipe/spare` | POST | On a phone: body `{ id, spared }`: on the summary, keeps a photo marked to delete after all, or marks it again |
+| `/swipe/delete` | POST | On a phone: body `{ atMost }` (optional): deletes what is marked, the largest first, to the phone's Recently Deleted or bin after its own question, each counting toward the day's free removals; the rest stay marked. Returns `{ deleted, bytes, left }`. 409 over the free plan's limit, or when the person said no |
 | `/send/start` | POST | On a phone: offer files to a computer. Body `{ files: [id] }`, the ids `/organize/files` gave; their Live Photo videos and edit files go with them. The phone waits for a computer, on the network and on a cable, until stopped. Returns the state below; 404 when none of the files is there any more, and on a computer always 404 |
 | `/send/state` | GET | Where sending has got to: `{ stage, code, computer, done, total, bytes, totalBytes, deletable, where, phone, problem, current }`. `stage` is `idle`, `waiting`, `comparing`, `sending`, `sent` or `failed`; `code` is the number to compare while comparing; `deletable` names the pictures and videos every file of which is safely on the computer; `current` names the file going now, none between files |
 | `/send/confirm` | POST | Body `{ same }`: whether the computer shows the same number |
@@ -465,6 +470,15 @@ The phone connects to the computer (Jamie, 2026-11-13). While the program runs, 
 - **Phones**, on the computer, lists every phone paired with it: the backup arriving with the files checked last, what is on the computer, when it was last checked, what the phone said it could delete, the folder (**Change…**), **Pause backups**, and what happened (`IBackupStore`).
 - **Safe to delete.** Library shows a tick on what is on the computer, filters by it and by what waits, and offers **Review**: Safe to delete lists the pictures and videos every file of which the computer confirmed at the last backup, less the keep rules (favorites, on an iPhone, and the last 30 days, both kept by default). **Remove** sends them to the phone's Recently Deleted, or Android's bin, after the phone's own question; each counts toward the day's free removals, and past them the largest go first (Jamie, 2026-11-13: rule 2's exception, extended). **Space freed** says how much went and where the copies are.
 - **Never waiting for ever.** As for sending, below: a minute's silence ends a backup with why, and **Try again** carries on.
+
+### Swipe to clean, on a phone
+
+Clean up's first screen has the free removals left today (on the free plan), **Swipe to clean**, and **Find**, whose Duplicates and Similar shots open their lists (`SwipeToClean` in `PhotoSense.Application/Organizing`, `ISwipeStore`).
+
+- **A set a day.** Up to 50 pictures and videos, a Live Photo as one, drawn at random among those never swiped, the same all day (drawn again the same way should the day's record be lost). A photo is known by the checksum its scan worked out, so it is the same photo wherever it is moved, and by its path until it has been scanned. One kept or deleted is never drawn again (Jamie, 2026-11-17).
+- **Nothing deleted while swiping.** Each photo is kept or marked; Undo takes back the last. No offer interrupts a session: the foot says what is marked and, on the free plan, the removals left today.
+- **One confirmation.** The summary lists what is marked, each of which can be kept after all, and deletes them together to the phone's Recently Deleted or bin after its own question, the largest first and no more than the day's free removals allow; the rest stay marked for another day (rule 2's exception, extended by Jamie on 2026-11-17). Pro deletes them all.
+- **The streak** counts the days in a row on which something was swiped.
 
 ### Sending photos from a phone to a computer, as before
 

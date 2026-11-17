@@ -39,6 +39,8 @@ internal static class Stores
 
     /// <summary>A phone's own record of its backups, kept in <paramref name="db"/>.</summary>
     public static IBackupLedger Ledger(this LiteDatabase db) => On(db).GetRequiredService<IBackupLedger>();
+    /// <summary>Swipe to clean's record on a phone, kept in <paramref name="db"/>.</summary>
+    public static ISwipeStore Swipes(this LiteDatabase db) => On(db).GetRequiredService<ISwipeStore>();
     /// <summary>What has been read from each file for Organize.</summary>
     public static IMediaDetailsStore MediaDetails(this LiteDatabase db) => On(db).GetRequiredService<IMediaDetailsStore>();
 }

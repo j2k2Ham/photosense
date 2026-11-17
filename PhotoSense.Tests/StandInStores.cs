@@ -213,6 +213,7 @@ internal static class StandInStores
             .AddSingleton<IPlanStore>(new MemoryPlanStore())
             .AddSingleton<IBackupStore>(new MemoryBackupStore())
             .AddSingleton<IBackupLedger>(new MemoryBackupLedger())
+            .AddSingleton<ISwipeStore>(new MemorySwipeStore())
             // The computer's door for phones waits on a free port of its own, and tells no network.
             .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

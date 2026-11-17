@@ -145,3 +145,78 @@ internal sealed class MemoryBackupLedger : IBackupLedger
         return Task.CompletedTask;
     }
 }
+
+/// <summary>Swipe to clean's day, what was swiped, what waits to be deleted and the days swiped, in memory.</summary>
+internal sealed class MemorySwipeStore : ISwipeStore
+{
+    private readonly object _lock = new();
+    private readonly HashSet<string> _swiped = new(StringComparer.Ordinal);
+    private readonly HashSet<DateOnly> _days = [];
+    private SwipeDay? _day;
+    private IReadOnlyList<string> _marked = [];
+
+    /// <inheritdoc />
+    public Task<SwipeDay?> DayAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock) return Task.FromResult(_day);
+    }
+
+    /// <inheritdoc />
+    public Task SaveDayAsync(SwipeDay day, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock) _day = day;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> SwipedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock) return Task.FromResult<IReadOnlySet<string>>(_swiped.ToHashSet(StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task SetSwipedAsync(IEnumerable<string> keys, bool swiped, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock)
+            foreach (var key in keys)
+                if (swiped) _swiped.Add(key);
+                else _swiped.Remove(key);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<string>> MarkedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock) return Task.FromResult(_marked);
+    }
+
+    /// <inheritdoc />
+    public Task SaveMarkedAsync(IReadOnlyList<string> keys, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock) _marked = [.. keys];
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<DateOnly>> DaysAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock) return Task.FromResult<IReadOnlySet<DateOnly>>(_days.ToHashSet());
+    }
+
+    /// <inheritdoc />
+    public Task SetDayAsync(DateOnly day, bool swiped, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_lock)
+            if (swiped) _days.Add(day);
+            else _days.Remove(day);
+        return Task.CompletedTask;
+    }
+}

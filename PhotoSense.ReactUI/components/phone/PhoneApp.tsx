@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
-import { backUpIfDue, eraseRemoved, openPhotoSettings, startBackup, useBackup, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview } from '../../lib/apiClient';
+import { backUpIfDue, eraseRemoved, openPhotoSettings, startBackup, useBackup, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe } from '../../lib/apiClient';
 import type { AppSettings } from '../../lib/settings';
 import type { AboutTopic } from '../AboutWindow';
 import type { ThemeChoice } from '../../lib/theme';
@@ -19,6 +19,8 @@ import { PhoneShell } from './PhoneShell';
 import { DeletePermanently, items, SettingsSheet } from './SettingsSheet';
 import { PlanProvider, usePlanSheet } from './ProSheet';
 import { SubscriptionScreen } from './Subscription';
+import { SwipeSession, SwipeSummary } from './Swipe';
+import { marked } from '../../lib/swipe';
 
 interface Props {
   readonly platform: Platform;
@@ -81,13 +83,16 @@ export function PhoneApp(props: Props) {
   const cleanUp = useCleanUp(form === 'tablet');
   const reviewing = !!cleanUp.group && tab === 'cleanup' && form === 'phone';
   const endReview = () => cleanUp.review(undefined);
+  // A list opened from Find is pushed over Clean up's first screen, and goes back to it.
+  const listing = cleanUp.listing && tab === 'cleanup';
+  useBackLayer(listing, cleanUp.closeList);
   useBackLayer(reviewing, endReview);
   // So is a suggestion's preview over Organize's list.
   const organize = useOrganize(library.listing, platform, form === 'tablet', props.settings.distanceUnit);
   const previewing = !!organize.open && tab === 'organize' && form === 'phone';
   const endPreview = () => organize.look(undefined);
   useBackLayer(previewing, endPreview);
-  const pushed = reviewing || previewing;
+  const pushed = (listing && form === 'phone') || reviewing || previewing;
   // Backing up: asked while the app shows its tabs; a backup due runs by itself as they first show.
   const ready = !cover;
   const backup = useBackup(ready).data;
@@ -95,6 +100,10 @@ export function PhoneApp(props: Props) {
   const libraryBackup = useLibraryBackup(ready && paired).data;
   const safe = useSafeReview((ready && paired) || sheet === 'safe').data;
   useEffect(() => { if (ready) void backUpIfDue().catch(() => undefined); }, [ready]);
+  // Swipe to clean: today's set, asked once the tabs show; swiping and its summary cover everything while they show.
+  const swipe = useSwipe(ready).data;
+  const [swiping, setSwiping] = useState<'cards' | 'summary'>();
+  const stopSwiping = () => setSwiping(swipe && marked(swipe).length > 0 ? 'summary' : undefined);
   useBackLayer(sheet === 'pair', () => setSheet(undefined));
   async function send(ids: string[]) {
     try {
@@ -107,7 +116,7 @@ export function PhoneApp(props: Props) {
   }
   // Tapping the tab showing goes back to its first screen.
   const onTab = (next: TabId) => {
-    if (next === tab && next === 'cleanup') endReview();
+    if (next === tab && next === 'cleanup') { endReview(); cleanUp.closeList(); }
     if (next === tab && next === 'organize') endPreview();
     props.onTab(next);
   };
@@ -150,7 +159,7 @@ export function PhoneApp(props: Props) {
       screens={{
         library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
           backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} />,
-        cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} />,
+        cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} swipe={swipe} library={library} onSwipe={setSwiping} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
         backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')} />,
@@ -178,6 +187,10 @@ export function PhoneApp(props: Props) {
           <SpaceFreed removed={freed.removed} partial={freed.partial} computer={backup?.computer ?? 'the computer'} folder={backup?.folder ?? ''}
             onPro={() => gate.offer('none')} onDone={() => { setFreed(undefined); props.onTab('library'); }} />
         )}
+        {swiping === 'cards' && swipe && (
+          <SwipeSession state={swipe} library={library} computer={backup?.computer} notify={notify} onClose={stopSwiping} onDone={() => setSwiping('summary')} />
+        )}
+        {swiping === 'summary' && swipe && <SwipeSummary state={swipe} library={library} notify={notify} onClose={() => setSwiping(undefined)} />}
         {proSheet}
       </>} />
     </PlanProvider>
