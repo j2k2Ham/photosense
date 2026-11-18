@@ -108,6 +108,18 @@ public sealed class CleanUpCategories
         return category == CleanUpCategory.Duplicates ? await CopiesAsync(ct) : Of(category, await CandidatesAsync(ct));
     }
 
+    /// <summary>
+    /// What Free up space offers: the duplicates' copies, the screenshots and the blurry shots, each photo once though it
+    /// be in two of them. The low-storage alert says this, so that it is the number the screen it opens shows.
+    /// </summary>
+    public async Task<(int Count, long Bytes)> FreeUpSpaceAsync(CancellationToken ct)
+    {
+        var candidates = await CandidatesAsync(ct);
+        var quick = (await CopiesAsync(ct)).Concat(Of(CleanUpCategory.Screenshots, candidates)).Concat(Of(CleanUpCategory.Blurry, candidates))
+            .DistinctBy(p => p.Id).ToList();
+        return (quick.Count, quick.Sum(p => p.FileSizeBytes));
+    }
+
     /// <summary>The bursts, latest first, each with the shot to keep.</summary>
     public async Task<IReadOnlyList<Burst>> BurstsAsync(CancellationToken ct) => Bursts.Of(await CandidatesAsync(ct));
 
@@ -141,7 +153,7 @@ public sealed class CleanUpCategories
         }
         phone.EraseAll([.. paths]);
         // Deleted: counted and forgotten whatever the caller does now.
-        await _removals.RecordAsync(going.Count, allowance, CancellationToken.None);
+        await _removals.RecordAsync(going.Count, going.Sum(p => p.FileSizeBytes), allowance, CancellationToken.None);
         var records = new List<PhotoId>();
         foreach (var path in paths)
             if (await _repo.GetByPathAsync(path, CancellationToken.None) is { } record) records.Add(record.Id);

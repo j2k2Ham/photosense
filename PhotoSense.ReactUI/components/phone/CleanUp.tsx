@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange, useCategories, useGroups } from '../../lib/apiClient';
-import { FIND_HUES, FIND_LABELS, findRows, freeable, percentFull, rowLine, type FindId, type FindRow } from '../../lib/categories';
+import { amountOf, FIND_HUES, FIND_LABELS, findRows, freeable, percentFull, rowLine, type FindId, type FindRow } from '../../lib/categories';
 import { ofStorage } from '../../lib/backup';
 import { useBackLayer } from '../../lib/backStack';
 import {
@@ -13,7 +13,7 @@ import type { Library } from '../../lib/library';
 import { usePhone } from '../../lib/phone';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
-import { Chip, ListGroup, ListRow, PhoneButton, StickyFooter } from './Controls';
+import { Chip, ListGroup, ListRow, PhoneButton, PhoneSwitch, StickyFooter } from './Controls';
 import { BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ImageIcon, ScreenshotIcon, VideoIcon } from './Icons';
 import { BurstsScreen, CategoryGrid, FreeUpSpace, LargeVideosScreen } from './Categories';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
@@ -44,6 +44,10 @@ interface Props {
   readonly library: Library;
   /** Opens swiping, or its summary. */
   onSwipe(where: 'cards' | 'summary'): void;
+  /** Whether low-storage alerts are on, once the phone has said. */
+  readonly lowStorage?: boolean;
+  /** Turns low-storage alerts on or off; on asks the phone first. */
+  onLowStorage?(on: boolean): void;
 }
 
 /**
@@ -52,7 +56,7 @@ interface Props {
  * and a group's review, pushed over the list on a phone and beside it on a tablet, with the picture full screen to flip
  * between the original and its copy.
  */
-export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swipe, library, onSwipe }: Props) {
+export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swipe, library, onSwipe, lowStorage, onLowStorage }: Props) {
   const { tablet, words, platform } = usePhone();
   const { mode, data, items, group, copy } = cleanUp;
   const [asked, setAsked] = useState<Asked>();
@@ -129,6 +133,11 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
         <SwipePanel state={swipe} library={library} onOpen={onSwipe} />
         <Find unmeasured={report?.unmeasured ?? 0} rows={findRows(report, similar, platform === 'android')}
           onOpen={id => (id === 'duplicates' || id === 'similar' ? cleanUp.openList(id) : cleanUp.open(id))} />
+        {lowStorage !== undefined && (
+          <ListGroup header="Alerts">
+            <PhoneSwitch inList label="Low-storage alerts" detail="When less than 10% is free, at most once a week" on={lowStorage} onChange={on => onLowStorage?.(on)} />
+          </ListGroup>
+        )}
         {status?.completed && (
           <div className="flex flex-col items-start gap-1 px-1">
             <p className="text-[14px] text-t2">{scannedLine(status.totalPhotos, status.completed, new Date())}</p>
@@ -266,7 +275,7 @@ function Storage({ found, total, free, onOpen }: { readonly found: number; reado
         <span className="bg-acc" style={{ width: `${(Math.min(found, used) / total) * 100}%` }} />
         <span className="bg-t3" style={{ width: `${(Math.max(0, used - found) / total) * 100}%` }} />
       </span>
-      <span className="flex justify-between text-[12.5px] text-t2"><span>{formatBytes(found)} found</span><span>{ofStorage(used, total)} used</span></span>
+      <span className="flex justify-between text-[12.5px] text-t2"><span>{amountOf(found)} found</span><span>{ofStorage(used, total)} used</span></span>
     </button>
   );
 }

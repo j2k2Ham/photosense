@@ -132,3 +132,6 @@ export const BlurryIcon = (p: IconProps) => <Line {...p}><circle cx="10.5" cy="1
 
 /** Messaging apps: a speech bubble. */
 export const ChatIcon = (p: IconProps) => <Line {...p}><path d="M4 11.5a7.5 7 0 1 1 3.5 6l-3.5 1 1-3.2A6.8 6.8 0 0 1 4 11.5z" /></Line>;
+
+/** Share: an arrow rising out of a tray. */
+export const ShareIcon = (p: IconProps) => <Line size={20} stroke={2} {...p}><path d="M12 3.5v11M7.5 8 12 3.5 16.5 8" /><path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></Line>;

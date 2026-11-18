@@ -162,6 +162,68 @@ test.describe('on a phone', () => {
     await expect(find).toBeVisible();
   });
 
+  test('Low-storage alerts are turned on in Clean up, after the phone asks; a large video is compressed on Pro, and the message says what it saved @phone', async ({ page }) => {
+    const MB = 1024 ** 2;
+    const phone = new Phone();
+    phone.videos = [{
+      video: {
+        id: 'video-1', fileName: 'IMG_0100.MOV', sourcePath: '/Photo Library/IMG_0100.MOV', folder: '/Photo Library', fileSizeBytes: 900 * MB, width: 3840, height: 2160, format: 'MOV',
+        isVideo: true, durationSeconds: 300, takenOn: '2023-07-04T10:00:00', placeName: 'Butte, Montana, US', set: 'Primary', kept: false,
+      },
+      estimates: { high: 400 * MB, balanced: 120 * MB, small: 50 * MB },
+    }];
+    await phone.attach(page);
+    // Compressing is part of Pro: this phone has it.
+    await page.route(url => url.pathname.endsWith('/api/plan'), route => route.fulfill({
+      json: { tier: 'pro', kind: 'lifetime', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] },
+    }));
+    await page.goto('/');
+
+    const alerts = page.getByRole('switch', { name: /^Low-storage alerts/ });
+    await expect(alerts).not.toBeChecked();
+    await page.locator('label').filter({ hasText: 'Low-storage alerts' }).click();
+    await expect(alerts).toBeChecked();
+    expect(phone.asked).toContain('notices {"lowStorage":true}');
+
+    await page.getByRole('region', { name: 'Find' }).getByRole('button', { name: /^Large videos/ }).click();
+    await expect(page.getByRole('region', { name: 'Compress all' })).toContainText('Saves about 780.0 MB at Balanced quality');
+    await page.getByRole('list', { name: 'Large videos' }).getByRole('button', { name: /^Butte/ }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Compress video' })).toBeVisible();
+    await expect(page.getByText('Saves about 780.0 MB')).toBeVisible();
+    await page.getByRole('radio', { name: 'Small' }).click();
+    await expect(page.getByText('Saves about 850.0 MB')).toBeVisible();
+    await page.getByRole('button', { name: 'Compress', exact: true }).click();
+    await expect(message(page, 'Saved 850.0 MB. The original is in Recently Deleted for 30 days.')).toBeVisible();
+    expect(phone.asked).toContain('compress/start {"ids":["video-1"],"quality":"small"}');
+    await expect(page.getByRole('list', { name: 'Large videos' })).toBeVisible();
+  });
+
+  test('Year in review shows in Library while it is due, goes card by card, and shares the card showing, drawn as a picture @phone', async ({ page }) => {
+    const phone = new Phone();
+    phone.year = {
+      year: 2026, photos: 7512, videos: 316, places: 12, topPlaces: [{ town: 'Butte', photos: 512 }], months: [1, 2, 3, 4, 5, 6, 1402, 8, 9, 10, 11, 12], busiestMonth: 7,
+      busiestPlace: { town: 'West Glacier', photos: 512 }, freed: 41_600_000_000, removed: 9846, longestStreak: 38, sessions: 142,
+    };
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const card = page.getByRole('region', { name: 'Year in review' });
+    await expect(card).toContainText('Your 2026 in photos');
+    await expect(card).toContainText('7,512 photos, 12 places, 41.6 GB freed');
+    await card.getByRole('button', { name: 'Watch' }).click();
+
+    const stories = page.getByRole('dialog', { name: 'Year in review' });
+    await expect(stories.getByRole('heading', { level: 2 })).toHaveText('2026');
+    await stories.getByRole('button', { name: 'Next card' }).click();
+    await stories.getByRole('button', { name: 'Next card' }).click();
+    await expect(stories.getByRole('heading', { level: 2 })).toHaveText('July');
+    await expect(stories).toContainText('1,402 photos. 512 of them are from West Glacier.');
+    await stories.getByRole('button', { name: 'Share' }).click();
+    await expect.poll(() => phone.shared).toEqual([{ name: 'PhotoSense 2026.png', png: true }]);
+    await stories.getByRole('button', { name: 'Close' }).click();
+    await expect(stories).toBeHidden();
+  });
+
   test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });

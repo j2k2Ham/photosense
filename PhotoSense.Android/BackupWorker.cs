@@ -4,6 +4,7 @@ using AndroidX.Concurrent.Futures;
 using AndroidX.Work;
 using Google.Common.Util.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Transfer;
 
 namespace PhotoSense.AndroidApp;
@@ -62,6 +63,8 @@ public sealed class BackupWorker : ListenableWorker
                 var backup = PhoneApp.Services.GetRequiredService<PhoneBackup>();
                 using var pausing = stop.Register(backup.Pause);
                 if (await backup.AutomaticAsync(stop)) await backup.Running;
+                // Woken anyway: a low-storage alert goes if one is due.
+                await PhoneApp.Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(stop);
             }
             // Stopped by Android, or the backup could not start: it is tried again at the next hour, and the app shows why.
             catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)

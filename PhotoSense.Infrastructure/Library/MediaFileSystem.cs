@@ -16,7 +16,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// sends to the phone's own bin. Nothing is ever copied onto the phone: photos are copied to a computer.
 /// </para>
 /// </summary>
-public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor
 {
     /// <summary>Where what is removed from the phone's storage as a whole waits, as Android shows it: inside Pictures.</summary>
     public const string RemovedHere = "PhotoSense Removed";
@@ -158,6 +158,15 @@ public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
         // A photo gone since its folder was read has nothing left to erase.
         change.Trash.AddRange(paths.Select(p => seen.Files.TryGetValue(p, out var found) ? found.Entry.Id : null).OfType<string>().Distinct());
         Apply(change);
+    }
+
+    /// <inheritdoc />
+    public async Task<long> CompressAsync(string path, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        if (Find(path) is not { IsVideo: true } video) throw new IOException($"{Path.GetFileName(path)} is not a video on the phone.");
+        try { return await _store.CompressAsync(video.Id, target, progress, ct); }
+        // The copy is a new file: the phone is read afresh.
+        finally { _seen = null; }
     }
 
     /// <summary>Forgets the folders made for photos that never came; a folder Android has goes when it is empty, as Android has it.</summary>

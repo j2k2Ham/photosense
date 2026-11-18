@@ -199,15 +199,15 @@ describe('swiping', () => {
   });
 });
 
-interface SummaryOptions { state?: SwipeStateDto; left?: number | null; known?: boolean; platform?: 'ios' | 'android'; remove?: ReturnType<typeof gate>['remove'] }
+interface SummaryOptions { state?: SwipeStateDto; left?: number | null; known?: boolean; platform?: 'ios' | 'android'; remove?: ReturnType<typeof gate>['remove']; onShare?(card: unknown): void }
 
 function summary({ state = swipeState({
   set: [swipeCard('a', { delete: true, bytes: 3 * MB }), swipeCard('b', { delete: false }), swipeCard('c', { delete: true, spared: true })],
   earlier: [swipeCard('unknown', { delete: true, bytes: 2 * MB })], streak: 7,
-}), left = 50, known = true, platform = 'ios', remove }: SummaryOptions = {}) {
+}), left = 50, known = true, platform = 'ios', remove, onShare }: SummaryOptions = {}) {
   const notify = vi.fn(), onClose = vi.fn();
   const planGate = gate({ plan: known ? plan({ leftToday: left, tier: left === null ? 'pro' : 'free' }) : undefined, ...(remove ? { remove } : {}) });
-  const view = inFrame(<SwipeSummary state={state} library={LIBRARY} notify={notify} onClose={onClose} />, frame(platform), planGate);
+  const view = inFrame(<SwipeSummary state={state} library={LIBRARY} notify={notify} onClose={onClose} onShare={onShare} />, frame(platform), planGate);
   return { ...view, notify, onClose, planGate };
 }
 
@@ -232,6 +232,19 @@ describe('the swipe summary', () => {
     await userEvent.click(marked[0]);
     expect(notify).toHaveBeenCalledWith('That photo is not marked to delete.', 'error');
     expect(dialog).toHaveTextContent('Uses 2 of your 50 free removals left today. Items stay in Recently Deleted for 30 days.');
+  });
+
+  it('once deleted, offers the share card of what was freed, by its row and by Share beside Done', async () => {
+    api.deleteSwiped.mockResolvedValue({ deleted: 2, bytes: 5 * MB, left: 0 });
+    const onShare = vi.fn();
+    const { onClose } = summary({ onShare });
+    await userEvent.click(screen.getByRole('button', { name: 'Delete 2 items' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^I freed 5.0 MB with PhotoSense/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(onShare).toHaveBeenCalledTimes(2);
+    expect(onShare).toHaveBeenLastCalledWith({ amount: '5.0 MB', device: 'iPhone', streak: 7, items: 2 });
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it('deletes everything marked in one confirmation, then says what was freed and what stays marked', async () => {

@@ -1,3 +1,5 @@
+using PhotoSense.Domain.ValueObjects;
+
 namespace PhotoSense.Infrastructure.Library;
 
 /// <summary>What one of the files a picture or video is kept as holds.</summary>
@@ -79,4 +81,12 @@ public interface IPhotoLibrary
     /// </summary>
     /// <exception cref="IOException">Nothing was changed: the person said no, or the library could not make one of the changes.</exception>
     void Change(LibraryChange change);
+
+    /// <summary>
+    /// Writes a smaller copy of the video <paramref name="id"/>, made into <paramref name="target"/> as HEVC, as a new
+    /// item with the original's date and place, fetching it from the cloud first when it is kept there; answers how many
+    /// bytes the copy takes. The original is left as it is.
+    /// </summary>
+    /// <exception cref="IOException">The video could not be fetched, read or written; nothing is kept.</exception>
+    Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
 }

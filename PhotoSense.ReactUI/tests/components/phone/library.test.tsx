@@ -57,6 +57,23 @@ const tile = (name: string) => screen.getByRole('button', { name });
 const sheet = (name: string | RegExp) => screen.getByRole('dialog', { name });
 const toastAction = (notify: ReturnType<typeof vi.fn>) => (notify.mock.calls.at(-1)![2] as { run(): void }).run;
 
+describe("Library's Year in review card", () => {
+  it('shows while the year is due, and not while choosing; Watch opens it', async () => {
+    const onYear = vi.fn();
+    const year = { year: 2026, photos: 7512, videos: 316, places: 12, topPlaces: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 41_600_000_000, removed: 0, longestStreak: 0, sessions: 0 };
+    const ui = (selecting: boolean, review = year) => (
+      <LibraryScreen library={library()} selecting={selecting} onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()} year={review} onYear={onYear} />
+    );
+    const { again } = inFrame(ui(false));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Year in review' })).getByRole('button', { name: 'Watch' }));
+    expect(onYear).toHaveBeenCalledOnce();
+    again(ui(true));
+    expect(screen.queryByRole('region', { name: 'Year in review' })).not.toBeInTheDocument();
+    again(ui(false, { ...year, year: null as unknown as number }));
+    expect(screen.queryByRole('region', { name: 'Year in review' })).not.toBeInTheDocument();
+  });
+});
+
 describe('Library', () => {
   it('shows every picture and video, latest first, by month, with each filter\'s count', async () => {
     show();

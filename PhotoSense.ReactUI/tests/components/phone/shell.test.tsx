@@ -15,7 +15,7 @@ import type { PlanDto, SwipeStateDto } from '../../../types';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
 // tested on its own, has one group of duplicates.
-const api = vi.hoisted(() => ({ usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})),
+const api = vi.hoisted(() => ({ openedNotice: vi.fn(async (): Promise<{ opens: string | null }> => ({ opens: null })), useNotices: vi.fn((): { data?: unknown } => ({})), changeNotices: vi.fn(), useCompression: vi.fn((): { data?: unknown } => ({})), useYear: vi.fn((): { data?: unknown } => ({})), usePhotoAccess: vi.fn(), useGroupsThrough: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useOrganizeBatches: vi.fn(() => ({})),
   useBackup: vi.fn(() => ({})), useLibraryBackup: vi.fn(() => ({})), useSafeReview: vi.fn(() => ({})), backUpIfDue: vi.fn(async () => ({})), startBackup: vi.fn(async () => ({})), removeSafe: vi.fn(), stopPairing: vi.fn(async () => undefined), usePairing: vi.fn(() => ({})),
   useRemoved: vi.fn<(roots: string[] | null) => { data?: unknown }>(() => ({})), eraseRemoved: vi.fn(), openPhotoSettings: vi.fn(), undoChange: vi.fn(),
   usePlan: vi.fn<() => { data?: PlanDto }>(() => ({})),
@@ -187,11 +187,19 @@ describe('Settings', () => {
   function show(platform: Platform = 'ios', more = {}) {
     const calls = {
       onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
-      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(),
+      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(), onLowStorage: vi.fn(),
     };
     const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} access="everything" removed={removed(37)} moves={1} {...calls} {...more} />, frame(platform));
     return { calls, view };
   }
+
+  it('turns low-storage alerts on or off under Clean up, once the phone has said whether they are', async () => {
+    const { calls, view } = show();
+    expect(screen.queryByRole('switch', { name: /^Low-storage alerts/ })).not.toBeInTheDocument();
+    view.again(<SettingsSheet theme="auto" unit="miles" errorCount={0} lowStorage={false} {...calls} />);
+    await userEvent.click(screen.getByRole('switch', { name: 'Low-storage alerts When less than 10% is free, at most once a week' }));
+    expect(calls.onLowStorage).toHaveBeenCalledWith(true);
+  });
 
   it('chooses the theme, Auto among them', async () => {
     const { calls } = show();
@@ -282,7 +290,7 @@ describe('Settings', () => {
 function noCalls() {
   return {
     onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
-    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(),
+    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(), onLowStorage: vi.fn(),
   };
 }
 
@@ -328,10 +336,10 @@ describe('Delete permanently', () => {
 
 describe('PhotoSense on a phone', () => {
   const notify = vi.fn(), onSettings = vi.fn(), onAbout = vi.fn();
-  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
+  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false };
   beforeEach(() => {
     localStorage.setItem('photosense-first-run', 'done');
-    settings = { eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
+    settings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false };
     for (const f of [notify, onSettings, onAbout]) f.mockReset();
   });
 
@@ -511,8 +519,11 @@ describe('PhotoSense on a phone', () => {
       await userEvent.click(within(await gear()).getByRole('button', { name: 'PhotoSense Pro trial. Subscription' }));
       const page = screen.getByRole('dialog', { name: 'Subscription' });
       expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+      // The reminder is the phone's own notification, kept by the service.
+      expect(within(page).getByRole('switch', { name: /^Remind me 2 days before it ends/ })).not.toBeChecked();
+      api.changeNotices.mockResolvedValueOnce({ lowStorage: false, trialReminder: true, allowed: true });
       await userEvent.click(within(page).getByRole('switch', { name: /^Remind me 2 days before it ends/ }));
-      expect(onSettings).toHaveBeenLastCalledWith({ remindTrialEnd: false });
+      expect(api.changeNotices).toHaveBeenLastCalledWith({ trialReminder: true });
       await userEvent.click(within(page).getByRole('button', { name: 'Terms' }));
       await userEvent.click(within(page).getByRole('button', { name: 'Privacy policy' }));
       expect(onAbout.mock.calls).toEqual([['terms'], ['privacy']]);
@@ -539,7 +550,7 @@ describe('PhotoSense on a phone', () => {
     });
 
     it('asks once when told not to ask twice, and says what could not be deleted, that nothing was left, or what went wrong', async () => {
-      settings = { eraseAskTwice: false, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
+      settings = { eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false };
       api.eraseRemoved.mockClear();
       api.eraseRemoved.mockResolvedValueOnce({ erased: 35, bytes: 1, skipped: 2, problems: ['You chose not to delete them.'] });
       render(<App platform="android" />);
@@ -687,6 +698,69 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Clean up/ }));
     expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'IMG_4299.JPG' })).not.toBeInTheDocument();
+  });
+
+  it('opens Year in review from its card in Library, and the share card from what compressing saved', async () => {
+    width(false);
+    api.useYear.mockReturnValue({ data: { year: 2026, photos: 3, videos: 0, places: 0, topPlaces: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 0, removed: 0, longestStreak: 0, sessions: 0 } });
+    let compressing: unknown = { stage: 'running', quality: 'balanced', total: 1, done: 0, current: 'IMG_1.MOV', progress: 0, results: [], saved: 0, originalsDeleted: null, problem: null };
+    api.useCompression.mockImplementation(() => ({ data: compressing }));
+    const { rerender } = render(<App start="library" />);
+    await userEvent.click(within(screen.getByRole('region', { name: 'Year in review' })).getByRole('button', { name: 'Watch' }));
+    const stories = screen.getByRole('dialog', { name: 'Year in review' });
+    await userEvent.click(within(stories).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog', { name: 'Year in review' })).not.toBeInTheDocument();
+
+    compressing = { stage: 'done', quality: 'balanced', total: 1, done: 1, current: null, progress: 1, results: [{ id: 'v', fileName: 'IMG_1.MOV', before: 900 * 1024 ** 2, after: 120 * 1024 ** 2 }],
+      saved: 780 * 1024 ** 2, originalsDeleted: true, problem: null };
+    rerender(<App start="library" />);
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('Saved 780.0 MB. The original is in Recently Deleted for 30 days.', 'ok', expect.objectContaining({ label: 'Share' })));
+    await act(async () => { notify.mock.calls.find(c => c[2]?.label === 'Share')![2].run(); });
+    const sheet = screen.getByRole('dialog', { name: 'Share your result' });
+    expect(within(sheet).getByRole('figure', { name: 'Share card' })).toHaveTextContent('780.0 MBfreed on my iPhone1 item cleaned up');
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('dialog', { name: 'Share your result' })).not.toBeInTheDocument();
+    api.useYear.mockReturnValue({});
+    api.useCompression.mockReturnValue({});
+  });
+
+  it('turns low-storage alerts on from Clean up and off from Settings', async () => {
+    width(false);
+    api.useNotices.mockReturnValue({ data: { lowStorage: false, trialReminder: false, allowed: true } });
+    api.changeNotices.mockResolvedValue({ lowStorage: true, trialReminder: false, allowed: true });
+    render(<App start="cleanup" />);
+    await userEvent.click(screen.getByRole('switch', { name: /^Low-storage alerts/ }));
+    expect(api.changeNotices).toHaveBeenLastCalledWith({ lowStorage: true });
+    api.useNotices.mockReturnValue({ data: { lowStorage: true, trialReminder: false, allowed: true } });
+    await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('switch', { name: /^Low-storage alerts/ }));
+    expect(api.changeNotices).toHaveBeenLastCalledWith({ lowStorage: false });
+    api.useNotices.mockReturnValue({});
+  });
+
+  it('opens what a notification tapped is about: Free up space, or the subscription, as it opens or comes back; and says why it could not ask', async () => {
+    width(false);
+    api.openedNotice.mockResolvedValueOnce({ opens: 'free-up-space' });
+    const first = render(<App start="library" />);
+    expect(await screen.findByRole('heading', { level: 1, name: 'Free up space' })).toBeInTheDocument();
+    first.unmount();
+
+    api.usePlan.mockReturnValue({ data: plan({ tier: 'trial', kind: 'yearly', until: '2099-01-10T00:00:00Z', leftToday: null }) });
+    render(<App start="library" />);
+    await act(async () => { await Promise.resolve(); });
+    api.openedNotice.mockResolvedValueOnce({ opens: 'subscription' });
+    await act(async () => { window.dispatchEvent(new Event('photosense-notice')); });
+    expect(await screen.findByRole('dialog', { name: 'Subscription' })).toBeInTheDocument();
+
+    api.openedNotice.mockRejectedValueOnce(new Error('The phone did not answer.'));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('The phone did not answer.', 'error'));
+    // Hidden, it does not ask.
+    const asked = api.openedNotice.mock.calls.length;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(api.openedNotice).toHaveBeenCalledTimes(asked);
   });
 
   it("pushes a category opened from Find over Clean up's first screen, which Back, or on a tablet the tab, takes back", async () => {

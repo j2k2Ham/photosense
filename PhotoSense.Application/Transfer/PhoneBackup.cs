@@ -242,7 +242,7 @@ public sealed class PhoneBackup
         if (!allowance.Allows(going.Count)) throw new InvalidOperationException(DailyRemovals.Refusal(allowance, going.Count));
         phone.EraseAll([.. going.SelectMany(i => i.Paths)]);
         // Deleted: counted whatever the caller does now.
-        await _removals.RecordAsync(going.Count, allowance, CancellationToken.None);
+        await _removals.RecordAsync(going.Count, going.Sum(i => i.Bytes), allowance, CancellationToken.None);
         return new SafeRemoval(going.Count, going.Sum(i => i.Bytes), removable.Count - going.Count, before);
     }
 

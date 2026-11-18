@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -175,6 +175,15 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         // A picture gone since its folder was read has nothing left to erase.
         change.Delete.AddRange(paths.Select(p => seen.Files.GetValueOrDefault(p)?.Item.Id).OfType<string>().Distinct());
         Apply(change);
+    }
+
+    /// <inheritdoc />
+    public async Task<long> CompressAsync(string path, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        if (Find(path) is not { File.Kind: LibraryFileKind.Video } video) throw new IOException($"{Path.GetFileName(path)} is not a video in the library.");
+        try { return await _library.CompressAsync(video.Item.Id, target, progress, ct); }
+        // The copy is a new item: the library is read afresh.
+        finally { _seen = null; }
     }
 
     /// <summary>

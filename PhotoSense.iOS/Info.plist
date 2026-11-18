@@ -41,6 +41,14 @@
     <string>PhotoSense uses the camera only to scan the pairing code on your computer.</string>
     <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>
     <true/>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+      <string>com.j2k2ham.photosense.storage-check</string>
+    </array>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>fetch</string>
+    </array>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>UIApplicationSceneManifest</key>

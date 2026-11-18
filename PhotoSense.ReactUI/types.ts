@@ -617,3 +617,79 @@ export interface CategoryRemovalDto {
   /** On a computer, what Undo puts them back by; null on a phone, where they went to its own bin. */
   batchId: string | null;
 }
+
+/** How small a compressed video is made: its own frame, 1080 lines or 720 lines, as HEVC. */
+export type CompressionQuality = 'high' | 'balanced' | 'small';
+
+/** About what a video's copy takes at each quality (PhotoSense.Contracts.Cleaning.CompressionEstimatesDto); null where a copy is not worth making, or its frame or length is not known. */
+export type CompressionEstimatesDto = Record<CompressionQuality, number | null>;
+
+/** A large video a phone can compress, with about what its copy would take (PhotoSense.Contracts.Cleaning.CompressibleVideoDto). */
+export interface CompressibleVideoDto {
+  video: PhotoDto;
+  estimates: CompressionEstimatesDto;
+}
+
+/** A video compressed: what the original took, and what its copy takes (PhotoSense.Contracts.Cleaning.CompressedVideoDto). */
+export interface CompressedVideoDto {
+  id: string;
+  fileName: string;
+  before: number;
+  after: number;
+}
+
+/** How compressing stands on a phone (PhotoSense.Contracts.Cleaning.CompressionStateDto). */
+export interface CompressionStateDto {
+  stage: 'idle' | 'running' | 'done' | 'stopped' | 'failed';
+  quality: CompressionQuality;
+  total: number;
+  done: number;
+  /** The name of the video being compressed now. */
+  current: string | null;
+  /** How far through them all, from 0 to 1. */
+  progress: number;
+  results: CompressedVideoDto[];
+  /** What the copies saved, all told. */
+  saved: number;
+  /** Once it has ended, whether the originals went to the phone's bin; null while running, or when none was compressed. */
+  originalsDeleted: boolean | null;
+  /** Why it failed. */
+  problem: string | null;
+}
+
+/** A phone's notifications: which are on, and whether the phone lets PhotoSense send any (PhotoSense.Contracts.Cleaning.NoticeStateDto). */
+export interface NoticeStateDto {
+  lowStorage: boolean;
+  trialReminder: boolean;
+  allowed: boolean;
+}
+
+/** What a notification tapped asked to open, once (PhotoSense.Contracts.Cleaning.NoticeOpenedDto). */
+export interface NoticeOpenedDto {
+  opens: 'free-up-space' | 'subscription' | null;
+}
+
+/** A town photos were taken in during the year, with how many (PhotoSense.Contracts.Cleaning.YearPlaceDto). */
+export interface YearPlaceDto {
+  town: string;
+  photos: number;
+}
+
+/** Year in review: the year due now, or null, and that year in photos (PhotoSense.Contracts.Cleaning.YearReviewDto). */
+export interface YearReviewDto {
+  /** December for the year ending, January for the year just ended; null the rest of the year. */
+  year: number | null;
+  photos: number;
+  videos: number;
+  places: number;
+  topPlaces: YearPlaceDto[];
+  /** January first. */
+  months: number[];
+  /** 1 to 12; 0 when none was taken. */
+  busiestMonth: number;
+  busiestPlace: YearPlaceDto | null;
+  freed: number;
+  removed: number;
+  longestStreak: number;
+  sessions: number;
+}

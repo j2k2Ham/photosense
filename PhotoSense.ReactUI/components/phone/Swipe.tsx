@@ -4,14 +4,16 @@ import { useBackLayer } from '../../lib/backStack';
 import { formatBytes, formatDuration } from '../../lib/format';
 import { items, type Library } from '../../lib/library';
 import { placeInFull, shortDate } from '../../lib/organize';
-import { usePhone } from '../../lib/phone';
+import { deviceWord, usePhone } from '../../lib/phone';
+import type { ResultCard } from '../../lib/shareCard';
 import {
   bytesOf, cardLine, dayLetter, dayName, kept, marked, markedAll, nextCard, overNotice, reviewed, runningLine, streakLine, summaryFoot, summaryKicker, swipeLimit,
 } from '../../lib/swipe';
 import type { OrganizeFileDto, SwipeCardDto, SwipeFreedDto, SwipeStateDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { PhoneButton } from './Controls';
-import { CheckIcon, CloseIcon, TrashIcon, UndoIcon } from './Icons';
+import { CheckIcon, CloseIcon, ShareIcon, TrashIcon, UndoIcon } from './Icons';
+import { ShareRow } from './Share';
 import { usePlanGate } from './ProSheet';
 
 type Notify = (message: string, kind: ToastKind) => void;
@@ -233,6 +235,8 @@ interface SummaryProps {
   readonly library: Library;
   notify: Notify;
   onClose(): void;
+  /** Once deleted, opens the share card. */
+  onShare?(card: ResultCard): void;
 }
 
 /**
@@ -240,8 +244,8 @@ interface SummaryProps {
  * (tap one to keep it), and the one confirmation that deletes them, to the phone's own bin after its question. Over the
  * free plan's removals left today, the largest that fit go now and the rest stay marked; Pro deletes them all.
  */
-export function SwipeSummary({ state, library, notify, onClose }: SummaryProps) {
-  const { words } = usePhone();
+export function SwipeSummary({ state, library, notify, onClose, onShare }: SummaryProps) {
+  const { words, platform, tablet } = usePhone();
   const gate = usePlanGate();
   const [busy, setBusy] = useState(false);
   const [freed, setFreed] = useState<SwipeFreedDto>();
@@ -265,6 +269,8 @@ export function SwipeSummary({ state, library, notify, onClose }: SummaryProps) 
     try { await spareSwipe(card.id, !card.spared); } catch (e) { notify(said(e), 'error'); }
   }
 
+  // The share card of what was deleted: the amount as the summary says it, the streak and how many.
+  const cardOf = (done: SwipeFreedDto): ResultCard => ({ amount: formatBytes(done.bytes), device: deviceWord(platform, tablet), streak: state.streak, items: done.deleted });
   const stats: [string, number][] = freed
     ? [['Reviewed', reviewed(state)], ['Kept', kept(state)], ['Deleted', freed.deleted]]
     : [['Reviewed', reviewed(state)], ['Kept', kept(state)], ['To delete', going.length]];
@@ -315,10 +321,16 @@ export function SwipeSummary({ state, library, notify, onClose }: SummaryProps) 
             </ul>
           </section>
         )}
+        {freed && freed.deleted > 0 && onShare && <ShareRow card={cardOf(freed)} onOpen={() => onShare(cardOf(freed))} />}
         {!freed && notice && <p role="note" className="rounded-[16px] bg-amber-soft px-4 py-3 text-[14.5px] leading-[1.4]">{notice}</p>}
       </div>
       <div className="flex flex-col gap-1 pt-3">
-        {freed || going.length === 0 ? <PhoneButton onClick={onClose}>{freed ? 'Done' : 'Finish'}</PhoneButton>
+        {freed && freed.deleted > 0 && onShare ? (
+          <div className="flex gap-3">
+            <PhoneButton kind="secondary" onClick={() => onShare(cardOf(freed))}><span className="flex items-center justify-center gap-2"><ShareIcon size={18} />Share</span></PhoneButton>
+            <PhoneButton onClick={onClose}>Done</PhoneButton>
+          </div>
+        ) : freed || going.length === 0 ? <PhoneButton onClick={onClose}>{freed ? 'Done' : 'Finish'}</PhoneButton>
           : notice && left === 0 ? <PhoneButton disabled={busy} onClick={withPro}>Get Pro</PhoneButton>
             : notice ? <>
               <PhoneButton disabled={busy} onClick={() => void remove(left!)}>Delete {left!.toLocaleString()} now</PhoneButton>

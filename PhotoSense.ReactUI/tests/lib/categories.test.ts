@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bytesOf, counted, deletedSaid, findRows, freeable, largestIds, namesOf, percentFull, resolution, rowLine, sizeOf } from '../../lib/categories';
+import { bytesOf, counted, deletedSaid, findRows, freeable, largestIds, namesOf, percentFull, resolution, rowLine, sizeOf, amountOf } from '../../lib/categories';
 import type { CategoryReportDto } from '../../types';
 import { photo } from '../components/phone/groups';
 
@@ -67,6 +67,8 @@ describe('the figures of a category\'s screen', () => {
     expect(bytesOf([])).toBe(0);
     expect(sizeOf(photos)).toBe('1 KB');
     expect(sizeOf([])).toBe('0 KB');
+    expect(amountOf(0)).toBe('0 KB');
+    expect(amountOf(5 * 1024 * 1024)).toBe('5.0 MB');
   });
 
   it('says what was deleted and where it waits', () => {

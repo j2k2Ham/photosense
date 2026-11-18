@@ -110,6 +110,12 @@ describe('the guide itself', () => {
       expect(ids('screenshot', platform)).toEqual(['phone-cleanup']);
       expect(ids('big videos', platform)).toEqual(['phone-cleanup']);
       expect(ids('free up space', platform)).toContain('phone-cleanup');
+      expect(ids('shrink', platform)).toEqual(['phone-cleanup']);
+      expect(ids('compress', platform)).toEqual(['library', 'phone-cleanup', 'phone-plan']);
+      expect(ids('running out', platform)).toEqual(['phone-cleanup']);
+      expect(ids('reminder', platform)).toContain('phone-plan');
+      expect(ids('wrapped', platform)).toEqual(['library']);
+      expect(ids('share card', platform)).toContain('library');
     }
     // What another platform has is not found.
     expect(ids('google play', 'ios')).toEqual([]);

@@ -4,12 +4,14 @@ import { automaticNote, backupButton, backupLine, backupPercent, backupTitle, ch
 import { items } from '../../lib/library';
 import { limitLine } from '../../lib/plan';
 import { deviceWord, usePhone } from '../../lib/phone';
+import type { ResultCard } from '../../lib/shareCard';
 import type { BackupSettingsDto, BackupStateDto, SafeRemovalDto, SafeReviewDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, PhoneSwitch } from './Controls';
-import { CheckIcon, DoneIcon, LaptopIcon, TickIcon } from './Icons';
+import { CheckIcon, DoneIcon, LaptopIcon, ShareIcon, TickIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { LayerScreen, PushedHeader, RootHeader, Screen } from './Screens';
+import { ShareRow } from './Share';
 
 type Notify = (message: string, kind: ToastKind) => void;
 
@@ -229,10 +231,14 @@ interface FreedProps {
   /** The free plan's limit stopped some: offers Pro. */
   onPro(): void;
   onDone(): void;
+  /** Days in a row something was swiped, for the share card. */
+  readonly streak?: number;
+  /** Opens the share card. */
+  onShare?(card: ResultCard): void;
 }
 
 /** Space freed (11): how much, what went and where its copies are, the phone's storage before and now, and what the limit left. */
-export function SpaceFreed({ removed, partial, computer, folder, onPro, onDone }: FreedProps) {
+export function SpaceFreed({ removed, partial, computer, folder, streak = 0, onPro, onShare, onDone }: FreedProps) {
   const { platform, tablet } = usePhone();
   const gate = usePlanGate();
   const device = deviceWord(platform, tablet);
@@ -240,8 +246,14 @@ export function SpaceFreed({ removed, partial, computer, folder, onPro, onDone }
   const after = Math.max(0, before - removed.bytes);
   const width = (used: number) => `${used / removed.storageTotal * 100}%`;
   const carry = partial && removed.left > 0 && gate.plan?.tier === 'free';
+  const card: ResultCard = { amount: gigabytes(removed.bytes), device, streak, items: removed.removed };
   return (
-    <LayerScreen label="Space freed" onBack={onDone} footer={<PhoneButton onClick={onDone}>Done</PhoneButton>}>
+    <LayerScreen label="Space freed" onBack={onDone} footer={(
+      <div className="flex gap-3">
+        {onShare && <PhoneButton kind="secondary" onClick={() => onShare(card)}><span className="flex items-center justify-center gap-2"><ShareIcon size={18} />Share</span></PhoneButton>}
+        <PhoneButton onClick={onDone}>Done</PhoneButton>
+      </div>
+    )}>
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-7 px-6 pb-6 pt-[calc(var(--safe-t)+56px)]">
         <span aria-hidden className="grid h-16 w-16 place-items-center rounded-full bg-keep-soft text-keep"><DoneIcon /></span>
         <div className="flex flex-col gap-2">
@@ -260,6 +272,7 @@ export function SpaceFreed({ removed, partial, computer, folder, onPro, onDone }
             ))}
           </div>
         )}
+        {onShare && <ShareRow card={card} onOpen={() => onShare(card)} />}
         {carry && (
           <section aria-label="More are selected" className="flex flex-col gap-2 rounded-cell bg-cell p-4">
             <p className="text-[16px] font-semibold">{removed.left.toLocaleString()} more {removed.left === 1 ? 'is' : 'are'} selected</p>

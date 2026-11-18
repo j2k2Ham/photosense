@@ -8,14 +8,12 @@ export interface AppSettings {
   eraseAskTwice: boolean;
   /** Distances are said in miles or kilometres, on a computer and a phone alike. */
   distanceUnit: DistanceUnit;
-  /** A free trial is to be followed by a reminder two days before it renews. */
-  remindTrialEnd: boolean;
   /** Phones has been opened on this computer, so its tab no longer has the dot that says it is new. */
   phonesSeen: boolean;
 }
 
 /** The settings until the person changes them. */
-export const defaultAppSettings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false };
+export const defaultAppSettings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false };
 
 const KEY = 'photosense-settings';
 

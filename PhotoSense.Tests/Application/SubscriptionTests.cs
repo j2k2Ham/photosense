@@ -171,13 +171,13 @@ public class SubscriptionTests
         var today = await removals.TodayAsync(ct);
         await Assert.That((today.PerDay, today.Used, today.Left, today.Unlimited)).IsEqualTo((50, 0, (int?)50, false));
 
-        await removals.RecordAsync(38, today, ct);
+        await removals.RecordAsync(38, 0, today, ct);
         today = await removals.TodayAsync(ct);
         await Assert.That(today.Left).IsEqualTo(12);
         await Assert.That(today.Allows(12)).IsTrue();
         await Assert.That(today.Allows(13)).IsFalse();
 
-        await removals.RecordAsync(20, today, ct);
+        await removals.RecordAsync(20, 0, today, ct);
         await Assert.That((await removals.TodayAsync(ct)).Left).IsEqualTo(0);
 
         _clock.Now = TestClock.Day.AddDays(1);
@@ -192,7 +192,7 @@ public class SubscriptionTests
         var today = await removals.TodayAsync(ct);
 
         await Assert.That((today.Left, today.Unlimited, today.Allows(100_000))).IsEqualTo(((int?)null, true, true));
-        await removals.RecordAsync(500, today, ct);
+        await removals.RecordAsync(500, 0, today, ct);
         await Assert.That(await _phone.Store.RemovedOnAsync(DateOnly.FromDateTime(_clock.GetLocalNow().DateTime), ct)).IsEqualTo(0);
     }
 
@@ -200,7 +200,7 @@ public class SubscriptionTests
     public async Task Nothing_Removed_Counts_For_Nothing(CancellationToken ct)
     {
         var removals = TestPlans.Removals(_computer);
-        await removals.RecordAsync(0, await removals.TodayAsync(ct), ct);
+        await removals.RecordAsync(0, 0, await removals.TodayAsync(ct), ct);
 
         await Assert.That((await removals.TodayAsync(ct)).Used).IsEqualTo(0);
     }

@@ -1,3 +1,4 @@
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
 namespace PhotoSense.Tests;
@@ -28,6 +29,12 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
     /// <summary>When set, the person says no to the next change, and this is why; nothing changes.</summary>
     public string? Refuse { get; set; }
 
+    /// <summary>The videos compressed, with what each was made into.</summary>
+    public List<(string Id, VideoTarget Target)> Compressed { get; } = [];
+
+    /// <summary>Runs as a video is compressed, after half of it: it can take a while, or fail.</summary>
+    public Func<string, CancellationToken, Task>? Compressing { get; set; }
+
     /// <summary>Adds a picture or video kept as the files given, taken a minute after the one before.</summary>
     public LibraryItem Add(string id, params (LibraryFileKind Kind, string Name, byte[] Bytes)[] files)
     {
@@ -50,6 +57,13 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
     {
         var at = _items.FindIndex(i => i.Id == id);
         _items[at] = _items[at] with { Screenshot = screenshot, BurstId = burst };
+    }
+
+    /// <summary>Says a picture or video's file is <paramref name="length"/> bytes long, as a large video would be, without holding as many.</summary>
+    public void Sized(string id, long length)
+    {
+        var at = _items.FindIndex(i => i.Id == id);
+        _items[at] = _items[at] with { Files = [.. _items[at].Files.Select(f => f with { Length = length })] };
     }
 
     /// <summary>Takes a picture or video out of the library, as deleting it in Photos would.</summary>
@@ -100,6 +114,22 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
             foreach (var album in _albums) album.Items.Remove(id);
             RecentlyDeleted.Add(id);
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>The copy takes a thousandth of the bits a second it is written at, in bytes, and is named after the original.</remarks>
+    public async Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        var original = _items.Single(i => i.Id == id);
+        progress.Report(0.5);
+        if (Compressing is { } compressing) await compressing(id, ct);
+        ct.ThrowIfCancellationRequested();
+        Compressed.Add((id, target));
+        var bytes = new byte[target.VideoBitsPerSecond / 1000];
+        var name = Path.GetFileNameWithoutExtension(original.Files[0].FileName) + " (smaller).MOV";
+        Add($"{id}-smaller-{Compressed.Count}", (LibraryFileKind.Video, name, bytes));
+        progress.Report(1);
+        return bytes.LongLength;
     }
 
     private (List<string> Path, List<string> Items)? Find(IReadOnlyList<string> path)

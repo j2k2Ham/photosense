@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Application.Plans;
+using PhotoSense.Application.Removal;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -37,16 +38,18 @@ public static class PhotoSensePhoneServices
     /// <param name="scanner">The phone's camera, which scans a computer's pairing code.</param>
     /// <param name="computers">Finds the computers with PhotoSense on the phone's Wi-Fi.</param>
     /// <param name="device">What sort of phone it is, whether it is charging, its storage and whether its photos are in iCloud too.</param>
+    /// <param name="notifier">The phone's own notifications.</param>
+    /// <param name="share">The phone's own share sheet, for the cards.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, string name, string root = LibraryRoot, ITransferListener? listener = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, string name, string root = LibraryRoot, ITransferListener? listener = null)
     {
         var photos = new PhotoLibraryFileSystem(library, root);
         s.AddSingleton(photos);
-        return s.AddPhone(photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, name, listener);
+        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, name, listener);
     }
 
     /// <summary>PhotoSense as it runs on an Android phone: as <see cref="AddPhotoSensePhone"/>, on the photos of the phone's own storage.</summary>
@@ -61,27 +64,31 @@ public static class PhotoSensePhoneServices
     /// <param name="scanner">The phone's camera, which scans a computer's pairing code.</param>
     /// <param name="computers">Finds the computers with PhotoSense on the phone's Wi-Fi.</param>
     /// <param name="device">What sort of phone it is, whether it is charging, its storage and whether its photos are in iCloud too.</param>
+    /// <param name="notifier">The phone's own notifications.</param>
+    /// <param name="share">The phone's own share sheet, for the cards.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the storage is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSenseAndroid(this IServiceCollection s, IMediaStore store, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, string name, string root = StorageRoot, ITransferListener? listener = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, string name, string root = StorageRoot, ITransferListener? listener = null)
     {
         var photos = new MediaFileSystem(store, root);
         s.AddSingleton(photos);
-        return s.AddPhone(photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, name, listener);
+        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, name, listener);
     }
 
-    private static IServiceCollection AddPhone(this IServiceCollection s, IPhotoFileSystem photos, string root, IPhotoAccess access, IImageAnalyzer analyzer,
-        string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore, ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, string name, ITransferListener? listener)
+    private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,
+        string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore, ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device,
+        INotifier notifier, IShareSheet share, string name, ITransferListener? listener)
+        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether
     {
         s.AddSingleton(Options.Create(new PhotoStorageOptions
         {
             DatabasePath = Path.Combine(dataFolder, "photosense.db"),
             ThumbnailPath = Path.Combine(cacheFolder, "thumbnails"),
         }));
-        s.AddSingleton(photos);
+        s.AddSingleton<IPhotoFileSystem>(photos);
         s.AddSingleton(access);
         s.AddSingleton(analyzer);
         s.AddSingleton(appStore);
@@ -98,6 +105,16 @@ public static class PhotoSensePhoneServices
         // Swipe to clean: a set a day, what is marked deleted together at the end.
         s.AddSingleton(sp => new SwipeToClean(sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos, sp.GetRequiredService<PhoneBackup>(),
             sp.GetRequiredService<DailyRemovals>(), Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
+        // Compressing large videos, and the notifications: the low-storage alert and the trial's reminder.
+        s.AddSingleton(notifier);
+        s.AddSingleton(sp => new VideoCompression(sp.GetRequiredService<CleanUpCategories>(), sp.GetRequiredService<IPhotoRepository>(), compressor, photos, sp.GetRequiredService<Subscription>(),
+            sp.GetRequiredService<DailyRemovals>()));
+        s.AddSingleton(sp => new PhoneNotices(sp.GetRequiredService<INoticeStore>(), notifier, device, sp.GetRequiredService<CleanUpCategories>(), sp.GetRequiredService<Subscription>(),
+            sp.GetRequiredService<TimeProvider>()));
+        // Year in review, and the share sheet its cards and the result screens' go to.
+        s.AddSingleton(share);
+        s.AddSingleton(sp => new YearInReview(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<IPlanStore>(),
+            sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<TimeProvider>()));
         return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

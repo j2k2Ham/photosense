@@ -10,12 +10,13 @@ import {
 import { checkedAt, gigabytes } from '../../lib/backup';
 import { checkFolderName, placeInFull, resolveNames } from '../../lib/organize';
 import { deviceWord, usePhone } from '../../lib/phone';
-import type { LibraryBackupDto, OrganizeDestination, OrganizeFileDto, OrganizePlaceDto, SafeReviewDto } from '../../types';
+import type { LibraryBackupDto, OrganizeDestination, OrganizeFileDto, OrganizePlaceDto, SafeReviewDto, YearReviewDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton } from './Controls';
 import { AddToFolderIcon, CheckIcon, ChevronBackIcon, CloseIcon, FolderIcon, LaptopIcon, SendIcon, TrashIcon } from './Icons';
 import { MonthHeader, PhotoGrid, SelectionBar } from './PhotoGrid';
 import { RootHeader, Screen } from './Screens';
+import { YearCard } from './YearInReview';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet, Sheet } from './Sheet';
 import { largest, limitLine } from '../../lib/plan';
@@ -48,13 +49,17 @@ interface Props {
   readonly safe?: SafeReviewDto;
   /** Opens Safe to delete. */
   onReview?(): void;
+  /** Year in review, in December and January; its card shows while it is due. */
+  readonly year?: YearReviewDto;
+  /** Opens Year in review. */
+  onYear?(): void;
 }
 
 /**
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter. Tapping one opens it;
  * Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear }: Props) {
   const { platform, ios, tablet, words } = usePhone();
   const backedUp = useMemo<BackedUp | undefined>(() => (backup?.computer ? { on: new Set(backup.onComputer), waiting: new Set(backup.waiting) } : undefined), [backup]);
   const [bannerHidden, setBannerHidden] = useState(false);
@@ -182,6 +187,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
           <button type="button" aria-label="Hide" onClick={() => setBannerHidden(true)} className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-t2"><CloseIcon size={16} /></button>
         </section>
       )}
+      {year?.year != null && !selecting && onYear && <YearCard review={year} onWatch={onYear} />}
       <div role="group" aria-label="Show" className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-1">
         {libraryFilters(backup?.computer).map(({ id, label }) => (
           <Chip key={id} label={label} count={counts?.[id].toLocaleString()} on={filter === id} onClick={() => { onFilter(id); setShown(LIBRARY_PAGE); }} />

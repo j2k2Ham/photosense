@@ -194,6 +194,14 @@ describe('Space freed', () => {
     expect(onDone).toHaveBeenCalledOnce();
   });
 
+  it('offers the share card of what was freed, by its row and by Share', async () => {
+    const onShare = vi.fn();
+    inFrame(<SpaceFreed removed={removed} partial={false} computer="Studio iMac" folder="Pictures/PhotoSense" streak={6} onPro={vi.fn()} onShare={onShare} onDone={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: /^I freed 28.1 GB with PhotoSense/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(onShare.mock.calls).toEqual([[{ amount: '28.1 GB', device: 'iPhone', streak: 6, items: 5998 }], [{ amount: '28.1 GB', device: 'iPhone', streak: 6, items: 5998 }]]);
+  });
+
   it('after the free plan let only some go, says how many more are chosen, and offers Pro', async () => {
     const onPro = vi.fn();
     inFrame(<SpaceFreed removed={{ ...removed, removed: 50, bytes: 3.6e9, left: 5948 }} partial computer="Studio iMac" folder="Pictures/PhotoSense" onPro={onPro} onDone={vi.fn()} />, frame('android'), gate({ plan: plan() }));

@@ -677,6 +677,84 @@ describe("Clean up's categories", () => {
   });
 });
 
+describe("compressing and the phone's notifications", () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const running = { stage: 'running', quality: 'small', total: 1, done: 0, current: 'IMG_1.MOV', progress: 0, results: [], saved: 0, originalsDeleted: null, problem: null };
+
+  it('asks for the large videos, and how compressing stands every second only while it runs', async () => {
+    const api = await load();
+    api.useCompressVideos(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useCompressVideos(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/compress/videos`);
+    api.useCompression(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useCompression(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/compress`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect([every({ stage: 'running' }), every({ stage: 'done' }), every(undefined)]).toEqual([1000, 0, 0]);
+  });
+
+  it('starts and cancels, showing how it stands at once, and reads again what it changed once it ends', async () => {
+    answering(running);
+    const api = await load();
+    await expect(api.startCompression(['a'], 'small')).resolves.toEqual(running);
+    expect(lastRequest()).toEqual({ url: `${API}/compress/start`, init: { method: 'POST', body: JSON.stringify({ ids: ['a'], quality: 'small' }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/compress`, running, { revalidate: false });
+    await api.cancelCompression();
+    expect(lastRequest()).toEqual({ url: `${API}/compress/cancel`, init: { method: 'POST', headers: json } });
+    await api.refreshCompressed();
+    expect(swr.mutate.mock.calls.map(c => c[0])).toContain(`${API}/compress/videos`);
+  });
+
+  it('asks which notifications are on, changes them, and what one tapped opens', async () => {
+    const state = { lowStorage: true, trialReminder: false, allowed: true };
+    answering(state);
+    const api = await load();
+    api.useNotices(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useNotices(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/notices`);
+    await expect(api.changeNotices({ lowStorage: true })).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/notices`, init: { method: 'POST', body: JSON.stringify({ lowStorage: true }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/notices`, state, { revalidate: false });
+    answering({ opens: 'free-up-space' });
+    await expect(api.openedNotice()).resolves.toEqual({ opens: 'free-up-space' });
+    expect(lastRequest().url).toBe(`${API}/notices/opened`);
+  });
+
+  it("turns the trial's reminder on when a trial starts, as its terms promise", async () => {
+    const plan = { tier: 'trial', kind: 'yearly' };
+    fetchMock.mockImplementationOnce(async () => reply({ outcome: 'bought', plan })).mockImplementationOnce(async () => reply({ lowStorage: false, trialReminder: true, allowed: true }));
+    const api = await load();
+    await api.buyPlan('yearly');
+    expect(lastRequest()).toEqual({ url: `${API}/notices`, init: { method: 'POST', body: JSON.stringify({ trialReminder: true }), headers: json } });
+    fetchMock.mockClear();
+    answering({ outcome: 'cancelled', plan });
+    await api.buyPlan('yearly');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Year in review and sharing', () => {
+  it('asks for the year due only while it is wanted', async () => {
+    const api = await load();
+    api.useYear(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useYear(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/year`);
+  });
+
+  it("hands a card to the phone's share sheet, and says why it could not", async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.shareImage('iVBOR', 'PhotoSense 2026.png');
+    expect(lastRequest()).toEqual({ url: `${API}/share`, init: { method: 'POST', body: JSON.stringify({ image: 'iVBOR', name: 'PhotoSense 2026.png' }), headers: { 'Content-Type': 'application/json', 'x-photosense-client': 'web' } } });
+    answering('The share sheet could not open.', 409);
+    await expect(api.shareImage('iVBOR', 'x.png')).rejects.toThrow('The share sheet could not open.');
+  });
+});
+
 describe('the plan', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };
@@ -772,6 +850,10 @@ describe('on Android', () => {
       await api.pauseBackup();
       expect(keep).toHaveBeenCalledOnce();
       expect(lastRequest().init?.headers).not.toHaveProperty('x-photosense-body');
+      // A card for the share sheet goes the same way.
+      answering(undefined, 204);
+      await api.shareImage('iVBOR', 'PhotoSense.png');
+      expect(lastRequest().init?.headers).toMatchObject({ 'x-photosense-body': 'body-7' });
     } finally {
       vi.unstubAllGlobals();
     }

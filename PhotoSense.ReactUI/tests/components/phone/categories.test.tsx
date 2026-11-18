@@ -1,21 +1,24 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BurstsScreen, CategoryGrid, FreeUpSpace, LargeVideosScreen } from '../../../components/phone/Categories';
 import type { Platform } from '../../../lib/phone';
-import type { BurstDto, CategoryReportDto, PhotoDto } from '../../../types';
+import type { BurstDto, CategoryReportDto, CompressibleVideoDto, CompressionStateDto, PhotoDto } from '../../../types';
 import { plan } from '../../fixtures';
 import { frame, gate, inFrame } from './frame';
 import { photo } from './groups';
 
-const api = vi.hoisted(() => ({ useCategories: vi.fn(), useCategoryPhotos: vi.fn(), useBursts: vi.fn(), deleteChosen: vi.fn() }));
+const api = vi.hoisted(() => ({ useCategories: vi.fn(), useCategoryPhotos: vi.fn(), useBursts: vi.fn(), deleteChosen: vi.fn(), useCompressVideos: vi.fn(), useCompression: vi.fn(),
+  startCompression: vi.fn(), cancelCompression: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 // What the service holds of each category; a category missing is still being read.
 let lists: Record<string, PhotoDto[] | undefined>;
 let bursts: BurstDto[] | undefined;
 let report: CategoryReportDto | undefined;
+let videos: CompressibleVideoDto[] | undefined;
+let compression: CompressionStateDto | undefined;
 const MB = 1024 ** 2;
 
 beforeEach(() => {
@@ -23,6 +26,12 @@ beforeEach(() => {
   lists = {};
   bursts = undefined;
   report = undefined;
+  videos = undefined;
+  compression = undefined;
+  api.useCompressVideos.mockImplementation(() => ({ data: videos }));
+  api.useCompression.mockImplementation(() => ({ data: compression }));
+  api.startCompression.mockResolvedValue(undefined);
+  api.cancelCompression.mockResolvedValue(undefined);
   api.useCategoryPhotos.mockImplementation((category: string) => ({ data: lists[category] }));
   api.useBursts.mockImplementation(() => ({ data: bursts }));
   api.useCategories.mockImplementation(() => ({ data: report }));
@@ -157,47 +166,154 @@ describe('Bursts (20)', () => {
   });
 });
 
-describe('Large videos (21)', () => {
-  it('lists each video with where and when, its frame and size, and deletes those tapped', async () => {
-    lists.largeVideos = [
-      photo('IMG_1.MOV', { isVideo: true, fileSizeBytes: 900 * MB, width: 3840, height: 2160, durationSeconds: 300 }),
-      photo('IMG_2.MOV', { isVideo: true, fileSizeBytes: 300 * MB, width: 640, height: 480, takenOn: undefined, placeName: undefined }),
-    ];
+describe('Large videos (21) and Compress (22)', () => {
+  const big = () => photo('IMG_1.MOV', { isVideo: true, fileSizeBytes: 900 * MB, width: 3840, height: 2160, durationSeconds: 300 });
+  const small = () => photo('IMG_2.MOV', { isVideo: true, fileSizeBytes: 300 * MB, width: 640, height: 480, takenOn: undefined, placeName: undefined });
+  const two = (): CompressibleVideoDto[] => [
+    { video: big(), estimates: { high: 400 * MB, balanced: 120 * MB, small: 50 * MB } },
+    { video: small(), estimates: { high: null, balanced: null, small: null } },
+  ];
+  const running = (more: Partial<CompressionStateDto> = {}): CompressionStateDto => ({
+    stage: 'running', quality: 'balanced', total: 2, done: 0, current: 'IMG_1.MOV', progress: 0.25, results: [], saved: 0, originalsDeleted: null, problem: null, ...more,
+  });
+  const pro = () => gate({ plan: plan({ tier: 'pro', leftToday: null }) });
+  const row = (name: RegExp) => within(screen.getByRole('list', { name: 'Large videos' })).getByRole('button', { name });
+
+  it('lists each video with where and when, its frame, its size and about what its copy takes, and compresses them all at Balanced on Pro', async () => {
+    videos = two();
     const notify = vi.fn(), onBack = vi.fn();
-    show(<LargeVideosScreen notify={notify} onBack={onBack} />);
+    show(<LargeVideosScreen notify={notify} onBack={onBack} />, { planGate: pro() });
     expect(screen.getByText('1.17 GB')).toBeInTheDocument();
     expect(screen.getByText('in 2 videos over 200 MB')).toBeInTheDocument();
-    expect(screen.getByText('Tap videos to choose the ones to delete.')).toBeInTheDocument();
-    const [one, two] = tiles('Large videos');
-    expect(one).toHaveTextContent('Anaconda, Montana, USDec 27, 2023 · 4K900.0 MB');
-    expect(two).toHaveTextContent('IMG_2.MOV300.0 MB');
-    expect(foot('Choose videos to delete')).toBeDisabled();
-    await userEvent.click(one);
-    expect(one).toHaveAttribute('aria-pressed', 'true');
-    expect(foot('Delete 1 video')).toBeEnabled();
-    await userEvent.click(two);
-    await userEvent.click(foot('Delete 2 videos'));
-    expect(api.deleteChosen).toHaveBeenCalledWith(['IMG_1.MOV', 'IMG_2.MOV']);
-    await waitFor(() => expect(notify).toHaveBeenCalledWith('2 items deleted. They wait in Recently Deleted for 30 days.', 'ok'));
-    expect(foot('Choose videos to delete')).toBeDisabled();
-    await userEvent.click(two);
-    await userEvent.click(two);
-    expect(two).toHaveAttribute('aria-pressed', 'false');
+    const card = within(screen.getByRole('region', { name: 'Compress all' }));
+    expect(card.getByText('Compress all 1')).toBeInTheDocument();
+    expect(card.getByText('Saves about 780.0 MB at Balanced quality')).toBeInTheDocument();
+    expect(card.queryByText('PRO')).not.toBeInTheDocument();
+    expect(row(/^Anaconda/)).toHaveTextContent('Anaconda, Montana, USDec 27, 2023 · 4K900.0 MB→ 120.0 MB');
+    expect(row(/^IMG_2/)).toHaveTextContent('IMG_2.MOV300.0 MB');
+    await userEvent.click(card.getByRole('button', { name: 'Compress' }));
+    expect(api.startCompression).toHaveBeenCalledWith(['IMG_1.MOV'], 'balanced');
     await userEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(onBack).toHaveBeenCalledOnce();
   });
 
-  it('says it is looking, then of one video, or that none is left', () => {
+  it('on the free plan marks Compress all as Pro and opens the Pro sheet, which starts it once bought, and says why it could not start', async () => {
+    videos = two();
+    const notify = vi.fn();
+    const { planGate } = show(<LargeVideosScreen notify={notify} onBack={vi.fn()} />, { planGate: gate({ plan: plan() }) });
+    const card = within(screen.getByRole('region', { name: 'Compress all' }));
+    expect(card.getByText('PRO')).toBeInTheDocument();
+    await userEvent.click(card.getByRole('button', { name: 'Compress' }));
+    expect(planGate.offer).toHaveBeenCalledWith('compress', expect.any(Function));
+    expect(api.startCompression).not.toHaveBeenCalled();
+    api.startCompression.mockRejectedValueOnce(new Error('Video compression is part of Pro.'));
+    (planGate.offer as ReturnType<typeof vi.fn>).mock.lastCall![1]();
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('Video compression is part of Pro.', 'error'));
+  });
+
+  it('shows how far compressing has got with Cancel while it runs, and marks the videos compressed once it is done', async () => {
+    videos = two();
+    compression = running();
+    const { again } = show(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />, { planGate: pro() });
+    const card = within(screen.getByRole('region', { name: 'Compress all' }));
+    expect(card.getByText('Compressing 1 of 2')).toBeInTheDocument();
+    expect(card.getByText('IMG_1.MOV')).toBeInTheDocument();
+    expect(card.getByRole('progressbar', { name: 'Compressing' })).toHaveAttribute('aria-valuenow', '25');
+    await userEvent.click(card.getByRole('button', { name: 'Cancel' }));
+    expect(api.cancelCompression).toHaveBeenCalledOnce();
+    compression = running({ done: 2, total: 2 });
+    again(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.getByText('Compressing 2 of 2')).toBeInTheDocument();
+
+    compression = { ...running(), stage: 'done', done: 1, total: 1, results: [{ id: 'IMG_1.MOV', fileName: 'IMG_1.MOV', before: 900 * MB, after: 120 * MB }] };
+    again(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
+    expect(row(/^Anaconda/)).toHaveTextContent('Compressed');
+  });
+
+  it('says it is looking, then of one video, or that none is left, with nothing to compress', () => {
     const { again } = show(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByRole('status')).toHaveTextContent('Looking for them…');
-    lists.largeVideos = [photo('IMG_1.MOV', { isVideo: true, fileSizeBytes: 300 * MB })];
+    videos = [{ video: big(), estimates: { high: null, balanced: null, small: null } }];
     again(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText('in 1 video over 200 MB')).toBeInTheDocument();
-    lists.largeVideos = [];
+    expect(screen.queryByRole('region', { name: 'Compress all' })).not.toBeInTheDocument();
+    videos = [];
     again(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
     expect(screen.getByText('in 0 videos over 200 MB')).toBeInTheDocument();
     expect(screen.getByText('Nothing left to review.')).toBeInTheDocument();
-    expect(screen.queryByText('Tap videos to choose the ones to delete.')).not.toBeInTheDocument();
+  });
+
+  it('opens a video before and after, at the quality chosen, and compresses it, going back once it has ended', async () => {
+    videos = two();
+    const { again } = show(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />, { planGate: pro() });
+    await userEvent.click(row(/^Anaconda/));
+    expect(screen.getByRole('heading', { level: 1, name: 'Compress video' })).toBeInTheDocument();
+    expect(screen.getByText('Saves about 780.0 MB')).toBeInTheDocument();
+    expect(screen.getByText('900.0 MB → about 120.0 MB')).toBeInTheDocument();
+    expect(screen.getAllByRole('figure').map(f => [f.getAttribute('aria-label'), f.querySelector('figcaption')!.textContent])).toEqual([['Original', 'Original · 900.0 MB'], ['Compressed', 'About 120.0 MB']]);
+    expect(screen.getByText('Anaconda, Montana, US')).toBeInTheDocument();
+    expect(screen.getByText('Dec 27, 2023 · 5:00')).toBeInTheDocument();
+    expect(screen.getByText('1080p, HEVC')).toBeInTheDocument();
+    expect(screen.getByText('Moves to Recently Deleted')).toBeInTheDocument();
+    expect(screen.getByText('Kept')).toBeInTheDocument();
+    expect(screen.queryByText('Video compression is part of Pro.')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Small' }));
+    expect(screen.getByText('Saves about 850.0 MB')).toBeInTheDocument();
+    expect(screen.getByText('720p, HEVC')).toBeInTheDocument();
+    await userEvent.click(foot('Compress'));
+    expect(api.startCompression).toHaveBeenCalledWith(['IMG_1.MOV'], 'small');
+
+    // While it runs: how far, and Cancel.
+    compression = running({ total: 1, progress: 0.4 });
+    again(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.getByText('Compressing IMG_1.MOV · 40%')).toBeInTheDocument();
+    await userEvent.click(foot('Cancel'));
+    expect(api.cancelCompression).toHaveBeenCalledOnce();
+    compression = { ...running(), stage: 'done' };
+    again(<LargeVideosScreen notify={vi.fn()} onBack={vi.fn()} />);
+    expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument();
+  });
+
+  it('says when a copy would not be worth making, deletes the video instead, and goes back with Back', async () => {
+    videos = two();
+    const notify = vi.fn();
+    show(<LargeVideosScreen notify={notify} onBack={vi.fn()} />, { platform: 'android', planGate: pro() });
+    await userEvent.click(row(/^IMG_2/));
+    expect(screen.getByText('This video is about as small as it gets at Balanced quality.')).toBeInTheDocument();
+    expect(foot('Compress')).toBeDisabled();
+    expect(screen.getByRole('figure', { name: 'Compressed' })).toHaveTextContent('No smaller copy');
+    // Neither its place nor its date known: its name, and nothing beside it.
+    expect(screen.getByText('IMG_2.MOV')).toBeInTheDocument();
+    expect(screen.getByText('Moves to the bin')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'High' }));
+    expect(screen.getByText('This video is about as small as it gets at High quality.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Small' }));
+    expect(screen.getByText('This video is about as small as it gets at Small quality.')).toBeInTheDocument();
+    await userEvent.click(foot('Delete this video instead'));
+    expect(api.deleteChosen).toHaveBeenCalledWith(['IMG_2.MOV']);
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('1 item deleted. It waits in the bin for 30 days.', 'ok'));
+    expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument();
+
+    await userEvent.click(row(/^Anaconda/));
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument();
+    // The phone's own Back, or a swipe from the edge, closes it too.
+    await userEvent.click(row(/^Anaconda/));
+    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
+    expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument();
+  });
+
+  it('on the free plan says compressing is part of Pro and opens the Pro sheet, and says why it could not start', async () => {
+    videos = two();
+    const notify = vi.fn();
+    const { planGate } = show(<LargeVideosScreen notify={notify} onBack={vi.fn()} />, { planGate: gate({ plan: plan() }) });
+    await userEvent.click(row(/^Anaconda/));
+    expect(screen.getByText('Video compression is part of Pro.')).toBeInTheDocument();
+    await userEvent.click(foot('Compress'));
+    expect(planGate.offer).toHaveBeenCalledWith('compress', expect.any(Function));
+    api.startCompression.mockRejectedValueOnce('The phone could not compress the video.');
+    (planGate.offer as ReturnType<typeof vi.fn>).mock.lastCall![1]();
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('The phone could not compress the video.', 'error'));
   });
 });
 
@@ -217,7 +333,7 @@ describe('Free up space (24)', () => {
     expect(screen.getByText('can be freed from 4 items')).toBeInTheDocument();
     expect(screen.getByText('36.0 MB selected')).toBeInTheDocument();
     expect(screen.getByText('0.9 of 1 GB used')).toBeInTheDocument();
-    expect(screen.getByText('These three are the quickest to check. Large videos and similar shots are in Clean up.')).toBeInTheDocument();
+    expect(screen.getByText('These three are the quickest to check. Large videos and similar shots are in Clean up. Low-storage alerts come at most once a week.')).toBeInTheDocument();
     await userEvent.click(boxes()[0]);
     expect(boxes()[0]).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('can be freed from 3 items')).toBeInTheDocument();

@@ -10,7 +10,8 @@ public sealed class PhotoSenseRoutes
     /// <summary>The addresses, each answered by one of the endpoints given; <see cref="PhotoSenseApiServices.AddPhotoSenseApi"/> makes it.</summary>
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
-        RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories)
+        RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
+        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -50,6 +51,15 @@ public sealed class PhotoSenseRoutes
             .Get("cleanup/categories", (r, _, ct) => categories.ReportAsync(r, ct))
             .Post("cleanup/categories/delete", (r, _, ct) => categories.DeleteAsync(r, ct))
             .Get("cleanup/categories/{category}", (r, v, ct) => categories.PhotosAsync(r, v["category"], ct))
+            .Get("compress/videos", (r, _, ct) => compress.VideosAsync(r, ct))
+            .Get("compress", (r, _, ct) => compress.StateAsync(r, ct))
+            .Post("compress/start", (r, _, ct) => compress.StartAsync(r, ct))
+            .Post("compress/cancel", (r, _, ct) => compress.CancelAsync(r, ct))
+            .Get("notices", (r, _, ct) => notices.StateAsync(r, ct))
+            .Post("notices", (r, _, ct) => notices.ChangeAsync(r, ct))
+            .Get("notices/opened", (r, _, ct) => notices.OpenedAsync(r, ct))
+            .Get("year", (r, _, ct) => year.YearAsync(r, ct))
+            .Post("share", (r, _, ct) => year.ShareAsync(r, ct))
             .Get("swipe", (r, _, ct) => swipe.StateAsync(r, ct))
             .Post("swipe/decide", (r, _, ct) => swipe.DecideAsync(r, ct))
             .Post("swipe/undo", (r, _, ct) => swipe.UndoAsync(r, ct))

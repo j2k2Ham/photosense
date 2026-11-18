@@ -195,6 +195,55 @@ internal sealed class MemoryPlanStore : IPlanStore
         _shared = plan;
         return Task.CompletedTask;
     }
+
+    private readonly Dictionary<DateOnly, (int Removed, long Freed)> _cleaned = [];
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<DateOnly, int>> RemovedInAsync(int year, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_removed) return Task.FromResult<IReadOnlyDictionary<DateOnly, int>>(_removed.Where(d => d.Key.Year == year).ToDictionary());
+    }
+
+    /// <inheritdoc />
+    public Task AddCleanedAsync(DateOnly day, int removed, long freed, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_cleaned)
+        {
+            var (was, gone) = _cleaned.GetValueOrDefault(day);
+            _cleaned[day] = (Math.Max(0, was + removed), Math.Max(0, gone + freed));
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<CleanedDay>> CleanedInAsync(int year, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_cleaned) return Task.FromResult<IReadOnlyList<CleanedDay>>([.. _cleaned.Where(d => d.Key.Year == year).OrderBy(d => d.Key).Select(d => new CleanedDay(d.Key, d.Value.Removed, d.Value.Freed))]);
+    }
+}
+
+/// <summary>A phone's notification settings, in memory.</summary>
+internal sealed class MemoryNoticeStore : INoticeStore
+{
+    private NoticeSettings _settings = NoticeSettings.None;
+
+    /// <inheritdoc />
+    public Task<NoticeSettings> GetAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_settings);
+    }
+
+    /// <inheritdoc />
+    public Task SaveAsync(NoticeSettings settings, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _settings = settings;
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Every store a program keeps, replaced by a stand-in in memory, so that no test but the stores' own touches the database.</summary>
@@ -214,6 +263,7 @@ internal static class StandInStores
             .AddSingleton<IBackupStore>(new MemoryBackupStore())
             .AddSingleton<IBackupLedger>(new MemoryBackupLedger())
             .AddSingleton<ISwipeStore>(new MemorySwipeStore())
+            .AddSingleton<INoticeStore>(new MemoryNoticeStore())
             // The computer's door for phones waits on a free port of its own, and tells no network.
             .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

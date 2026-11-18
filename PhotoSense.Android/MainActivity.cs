@@ -47,6 +47,7 @@ public sealed class MainActivity : Activity
         // Automatic backup, with the app closed too: it backs up only when one is due.
         BackupWorker.Schedule(ApplicationContext!);
         SelfCheck.Prepare(this, Intent);
+        AndroidNotifier.Opened(Intent);
 
         var page = _page = new WebView(this);
         page.Settings.JavaScriptEnabled = true;
@@ -71,6 +72,14 @@ public sealed class MainActivity : Activity
 
         // The page asks for the photos itself, once it has said what PhotoSense does with them (library/ask).
         page.LoadUrl(PageClient.Origin);
+    }
+
+    // A notification tapped while the app was open: the page is told, and asks what to open.
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        AndroidNotifier.Opened(intent);
+        _page?.EvaluateJavascript("window.dispatchEvent(new Event('photosense-notice'))", null);
     }
 
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
@@ -153,6 +162,15 @@ public sealed class MainActivity : Activity
         var screen = Shown ?? throw new IOException("PhotoSense has to be open on the screen to ask.");
         var (id, answer) = Question();
         screen.RunOnUiThread(() => screen.RequestPermissions(PhotoPermissions, id));
+        return answer.Task;
+    }
+
+    /// <summary>Asks for one of Android's permissions, such as sending notifications, and answers whether it was given.</summary>
+    public static Task<bool> AskPermission(string permission)
+    {
+        var screen = Shown ?? throw new IOException("PhotoSense has to be open on the screen to ask.");
+        var (id, answer) = Question();
+        screen.RunOnUiThread(() => screen.RequestPermissions([permission], id));
         return answer.Task;
     }
 

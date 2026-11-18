@@ -179,7 +179,8 @@ public sealed class FileChanges
             batch.Counted = allowance is { Unlimited: false } ? batch.Files : 0;
             await _batches.SaveAsync(batch, CancellationToken.None);
             // The files have gone, so they count, whatever happens.
-            if (batch.Counted > 0) await _removals.RecordAsync(batch.Counted, allowance!, CancellationToken.None);
+            // Into the folder of removed files: nothing is freed until Delete permanently.
+            if (batch.Counted > 0) await _removals.RecordAsync(batch.Counted, 0, allowance!, CancellationToken.None);
             return new ChangeResult(true, null, left);
         }
         finally

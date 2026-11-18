@@ -1,6 +1,8 @@
 using System.Runtime.InteropServices;
+using AVFoundation;
 using ObjCRuntime;
 using Photos;
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
 namespace PhotoSense.iOS;
@@ -152,6 +154,91 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         if (!done)
             throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense make this change to your photos." : $"The photo library did not make the change: {error?.LocalizedDescription}");
         if (made.Count > 0) File.AppendAllLines(_made, made);
+    }
+
+    /// <summary>
+    /// Writes a smaller copy of a video as HEVC with AVFoundation, fetched from iCloud first when it is kept there, and
+    /// keeps it as a new item with the original's date, place and favorite mark. The original is left as it is. iOS's
+    /// export picks its own bitrate for the frame size chosen; at the smallest size it writes H.264, as iOS has no HEVC
+    /// preset of that size.
+    /// </summary>
+    public async Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        var found = PHAsset.FetchAssetsUsingLocalIdentifiers([id], null);
+        if (found.Count == 0 || found[0] is not PHAsset original || original.MediaType != PHAssetMediaType.Video)
+            throw new IOException("The video is no longer in the photo library.");
+        var video = await VideoAsync(original, ct);
+        var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mov");
+        try
+        {
+            using var export = new AVAssetExportSession(video, PresetFor(original, target))
+            {
+                OutputUrl = NSUrl.FromFilename(file), OutputFileType = AVFileTypes.QuickTimeMovie.GetConstant()!, ShouldOptimizeForNetworkUse = false,
+            };
+            using (ct.Register(export.CancelExport))
+            {
+                var exporting = export.ExportTaskAsync();
+                while (!exporting.IsCompleted)
+                {
+                    await Task.WhenAny(exporting, Task.Delay(500, CancellationToken.None));
+                    progress.Report(export.Progress);
+                }
+                await exporting;
+            }
+            ct.ThrowIfCancellationRequested();
+            if (export.Status != AVAssetExportSessionStatus.Completed)
+                throw new IOException($"The phone could not compress the video: {export.Error?.LocalizedDescription}");
+            var bytes = new FileInfo(file).Length;
+            await KeepAsync(original, file);
+            return bytes;
+        }
+        // The exported file is the app's own: nothing of it stays.
+        finally { File.Delete(file); }
+    }
+
+    // The video as iOS plays it, edits and all, fetched from iCloud when it is kept there.
+    private static async Task<AVAsset> VideoAsync(PHAsset original, CancellationToken ct)
+    {
+        var got = new TaskCompletionSource<AVAsset>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var options = new PHVideoRequestOptions { NetworkAccessAllowed = true, DeliveryMode = PHVideoRequestOptionsDeliveryMode.HighQualityFormat };
+        var request = PHImageManager.DefaultManager.RequestAVAsset(original, options, (asset, _, _) =>
+        {
+            if (asset is null) got.TrySetException(new IOException("The video could not be fetched from iCloud. Check the phone's connection and try again."));
+            else got.TrySetResult(asset);
+        });
+        await using (ct.Register(() =>
+        {
+            PHImageManager.DefaultManager.CancelImageRequest(request);
+            got.TrySetCanceled(ct);
+        }))
+            return await got.Task;
+    }
+
+    // iOS's presets by frame: the original's own size, 1080 lines as HEVC, or 720 lines.
+    private static AVAssetExportSessionPreset PresetFor(PHAsset original, VideoTarget target)
+    {
+        var shortSide = Math.Min(target.Width, target.Height);
+        if (shortSide >= Math.Min((int)original.PixelWidth, (int)original.PixelHeight)) return AVAssetExportSessionPreset.HevcHighestQuality;
+        return shortSide <= 720 ? AVAssetExportSessionPreset.Preset1280x720 : AVAssetExportSessionPreset.Hevc1920x1080;
+    }
+
+    // The copy, as a new item of the library with the original's date, place and favorite mark.
+    private static Task KeepAsync(PHAsset original, string file)
+    {
+        var kept = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        PHPhotoLibrary.SharedPhotoLibrary.PerformChanges(() =>
+        {
+            var copy = PHAssetCreationRequest.CreationRequestForAsset();
+            copy.AddResource(PHAssetResourceType.Video, NSUrl.FromFilename(file), null);
+            copy.CreationDate = original.CreationDate;
+            copy.Location = original.Location;
+            copy.Favorite = original.Favorite;
+        }, (done, error) =>
+        {
+            if (done) kept.TrySetResult();
+            else kept.TrySetException(new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense add the smaller copy." : $"The photo library would not keep the smaller copy: {error?.LocalizedDescription}"));
+        });
+        return kept.Task;
     }
 
     [DllImport(Constants.ObjectiveCLibrary, EntryPoint = "objc_msgSend")]

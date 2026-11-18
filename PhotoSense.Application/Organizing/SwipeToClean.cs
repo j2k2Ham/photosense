@@ -177,7 +177,7 @@ public sealed class SwipeToClean
                 if (!allowance.Allows(going.Count)) throw new InvalidOperationException(DailyRemovals.Refusal(allowance, going.Count));
                 phone.EraseAll([.. going.SelectMany(k => byKey[k].Files.Select(f => f.Path))]);
                 // Deleted: counted and noted whatever the caller does now.
-                await _removals.RecordAsync(going.Count, allowance, CancellationToken.None);
+                await _removals.RecordAsync(going.Count, going.Sum(k => byKey[k].Bytes), allowance, CancellationToken.None);
                 freed = new SwipeFreed(going.Count, going.Sum(k => byKey[k].Bytes), marked.Count - going.Count);
             }
             await _store.SaveMarkedAsync([.. marked.Except(going)], CancellationToken.None);

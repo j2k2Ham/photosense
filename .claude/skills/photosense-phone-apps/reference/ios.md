@@ -14,6 +14,8 @@
 - **Never delete an album:** iOS shows a question before an app deletes one, which hung the simulator's check. An emptied album stays.
 - **Removed photos are not hidden:** with the Hidden album locked, the default since iOS 16, apps cannot see hidden photos at all.
 - **`ImageIOAnalyzer`** measures pictures through the shared `ImageFingerprint`.
+- **Compressing** (`PhotoKitLibrary.CompressAsync`): `AVAssetExportSession` on the asset from `PHImageManager.RequestAVAsset` (iCloud allowed), then a new asset by `PHAssetCreationRequest` with the original's date, place and favorite mark. iOS's presets choose the bitrate; there is no HEVC preset below 1080p, so Small is H.264 1280×720.
+- **Notifications** (`IosNotifier.Shared`, the `UNUserNotificationCenter` delegate set in `FinishedLaunching`): a tap notes what it opens and tells the page (`photosense-notice`). The low-storage check runs at launch, on `sceneDidBecomeActive:` (a scene app's delegate, not the app's, hears it) and in `BGAppRefreshTask` `com.j2k2ham.photosense.storage-check`, which `Info.plist` must list, with the `fetch` background mode, or registering it fails.
 - **`BonjourAdvertiser`** calls `DNSServiceRegister` from `libSystem` with no callback, and keeps the screen on while the phone offers photos.
 - **`Info.plist`:**
   - `NSPhotoLibraryUsageDescription`

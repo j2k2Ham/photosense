@@ -34,6 +34,8 @@
     <PackageReference Include="Xamarin.GooglePlayServices.Code.Scanner" Version="116.1.0.17" />
     <!-- Automatic backup with the app closed: WorkManager wakes the app on Wi-Fi. -->
     <PackageReference Include="Xamarin.AndroidX.Work.Runtime" Version="2.12.0" />
+    <!-- Compressing large videos to HEVC on the phone (Jamie, 2026-11-17). -->
+    <PackageReference Include="Xamarin.AndroidX.Media3.Transformer" Version="1.11.1" />
   </ItemGroup>
   <ItemGroup>
     <!-- The page, built for a program that hands it out itself: in PhotoSense.ReactUI,

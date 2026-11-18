@@ -10,6 +10,7 @@ internal sealed class LiteDbPlanStore : IPlanStore
 {
     private readonly ILiteCollection<RemovedDocument> _removed;
     private readonly ILiteCollection<SharedDocument> _shared;
+    private readonly ILiteCollection<CleanedDocument> _cleaned;
 
     /// <summary>Uses a database that other stores share; the caller disposes it.</summary>
     /// <param name="db">The shared database.</param>
@@ -19,6 +20,38 @@ internal sealed class LiteDbPlanStore : IPlanStore
         LiteDbMapping.Prepare<SharedDocument>();
         _removed = db.GetCollection<RemovedDocument>("removals_by_day");
         _shared = db.GetCollection<SharedDocument>("shared_plan");
+        LiteDbMapping.Prepare<CleanedDocument>();
+        _cleaned = db.GetCollection<CleanedDocument>("cleaned_by_day");
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<DateOnly, int>> RemovedInAsync(int year, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var prefix = Year(year);
+        return Task.FromResult<IReadOnlyDictionary<DateOnly, int>>(_removed.Find(d => d.Id.StartsWith(prefix)).ToDictionary(d => Day(d.Id), d => d.Count));
+    }
+
+    /// <inheritdoc />
+    public Task AddCleanedAsync(DateOnly day, int removed, long freed, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        // One day's record at a time: two clean-ups ending together would each read the same figures.
+        lock (_cleaned)
+        {
+            var key = Key(day);
+            var was = _cleaned.FindById(key);
+            _cleaned.Upsert(new CleanedDocument { Id = key, Removed = Math.Max(0, (was?.Removed ?? 0) + removed), Freed = Math.Max(0, (was?.Freed ?? 0) + freed) });
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<CleanedDay>> CleanedInAsync(int year, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var prefix = Year(year);
+        return Task.FromResult<IReadOnlyList<CleanedDay>>([.. _cleaned.Find(d => d.Id.StartsWith(prefix)).Select(d => new CleanedDay(Day(d.Id), d.Removed, d.Freed)).OrderBy(d => d.Day)]);
     }
 
     /// <inheritdoc />
@@ -65,6 +98,10 @@ internal sealed class LiteDbPlanStore : IPlanStore
 
     private static string Key(DateOnly day) => day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 
+    private static DateOnly Day(string key) => DateOnly.ParseExact(key, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Year(int year) => year.ToString("0000", System.Globalization.CultureInfo.InvariantCulture) + "-";
+
     private static DateTimeOffset? Time(long? utcTicks) => utcTicks is { } t ? new DateTimeOffset(t, TimeSpan.Zero) : null;
 
     private sealed class RemovedDocument
@@ -73,6 +110,16 @@ internal sealed class LiteDbPlanStore : IPlanStore
         [BsonId] public string Id { get; set; } = string.Empty;
         /// <summary>How many photos and videos were removed that day.</summary>
         public int Count { get; set; }
+    }
+
+    private sealed class CleanedDocument
+    {
+        /// <summary>The day, by this device's own calendar: "2026-11-17".</summary>
+        [BsonId] public string Id { get; set; } = string.Empty;
+        /// <summary>Photos and videos removed that day, on any plan.</summary>
+        public int Removed { get; set; }
+        /// <summary>Bytes freed from the device that day.</summary>
+        public long Freed { get; set; }
     }
 
     private sealed class SharedDocument

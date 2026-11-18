@@ -34,6 +34,10 @@ interface Props {
   readonly plan?: PlanDto;
   /** The computer the phone backs up to, and where its backups go there; null when it has none; absent until the phone has said. */
   readonly computer?: { readonly name: string; readonly folder: string | null } | null;
+  /** Whether low-storage alerts are on, once the phone has said. */
+  readonly lowStorage?: boolean;
+  /** Turns low-storage alerts on or off; on asks the phone first. */
+  onLowStorage(on: boolean): void;
   /** Pairs with a computer. */
   onPair(): void;
   /** Opens the Subscription page. */
@@ -84,6 +88,11 @@ export function SettingsSheet(p: Props) {
           <ListRow detail={<Segmented<ThemeChoice> label="Theme" options={THEMES} value={p.theme} onChange={p.onTheme} className="w-[220px]" />}>Theme</ListRow>
           <ListRow detail={<Segmented<DistanceUnit> label="Distances" options={UNITS} value={p.unit} onChange={p.onUnit} className="w-[220px]" />}>Distances</ListRow>
         </ListGroup>
+        {p.lowStorage !== undefined && (
+          <ListGroup header="Clean up">
+            <PhoneSwitch inList label="Low-storage alerts" detail="When less than 10% is free, at most once a week" on={p.lowStorage} onChange={p.onLowStorage} />
+          </ListGroup>
+        )}
         <ListGroup header="Photos">
           <ListRow chevron detail={access} onClick={then(p.onPhotoAccess)}>Photo access</ListRow>
           <ListRow onClick={then(p.onScanAgain)}><span className="text-acc">Scan again</span></ListRow>

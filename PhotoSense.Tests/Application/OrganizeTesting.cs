@@ -109,7 +109,7 @@ internal sealed class OrganizeFixture : IDisposable
     public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Changes, _audit.Object, Disk, Clock);
 
     /// <param name="files">The file system it erases through; the fixture's own disk when not given.</param>
-    public PhotoSense.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null) => new(Repo, Batches, _audit.Object, files ?? Disk);
+    public PhotoSense.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null) => new(Repo, Batches, _audit.Object, files ?? Disk, TestPlans.Removals());
 
     public void Dispose()
     {

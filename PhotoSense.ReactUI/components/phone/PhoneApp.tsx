@@ -1,7 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
-import { backUpIfDue, eraseRemoved, openPhotoSettings, startBackup, useBackup, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe } from '../../lib/apiClient';
+import { backUpIfDue, eraseRemoved, openedNotice, openPhotoSettings, startBackup, useBackup, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useYear } from '../../lib/apiClient';
+import { formatBytes } from '../../lib/format';
+import { deviceWord } from '../../lib/phone';
+import type { ResultCard } from '../../lib/shareCard';
+import { ShareSheet } from './Share';
+import { YearStories } from './YearInReview';
+import { useCompressionEnded, useNoticeSwitches } from '../../lib/compress';
 import type { AppSettings } from '../../lib/settings';
 import type { AboutTopic } from '../AboutWindow';
 import type { ThemeChoice } from '../../lib/theme';
@@ -132,6 +138,32 @@ export function PhoneApp(props: Props) {
   const bin = WORDS[platform].bin;
   // The plan: every removal asks it first, and the Pro sheet opens when the free plan has too few left today.
   const { gate, sheet: proSheet } = usePlanSheet(notify);
+  // The notifications' switches; what compressing saved, said wherever the person is when it ends.
+  const notices = useNoticeSwitches(ready, notify);
+  // The share card, over whichever result screen opened it; what compressing saved can be shared from its message.
+  const [sharing, setSharing] = useState<ResultCard>();
+  const device = deviceWord(platform, form === 'tablet');
+  const shareSaved = useCallback((saved: number, videos: number) => setSharing({ amount: formatBytes(saved), device, streak: swipe?.streak ?? 0, items: videos }), [device, swipe?.streak]);
+  useCompressionEnded(ready, notify, bin, shareSaved);
+  // Year in review: its card in Library while it is due, and its cards over everything.
+  const year = useYear(ready).data;
+  const [watching, setWatching] = useState(false);
+  // A notification tapped opens what it is about: Free up space, or the subscription.
+  const opened = useEffectEvent(() => void openedNotice().then(o => {
+    if (o.opens === 'free-up-space') { props.onTab('cleanup'); cleanUp.open('free'); }
+    else if (o.opens === 'subscription') setSheet('subscription');
+  }, e => notify(said(e), 'error')));
+  useEffect(() => {
+    if (!ready) return;
+    opened();
+    const visible = () => { if (document.visibilityState === 'visible') opened(); };
+    window.addEventListener('photosense-notice', opened);
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      window.removeEventListener('photosense-notice', opened);
+      document.removeEventListener('visibilitychange', visible);
+    };
+  }, [ready]);
 
   async function erase(askOnce: boolean) {
     setBusy(true);
@@ -160,8 +192,9 @@ export function PhoneApp(props: Props) {
       notice={notice} cover={cover}
       screens={{
         library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
-          backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} />,
-        cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} swipe={swipe} library={library} onSwipe={setSwiping} />,
+          backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} year={year} onYear={() => setWatching(true)} />,
+        cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} swipe={swipe} library={library} onSwipe={setSwiping}
+          lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
         backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')} />,
@@ -169,14 +202,14 @@ export function PhoneApp(props: Props) {
       sheet={<>
         {sheet === 'settings' && (
           <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
-            plan={gate.plan} onSubscription={() => setSheet('subscription')}
+            plan={gate.plan} onSubscription={() => setSheet('subscription')} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
             computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
             onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
             onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
             onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} />
         )}
         {sheet === 'subscription' && gate.plan && (
-          <SubscriptionScreen plan={gate.plan} remind={props.settings.remindTrialEnd} onRemind={remindTrialEnd => props.onSettings({ remindTrialEnd })} notify={notify}
+          <SubscriptionScreen plan={gate.plan} remind={notices.state?.trialReminder ?? false} onRemind={trialReminder => void notices.change({ trialReminder })} notify={notify}
             onTerms={() => props.onAbout('terms')} onPrivacy={() => props.onAbout('privacy')} onBack={() => setSheet('settings')} />
         )}
         {sheet === 'erase' && removed && <DeletePermanently removed={removed} askTwice={props.settings.eraseAskTwice} busy={busy} onErase={askOnce => void erase(askOnce)} onCancel={closeSheet} />}
@@ -186,13 +219,15 @@ export function PhoneApp(props: Props) {
         )}
         {sheet === 'pair' && <Pair later notify={notify} onNext={closeSheet} />}
         {freed && (
-          <SpaceFreed removed={freed.removed} partial={freed.partial} computer={backup?.computer ?? 'the computer'} folder={backup?.folder ?? ''}
+          <SpaceFreed removed={freed.removed} partial={freed.partial} computer={backup?.computer ?? 'the computer'} folder={backup?.folder ?? ''} streak={swipe?.streak} onShare={setSharing}
             onPro={() => gate.offer('none')} onDone={() => { setFreed(undefined); props.onTab('library'); }} />
         )}
         {swiping === 'cards' && swipe && (
           <SwipeSession state={swipe} library={library} computer={backup?.computer} notify={notify} onClose={stopSwiping} onDone={() => setSwiping('summary')} />
         )}
-        {swiping === 'summary' && swipe && <SwipeSummary state={swipe} library={library} notify={notify} onClose={() => setSwiping(undefined)} />}
+        {swiping === 'summary' && swipe && <SwipeSummary state={swipe} library={library} notify={notify} onClose={() => setSwiping(undefined)} onShare={setSharing} />}
+        {watching && year?.year != null && <YearStories review={year} notify={notify} onClose={() => setWatching(false)} />}
+        {sharing && <ShareSheet card={sharing} notify={notify} onClose={() => setSharing(undefined)} />}
         {proSheet}
       </>} />
     </PlanProvider>

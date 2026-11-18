@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { deleteChosen, thumbnailUrl, useBursts, useCategories, useCategoryPhotos } from '../../lib/apiClient';
+import React, { useEffect, useState } from 'react';
+import { cancelCompression, deleteChosen, startCompression, thumbnailUrl, useBursts, useCategories, useCategoryPhotos, useCompression, useCompressVideos } from '../../lib/apiClient';
+import { useBackLayer } from '../../lib/backStack';
+import { QUALITIES, savings } from '../../lib/compress';
 import { ofStorage } from '../../lib/backup';
 import { bytesOf, counted, deletedSaid, largestIds, percentFull, resolution, sizeOf } from '../../lib/categories';
 import { formatBytes, formatDuration } from '../../lib/format';
 import { shortDate } from '../../lib/organize';
 import { limitLine } from '../../lib/plan';
 import { deviceWord, usePhone } from '../../lib/phone';
-import type { BurstDto, PhotoDto } from '../../types';
+import type { BurstDto, CompressibleVideoDto, CompressionQuality, PhotoDto } from '../../types';
 import type { ToastKind } from '../Toaster';
-import { PhoneButton, StickyFooter } from './Controls';
+import { ListGroup, ListRow, PhoneButton, Segmented, StickyFooter } from './Controls';
 import { TickIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { PushedHeader } from './Screens';
@@ -180,43 +182,152 @@ export function BurstsScreen({ notify, onBack }: { notify: Notify; onBack(): voi
   );
 }
 
-/** 21: the videos over 200 MB, largest first: where and when each was taken, its frame and its size. Tap videos to choose them to delete. */
+/** 21: the videos over 200 MB, largest first, with Compress all and about what each copy would take. Tap one to compress it. */
 export function LargeVideosScreen({ notify, onBack }: { notify: Notify; onBack(): void }) {
-  const videos = useCategoryPhotos('largeVideos').data;
-  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
-  const { busy, run, limit } = useDeleting(notify);
+  const videos = useCompressVideos(true).data;
+  const compression = useCompression(true).data;
+  const [chosen, setChosen] = useState<CompressibleVideoDto>();
+  useBackLayer(!!chosen, () => setChosen(undefined));
+  const gate = usePlanGate();
+  if (chosen) return <CompressScreen video={chosen} notify={notify} onBack={() => setChosen(undefined)} />;
   const all = videos ?? [];
-  const going = all.filter(v => chosen.has(v.id));
-  const toggle = (id: string) => setChosen(before => { const next = new Set(before); if (!next.delete(id)) next.add(id); return next; });
+  const balanced = savings(all, 'balanced');
+  const running = compression?.stage === 'running';
+  const compressed = new Set(compression?.stage === 'running' ? [] : compression?.results.map(r => r.id) ?? []);
+  const free = gate.plan?.tier === 'free';
+  const compressAll = () => {
+    const start = () => void startCompression(balanced.ids, 'balanced').catch(e => notify(said(e), 'error'));
+    if (free) gate.offer('compress', start); else start();
+  };
   return (
     <>
       <PushedHeader title="Large videos" onBack={onBack} />
       {!videos ? <p role="status" className="px-4 py-10 text-center text-[15px] text-t2">Looking for them…</p> : (
         <>
-          <Total photos={all} of={`in ${all.length.toLocaleString()} ${all.length === 1 ? 'video' : 'videos'} over 200 MB`} note={all.length > 0 ? 'Tap videos to choose the ones to delete.' : undefined} />
+          <Total photos={all.map(v => v.video)} of={`in ${all.length.toLocaleString()} ${all.length === 1 ? 'video' : 'videos'} over 200 MB`} />
           {all.length === 0 && <p className="px-4 py-6 text-[15px] text-t2">Nothing left to review.</p>}
+          {(running || balanced.count > 0) && (
+            <section aria-label="Compress all" className="mx-4 mb-3 flex items-center gap-3 rounded-cell bg-acc-soft px-4 py-3 text-on-acc-soft">
+              {running ? (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[15px] font-semibold">Compressing {Math.min(compression!.done + 1, compression!.total).toLocaleString()} of {compression!.total.toLocaleString()}</p>
+                    <p className="truncate text-[13px]">{compression!.current}</p>
+                    <div role="progressbar" aria-label="Compressing" aria-valuenow={Math.round(compression!.progress * 100)} className="mt-2 h-1.5 overflow-hidden rounded-full bg-fill">
+                      <span className="block h-full bg-acc" style={{ width: `${compression!.progress * 100}%` }} />
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => void cancelCompression()} className="h-9 shrink-0 rounded-full bg-cell px-4 text-[14px] font-semibold">Cancel</button>
+                </>
+              ) : (
+                <>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex items-center gap-2 text-[15px] font-semibold">
+                      Compress all {balanced.count.toLocaleString()}
+                      {free && <span className="rounded-full bg-acc px-1.5 text-[10.5px] font-bold text-on-acc">PRO</span>}
+                    </p>
+                    <p className="text-[13px]">Saves about {formatBytes(balanced.bytes)} at Balanced quality</p>
+                  </div>
+                  <button type="button" onClick={compressAll} className="h-9 shrink-0 rounded-full bg-acc px-4 text-[14px] font-semibold text-on-acc">Compress</button>
+                </>
+              )}
+            </section>
+          )}
           <ul aria-label="Large videos" className="mx-4 mb-4 overflow-hidden rounded-cell bg-cell [&>li+li]:border-t-[0.5px] [&>li+li]:border-sep">
-            {all.map(v => {
-              const on = chosen.has(v.id);
-              return (
-                <li key={v.id}>
-                  <button type="button" aria-pressed={on} onClick={() => toggle(v.id)} className={`flex w-full items-center gap-3 px-3 py-2.5 text-left ${on ? 'bg-sel' : ''}`}>
-                    <Tile photo={v} className="h-14 w-14 shrink-0 rounded-[10px]" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[15.5px] font-semibold">{v.placeName ?? v.fileName}</span>
-                      <span className="block truncate text-[13px] text-t2">{[v.takenOn ? shortDate(v.takenOn) : undefined, resolution(v.width, v.height)].filter(Boolean).join(' · ')}</span>
-                    </span>
-                    <span className="shrink-0 text-[15px] font-semibold tabular-nums">{formatBytes(v.fileSizeBytes)}</span>
-                  </button>
-                </li>
-              );
-            })}
+            {all.map(({ video: v, estimates }) => (
+              <li key={v.id}>
+                <button type="button" onClick={() => setChosen(all.find(c => c.video.id === v.id))} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
+                  <Tile photo={v} className="h-14 w-14 shrink-0 rounded-[10px]" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15.5px] font-semibold">{v.placeName ?? v.fileName}</span>
+                    <span className="block truncate text-[13px] text-t2">{[v.takenOn ? shortDate(v.takenOn) : undefined, resolution(v.width, v.height)].filter(Boolean).join(' · ')}</span>
+                  </span>
+                  <span className="flex shrink-0 flex-col items-end">
+                    <span className="text-[15px] font-semibold tabular-nums">{formatBytes(v.fileSizeBytes)}</span>
+                    {compressed.has(v.id) ? <span className="text-[12.5px] font-semibold text-keep">Compressed</span>
+                      : estimates.balanced != null && <span className="text-[12.5px] text-t2">→ {formatBytes(estimates.balanced)}</span>}
+                  </span>
+                </button>
+              </li>
+            ))}
           </ul>
         </>
       )}
-      <DeleteFoot disabled={busy || going.length === 0} limit={limit} onClick={() => run(going, () => setChosen(new Set()))}>
-        {going.length > 0 ? `Delete ${going.length.toLocaleString()} ${going.length === 1 ? 'video' : 'videos'}` : 'Choose videos to delete'}
-      </DeleteFoot>
+    </>
+  );
+}
+
+/**
+ * 22: one video, before and after: the original's size and about what the copy would take at the quality chosen, what
+ * is kept and where the original goes; Compress (Pro), or Delete this video instead. While it compresses, how far it
+ * has got, and Cancel.
+ */
+export function CompressScreen({ video, notify, onBack }: { readonly video: CompressibleVideoDto; notify: Notify; onBack(): void }) {
+  const { words } = usePhone();
+  const gate = usePlanGate();
+  const [quality, setQuality] = useState<CompressionQuality>('balanced');
+  const [started, setStarted] = useState(false);
+  const compression = useCompression(true).data;
+  const { busy, run } = useDeleting(notify);
+  const v = video.video;
+  const estimate = video.estimates[quality];
+  const running = compression?.stage === 'running';
+  // Ended once started here: back to the list, which the message after it brings up to date.
+  useEffect(() => { if (started && compression && compression.stage !== 'running') onBack(); }, [started, compression, onBack]);
+  const free = gate.plan?.tier === 'free';
+  const compress = () => {
+    const start = () => void startCompression([v.id], quality).then(() => setStarted(true), e => notify(said(e), 'error'));
+    if (free) gate.offer('compress', start); else start();
+  };
+  const note = QUALITIES.find(q => q.id === quality)!.note;
+  return (
+    <>
+      <PushedHeader title="Compress video" onBack={onBack} />
+      <div className="flex flex-col gap-4 px-4 pb-4">
+        <div className="grid grid-cols-2 gap-3">
+          {[['Original', `Original · ${formatBytes(v.fileSizeBytes)}`], ['Compressed', estimate == null ? 'No smaller copy' : `About ${formatBytes(estimate)}`]].map(([label, size]) => (
+            <figure key={label} aria-label={label} className="relative flex flex-col gap-1.5">
+              <Tile photo={v} className="aspect-[3/4] w-full rounded-[14px]" />
+              <span aria-hidden className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white">{label}</span>
+              <figcaption className="text-center text-[13px] text-t2">{size}</figcaption>
+            </figure>
+          ))}
+        </div>
+        {estimate == null
+          ? <p className="text-[15px] text-t2">This video is about as small as it gets at {quality === 'high' ? 'High' : quality === 'balanced' ? 'Balanced' : 'Small'} quality.</p>
+          : (
+            <div>
+              <p className="font-title text-[30px] font-bold leading-tight tabular-nums">Saves about {formatBytes(v.fileSizeBytes - estimate)}</p>
+              <p className="text-[14px] text-t2">{formatBytes(v.fileSizeBytes)} → about {formatBytes(estimate)}</p>
+            </div>
+          )}
+        <Segmented<CompressionQuality> label="Quality" options={QUALITIES} value={quality} onChange={setQuality} />
+        <p className="-mt-2 text-[13px] text-t2">{note}</p>
+        <ListGroup>
+          <ListRow detail={[v.takenOn ? shortDate(v.takenOn) : undefined, v.durationSeconds != null ? formatDuration(v.durationSeconds) : undefined].filter(Boolean).join(' · ') || undefined}>
+            {v.placeName ?? v.fileName}
+          </ListRow>
+          <ListRow detail="Kept">Date and location</ListRow>
+          <ListRow detail={`Moves to ${words.bin}`}>Original</ListRow>
+        </ListGroup>
+      </div>
+      <StickyFooter>
+        {running ? (
+          <>
+            <div role="progressbar" aria-label="Compressing" aria-valuenow={Math.round(compression!.progress * 100)} className="h-2 overflow-hidden rounded-full bg-fill">
+              <span className="block h-full bg-acc" style={{ width: `${compression!.progress * 100}%` }} />
+            </div>
+            <p className="text-center text-[13px] text-t2">Compressing {compression!.current} · {Math.round(compression!.progress * 100)}%</p>
+            <PhoneButton kind="secondary" onClick={() => void cancelCompression()}>Cancel</PhoneButton>
+          </>
+        ) : (
+          <>
+            <PhoneButton disabled={estimate == null} onClick={compress}>Compress</PhoneButton>
+            <button type="button" disabled={busy} onClick={() => run([v], onBack)} className="py-1.5 text-center text-[15px] font-semibold text-acc disabled:opacity-40">Delete this video instead</button>
+            {free && <p className="text-center text-[13px] text-t2">Video compression is part of Pro.</p>}
+          </>
+        )}
+      </StickyFooter>
     </>
   );
 }
@@ -275,7 +386,7 @@ export function FreeUpSpace({ notify, onBack }: { notify: Notify; onBack(): void
           );
         })}
       </ul>
-      <p className="px-6 pb-4 pt-3 text-[13px] leading-[1.45] text-t2">These three are the quickest to check. Large videos and similar shots are in Clean up.</p>
+      <p className="px-6 pb-4 pt-3 text-[13px] leading-[1.45] text-t2">These three are the quickest to check. Large videos and similar shots are in Clean up. Low-storage alerts come at most once a week.</p>
       <DeleteFoot disabled={busy || chosen.length === 0} limit={limit} onClick={() => run(chosen)}>
         {chosen.length > 0 ? `Delete ${chosen.length.toLocaleString()} ${chosen.length === 1 ? 'item' : 'items'}` : 'Nothing selected'}
       </DeleteFoot>

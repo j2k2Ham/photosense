@@ -1,3 +1,4 @@
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Changes;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
@@ -30,14 +31,21 @@ public sealed class RemovedFiles
     private readonly IOrganizeBatchStore _batches;
     private readonly IAuditRepository _audit;
     private readonly IPhotoFileSystem _files;
+    private readonly DailyRemovals _removals;
 
     /// <summary>The removed files where the photos are kept, with the records of what scans and changes did.</summary>
-    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files)
+    /// <param name="repo">What the scans recorded.</param>
+    /// <param name="batches">The changes made, which an erasure can leave nothing to undo of.</param>
+    /// <param name="audit">The record of what was done.</param>
+    /// <param name="files">Where the photos are.</param>
+    /// <param name="removals">Where the bytes erased are noted, for Year in review.</param>
+    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals)
     {
         _repo = repo;
         _batches = batches;
         _audit = audit;
         _files = files;
+        _removals = removals;
     }
 
     /// <summary>
@@ -129,6 +137,7 @@ public sealed class RemovedFiles
         foreach (var batch in await RemovalsAsync(CancellationToken.None))
             if (!batch.Items.Exists(i => _files.FileExists(i.To))) await _batches.MarkUndoneAsync(batch.Id, CancellationToken.None);
         await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files erased from {emptied} folders, {skipped} left" }, CancellationToken.None);
+        await _removals.FreedAsync(bytes, CancellationToken.None);
         return new EraseResult(erased, bytes, skipped, problems);
     }
 

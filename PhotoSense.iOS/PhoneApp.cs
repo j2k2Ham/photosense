@@ -3,6 +3,7 @@ using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Infrastructure.Library;
 
@@ -13,7 +14,7 @@ public static class PhoneApp
 {
     private static readonly Lazy<ServiceProvider> Built = new(() => new ServiceCollection()
         .AddPhotoSensePhone(new PhotoKitLibrary(DataFolder), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory), new BonjourAdvertiser(), new StoreKitStore(),
-            new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), UIDevice.CurrentDevice.Name)
+            new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), IosNotifier.Shared, new IosShareSheet(), UIDevice.CurrentDevice.Name)
         .AddPhotoSenseApi()
         .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "iphone"))
         .BuildServiceProvider());
@@ -38,7 +39,17 @@ public static class PhoneApp
         var log = Services.GetRequiredService<IScanLogSink>();
         // Putting back runs once, at start, until it is done: nothing stops it part way.
         foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync(CancellationToken.None)) log.Log("audit", "Warning", sentence);
+        // The trial's reminder follows the plan.
+        await Services.GetRequiredService<PhoneNotices>().RemindAsync(CancellationToken.None);
     });
+
+    /// <summary>Sends a low-storage alert if one is due, once the app is ready.</summary>
+    public static async Task CheckStorageAsync()
+    {
+        await Ready;
+        // Nothing stops a check part way: it reads the storage and sends one notification at most.
+        await Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(CancellationToken.None);
+    }
 
     private static string Folder(NSSearchPathDirectory which) => NSFileManager.DefaultManager.GetUrls(which, NSSearchPathDomain.User)[0].Path!;
 }

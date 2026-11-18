@@ -1,3 +1,4 @@
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
 namespace PhotoSense.Tests;
@@ -20,6 +21,9 @@ internal sealed class FakeMediaStore : IMediaStore
 
     /// <summary>When set, the person says no to the next change, and this is why; nothing changes.</summary>
     public string? Refuse { get; set; }
+
+    /// <summary>The videos compressed, with what each was made into.</summary>
+    public List<(string Id, VideoTarget Target)> Compressed { get; } = [];
 
     /// <summary>Adds a photo in a folder as the store says it ("DCIM/Camera/"), taken a minute after the one before.</summary>
     public MediaEntry Add(string id, string folder, string name, byte[] bytes, bool video = false)
@@ -63,6 +67,19 @@ internal sealed class FakeMediaStore : IMediaStore
             _entries.RemoveAll(e => e.Id == id);
             Trashed.Add(id);
         }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>The copy takes a thousandth of the bits a second it is written at, in bytes, and goes beside the original.</remarks>
+    public Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var original = _entries.Single(e => e.Id == id);
+        Compressed.Add((id, target));
+        var bytes = new byte[target.VideoBitsPerSecond / 1000];
+        Add(id + "-smaller", original.Folder, Path.GetFileNameWithoutExtension(original.Name) + " (smaller).mp4", bytes, video: true);
+        progress.Report(1);
+        return Task.FromResult(bytes.LongLength);
     }
 
     private sealed class OnlyForward(byte[] bytes) : MemoryStream(bytes, writable: false)

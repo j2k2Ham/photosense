@@ -67,8 +67,11 @@ export function largestIds(photos: readonly PhotoDto[], allowed: number): string
 /** What the photos given take. */
 export const bytesOf = (photos: readonly PhotoDto[]) => photos.reduce((n, p) => n + p.fileSizeBytes, 0);
 
-/** What the photos given take, said: "0 KB" when there are none, where a file's own size is never said as nothing. */
-export const sizeOf = (photos: readonly PhotoDto[]) => (photos.length === 0 ? '0 KB' : formatBytes(bytesOf(photos)));
+/** An amount of bytes found or chosen, said: "0 KB" for none, where a file's own size is never said as nothing. */
+export const amountOf = (bytes: number) => (bytes > 0 ? formatBytes(bytes) : '0 KB');
+
+/** What the photos given take, said: "0 KB" when there are none. */
+export const sizeOf = (photos: readonly PhotoDto[]) => amountOf(bytesOf(photos));
 
 /** "3 items deleted. They wait in Recently Deleted for 30 days.": what a phone says once its own bin has them. */
 export const deletedSaid = (n: number, bin: string) => `${items(n)} deleted. ${n === 1 ? 'It waits' : 'They wait'} in ${bin} for 30 days.`;

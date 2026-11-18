@@ -202,7 +202,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Each kind',
         tips: [
-          '**Large videos** are videos over 200 MB, largest first, each with its size and how sharp its picture is (4K, 1080p, 720p). None is chosen to start with: click the ones to delete.',
+          '**Large videos** are videos over 200 MB, largest first, each with its size and how sharp its picture is (4K, 1080p, 720p). None is chosen to start with: click the ones to delete. Making a video smaller is done in PhotoSense on a phone, where it was filmed.',
           '**Screenshots** are pictures of a screen, found by their name or by a folder called Screenshots. All are chosen to start with: click one to keep it.',
           '**Bursts** are three or more shots taken within a second of each other by one camera. PhotoSense keeps the sharpest shot of each burst, framed and marked **Keep**; click another shot to keep it instead. The other shots are deleted.',
           '**Blurry** are pictures whose sharpest part is still soft. All are chosen to start with: click one to keep it. A scan measures how sharp each picture is; until one has, Blurry says **Scan again to find blurry shots**.',
@@ -591,7 +591,8 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'Library',
     summary: 'Every photo and video, by month: viewing one, choosing several, and what can be done with them.',
-    keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month'],
+    keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month',
+      'year in review', 'recap', 'wrapped', 'stats', 'share card', 'brag', 'story'],
     sections: [
       {
         text: [
@@ -666,15 +667,33 @@ export const GUIDE: GuideTopic[] = [
           'When photos are on your computer, a card at the top of Library says how many, and how much space removing them here would free. **Review** opens **Safe to delete**; the × hides the card. See **Backing up to your computer**.',
         ],
       },
+      {
+        heading: 'Year in review',
+        text: [
+          'In December, and through January, a card at the top of Library offers **Year in review**: your year in photos, made on the device. **Watch** opens it.',
+          'Five cards, one after another: how many photos and videos you took; the places they were taken in, with where you took the most; your busiest month, with a bar for each month; what you cleaned up, how much space it freed, your longest swipe streak and how many days you swiped; and the year in a line.',
+          'Tap the right of the screen to go on and the left to go back. The cross, or Back, closes it.',
+          '**Share** hands the card showing, as a picture, to your phone’s share sheet. No photos are on these cards.',
+          'Space freed and items removed count from the update that brought Year in review; before it, items removed come from the free plan’s daily counts.',
+        ],
+      },
+      {
+        heading: 'Sharing what you freed',
+        text: [
+          'After **Safe to delete**, after deleting in **Swipe to clean**, and after compressing videos, PhotoSense offers a share card: “I freed 28.1 GB with PhotoSense”. Tap it, or **Share**.',
+          '**Share your result** shows the card, **Square** or as a **Story**, with or without your streak and how many items. **Share** hands it to your phone’s share sheet; **Not now** puts it away. None of your photos are on the card.',
+        ],
+      },
     ],
   },
   {
     id: 'phone-cleanup',
     only: PHONES,
     title: 'Clean up',
-    summary: 'Swipe to clean, a set of photos a day; what Find finds, from copies and similar shots to large videos, screenshots, bursts and blurry shots; and Free up space.',
+    summary: 'Swipe to clean, a set of photos a day; what Find finds, from copies and similar shots to large videos, screenshots, bursts and blurry shots; compressing videos; Free up space and low-storage alerts.',
     keywords: ['duplicates', 'copies', 'copy', 'same photo', 'twice', 'dupes', 'similar', 'burst', 'compare', 'keep', 'original', 'free space', 'scan again', 'swipe', 'streak', 'daily', 'tinder', 'left', 'right',
-      'screenshot', 'large videos', 'big videos', 'blur', 'out of focus', 'whatsapp', 'telegram', 'storage', 'full', 'space'],
+      'screenshot', 'large videos', 'big videos', 'blur', 'out of focus', 'whatsapp', 'telegram', 'storage', 'full', 'space', 'compress', 'shrink', 'smaller', 'hevc',
+      'notification', 'alert', 'running out'],
     sections: [
       {
         text: [
@@ -724,9 +743,39 @@ export const GUIDE: GuideTopic[] = [
           '**Screenshots** and **Blurry** show their pictures in a grid, all chosen to start with: tap one to keep it. **Deselect all** and **Select all** are at the top right. **Messaging apps** works the same way.',
           '**Blurry** pictures are those whose sharpest part is still soft. A scan measures how sharp each picture is; until one has, Blurry says **Scan again to find blurry shots**.',
           '**Bursts** shows each burst with its shots, the one kept framed and marked **Keep**: PhotoSense keeps the sharpest. Tap another shot to keep it instead. **Delete** and the number of extra shots deletes the rest.',
-          '**Large videos** lists the videos over 200 MB, largest first, with where and when each was taken, how sharp its picture is (4K, 1080p, 720p) and its size. Tap the ones to delete.',
+          '**Large videos** lists the videos over 200 MB, largest first, with where and when each was taken, how sharp its picture is (4K, 1080p, 720p), its size, and about what a smaller copy would take. Tap one to compress it or delete it.',
           'The button at the foot says how many go, and on the free plan how many free removals are left today.',
         ],
+      },
+      {
+        heading: 'Compressing large videos',
+        steps: [
+          'In **Large videos**, tap a video. **Compress video** shows the original beside the copy, with about how much space the copy would save.',
+          'Choose how small: **High** keeps the video’s own size; **Balanced** makes it 1080p; **Small**, 720p. All are HEVC, which keeps a video sharp in far less space.',
+          'Tap **Compress**. PhotoSense makes a smaller copy on the phone, with the original’s date and place, and shows how far it has got; **Cancel** stops it.',
+          'Then the phone asks before the original goes, and it waits in the phone’s bin for 30 days. Say no and the original and the copy are both kept.',
+        ],
+        tips: [
+          '**Compress all**, at the top of Large videos, compresses every video worth it at **Balanced**, one after another, then asks once about all the originals.',
+          'The saving is worked out from each video’s length and size before it is compressed, so it is said as “about”; the message after says what was really saved.',
+          'Compressing is part of **PhotoSense Pro**, and takes nothing from the day’s free removals. On the free plan, **Compress** shows what Pro adds.',
+          'A video already about as small as it gets at a quality says so, and **Delete this video instead** deletes it.',
+        ],
+      },
+      {
+        heading: 'Low-storage alerts',
+        text: [
+          'Turn on **Low-storage alerts**, under **Alerts** in Clean up or under **Clean up** in Settings, and PhotoSense sends a notification when less than a tenth of the phone’s storage is free, at most once a week, saying how much **Free up space** would free. Tap it to open Free up space.',
+          'The first time you turn it on, the phone asks whether PhotoSense may send notifications. Said no, the switch stays off; turn notifications on for PhotoSense in the phone’s settings, then turn the switch on again.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: ['The alert has **Review**, which opens Free up space, and **Not now**, which puts it away.'],
+      },
+      {
+        only: IOS,
+        tips: ['iOS decides when PhotoSense may look in the background, so an alert can come later than the storage ran low; it also comes when you open PhotoSense.'],
       },
       {
         heading: 'Free up space',
@@ -735,7 +784,7 @@ export const GUIDE: GuideTopic[] = [
           'It says how full the phone is, and how much the three quickest kinds to check would free: **Duplicates**, **Screenshots** and **Blurry**. A photo that is two of them counts once.',
           'Untick any you want to keep, then tap **Delete** and the number of items.',
         ],
-        tips: ['Large videos and similar shots are worth a look one by one, so they are in Clean up, not here.'],
+        tips: ['Large videos and similar shots are worth a look one by one, so they are in Clean up, not here. Low-storage alerts come at most once a week.'],
       },
       {
         only: IOS,
@@ -1000,7 +1049,7 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'The free plan and Pro',
     summary: 'How many photos the free plan removes each day, what Pro adds, and buying, restoring or cancelling it.',
-    keywords: ['price', 'cost', 'pay', 'buy', 'purchase', 'subscription', 'upgrade', 'limit', 'daily', '50', 'trial', 'cancel', 'restore', 'family', 'lifetime', 'monthly', 'yearly', 'premium'],
+    keywords: ['price', 'cost', 'pay', 'buy', 'purchase', 'subscription', 'upgrade', 'limit', 'daily', '50', 'trial', 'cancel', 'restore', 'family', 'lifetime', 'monthly', 'yearly', 'premium', 'reminder'],
     sections: [
       {
         text: [
@@ -1014,6 +1063,8 @@ export const GUIDE: GuideTopic[] = [
           'Pro removes as many as you like each day, and backs up automatically. One purchase covers your phone, tablet and computer; a computer learns of it the next time this device backs up to it.',
           'The plans: **Yearly**, with a 7-day free trial; **Monthly**; and **Lifetime**, paid once. **Family** covers up to 6 people. Prices are the store’s own, in your currency.',
           '**Settings** shows your plan at the top; tap it for **Subscription**, with what each plan includes, the free removals left today, and the plans.',
+          'Starting the free trial turns on its reminder, a notification two days before it ends, and the phone asks first whether PhotoSense may send one. **Remind me 2 days before it ends**, in Subscription, turns it off or on again.',
+          'Compressing large videos is part of Pro.',
         ],
       },
       {
@@ -1035,13 +1086,14 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'Settings',
     summary: 'Everything under the gear: your plan, the computer, the theme, photo access and the rest.',
-    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles'],
+    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles', 'notifications'],
     sections: [
       {
         tips: [
           'Your plan, at the top, opens **Subscription**.',
           '**Computer**: the computer this device is paired with, and its **Backup folder**; or **Connect your computer**.',
           '**Theme**: **Auto** follows the phone’s own light or dark setting; **Dark** or **Light** keeps one. **Distances**: miles or kilometers, for Organize.',
+          '**Clean up**: **Low-storage alerts**, a notification when less than a tenth of the storage is free, at most once a week.',
           '**Photo access** says what PhotoSense may see, and opens the phone’s own settings for PhotoSense to change it. **Scan again** reads your library again.',
           '**PhotoSense Removed** says what waits there; **Delete permanently…** empties it.',
           '**Recently moved** lists what can still be undone. **Errors** lists what went wrong.',

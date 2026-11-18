@@ -11,6 +11,7 @@ import { plan } from '../../fixtures';
 import { width } from './frame';
 
 const api = vi.hoisted(() => ({
+  openedNotice: vi.fn(async (): Promise<{ opens: string | null }> => ({ opens: null })), useNotices: vi.fn((): { data?: unknown } => ({})), changeNotices: vi.fn(), useCompression: vi.fn(() => ({})),
   usePhotoAccess: vi.fn(), askForPhotos: vi.fn(), openPhotoSettings: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useGroupsThrough: vi.fn(),
   usePairing: vi.fn(), scanPairing: vi.fn(), enterPairingCode: vi.fn(), confirmPairing: vi.fn(), stopPairing: vi.fn(), useFound: vi.fn(), usePlan: vi.fn(), buyPlan: vi.fn(),
 }));
@@ -69,7 +70,7 @@ function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn()
   const [started, setStarted] = React.useState(false);
   return (
     <PhoneApp platform={platform} tab={tab}
-      toasts={[]} theme="dark" errorCount={0} settings={{ eraseAskTwice: true, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false }} onSettings={vi.fn()} scanning={scanning || started} progress={progress}
+      toasts={[]} theme="dark" errorCount={0} settings={{ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false }} onSettings={vi.fn()} scanning={scanning || started} progress={progress}
       onStarted={id => { setStarted(true); onStarted(id); }} onStopScan={onStop} notify={notify}
       onTab={next => { onTab(next); setTab(next); }} removeToast={vi.fn()} onTheme={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
   );

@@ -5,6 +5,7 @@ using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Infrastructure.Library;
 using PhotoSense.Infrastructure.Transfer;
@@ -36,7 +37,7 @@ public static class PhoneApp
         _built = new ServiceCollection()
             .AddPhotoSenseAndroid(new AndroidMediaStore(context), new AndroidAccess(), new AndroidImageAnalyzer(), DataFolder(context), context.CacheDir!.AbsolutePath,
                 new NsdAdvertiser(context), new PlayBillingStore(TimeProvider.System),
-                new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), $"{Build.Manufacturer} {Build.Model}".Trim())
+                new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), new AndroidNotifier(context), new AndroidShareSheet(context), $"{Build.Manufacturer} {Build.Model}".Trim())
             .AddPhotoSenseApi()
             .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "android"))
             .BuildServiceProvider();
@@ -45,6 +46,10 @@ public static class PhoneApp
             var log = Services.GetRequiredService<IScanLogSink>();
             // Putting back runs once, at start, until it is done: nothing stops it part way.
             foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync(CancellationToken.None)) log.Log("audit", "Warning", sentence);
+            // The trial's reminder follows the plan, and a low-storage alert goes if one is due.
+            var notices = Services.GetRequiredService<PhoneNotices>();
+            await notices.RemindAsync(CancellationToken.None);
+            await notices.CheckStorageAsync(CancellationToken.None);
         });
     }
 }

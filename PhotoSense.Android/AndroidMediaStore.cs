@@ -1,8 +1,15 @@
 using Android.Content;
+using Android.OS;
 using Android.Provider;
+using AndroidX.Media3.Common;
+using AndroidX.Media3.Common.Audio;
+using AndroidX.Media3.Effect;
+using AndroidX.Media3.Transformer;
 using Microsoft.Win32.SafeHandles;
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 using AndroidUri = Android.Net.Uri;
+using Presentation = AndroidX.Media3.Effect.Presentation;
 
 namespace PhotoSense.AndroidApp;
 
@@ -116,6 +123,106 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
         using var row = Resolver.Query(uri, [MediaStore.IMediaColumns.RelativePath, MediaStore.IMediaColumns.DisplayName], null, null, null);
         if (row?.MoveToFirst() != true) throw new IOException("The photo is no longer on the phone.");
         return (row.GetString(0) ?? "", row.GetString(1) ?? "");
+    }
+
+    /// <summary>
+    /// Re-encodes a video as HEVC at the frame and bitrate given, with Google's Media3 Transformer, and keeps the copy
+    /// in the same folder with the original's date, as "<c>name (smaller).mp4</c>". The original is left as it is.
+    /// </summary>
+    public async Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        var source = UriOf(id);
+        var (folder, name) = Where(source);
+        var taken = TakenOn(source);
+        var encoded = Path.Combine(context.CacheDir!.AbsolutePath, $"compressing-{Guid.NewGuid():N}.mp4");
+        try
+        {
+            await EncodeAsync(source, encoded, target, progress, ct);
+            return Keep(encoded, folder, Path.GetFileNameWithoutExtension(name) + " (smaller).mp4", taken);
+        }
+        // The encoded file is the app's own until it is kept: nothing of it stays.
+        finally { File.Delete(encoded); }
+    }
+
+    // Media3 runs on the main thread's looper: it is made, started, asked how far it has got and cancelled there.
+    private async Task EncodeAsync(AndroidUri source, string encoded, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var main = new Handler(Looper.MainLooper!);
+        Transformer? transformer = null;
+        main.Post(() =>
+        {
+            try
+            {
+                var settings = new VideoEncoderSettings.Builder().SetBitrate((int)Math.Min(int.MaxValue, target.VideoBitsPerSecond))!.Build()!;
+                var encoders = new DefaultEncoderFactory.Builder(context).SetRequestedVideoEncoderSettings(settings)!.Build()!;
+                var made = new Transformer.Builder(context).SetVideoMimeType(MimeTypes.VideoH265)!.SetEncoderFactory(encoders)!.AddListener(new Ended(done))!.Build()!;
+                transformer = made;
+                var frame = Presentation.CreateForWidthAndHeight(target.Width, target.Height, Presentation.LayoutScaleToFit)!;
+                var item = new EditedMediaItem.Builder(MediaItem.FromUri(source)!).SetEffects(new Effects(new List<IAudioProcessor>(), new List<IEffect> { frame }))!.Build()!;
+                made.Start(item, encoded);
+            }
+            catch (Java.Lang.Exception e) { done.TrySetException(new IOException($"The phone could not compress the video: {e.Message}")); }
+        });
+        using var stopping = ct.Register(() => main.Post(() =>
+        {
+            transformer?.Cancel();
+            done.TrySetCanceled(ct);
+        }));
+        while (!done.Task.IsCompleted)
+        {
+            await Task.WhenAny(done.Task, Task.Delay(500, CancellationToken.None));
+            main.Post(() =>
+            {
+                var holder = new ProgressHolder();
+                if (transformer?.GetProgress(holder) == Transformer.ProgressStateAvailable) progress.Report(holder.Progress / 100d);
+            });
+        }
+        await done.Task;
+    }
+
+    // The copy, written into the same folder as a video PhotoSense made, hidden from other apps until it is all there.
+    private long Keep(string encoded, string folder, string name, long? taken)
+    {
+        var values = new ContentValues();
+        values.Put(MediaStore.IMediaColumns.DisplayName, name);
+        values.Put(MediaStore.IMediaColumns.MimeType, "video/mp4");
+        values.Put(MediaStore.IMediaColumns.RelativePath, folder);
+        values.Put(MediaStore.IMediaColumns.IsPending, 1);
+        if (taken is { } when) values.Put(MediaStore.IMediaColumns.DateTaken, when);
+        var uri = Resolver.Insert(Videos, values) ?? throw new IOException("The phone would not keep the smaller copy.");
+        try
+        {
+            using (var into = Resolver.OpenOutputStream(uri) ?? throw new IOException("The phone would not keep the smaller copy."))
+            using (var from = File.OpenRead(encoded))
+                from.CopyTo(into);
+            var kept = new ContentValues();
+            kept.Put(MediaStore.IMediaColumns.IsPending, 0);
+            Resolver.Update(uri, kept, null, null);
+            return new FileInfo(encoded).Length;
+        }
+        // Not kept whole: nothing of it is left.
+        catch (Exception e) when (e is Java.Lang.Exception or IOException)
+        {
+            Resolver.Delete(uri, null, null);
+            throw new IOException($"The phone would not keep the smaller copy: {e.Message}");
+        }
+    }
+
+    // When the video was taken, in milliseconds since 1970, as the media store has it.
+    private long? TakenOn(AndroidUri uri)
+    {
+        using var row = Resolver.Query(uri, [MediaStore.IMediaColumns.DateTaken], null, null, null);
+        return row?.MoveToFirst() == true && !row.IsNull(0) ? row.GetLong(0) : null;
+    }
+
+    // Says the copy is made, or why not, once Media3 has finished.
+    private sealed class Ended(TaskCompletionSource done) : Java.Lang.Object, Transformer.IListener
+    {
+        public void OnCompleted(Composition? composition, ExportResult? exportResult) => done.TrySetResult();
+
+        public void OnError(Composition? composition, ExportResult? exportResult, ExportException? exportException)
+            => done.TrySetException(new IOException($"The phone could not compress the video: {exportException?.Message}"));
     }
 
     // Whether PhotoSense made all of them itself, and so may change them without asking.

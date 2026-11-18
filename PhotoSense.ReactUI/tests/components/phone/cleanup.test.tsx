@@ -136,6 +136,26 @@ describe('Clean up\'s first screen', () => {
   });
 });
 
+describe("Clean up's alerts", () => {
+  it('turns low-storage alerts on or off, once the phone has said whether they are', async () => {
+    const onLowStorage = vi.fn();
+    const ui = (lowStorage?: boolean, change?: (on: boolean) => void) => (
+      <CleanUpScreen cleanUp={{ ...stub(), listing: false }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} lowStorage={lowStorage} onLowStorage={change} />
+    );
+    const { again } = inFrame(ui(undefined, onLowStorage), frame('ios'), gate());
+    expect(screen.queryByRole('switch', { name: /Low-storage alerts/ })).not.toBeInTheDocument();
+    again(ui(false, onLowStorage));
+    const alerts = screen.getByRole('switch', { name: 'Low-storage alerts When less than 10% is free, at most once a week' });
+    expect(alerts).not.toBeChecked();
+    await userEvent.click(alerts);
+    expect(onLowStorage).toHaveBeenCalledWith(true);
+    // With nothing to tell, a tap changes nothing.
+    again(ui(true));
+    await userEvent.click(screen.getByRole('switch', { name: /^Low-storage alerts/ }));
+    expect(onLowStorage).toHaveBeenCalledOnce();
+  });
+});
+
 describe("Clean up's categories, from its first screen", () => {
   const MB = 1024 ** 2;
   const find = () => within(screen.getByRole('region', { name: 'Find' }));

@@ -1,3 +1,5 @@
+using PhotoSense.Domain.ValueObjects;
+
 namespace PhotoSense.Infrastructure.Library;
 
 /// <summary>A picture or video as an Android phone's media store keeps it.</summary>
@@ -41,4 +43,11 @@ public interface IMediaStore
     /// </summary>
     /// <exception cref="IOException">Nothing was changed, and why.</exception>
     void Change(MediaChange change);
+
+    /// <summary>
+    /// Writes a smaller copy of the video <paramref name="id"/>, made into <paramref name="target"/> as HEVC, into the
+    /// same folder with the original's date; answers how many bytes the copy takes. The original is left as it is.
+    /// </summary>
+    /// <exception cref="IOException">The video could not be read or written; nothing is kept.</exception>
+    Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
 }

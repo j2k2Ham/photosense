@@ -9,6 +9,7 @@ import { deferred } from '../deferred';
 import { group, groupsPage, member, photo, plan } from '../fixtures';
 
 const api = vi.hoisted(() => ({
+  openedNotice: vi.fn(async (): Promise<{ opens: string | null }> => ({ opens: null })), useNotices: vi.fn((): { data?: unknown } => ({})), changeNotices: vi.fn(), useCompression: vi.fn(() => ({})),
   useGroups: vi.fn(), useGroupsThrough: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
   fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(), useRemoved: vi.fn((): { data?: unknown } => ({ data: undefined })),
@@ -1185,7 +1186,7 @@ describe('deleting permanently', () => {
     expect(sure()).toHaveTextContent('It can be turned back on under Settings in the menu.');
     await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
     expect(await toast('Deleted 2 files (2 KB) permanently.')).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', remindTrialEnd: true, phonesSeen: false });
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
 
     // Now the warning is all there is.
     await confirm();

@@ -2,6 +2,7 @@ import useSWR, { mutate } from 'swr';
 import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
+  CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -323,6 +324,8 @@ export function usePlan() {
 export async function buyPlan(kind: PlanKind): Promise<PlanBuyResultDto> {
   const result = await json<PlanBuyResultDto>(`${planUrl}/buy`, { method: 'POST', body: JSON.stringify({ kind }) });
   await mutate(planUrl, result.plan, { revalidate: false });
+  // The trial's terms promise a reminder two days before it ends: starting it turns the reminder on, which asks the phone first.
+  if (result.outcome === 'bought' && kind === 'yearly') await changeNotices({ trialReminder: true });
   return result;
 }
 
@@ -525,4 +528,66 @@ export async function deleteChosen(ids: readonly string[]): Promise<CategoryRemo
   const done = await json<CategoryRemovalDto>(`${categoriesUrl}/delete`, { method: 'POST', body: JSON.stringify({ ids }) });
   await refreshOrganize();
   return done;
+}
+
+const compressUrl = `${API_BASE}/compress`;
+
+/** On a phone: the large videos, largest first, each with about what its copy takes at each quality; nothing is asked while `on` is false. */
+export function useCompressVideos(on: boolean) {
+  return useSWR<CompressibleVideoDto[]>(on ? `${compressUrl}/videos` : null, json);
+}
+
+/** On a phone: how compressing stands, asked every second while it runs; nothing is asked while `on` is false. */
+export function useCompression(on: boolean) {
+  return useSWR<CompressionStateDto>(on ? compressUrl : null, json, { refreshInterval: latest => (latest?.stage === 'running' ? 1000 : 0) });
+}
+
+/** Starts compressing the videos given at the quality given, in the background, and shows how it stands at once. */
+export async function startCompression(ids: readonly string[], quality: CompressionQuality): Promise<CompressionStateDto> {
+  const state = await json<CompressionStateDto>(`${compressUrl}/start`, { method: 'POST', body: JSON.stringify({ ids, quality }) });
+  await mutate(compressUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Stops compressing after the video it is on; what was compressed is kept. */
+export async function cancelCompression(): Promise<CompressionStateDto> {
+  const state = await json<CompressionStateDto>(`${compressUrl}/cancel`, { method: 'POST' });
+  await mutate(compressUrl, state, { revalidate: false });
+  return state;
+}
+
+/**
+ * Once compressing has ended: the large videos, the categories, the groups, Library and the plan are read again, as the
+ * originals may have gone and their smaller copies come.
+ */
+export const refreshCompressed = () => Promise.all([mutate(`${compressUrl}/videos`), refreshOrganize()]);
+
+const noticesUrl = `${API_BASE}/notices`;
+
+/** On a phone: which notifications are on, and whether the phone lets PhotoSense send any; nothing is asked while `on` is false. */
+export function useNotices(on: boolean) {
+  return useSWR<NoticeStateDto>(on ? noticesUrl : null, json);
+}
+
+/** Turns low-storage alerts or the trial's reminder on or off; turning one on may ask the phone's own question first. */
+export async function changeNotices(change: Partial<Pick<NoticeStateDto, 'lowStorage' | 'trialReminder'>>): Promise<NoticeStateDto> {
+  const state = await json<NoticeStateDto>(noticesUrl, { method: 'POST', body: JSON.stringify(change) });
+  await mutate(noticesUrl, state, { revalidate: false });
+  return state;
+}
+
+/** What the last notification tapped asked to open, once. */
+export const openedNotice = () => json<NoticeOpenedDto>(`${noticesUrl}/opened`);
+
+/** On a phone: Year in review, the year due now (null the rest of the year) and its figures; nothing is asked while `on` is false. */
+export function useYear(on: boolean) {
+  return useSWR<YearReviewDto>(on ? `${API_BASE}/year` : null, json);
+}
+
+/** Hands a card, a PNG in base 64, to the phone's share sheet, named `name`. */
+export async function shareImage(image: string, name: string): Promise<void> {
+  const body = JSON.stringify({ image, name });
+  const carried: Record<string, string> = android ? { 'x-photosense-body': android.keep(body) } : {};
+  const res = await fetch(`${API_BASE}/share`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...authHeaders, ...carried } });
+  if (!res.ok) throw await failure(res);
 }

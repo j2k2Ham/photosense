@@ -17,6 +17,9 @@ export const SAFE = {
   recent: { count: 0, bytes: 0 }, removable: { count: 2, bytes: 6e9 }, storageTotal: 128e9, storageFree: 16e9, cloudPhotos: false,
 };
 
+/** Compressing, before any has run. */
+const IDLE = { stage: 'idle', quality: 'balanced', total: 0, done: 0, current: null as string | null, progress: 0, results: [] as unknown[], saved: 0, originalsDeleted: null as boolean | null, problem: null };
+
 /**
  * A phone, as the page sees it: which program it is, what it may see of the photos, where its library is, and backing
  * up to a computer. It is past its first run unless the test says otherwise.
@@ -111,7 +114,66 @@ export class Phone {
       }
       return json(route, this.swipe);
     });
+    // Year in review, and the share sheet: only a phone has them.
+    await page.route(url => url.pathname.endsWith('/api/year'), route => json(route, this.year));
+    await page.route(url => url.pathname.endsWith('/api/share'), async route => {
+      const asked = JSON.parse(route.request().postData()!);
+      this.shared.push({ name: asked.name, png: Buffer.from(asked.image, 'base64')[0] === 0x89 && Buffer.from(asked.image, 'base64').subarray(1, 4).toString() === 'PNG' });
+      return route.fulfill({ status: 204 });
+    });
+    // Notifications, which only a phone sends: off until turned on, when the phone asks; what one tapped opens, once.
+    await page.route(url => url.pathname.endsWith('/api/notices/opened'), async route => {
+      const opens = this.opens;
+      this.opens = null;
+      return json(route, { opens });
+    });
+    await page.route(url => url.pathname.endsWith('/api/notices'), async route => {
+      if (route.request().method() === 'POST') {
+        const asked = JSON.parse(route.request().postData()!);
+        this.asked.push(`notices ${route.request().postData()}`);
+        if ((asked.lowStorage || asked.trialReminder) && !this.notices.allowed) this.notices.allowed = this.allowNotices;
+        for (const key of ['lowStorage', 'trialReminder'] as const) if (key in asked) this.notices[key] = asked[key] && this.notices.allowed;
+      }
+      return json(route, this.notices);
+    });
+    // Compressing, which only a phone does: started, it has finished by the next time the page asks, the originals gone to the bin.
+    await page.route(url => url.pathname.includes('/api/compress'), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/compress').pop()!.replace(/^\//, '');
+      if (what === 'videos') return json(route, this.videos);
+      if (what === 'start') {
+        const asked = JSON.parse(route.request().postData()!);
+        this.asked.push(`compress/start ${route.request().postData()}`);
+        const going = this.videos.filter(v => asked.ids.includes(v.video.id));
+        const results = going.map(v => ({ id: v.video.id, fileName: v.video.fileName, before: v.video.fileSizeBytes, after: v.estimates[asked.quality as 'high' | 'balanced' | 'small']! }));
+        this.compression = { ...IDLE, stage: 'running', quality: asked.quality, total: going.length, current: going[0].video.fileName };
+        const running = this.compression;
+        this.compressed = { ...running, stage: 'done', done: going.length, current: null, progress: 1, results, saved: results.reduce((n, r) => n + r.before - r.after, 0), originalsDeleted: true };
+        return json(route, running);
+      }
+      if (what === 'cancel') return json(route, this.compression);
+      // Asked again once started: it has finished.
+      const now = this.compression;
+      if (this.compressed) { this.compression = this.compressed; this.compressed = undefined; }
+      return json(route, now);
+    });
   }
+
+  /** Year in review as the phone would say it; none due unless the test gives one. */
+  year: Record<string, unknown> = { year: null };
+  /** The cards handed to the share sheet: each one's name and whether it is a PNG. */
+  readonly shared: { name: string; png: boolean }[] = [];
+
+  /** The phone's notifications, as the person turned them. */
+  notices = { lowStorage: false, trialReminder: false, allowed: false };
+  /** What the person answers when the phone asks whether PhotoSense may send notifications. */
+  allowNotices = true;
+  /** What a notification tapped asks to open, next time the page asks. */
+  opens: string | null = null;
+  /** The phone's videos over 200 MB, with about what each copy takes; none unless the test gives some. */
+  videos: { video: { id: string; fileName: string; fileSizeBytes: number } & Record<string, unknown>; estimates: Record<'high' | 'balanced' | 'small', number | null> }[] = [];
+  /** How compressing stands, as the page is told next. */
+  compression: typeof IDLE & Record<string, unknown> = IDLE;
+  private compressed?: typeof IDLE & Record<string, unknown>;
 
   /** Swipe to clean today, as the stand-in holds it once the page has first asked. */
   swipe?: {

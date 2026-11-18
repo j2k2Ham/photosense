@@ -43,6 +43,7 @@ public static class PhotoSenseCoreServices
         s.AddSingleton<IPlanStore>(sp => new LiteDbPlanStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IBackupStore>(sp => new LiteDbBackupStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<ISwipeStore>(sp => new LiteDbSwipeStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<INoticeStore>(sp => new LiteDbNoticeStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IBackupLedger>(sp => new LiteDbBackupLedger(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IThumbnailStore>(sp =>
