@@ -18,6 +18,11 @@ namespace PhotoSense.Application.Transfer;
 /// <param name="Arrived">The paths on this computer of the files that arrived last, the latest last.</param>
 public sealed record ArrivingBackup(int Done, int Total, long Bytes, long TotalBytes, DateTimeOffset Started, IReadOnlyList<string> Arrived);
 
+/// <summary>A copy's name now, and what renaming by date makes it.</summary>
+/// <param name="Now">Its name now: "IMG_4821.HEIC".</param>
+/// <param name="After">Its name after: "2026-03-02 14.31.07.HEIC".</param>
+public sealed record RenamedFile(string Now, string After);
+
 /// <summary>
 /// A computer keeping the backups of the phones paired with it. A phone that connects asks to back up: the computer
 /// first checks every file it holds for that phone (one no longer there, or changed and no longer matching its
@@ -42,6 +47,8 @@ public sealed class ComputerBackup
     private readonly string _root;
     private readonly string _home;
     private readonly TimeProvider _clock;
+    private readonly IMediaDetailsReader _reader;
+    private readonly IPlaceNameResolver _places;
     private readonly object _lock = new();
     private readonly Dictionary<string, ArrivingBackup> _arriving = [];
 
@@ -53,8 +60,13 @@ public sealed class ComputerBackup
     /// <param name="root">The folder each phone's folder is made in: Pictures/PhotoSense.</param>
     /// <param name="home">The person's own folder, from which folders are named to them ("Pictures/PhotoSense").</param>
     /// <param name="clock">When things happen, and how long a phone may stay silent.</param>
-    public ComputerBackup(IBackupStore store, IPhotoFileSystem files, FileChanges changes, Subscription plan, string root, string home, TimeProvider clock)
+    /// <param name="reader">When and where each copy was taken, as its file says, for naming it by date.</param>
+    /// <param name="places">The towns and landmarks places are at, for naming a copy by where it was taken.</param>
+    public ComputerBackup(IBackupStore store, IPhotoFileSystem files, FileChanges changes, Subscription plan, string root, string home, TimeProvider clock,
+        IMediaDetailsReader reader, IPlaceNameResolver places)
     {
+        _reader = reader;
+        _places = places;
         _store = store;
         _files = files;
         _changes = changes;
@@ -128,6 +140,83 @@ public sealed class ComputerBackup
         return moved;
     }
 
+    /// <summary>
+    /// What renaming a phone's copies would make of their names, the first <paramref name="atMost"/>, and how many would
+    /// change; a copy whose file does not say when it was taken keeps its name.
+    /// </summary>
+    /// <exception cref="ArgumentException">No such phone.</exception>
+    public async Task<(int Count, IReadOnlyList<RenamedFile> First)> RenamingAsync(string phoneId, FileNaming naming, int atMost, CancellationToken ct)
+    {
+        var phone = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
+        var plan = await RenamePlanAsync(phone, naming, ct);
+        return (plan.Count, [.. plan.Take(atMost).Select(p => new RenamedFile(Path.GetFileName(p.File.Path), Path.GetFileName(p.To)))]);
+    }
+
+    /// <summary>
+    /// Names a phone's copies on this computer by date, or by date and place, as one change with Undo in Recently
+    /// moved, and those that arrive from then on the same way; or, with <see cref="FileNaming.AsOnPhone"/>, lets those
+    /// that arrive keep the phone's names. Renaming is part of Pro.
+    /// </summary>
+    /// <returns>How many were renamed.</returns>
+    /// <exception cref="ArgumentException">No such phone.</exception>
+    /// <exception cref="InvalidOperationException">The plan is not Pro.</exception>
+    /// <exception cref="IOException">A copy could not be renamed: none was.</exception>
+    public async Task<int> RenameAsync(string phoneId, FileNaming naming, CancellationToken ct)
+    {
+        var phone = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
+        if (naming != FileNaming.AsOnPhone && !(await _plan.CurrentAsync(ct)).Pro)
+            throw new InvalidOperationException("Renaming copies by date is part of Pro. Pro bought on the phone covers this computer too.");
+        var plan = naming == FileNaming.AsOnPhone ? [] : await RenamePlanAsync(phone, naming, ct);
+        if (plan.Count > 0)
+        {
+            var batch = new OrganizeBatch { UtcTicks = _clock.GetUtcNow().UtcTicks, Label = $"{phone.Name}, named by date" };
+            batch.Items.AddRange(plan.Select(p => new OrganizeBatchItem { From = p.File.Path, To = p.To, SizeBytes = p.File.Size, ModifiedUtcTicks = p.File.ModifiedUtc.Ticks }));
+            var result = await _changes.CarryOutAsync(batch, null, ct);
+            if (!result.Done) throw new IOException($"The copies could not be renamed. {result.Problem}");
+            // The files have moved: where they are now is kept whatever happens.
+            foreach (var (file, to) in plan) await _store.HoldAsync(file with { Path = to }, CancellationToken.None);
+        }
+        await _store.SavePhoneAsync(phone with { Names = naming }, CancellationToken.None);
+        await NoteAsync(phoneId, naming == FileNaming.AsOnPhone ? "New backups keep the phone's names" : $"Renamed {Items(plan.Count)} by date", CancellationToken.None);
+        return plan.Count;
+    }
+
+    // Each copy whose name by date differs from its own, with where it goes; pictures first, so that each Live Photo's
+    // video takes its picture's new name.
+    private async Task<List<(HeldFile File, string To)>> RenamePlanAsync(BackupPhone phone, FileNaming naming, CancellationToken ct)
+    {
+        var held = (await _store.HeldAsync(phone.Id, ct)).Where(f => _files.FileExists(f.Path))
+            .OrderBy(f => MediaFiles.IsVideo(f.Path)).ThenBy(f => f.Path, StringComparer.Ordinal).ToList();
+        var stems = new Dictionary<string, string>(PhotoPath.Comparer);
+        var taken = new HashSet<string>(PhotoPath.Comparer);
+        var plan = new List<(HeldFile, string)>();
+        foreach (var file in held)
+            if (await DatedAsync(file.Path, naming, stems, taken, ct) is { } to) plan.Add((file, to));
+        return plan;
+    }
+
+    // Where a copy goes named by date, or null when its name stays: it already has the name, or its file does not say
+    // when it was taken. A picture's new stem is noted for its Live Photo video, which takes it.
+    private async Task<string?> DatedAsync(string path, FileNaming naming, Dictionary<string, string> stems, ISet<string> taken, CancellationToken ct)
+    {
+        var folder = Path.GetDirectoryName(path)!;
+        var stem = Path.Combine(folder, Path.GetFileNameWithoutExtension(path));
+        string name;
+        if (MediaFiles.IsVideo(path) && stems.TryGetValue(stem, out var picture)) name = Path.GetFileName(picture) + Path.GetExtension(path);
+        else
+        {
+            var details = await _reader.ReadAsync(path, ct);
+            if (details.TakenOn is not { } when) return null;
+            var place = naming == FileNaming.DatePlace && details.Latitude is { } lat && details.Longitude is { } lon && _places.Locate(lat, lon) is { } at ? at.Landmark ?? at.Town : null;
+            name = DetailRules.Numbered(DetailRules.NameByDate(when, place, Path.GetExtension(path)),
+                n => !PhotoPath.Comparer.Equals(Path.Combine(folder, n), path) && (taken.Contains(Path.Combine(folder, n)) || _files.FileExists(Path.Combine(folder, n))));
+        }
+        var to = Path.Combine(folder, name);
+        taken.Add(to);
+        if (!MediaFiles.IsVideo(path)) stems[stem] = Path.Combine(folder, Path.GetFileNameWithoutExtension(name));
+        return PhotoPath.Comparer.Equals(to, path) ? null : to;
+    }
+
     /// <summary>Where a phone's trip folders are made: where the person chose, or beside the phones' folders.</summary>
     public string TripsIn(BackupPhone phone) => phone.TripsFolder ?? _root;
 
@@ -166,7 +255,7 @@ public sealed class ComputerBackup
         if (!_files.FolderExists(record.Folder)) _files.MakeFolder(record.Folder);
         record = record with { LastChecked = _clock.GetUtcNow() };
         await _store.SavePhoneAsync(record, ct);
-        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)) }, ct);
+        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)), ["names"] = record.Names.ToString() }, ct);
 
         var offered = await Lists.ReceiveAsync(channel, "offer", "files", null, null, ct);
         var files = offered.OfType<JsonObject>().Select(f => (Id: Wire.Text(f, "id"), Name: PhoneReceiving.Plain(Wire.Text(f, "name")), Size: Size(f), Sha256: Sha(f))).ToList();
@@ -177,6 +266,8 @@ public sealed class ComputerBackup
         try
         {
             var taken = new HashSet<string>(PhotoPath.Comparer);
+            // The new stems of the pictures named by date, which their Live Photo videos take too.
+            var stems = new Dictionary<string, string>(PhotoPath.Comparer);
             foreach (var (id, name, _, said) in files)
             {
                 // A file whose checksum the phone knows and this computer holds is not sent again.
@@ -194,6 +285,12 @@ public sealed class ComputerBackup
                 {
                     path = _changes.FreePlace(Path.Combine(record.Folder, name), taken);
                     _files.Move(arriving, path);
+                    // Named by date, as the person chose, once it is whole and its file can say when it was taken.
+                    if (record.Names != FileNaming.AsOnPhone && await DatedAsync(path, record.Names, stems, taken, ct) is { } dated)
+                    {
+                        _files.Move(path, dated);
+                        path = dated;
+                    }
                     var stored = _files.Describe(path)!;
                     held[check] = new HeldFile(phone.Id, check, path, stored.Length, stored.ModifiedUtc, _clock.GetUtcNow());
                     await _store.HoldAsync(held[check], ct);
@@ -204,14 +301,32 @@ public sealed class ComputerBackup
                 Arrived(phone.Id, path, 0);
             }
             await channel.SendAsync(new JsonObject { ["t"] = "done" }, ct);
-            var bye = await channel.ReceiveAsync(ct, "bye", "trip");
-            if (Wire.Text(bye, "t") == "trip")
+            var bye = await channel.ReceiveAsync(ct, "bye", "trip", "names");
+            // What the phone asks for after its backup, until it says goodbye: a trip's folder, or its copies named by date.
+            while (Wire.Text(bye, "t") != "bye")
             {
-                var folder = string.Empty;
-                var checksums = (await Lists.ReceiveAsync(channel, "trip", "sha256", bye, last => folder = Wire.Text(last, "folder"), ct)).Select(n => n?.GetValue<string>()).OfType<string>().ToList();
-                (record, var made) = await TripFolderAsync(record, folder, checksums, ct);
-                await channel.SendAsync(made, ct);
-                bye = await channel.ReceiveAsync(ct, "bye");
+                if (Wire.Text(bye, "t") == "trip")
+                {
+                    var folder = string.Empty;
+                    var checksums = (await Lists.ReceiveAsync(channel, "trip", "sha256", bye, last => folder = Wire.Text(last, "folder"), ct)).Select(n => n?.GetValue<string>()).OfType<string>().ToList();
+                    (record, var made) = await TripFolderAsync(record, folder, checksums, ct);
+                    await channel.SendAsync(made, ct);
+                }
+                else
+                {
+                    var naming = Enum.TryParse<FileNaming>(Wire.Text(bye, "style"), out var style) ? style : throw new TransferException("The phone sent something PhotoSense does not understand.");
+                    try
+                    {
+                        var renamed = await RenameAsync(phone.Id, naming, ct);
+                        record = record with { Names = naming };
+                        await channel.SendAsync(new JsonObject { ["t"] = "named", ["renamed"] = renamed }, ct);
+                    }
+                    catch (Exception ex) when (ex is InvalidOperationException or IOException)
+                    {
+                        await channel.SendAsync(new JsonObject { ["t"] = "named", ["problem"] = ex.Message }, ct);
+                    }
+                }
+                bye = await channel.ReceiveAsync(ct, "bye", "trip", "names");
             }
             await _store.SavePhoneAsync(record with
             {

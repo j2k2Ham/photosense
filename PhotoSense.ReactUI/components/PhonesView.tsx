@@ -5,6 +5,8 @@ import { formatBytes } from '../lib/format';
 import { items } from '../lib/library';
 import type { BackupPhoneDto } from '../types';
 import { FolderPicker } from './FolderPicker';
+import { RenameWindow } from './RenameWindow';
+import { NAMING } from '../lib/fixes';
 import type { ToastKind } from './Toaster';
 
 interface Props {
@@ -48,7 +50,7 @@ export function activityTime(iso: string, now: Date): string {
 export function PhonesView({ notify, onPair }: Props) {
   const phones = useBackupPhones(true).data;
   const [chosenId, setChosenId] = useState<string>();
-  const [picking, setPicking] = useState<'backups' | 'trips'>();
+  const [picking, setPicking] = useState<'backups' | 'trips' | 'names'>();
   const [busy, setBusy] = useState(false);
   const chosen = phones?.find(p => p.id === chosenId) ?? phones?.[0];
   const now = new Date();
@@ -106,7 +108,7 @@ export function PhonesView({ notify, onPair }: Props) {
             </div>
           ) : <Detail phone={chosen} now={now} busy={busy}
             onPause={() => void act(() => pausePhone(chosen.id, !chosen.paused), chosen.paused ? `Backups from ${chosen.name} run again.` : `Backups from ${chosen.name} are paused.`)}
-            onChangeFolder={() => setPicking('backups')} onChangeTrips={() => setPicking('trips')} />}
+            onChangeFolder={() => setPicking('backups')} onChangeTrips={() => setPicking('trips')} onRename={() => setPicking('names')} />}
       </section>
 
       {picking === 'backups' && chosen && (
@@ -114,6 +116,7 @@ export function PhonesView({ notify, onPair }: Props) {
           onPick={folder => { setPicking(undefined); void act(() => moveBackups(chosen.id, folder), `Backups from ${chosen.name} now go to ${folder}.`); }}
           onCancel={() => setPicking(undefined)} />
       )}
+      {picking === 'names' && chosen && <RenameWindow phone={chosen} notify={notify} onClose={() => setPicking(undefined)} />}
       {picking === 'trips' && chosen && (
         <FolderPicker title={`Where trip folders from ${chosen.name} go`} startAt={chosen.tripsPath} pickLabel="Make them here"
           onPick={folder => { setPicking(undefined); void act(() => tripsGoTo(chosen.id, folder), `Trip folders from ${chosen.name} now go in ${folder}.`); }}
@@ -131,10 +134,12 @@ interface DetailProps {
   onChangeFolder(): void;
   /** Chooses where its trip folders are made. */
   onChangeTrips(): void;
+  /** Opens Rename files by date. */
+  onRename(): void;
 }
 
 /** One phone, as Phones shows it beside the list. */
-function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips }: DetailProps) {
+function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips, onRename }: DetailProps) {
   const arriving = phone.arriving;
   const percent = arriving && arriving.totalBytes > 0 ? arriving.bytes / arriving.totalBytes * 100 : 0;
   const stat = 'flex flex-col gap-1 rounded-[16px] border border-line bg-s1 p-4';
@@ -203,6 +208,13 @@ function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips }: De
               <p className="truncate font-mono text-[12.5px] text-t2" title={phone.path}>{phone.folder}</p>
             </div>
             <button type="button" onClick={onChangeFolder} className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">Change…</button>
+          </div>
+          <div className="flex items-center gap-3 border-t border-line px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px]">File names</p>
+              <p className="text-[12.5px] text-t2">{NAMING[phone.names]}</p>
+            </div>
+            <button type="button" onClick={onRename} className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">{phone.names === 'asOnPhone' ? 'Rename by date…' : 'Change names…'}</button>
           </div>
           <div className="flex items-center gap-3 border-t border-line px-4 py-3">
             <div className="min-w-0 flex-1">

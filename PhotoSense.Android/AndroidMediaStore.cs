@@ -247,6 +247,53 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
     }
 
     /// <summary>
+    /// Gives pictures and videos the dates and places asked, all together, after Android asks when they are another
+    /// app's. A JPEG, PNG or WebP has its own details written again, the picture untouched; a date is also Android's
+    /// record of when it was taken, which is all a video or a HEIC gets.
+    /// </summary>
+    public void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes)
+    {
+        var uris = changes.Select(c => UriOf(c.Id)).ToList();
+        if (!Mine(uris) && !MainActivity.Ask(MediaStore.CreateWriteRequest(Resolver, uris)!)) throw new IOException(Declined);
+        foreach (var ((id, taken, place), uri) in changes.Zip(uris))
+        {
+            var (_, name) = Where(uri);
+            if (!id.StartsWith("video/", StringComparison.Ordinal) && Path.GetExtension(name).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png" or ".webp")
+                WriteDetails(uri, name, taken, place);
+            if (taken is not { } when) continue;
+            var values = new ContentValues();
+            values.Put(MediaStore.IMediaColumns.DateTaken, new DateTimeOffset(DateTime.SpecifyKind(when, DateTimeKind.Local)).ToUnixTimeMilliseconds());
+            Resolver.Update(uri, values, null, null);
+        }
+    }
+
+    // A picture's own date and place written again in its file, through its descriptor; the picture is not touched.
+    private void WriteDetails(AndroidUri uri, string name, DateTime? taken, PlaceChange? place)
+    {
+        try
+        {
+            using var file = Resolver.OpenFileDescriptor(uri, "rw") ?? throw new IOException($"{name} could not be opened.");
+            var details = new ExifInterface(file.FileDescriptor!);
+            if (taken is { } when)
+                foreach (var tag in new[] { ExifInterface.TagDatetime, ExifInterface.TagDatetimeOriginal, ExifInterface.TagDatetimeDigitized })
+                    details.SetAttribute(tag, DetailRules.ExifDate(when));
+            if (place is { Latitude: { } lat, Longitude: { } lon })
+            {
+                var (latitude, north) = DetailRules.ExifDegrees(lat, "N", "S");
+                var (longitude, east) = DetailRules.ExifDegrees(lon, "E", "W");
+                details.SetAttribute(ExifInterface.TagGpsLatitude, latitude);
+                details.SetAttribute(ExifInterface.TagGpsLatitudeRef, north);
+                details.SetAttribute(ExifInterface.TagGpsLongitude, longitude);
+                details.SetAttribute(ExifInterface.TagGpsLongitudeRef, east);
+            }
+            else if (place is not null)
+                foreach (var tag in SharingDetails.ExifPlace) details.SetAttribute(tag, null);
+            details.SaveAttributes();
+        }
+        catch (Java.IO.IOException ex) { throw new IOException($"{name} could not be changed: {ex.Message}"); }
+    }
+
+    /// <summary>
     /// A copy of a picture or video for sharing, in the app's cache, without where it was taken and the camera's details
     /// as asked; the copy shared before is deleted first. A JPEG, PNG or WebP keeps its format, with its details taken
     /// out by <c>ExifInterface</c>; any other picture, a HEIC among them, is made again as a JPEG with only the details

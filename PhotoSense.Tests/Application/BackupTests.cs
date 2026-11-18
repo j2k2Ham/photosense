@@ -658,6 +658,80 @@ public sealed class BackupTests : IDisposable
     }
 
     [Test]
+    public async Task The_Phone_Has_The_Computer_Name_Its_Copies_By_Date_On_Pro_And_The_Computer_Shows_What_It_Would_Rename(CancellationToken ct)
+    {
+        Library();
+        await Assert.That(await AskAsync("POST", "fixes/names", ct, new { kind = "date" })).IsEqualTo((HttpStatusCode.Conflict, "Pair with a computer first: in Settings, choose Computer."));
+        await PairedAsync(ct);
+        await BackedUpAsync(ct);
+        var phoneId = (await NotedOnComputerAsync("4 items backed up and checked", ct)).GetProperty("id").GetString()!;
+        var names = (await PhoneAsync("GET", "fixes", ct)).GetProperty("names");
+        await Assert.That((names.GetProperty("computer").GetString(), names.GetProperty("files").GetInt32(), names.GetProperty("style").GetString(), names.GetProperty("now").ValueKind, names.GetProperty("stage").ValueKind))
+            .IsEqualTo(("Studio iMac", 4, "asOnPhone", JsonValueKind.Null, JsonValueKind.Null));
+
+        // On the computer: what it would rename, and how many.
+        var preview = (await _computer.RenamingAsync(Http.Get("backup/phones/x/names?style=date").FromClient(), phoneId, ct)).Json();
+        await Assert.That((preview.GetProperty("count").GetInt32(), preview.GetProperty("rows")[0].GetProperty("now").GetString())).IsEqualTo((4, "IMG_0001.JPG"));
+        await Assert.That((await _computer.RenamingAsync(Http.Get("backup/phones/x/names?style=sideways").FromClient(), phoneId, ct)).StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That((await _computer.RenamingAsync(Http.Get("backup/phones/x/names?style=date").FromClient(), "nobody", ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        var free = await _computer.RenameAsync(Http.Post("backup/phones/x/names", JsonSerializer.Serialize(new { kind = "date" })).FromClient(), phoneId, ct);
+        await Assert.That((free.StatusCode, free.Text().StartsWith("Renaming copies by date is part of Pro.", StringComparison.Ordinal))).IsEqualTo((HttpStatusCode.Conflict, true));
+        foreach (var body in new[] { "{\"kind\":\"sideways\"}", "not json" })
+            await Assert.That((await _computer.RenameAsync(Http.Post("backup/phones/x/names", body).FromClient(), phoneId, ct)).StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+        await Assert.That((await _computer.RenameAsync(Http.Post("backup/phones/x/names", "{\"kind\":\"date\"}").FromClient(), "nobody", ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        var neither = new BackupApi(new TestApi());
+        await Assert.That((await neither.RenamingAsync(Http.Get("backup/phones/x/names?style=date").FromClient(), phoneId, ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        await Assert.That((await neither.RenameAsync(Http.Post("backup/phones/x/names", "{}").FromClient(), phoneId, ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+
+        // From the phone: Pro first.
+        await Assert.That(await AskAsync("POST", "fixes/names", ct, new { kind = "date" })).IsEqualTo((HttpStatusCode.Conflict, "Renaming copies by date is part of Pro."));
+        foreach (var body in new object[] { new { kind = "sideways" }, "not a request" })
+            await Assert.That(await AskAsync("POST", "fixes/names", ct, body)).IsEqualTo((HttpStatusCode.BadRequest, "Say how to name the files."));
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
+        await Assert.That((await AskAsync("POST", "fixes/names", ct, new { kind = "date" })).Status).IsEqualTo(HttpStatusCode.Accepted);
+        await Backup.Running;
+        names = (await PhoneAsync("GET", "fixes", ct)).GetProperty("names");
+        await Assert.That((names.GetProperty("stage").GetString(), names.GetProperty("renamed").GetInt32(), names.GetProperty("style").GetString())).IsEqualTo(("ready", 4, "date"));
+        await Assert.That(Directory.GetFiles(Folder).All(f => char.IsDigit(Path.GetFileName(f)[0]))).IsTrue();
+        await Assert.That((await NotedOnComputerAsync("Renamed 4 items by date", ct)).GetProperty("names").GetString()).IsEqualTo("date");
+        // Copies renamed are held where they are now: none is sent again.
+        var again = await BackedUpAsync(ct);
+        await Assert.That((again.GetProperty("total").GetInt32(), Directory.GetFiles(Folder).Length)).IsEqualTo((0, 4));
+        var kept = (await _computer.RenameAsync(Http.Post("backup/phones/x/names", "{\"kind\":\"asOnPhone\"}").FromClient(), phoneId, ct)).Json();
+        await Assert.That(kept.GetProperty("changed").GetInt32()).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task Renaming_From_The_Phone_Waits_For_A_Backup_Running_And_Says_Why_The_Computer_Did_Not(CancellationToken ct)
+    {
+        Library();
+        // The latest photo that says when it was taken gives the example of a name by date.
+        var files = _phone.GetRequiredService<IPhotoFileSystem>();
+        var picture = files.FilesIn(_root).Single(p => p.EndsWith("IMG_0002.JPG", StringComparison.Ordinal));
+        await _phone.GetRequiredService<IPhotoRepository>().AddOrUpdateAsync(new Photo { SourcePath = picture, FileName = "IMG_0002.JPG", TakenOn = new DateTime(2026, 3, 2, 14, 31, 7) }, ct);
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
+        var computer = await ScriptedComputerAsync(ct);
+        await Assert.That((await AskAsync("POST", "fixes/names", ct, new { kind = "datePlace" })).Status).IsEqualTo(HttpStatusCode.Accepted);
+        var channel = await computer.WaitAsync(ct);
+        await channel.ReceiveAsync(ct, "backup");
+        // A way of naming this phone does not know is left as it was.
+        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "held", ["sha256"] = new System.Text.Json.Nodes.JsonArray(), ["more"] = false, ["folder"] = "Pictures/PhotoSense", ["names"] = "sideways" }, ct);
+        var offer = await channel.ReceiveAsync(ct, "offer");
+        await Assert.That(((System.Text.Json.Nodes.JsonArray?)offer["files"])?.Count ?? 0).IsEqualTo(0);
+        await Assert.That(await AskAsync("POST", "fixes/names", ct, new { kind = "date" })).IsEqualTo((HttpStatusCode.Conflict, "A backup to Studio iMac is running. Rename the files once it ends."));
+        await Assert.That((await PhoneAsync("GET", "fixes", ct)).GetProperty("names").GetProperty("stage").GetString()).IsEqualTo("running");
+        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "done" }, ct);
+        await Assert.That(Wire.Text(await channel.ReceiveAsync(ct, "names"), "style")).IsEqualTo("DatePlace");
+        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "named", ["problem"] = "The copies could not be renamed. The disk is full." }, ct);
+        await Backup.Running;
+
+        var names = (await PhoneAsync("GET", "fixes", ct)).GetProperty("names");
+        await Assert.That((names.GetProperty("stage").GetString(), names.GetProperty("problem").GetString(), names.GetProperty("renamed").ValueKind, names.GetProperty("style").GetString()))
+            .IsEqualTo(("failed", "The copies could not be renamed. The disk is full.", JsonValueKind.Null, "asOnPhone"));
+        await Assert.That((names.GetProperty("now").GetString(), names.GetProperty("after").GetString())).IsEqualTo(("IMG_0002.JPG", "2026-03-02 14.31.07.JPG"));
+    }
+
+    [Test]
     public async Task A_Trip_Folder_Needs_A_Computer_Waits_For_A_Backup_Running_And_Says_Why_The_Computer_Refused(CancellationToken ct)
     {
         Library();

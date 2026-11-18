@@ -3,7 +3,7 @@ import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
   CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
-  TownDto, TripDetailDto, TripsDto,
+  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -665,5 +665,47 @@ export async function renameTrip(id: string, name: string | null): Promise<void>
 export async function makeTripFolder(id: string): Promise<void> {
   await post(`${tripsUrl}/${encodeURIComponent(id)}/folder`, '{}');
   await mutate(tripsUrl);
+}
+
+const fixesUrl = `${API_BASE}/fixes`;
+
+/**
+ * On a phone: what needs a date or a place, and how the computer names the phone's copies; asked every second while
+ * the computer renames them. Nothing is asked while `on` is false.
+ */
+export function useFixes(on: boolean) {
+  return useSWR<FixesDto>(on ? fixesUrl : null, json, { refreshInterval: latest => (latest?.names?.stage === 'running' ? 1000 : 0) });
+}
+
+// A fix, or its Undo, after which everything that shows a date or place is asked again.
+async function fix(what: string, body?: unknown): Promise<number> {
+  const result = await json<FixResultDto>(`${fixesUrl}/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(() => true);
+  return result.changed;
+}
+
+/** Gives every photo with a wrong date the day chosen, "2026-03-02", each keeping its time of day; the phone asks first. */
+export const fixDates = (date: string) => fix('dates', { date });
+/** Gives every photo with no place that of the one taken nearest in time, within 30 minutes; the phone asks first. */
+export const addPlaces = () => fix('places');
+/** Puts back what the last fix of a kind changed; the phone asks first. */
+export const undoFix = (kind: 'dates' | 'places') => fix('undo', { kind });
+
+/** On a phone: has the computer name its copies so, now and as they arrive; `useFixes` says how it stands. */
+export async function renameOnComputer(style: FileNaming): Promise<void> {
+  await post(`${fixesUrl}/names`, JSON.stringify({ kind: style }));
+  await mutate(fixesUrl);
+}
+
+/** On a computer: what naming a phone's copies so would make of the first few, and how many; nothing is asked while `id` is undefined. */
+export function useRenaming(id: string | undefined, style: FileNaming) {
+  return useSWR<RenamingDto>(id === undefined ? null : `${phonesUrl}/${encodeURIComponent(id)}/names?style=${style}`, json);
+}
+
+/** On a computer: names a phone's copies so, now and as they arrive, or keeps the phone's names for those that arrive. */
+export async function renameCopies(id: string, style: FileNaming): Promise<number> {
+  const result = await json<FixResultDto>(`${phonesUrl}/${encodeURIComponent(id)}/names`, { method: 'POST', body: JSON.stringify({ kind: style }) });
+  await mutate(phonesUrl);
+  return result.changed;
 }
 

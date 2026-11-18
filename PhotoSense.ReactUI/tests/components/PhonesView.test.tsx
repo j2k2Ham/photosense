@@ -8,6 +8,12 @@ import { backupPhone } from '../fixtures';
 
 const api = vi.hoisted(() => ({ tripsGoTo: vi.fn(), useBackupPhones: vi.fn(), moveBackups: vi.fn(), pausePhone: vi.fn() }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
+// The rename window is tested on its own; here it shows which phone it is for, and closes.
+vi.mock('../../components/RenameWindow', () => ({
+  RenameWindow: ({ phone, onClose }: { phone: BackupPhoneDto; onClose(): void }) => (
+    <div role="dialog" aria-label="Rename files by date">{phone.name}<button type="button" onClick={onClose}>Close the window</button></div>
+  ),
+}));
 // The folder picker is tested on its own; here it picks a folder or is put away.
 vi.mock('../../components/FolderPicker', () => ({
   FolderPicker: ({ title, startAt, onPick, onCancel }: { title: string; startAt?: string; onPick(path: string): void; onCancel(): void }) => (
@@ -162,3 +168,20 @@ describe('Where trip folders go', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
+
+describe('How the copies are named', () => {
+  it("says the phone's names to start with, Rename by date… opens the window for the phone, and a name by date says so", async () => {
+    const { rerender } = render(<PhonesView notify={vi.fn()} onPair={vi.fn()} />);
+    const files = screen.getByRole('region', { name: 'Files from this phone' });
+    expect(files).toHaveTextContent('File namesAs on the phone');
+    await userEvent.click(within(files).getByRole('button', { name: 'Rename by date…' }));
+    expect(screen.getByRole('dialog', { name: 'Rename files by date' })).toHaveTextContent("Alex's iPhone");
+    await userEvent.click(screen.getByRole('button', { name: 'Close the window' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    phones = [backupPhone({ names: 'datePlace' })];
+    rerender(<PhonesView notify={vi.fn()} onPair={vi.fn()} />);
+    expect(screen.getByRole('region', { name: 'Files from this phone' })).toHaveTextContent('File namesDate, time and place');
+    expect(within(screen.getByRole('region', { name: 'Files from this phone' })).getByRole('button', { name: 'Change names…' })).toBeInTheDocument();
+  });
+});
+

@@ -97,6 +97,8 @@ describe('the guide itself', () => {
     expect(ids('out of focus', 'computer')).toEqual(['categories']);
     expect(ids('whatsapp', 'computer')).toEqual(['categories']);
     expect(ids('trip folders', 'computer')).toContain('phones');
+    expect(ids('file names', 'computer')).toContain('phones');
+    expect(ids('rename by date', 'computer')).toEqual(['phones']);
 
     for (const platform of ['ios', 'android'] as const) {
       expect(ids('recover', platform)).toEqual(['phone-removed']);
@@ -110,7 +112,9 @@ describe('the guide itself', () => {
       expect(ids('dark mode', platform)).toEqual(['phone-settings']);
       expect(ids('qr code', platform)).toContain('backup');
       expect(ids('sidebar', platform)).toEqual(['phone-start']);
-      expect(ids('screenshot', platform)).toEqual(['phone-cleanup']);
+      expect(ids('screenshot', platform)).toContain('phone-cleanup');
+      expect(ids('wrong date', platform)).toEqual(['library']);
+      expect(ids('missing location', platform)).toEqual(['library']);
       expect(ids('big videos', platform)).toEqual(['phone-cleanup']);
       expect(ids('free up space', platform)).toContain('phone-cleanup');
       expect(ids('shrink', platform)).toEqual(['phone-cleanup']);

@@ -170,4 +170,33 @@ public class LiteDbBackupStoreTests
         await Assert.That((await db.Pairings(new TestClock()).SelfNameAsync(ct), await db.Pairings(new TestClock()).SelfIdAsync(ct))).IsEqualTo(("Office PC", id));
         await Assert.That(() => pairs.SelfNameAsync(new CancellationToken(canceled: true))).Throws<OperationCanceledException>();
     }
+
+    [Test]
+    public async Task How_A_Phones_Copies_Are_Named_Is_Kept_On_Both_And_The_Fixes_Made_On_The_Phone_With_The_Last_Of_Each_Kind(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        await db.Backups().SavePhoneAsync(new BackupPhone("p", "P", null, "f", false, Day, null, null, Names: FileNaming.DatePlace), ct);
+        await Assert.That((await db.Backups().PhonesAsync(ct)).Single().Names).IsEqualTo(FileNaming.DatePlace);
+        await db.Ledger().SaveComputerAsync(new BackupComputer("c", "C", "f", null, null, Names: FileNaming.Date), ct);
+        await Assert.That((await db.Ledger().ComputerAsync(ct))!.Names).IsEqualTo(FileNaming.Date);
+
+        var fixes = db.Fixes();
+        await Assert.That((await fixes.FixedAsync(ct)).Count).IsEqualTo(0);
+        var dated = new FixedDetails(new DateTime(2026, 3, 2, 9, 30, 0), false, null, null);
+        var placed = new FixedDetails(null, true, 48.7, -113.8);
+        await fixes.SaveFixedAsync(new Dictionary<string, FixedDetails?> { ["a"] = dated, ["b"] = placed, ["c"] = dated }, ct);
+        await fixes.SaveFixedAsync(new Dictionary<string, FixedDetails?> { ["c"] = null }, ct);
+        await Assert.That(await db.Fixes().FixedAsync(ct)).IsEquivalentTo(new Dictionary<string, FixedDetails> { ["a"] = dated, ["b"] = placed });
+
+        await Assert.That((await fixes.LastAsync(FixKind.Places, ct)).Count).IsEqualTo(0);
+        var item = new FixedItem("b", "/Phone/DCIM/IMG_1.JPG", new FixedDetails(null, true, null, null), placed);
+        await fixes.SaveLastAsync(FixKind.Places, [item], ct);
+        await Assert.That((await db.Fixes().LastAsync(FixKind.Places, ct)).Single()).IsEqualTo(item);
+        await fixes.SaveLastAsync(FixKind.Places, [], ct);
+        await Assert.That((await fixes.LastAsync(FixKind.Places, ct)).Count).IsEqualTo(0);
+
+        var gone = new CancellationToken(canceled: true);
+        foreach (var ask in new Func<Task>[] { () => fixes.FixedAsync(gone), () => fixes.SaveFixedAsync(new Dictionary<string, FixedDetails?>(), gone), () => fixes.LastAsync(FixKind.Dates, gone), () => fixes.SaveLastAsync(FixKind.Dates, [], gone) })
+            await Assert.That(ask).Throws<OperationCanceledException>();
+    }
 }

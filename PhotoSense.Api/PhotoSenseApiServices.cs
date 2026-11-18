@@ -52,6 +52,8 @@ public static class PhotoSenseApiServices
         s.AddSingleton(sp => new YearEndpoints(sp.GetService<YearInReview>(), sp.GetService<IShareSheet>()));
         s.AddSingleton(sp => new ViewerEndpoints(sp.GetService<PhotoSearch>(), sp.GetService<IFavoritePhotos>(), sp.GetService<ISharingCopies>(), sp.GetService<IShareSheet>(),
             sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<PhotoDtoMapper>()));
+        // Only a phone fixes dates and places.
+        s.AddSingleton(sp => new FixEndpoints(sp.GetService<PhotoFixes>(), sp.GetService<PhoneBackup>(), sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<PhotoDtoMapper>()));
         // Only a phone has Trips.
         s.AddSingleton(sp => new TripEndpoints(sp.GetService<Trips>(), sp.GetService<PhoneBackup>(), sp.GetRequiredService<PhotoDtoMapper>()));
         // A phone sends and a computer receives: each program has the one half.
@@ -65,7 +67,7 @@ public static class PhotoSenseApiServices
             sp.GetRequiredService<RemovedEndpoints>(), sp.GetRequiredService<TransferEndpoints>(), sp.GetRequiredService<PlanEndpoints>(),
             sp.GetRequiredService<ScanFoundEndpoints>(), sp.GetRequiredService<PairingEndpoints>(), sp.GetRequiredService<BackupEndpoints>(), sp.GetRequiredService<SwipeEndpoints>(), sp.GetRequiredService<CategoryEndpoints>(),
             sp.GetRequiredService<CompressionEndpoints>(), sp.GetRequiredService<NoticeEndpoints>(), sp.GetRequiredService<YearEndpoints>(), sp.GetRequiredService<ViewerEndpoints>(),
-            sp.GetRequiredService<TripEndpoints>()));
+            sp.GetRequiredService<TripEndpoints>(), sp.GetRequiredService<FixEndpoints>()));
         return s;
     }
 }

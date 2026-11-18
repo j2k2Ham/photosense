@@ -847,6 +847,48 @@ describe('trips', () => {
   });
 });
 
+describe('fixing dates and places, and naming copies by date', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('asks what needs fixing only while wanted, and every second while the computer renames', async () => {
+    const api = await load();
+    api.useFixes(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useFixes(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/fixes`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ names: null }), every({ names: { stage: 'ready' } }), every({ names: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+  });
+
+  it('fixes, undoes and renames, asking everything again after a fix', async () => {
+    const api = await load();
+    answering({ changed: 32 });
+    await expect(api.fixDates('2026-03-02')).resolves.toBe(32);
+    expect(lastRequest()).toEqual({ url: `${API}/fixes/dates`, init: { method: 'POST', body: JSON.stringify({ date: '2026-03-02' }), headers: json } });
+    expect((swr.mutate.mock.lastCall![0] as () => boolean)()).toBe(true);
+    await api.addPlaces();
+    expect(lastRequest()).toEqual({ url: `${API}/fixes/places`, init: { method: 'POST', headers: json } });
+    await api.undoFix('places');
+    expect(lastRequest().init!.body).toBe('{"kind":"places"}');
+    answering(undefined, 202);
+    await api.renameOnComputer('date');
+    expect(lastRequest()).toEqual({ url: `${API}/fixes/names`, init: { method: 'POST', body: '{"kind":"date"}', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/fixes`);
+  });
+
+  it('on a computer, asks what renaming would do only for a phone, and renames', async () => {
+    const api = await load();
+    api.useRenaming(undefined, 'date');
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useRenaming('p 1', 'datePlace');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/backup/phones/p%201/names?style=datePlace`);
+    answering({ changed: 6941 });
+    await expect(api.renameCopies('p 1', 'date')).resolves.toBe(6941);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p%201/names`, init: { method: 'POST', body: '{"kind":"date"}', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/backup/phones`);
+  });
+});
+
 describe('the plan', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };

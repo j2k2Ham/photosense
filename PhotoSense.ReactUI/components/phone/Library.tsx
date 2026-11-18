@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, usePhotoAccess, useTrips } from '../../lib/apiClient';
+import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, useFixes, usePhotoAccess, useTrips } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
 import { formatDuration, leaf } from '../../lib/format';
 import {
@@ -18,6 +18,7 @@ import { MonthHeader, PhotoGrid, SelectionBar } from './PhotoGrid';
 import { RootHeader, Screen } from './Screens';
 import { SearchField, SearchScreen } from './Search';
 import { Viewer } from './Viewer';
+import { FixesScreen, FixesTile } from './Fixes';
 import { TripsScreen, TripsTile } from './Trips';
 import { YearCard } from './YearInReview';
 import { usePlanGate } from './ProSheet';
@@ -79,7 +80,9 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   const [viewing, setViewing] = useState<string>();
   const [searching, setSearching] = useState(false);
   const [tripping, setTripping] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const trips = useTrips(!selecting).data;
+  const fixes = useFixes(!selecting).data;
   const [busy, setBusy] = useState(false);
 
   const counts = useMemo(() => (root ? filterCounts(files, root, platform, backedUp) : undefined), [files, root, platform, backedUp]);
@@ -177,7 +180,12 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
     <Screen label="Library">
       <RootHeader title={title} subtitle={subtitle} textAction={textAction} onStop={selecting && !ios ? stopSelecting : undefined} noGear={selecting} />
       {!selecting && <SearchField onOpen={() => setSearching(true)} />}
-      {!selecting && <TripsTile trips={trips} onOpen={() => setTripping(true)} />}
+      {!selecting && (
+        <div className="grid grid-cols-2 gap-3 px-4 pb-3">
+          <TripsTile trips={trips} onOpen={() => setTripping(true)} />
+          <FixesTile fixes={fixes} onOpen={() => setFixing(true)} />
+        </div>
+      )}
       {access === 'selected' && (
         <div role="note" className="mx-4 mb-3 flex items-center gap-3 rounded-cell bg-acc-soft px-4 py-3.5 text-on-acc-soft">
           <p className="min-w-0 flex-1 text-[14.5px] leading-[1.4]">PhotoSense can see only the {all.toLocaleString()} photos you chose. Copies among the rest are not found.</p>
@@ -226,6 +234,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
       {searching && <SearchScreen files={files} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setSearching(false)} />}
+      {fixing && <FixesScreen notify={notify} onClose={() => setFixing(false)} />}
       {tripping && <TripsScreen files={files} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setTripping(false)} />}
       {viewed && (
         <Viewer file={viewed} places={places} root={root!} removeLocation={removeLocation} notify={notify} onClose={() => setViewing(undefined)}

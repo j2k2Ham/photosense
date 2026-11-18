@@ -238,6 +238,10 @@ internal sealed class BackupApi(TestApi api)
     public Task<ApiResponse> PhonesAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/phones");
     /// <summary>POST /backup/phones/{id}/folder.</summary>
     public Task<ApiResponse> FolderAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/folder");
+    /// <summary>GET /backup/phones/{id}/names.</summary>
+    public Task<ApiResponse> RenamingAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/names");
+    /// <summary>POST /backup/phones/{id}/names.</summary>
+    public Task<ApiResponse> RenameAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/names");
     /// <summary>POST /backup/phones/{id}/trips.</summary>
     public Task<ApiResponse> TripsFolderAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/trips");
     /// <summary>POST /backup/phones/{id}/pause.</summary>

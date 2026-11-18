@@ -141,6 +141,22 @@ export class Phone {
       this.sharedPhotos.push(JSON.parse(route.request().postData()!));
       return route.fulfill({ status: 204 });
     });
+    // Fix dates and places, which only a phone does: each fix is done at once, and Undo puts it back.
+    await page.route(url => /\/api\/fixes(\/|$)/.test(url.pathname), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/fixes').pop()!.replace(/^\//, '');
+      if (!what) return json(route, this.fixes);
+      this.asked.push(`fixes/${what} ${route.request().postData() ?? ''}`.trim());
+      const f = this.fixes;
+      if (what === 'names') {
+        this.fixes = { ...f, names: { ...f.names!, style: 'date', stage: 'ready', renamed: f.names!.files } };
+        return route.fulfill({ status: 202 });
+      }
+      if (what === 'dates') { this.fixes = { ...f, total: f.total - f.dates.count, dates: { ...f.dates, count: 0, undo: f.dates.count } }; return json(route, { changed: f.dates.count }); }
+      if (what === 'places') { this.fixes = { ...f, total: f.total - f.places.count, places: { ...f.places, count: 0, undo: f.places.count } }; return json(route, { changed: f.places.count }); }
+      const kind = JSON.parse(route.request().postData()!).kind as 'dates' | 'places';
+      this.fixes = { ...f, total: f.total + f[kind].undo, [kind]: { ...f[kind], count: f[kind].undo, undo: 0 } };
+      return json(route, { changed: f[kind].undo });
+    });
     // Trips, which only a phone finds: a folder asked for has been made by the next time the page asks.
     await page.route(url => /\/api\/trips(\/|$)/.test(url.pathname), async route => {
       const what = new URL(route.request().url()).pathname.split('/api/trips').pop()!.replace(/^\//, '');
@@ -216,6 +232,11 @@ export class Phone {
   /** The copies of photos handed to the share sheet, with what each left out. */
   readonly sharedPhotos: { path: string; removeLocation: boolean; removeCamera: boolean }[] = [];
 
+  /** What needs fixing, as the phone would say: nothing unless the test says otherwise. */
+  fixes: { total: number; dates: FixGroup; places: FixGroup; names: { computer: string; files: number; style: string; now: string | null; after: string | null; stage: string | null; problem: string | null; renamed: number | null } | null } = {
+    total: 0, dates: noFix(), places: noFix(), names: null,
+  };
+
   /** Trips as the phone would find them: none, with no home, unless the test gives them. */
   trips: { home: Record<string, unknown> | null; homeChosen: boolean; trips: { id: string; folder: string; [key: string]: unknown }[]; computer: string | null; tripsFolder: string | null;
     folder: Record<string, unknown> | null; } = { home: null, homeChosen: false, trips: [], computer: null, tripsFolder: null, folder: null };
@@ -250,3 +271,8 @@ export class Phone {
   };
 }
 
+/** A kind of fix, as the phone says it. */
+export interface FixGroup { count: number; photos: unknown[]; date: string | null; place: string | null; placeCount: number; undo: number }
+
+/** A kind of fix with nothing to fix. */
+export const noFix = (more: Partial<FixGroup> = {}): FixGroup => ({ count: 0, photos: [], date: null, place: null, placeCount: 0, undo: 0, ...more });

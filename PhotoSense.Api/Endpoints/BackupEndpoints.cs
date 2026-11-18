@@ -4,6 +4,7 @@ using System.Text.Json;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Application.Transfer;
+using PhotoSense.Contracts.Organize;
 using PhotoSense.Contracts.Transfer;
 using PhotoSense.Domain.Repositories;
 
@@ -151,6 +152,34 @@ internal sealed class BackupEndpoints
         catch (DirectoryNotFoundException ex) { return await RefuseAsync(req, HttpStatusCode.BadRequest, ex.Message, ct); }
     }
 
+    /// <summary>GET /api/backup/phones/{id}/names?style=: on a computer, what naming a phone's copies so would make of the first few, and how many.</summary>
+    public async Task<ApiResponse> RenamingAsync(ApiRequest req, string id, CancellationToken ct)
+    {
+        if (Refused(req, _computer, OnlyAComputer, ct) is { } refused) return await refused;
+        if (!Enum.TryParse<FileNaming>(System.Web.HttpUtility.ParseQueryString(req.Url.Query).Get("style"), ignoreCase: true, out var naming))
+            return await RefuseAsync(req, HttpStatusCode.BadRequest, "Say how to name the files.", ct);
+        try
+        {
+            var (count, first) = await _computer!.RenamingAsync(id, naming, 5, ct);
+            return await AnswerAsync(req, new RenamingDto { Count = count, Rows = [.. first.Select(r => new RenamedFileDto { Now = r.Now, After = r.After })] }, ct);
+        }
+        catch (ArgumentException ex) { return await RefuseAsync(req, HttpStatusCode.NotFound, ex.Message, ct); }
+    }
+
+    /// <summary>POST /api/backup/phones/{id}/names: on a computer, names a phone's copies by date now and as they arrive, or keeps the phone's names for those that arrive.</summary>
+    public async Task<ApiResponse> RenameAsync(ApiRequest req, string id, CancellationToken ct)
+    {
+        if (Refused(req, _computer, OnlyAComputer, ct) is { } refused) return await refused;
+        if (await req.ReadJsonAsync<FixKindRequest>(Json, ct) is not { } asked || !Enum.TryParse<FileNaming>(asked.Kind, ignoreCase: true, out var naming))
+            return await RefuseAsync(req, HttpStatusCode.BadRequest, "Say how to name the files.", ct);
+        int renamed;
+        try { renamed = await _computer!.RenameAsync(id, naming, ct); }
+        catch (ArgumentException ex) { return await RefuseAsync(req, HttpStatusCode.NotFound, ex.Message, ct); }
+        catch (InvalidOperationException ex) { return await RefuseAsync(req, HttpStatusCode.Conflict, ex.Message, ct); }
+        catch (IOException ex) { return await RefuseAsync(req, HttpStatusCode.Conflict, ex.Message, ct); }
+        return await AnswerAsync(req, new FixResultDto { Changed = renamed }, ct);
+    }
+
     /// <summary>POST /api/backup/phones/{id}/pause: on a computer, pauses a phone's backups, or lets them run again.</summary>
     public async Task<ApiResponse> PausePhoneAsync(ApiRequest req, string id, CancellationToken ct)
     {
@@ -175,7 +204,7 @@ internal sealed class BackupEndpoints
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = _computer.Named(phone.Folder), Path = phone.Folder, Paused = phone.Paused, Paired = Time(phone.Paired)!,
             LastBackup = Time(phone.LastBackup), LastChecked = Time(phone.LastChecked), Held = held, HeldBytes = heldBytes, Safe = phone.Safe, SafeBytes = phone.SafeBytes,
-            TripFolders = phone.TripFolders?.Count ?? 0, TripsFolder = _computer.Named(_computer.TripsIn(phone)), TripsPath = _computer.TripsIn(phone), Arriving = arriving, Events = [.. (await _computer.EventsAsync(phone.Id, ct)).Select(e => new BackupEventDto { At = Time(e.At)!, Text = e.Text })],
+            TripFolders = phone.TripFolders?.Count ?? 0, TripsFolder = _computer.Named(_computer.TripsIn(phone)), TripsPath = _computer.TripsIn(phone), Names = FixEndpoints.Style(phone.Names), Arriving = arriving, Events = [.. (await _computer.EventsAsync(phone.Id, ct)).Select(e => new BackupEventDto { At = Time(e.At)!, Text = e.Text })],
         };
     }
 

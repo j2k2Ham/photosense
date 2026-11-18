@@ -43,7 +43,8 @@ internal static class PhotoSenseServices
         s.AddSingleton(new PhoneDoor(new TcpTransferListener(TcpTransferListener.ComputerPort), new MdnsAdvertiser()));
         s.AddSingleton(sp => new ComputerBackup(sp.GetRequiredService<IBackupStore>(), sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<FileChanges>(),
             sp.GetRequiredService<Subscription>(), sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveBackupPath(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), sp.GetRequiredService<TimeProvider>()));
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<IMediaDetailsReader>(),
+            sp.GetRequiredService<IPlaceNameResolver>()));
         // Pair a phone: the computer shows a code, and a phone it does not know may pair with it.
         s.AddSingleton(sp => new ComputerPairing(sp.GetRequiredService<PhoneDoor>().Listener, sp.GetRequiredService<PhoneDoor>().Advertiser, sp.GetRequiredService<IPairingStore>(),
             Environment.MachineName, () => [.. MdnsPhoneFinder.Networks().Select(a => a.ToString())], sp.GetRequiredService<ComputerBackup>(), sp.GetRequiredService<TimeProvider>()));

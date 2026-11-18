@@ -272,4 +272,18 @@ public sealed class PhotoLibraryFileSystemTests
         await Assert.That(Assert.Throws<InvalidOperationException>(() => new PhoneViewer().Open(In("IMG_1.JPG")))!.Message)
             .IsEqualTo("Photos cannot be opened in another app from PhotoSense on a phone yet.");
     }
+
+    [Test]
+    public async Task Dates_And_Places_Are_Changed_In_Photos_Once_For_A_Live_Photo_And_Every_Item_Takes_A_Place(CancellationToken ct)
+    {
+        _library.Add("LIVE", File(LibraryFileKind.Photo, "IMG_0001.HEIC"), File(LibraryFileKind.PairedVideo, "IMG_0001.MOV"));
+        await Assert.That((_photos.IdOf(In("IMG_0001.HEIC")), _photos.IdOf(In("IMG_0001.MOV")), _photos.IdOf(In("gone.jpg")))).IsEqualTo(("LIVE", "LIVE", (string?)null));
+        await Assert.That((_photos.CanChangePlace(In("IMG_0001.MOV")), _photos.CanChangePlace(In("gone.jpg")))).IsEqualTo((true, false));
+        _photos.ChangeAll([new DetailsChange(In("IMG_0001.HEIC"), new DateTime(2026, 3, 2), null), new DetailsChange(In("IMG_0001.MOV"), new DateTime(2026, 3, 2), null)]);
+        await Assert.That(_library.DetailsChanged.Single().Single()).IsEqualTo(("LIVE", (DateTime?)new DateTime(2026, 3, 2), (PlaceChange?)null));
+        _library.Refuse = "You chose not to let PhotoSense change these photos.";
+        await Assert.That(() => _photos.ChangeAll([new DetailsChange(In("IMG_0001.HEIC"), null, new PlaceChange(1, 2))])).Throws<IOException>();
+        var gone = Assert.Throws<IOException>(() => _photos.ChangeAll([new DetailsChange(In("gone.jpg"), null, null)]));
+        await Assert.That(gone!.Message).IsEqualTo("gone.jpg is no longer in the library.");
+    }
 }

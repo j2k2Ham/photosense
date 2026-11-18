@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { expect, message, test } from '../fixtures/app';
-import { Phone, SAFE } from '../fixtures/phone';
+import { noFix, Phone, SAFE } from '../fixtures/phone';
 import { phoneSettings, phoneTab, question } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
@@ -340,6 +340,46 @@ test.describe('on a phone', () => {
     expect(phone.asked).toContain('trips/home Butte');
     await trips.getByRole('button', { name: 'Back' }).click();
     await expect(trips).toBeHidden();
+  });
+
+  test('Fix dates and places gives wrong dates the day chosen and places from the nearest photo, with Undo, and has the computer name the copies by date @phone', async ({ page }) => {
+    const phone = new Phone();
+    phone.fixes = {
+      total: 374, dates: noFix({ count: 32, date: '2000-01-01' }), places: noFix({ count: 342, place: 'Glacier National Park', placeCount: 214 }),
+      names: { computer: 'Office PC', files: 6941, style: 'asOnPhone', now: 'IMG_4821.HEIC', after: '2026-03-02 14.31.07.HEIC', stage: null, problem: null, renamed: null },
+    };
+    await phone.attach(page);
+    // Pro, as fixing is.
+    await page.route(url => url.pathname.endsWith('/api/plan'), route => route.fulfill({
+      json: { tier: 'pro', kind: 'lifetime', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] },
+    }));
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    await page.getByRole('region', { name: 'Library' }).getByRole('button', { name: 'Needs fixing, 374 items' }).click();
+    const fixes = page.getByRole('dialog', { name: 'Fix dates and places' });
+    const dates = fixes.getByRole('region', { name: 'Camera clock not set' });
+    await expect(dates).toContainText('32 items dated Jan 1, 2000');
+    await dates.getByLabel('The date they were taken').fill('2026-03-02');
+    await dates.getByRole('button', { name: 'Fix 32 dates' }).click();
+    await expect(message(page, '32 dates fixed.')).toBeVisible();
+    expect(phone.asked).toContain('fixes/dates {"date":"2026-03-02"}');
+    await expect(dates).toContainText('Every date looks right.32 dates fixed');
+    await dates.getByRole('button', { name: 'Undo' }).click();
+    await expect(message(page, 'Put back 32 dates.')).toBeVisible();
+    await expect(dates).toContainText('32 items dated Jan 1, 2000');
+
+    const places = fixes.getByRole('region', { name: 'Missing location' });
+    await expect(places).toContainText('214 of them get Glacier National Park.');
+    await places.getByRole('button', { name: 'Add 342 locations' }).click();
+    await expect(message(page, '342 locations added.')).toBeVisible();
+
+    const files = fixes.getByRole('region', { name: 'File names on Office PC' });
+    await expect(files).toContainText('IMG_4821.HEIC→2026-03-02 14.31.07.HEIC');
+    await files.getByRole('button', { name: 'Rename 6,941 files' }).click();
+    await expect(files).toContainText('6,941 files renamed');
+    expect(phone.asked).toContain('fixes/names {"kind":"date"}');
+    await fixes.getByRole('button', { name: 'Back' }).click();
+    await expect(fixes).toBeHidden();
   });
 
   test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {

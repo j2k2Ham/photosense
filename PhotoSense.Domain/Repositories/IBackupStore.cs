@@ -1,5 +1,16 @@
 namespace PhotoSense.Domain.Repositories;
 
+/// <summary>How a phone's copies are named on the computer.</summary>
+public enum FileNaming
+{
+    /// <summary>As on the phone: "IMG_4821.HEIC".</summary>
+    AsOnPhone,
+    /// <summary>By when it was taken: "2026-03-02 14.31.07.HEIC".</summary>
+    Date,
+    /// <summary>By when and where it was taken: "2026-03-02 14.31.07 Big Sky.HEIC".</summary>
+    DatePlace,
+}
+
 /// <summary>A phone that backs up to this computer, and how its backups stand.</summary>
 /// <param name="Id">The phone's own id, as it was paired.</param>
 /// <param name="Name">What the phone is called.</param>
@@ -13,8 +24,9 @@ namespace PhotoSense.Domain.Repositories;
 /// <param name="SafeBytes">How much those take on the phone.</param>
 /// <param name="TripFolders">The trip folders made on this computer when the phone asked, where its files may be too; null for none.</param>
 /// <param name="TripsFolder">The folder its trip folders are made in, as the person chose; null for the one beside the phones' folders, Pictures/PhotoSense.</param>
+/// <param name="Names">How its copies are named here, those arriving among them.</param>
 public sealed record BackupPhone(string Id, string Name, string? Kind, string Folder, bool Paused, DateTimeOffset Paired, DateTimeOffset? LastBackup, DateTimeOffset? LastChecked, int Safe = 0, long SafeBytes = 0,
-    IReadOnlyList<string>? TripFolders = null, string? TripsFolder = null);
+    IReadOnlyList<string>? TripFolders = null, string? TripsFolder = null, FileNaming Names = FileNaming.AsOnPhone);
 
 /// <summary>A file this computer keeps for a phone, by its checksum.</summary>
 /// <param name="PhoneId">The phone it came from.</param>
@@ -63,7 +75,9 @@ public interface IBackupStore
 /// <param name="LastChecked">When the computer last checked the files it keeps for this phone, and said which they are.</param>
 /// <param name="LastBackup">When a backup last finished.</param>
 /// <param name="Trips">Where the computer makes trip folders, as it last said ("Pictures/PhotoSense"); null until it has said.</param>
-public sealed record BackupComputer(string ComputerId, string Name, string Folder, DateTimeOffset? LastChecked, DateTimeOffset? LastBackup, string? Trips = null);
+/// <param name="Names">How the computer names this phone's copies, as it last said.</param>
+public sealed record BackupComputer(string ComputerId, string Name, string Folder, DateTimeOffset? LastChecked, DateTimeOffset? LastBackup, string? Trips = null,
+    FileNaming Names = FileNaming.AsOnPhone);
 
 /// <summary>How a phone backs up by itself, and what Safe to delete keeps on it.</summary>
 /// <param name="Automatic">Backs up by itself (Pro).</param>

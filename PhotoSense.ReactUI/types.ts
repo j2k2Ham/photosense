@@ -538,6 +538,8 @@ export interface BackupPhoneDto {
   tripsFolder: string;
   /** The same, whole, for the folder picker to start from. */
   tripsPath: string;
+  /** How its copies are named here. */
+  names: FileNaming;
   arriving: { done: number; total: number; bytes: number; totalBytes: number; started: string; arrived: string[] } | null;
   events: { at: string; text: string }[];
 }
@@ -809,4 +811,58 @@ export interface TripDayDto {
 export interface TripDetailDto {
   trip: TripDto;
   days: TripDayDto[];
+}
+
+/** How a phone's copies are named on the computer: as on the phone, by date, or by date and place. */
+export type FileNaming = 'asOnPhone' | 'date' | 'datePlace';
+
+/** A kind of fix, as Fix dates and places shows it (PhotoSense.Contracts.Organize.FixGroupDto). */
+export interface FixGroupDto {
+  /** How many photos and videos, a Live Photo once. */
+  count: number;
+  /** The first few, to show. */
+  photos: PhotoDto[];
+  /** For wrong dates: the date most of them have, "2000-01-01". */
+  date: string | null;
+  /** For places: the place most of them would get. */
+  place: string | null;
+  placeCount: number;
+  /** How many the last fix of this kind changed, which Undo puts back; 0 when there is nothing to undo. */
+  undo: number;
+}
+
+/** The phone's copies on the computer, and how they are named there (PhotoSense.Contracts.Organize.ComputerNamesDto). */
+export interface ComputerNamesDto {
+  computer: string;
+  /** How many of the phone's files it holds. */
+  files: number;
+  style: FileNaming;
+  /** An example: a name on the phone, "IMG_4821.HEIC", and the same by date; null when no photo says when it was taken. */
+  now: string | null;
+  after: string | null;
+  /** Renaming asked from the phone; null when it was not asked since PhotoSense started. */
+  stage: 'running' | 'ready' | 'failed' | 'paused' | null;
+  problem: string | null;
+  renamed: number | null;
+}
+
+/** Fix dates and places (PhotoSense.Contracts.Organize.FixesDto). */
+export interface FixesDto {
+  /** How many photos and videos need a date or a place, each once. */
+  total: number;
+  dates: FixGroupDto;
+  places: FixGroupDto;
+  /** Null when the phone has been paired with no computer. */
+  names: ComputerNamesDto | null;
+}
+
+/** How many a fix, or its Undo, changed (PhotoSense.Contracts.Organize.FixResultDto). */
+export interface FixResultDto {
+  changed: number;
+}
+
+/** On a computer: what renaming a phone's copies would make of their names (PhotoSense.Contracts.Organize.RenamingDto). */
+export interface RenamingDto {
+  count: number;
+  rows: { now: string; after: string }[];
 }

@@ -4,6 +4,9 @@ using PhotoSense.Tests.Endpoints;
 using System.Text.Json.Nodes;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.ValueObjects;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Tests.Application;
 
@@ -325,5 +328,111 @@ public sealed class ComputerBackupTests : IDisposable
         await Assert.That(Wire.Text(refused, "problem")).StartsWith("Pictures/PhotoSense/2026-07 Glacier National Park could not be made. ");
         await Assert.That((System.IO.File.Exists(Path.Combine(Backups, "IMG_A.JPG")), Directory.Exists(Trip))).IsEqualTo((true, false));
         await Assert.That((await _store.HeldAsync(_phone.Id, ct)).Single().Path).IsEqualTo(Path.Combine(Backups, "IMG_A.JPG"));
+    }
+
+    /// <summary>A computer whose plan is Pro, kept on the disk given.</summary>
+    private ComputerBackup ProComputer(IPhotoFileSystem? files = null)
+    {
+        var app = new FakeAppStore();
+        app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
+        return TestBackups.Computer(Folder("Home", "Pictures", "PhotoSense"), _store, home: Folder("Home"), files: files, plan: TestPlans.Subscription(new PlanParts { App = app }));
+    }
+
+    /// <summary>Copies held for the phone: a Live Photo and another picture taken at the same second, a file that says no date, and one named by date already.</summary>
+    private async Task HeldToRenameAsync(CancellationToken ct)
+    {
+        await _store.SavePhoneAsync(new BackupPhone(_phone.Id, "Jamie's iPhone", "iPhone", Backups, false, TestClock.Day, null, null), ct);
+        await HeldFileAsync(Backups, "IMG_A.JPG", MediaSamples.Picture("A"), ct);
+        await HeldFileAsync(Backups, "IMG_A.MOV", MediaSamples.Movie("A"), ct);
+        await HeldFileAsync(Backups, "IMG_B.JPG", MediaSamples.Picture("B"), ct);
+        await HeldFileAsync(Backups, "NODATE.PNG", [1, 2, 3], ct);
+        await HeldFileAsync(Backups, "2024-04-07 17.35.59.JPG", MediaSamples.Picture(), ct);
+    }
+
+    [Test]
+    public async Task Copies_Are_Named_By_Date_On_Pro_A_Live_Photos_Video_With_Its_Picture_And_A_Clash_Numbered(CancellationToken ct)
+    {
+        await HeldToRenameAsync(ct);
+        var (count, first) = await _backup.RenamingAsync(_phone.Id, FileNaming.Date, 2, ct);
+        await Assert.That((count, first.Count)).IsEqualTo((3, 2));
+        var free = await Assert.ThrowsAsync<InvalidOperationException>(() => _backup.RenameAsync(_phone.Id, FileNaming.Date, ct));
+        await Assert.That(free!.Message).IsEqualTo("Renaming copies by date is part of Pro. Pro bought on the phone covers this computer too.");
+
+        var pro = ProComputer();
+        var renamed = await new BackupApi(new TestApi(s => s.AddSingleton(pro))).RenameAsync(Http.Post("backup/phones/x/names", "{\"kind\":\"date\"}").FromClient(), _phone.Id, ct);
+        await Assert.That(renamed.Json().GetProperty("changed").GetInt32()).IsEqualTo(3);
+        await Assert.That(Directory.GetFiles(Backups).Select(f => Path.GetFileName(f)).Order()).IsEquivalentTo(
+            ["2024-04-07 17.35.59-2.JPG", "2024-04-07 17.35.59-2.MOV", "2024-04-07 17.35.59-3.JPG", "2024-04-07 17.35.59.JPG", "NODATE.PNG"], CollectionOrdering.Matching);
+        await Assert.That((await _store.HeldAsync(_phone.Id, ct)).Select(h => Path.GetFileName(h.Path)).Order()).IsEquivalentTo(
+            ["2024-04-07 17.35.59-2.JPG", "2024-04-07 17.35.59-2.MOV", "2024-04-07 17.35.59-3.JPG", "2024-04-07 17.35.59.JPG", "NODATE.PNG"], CollectionOrdering.Matching);
+        await Assert.That((await _store.PhonesAsync(ct)).Single().Names).IsEqualTo(FileNaming.Date);
+        await Assert.That((await NotesAsync(ct))[0]).IsEqualTo("Renamed 3 items by date");
+
+        // Named again, nothing changes; by date and place, a file that says where it was taken takes the town.
+        await Assert.That(await pro.RenameAsync(_phone.Id, FileNaming.Date, ct)).IsEqualTo(0);
+        await HeldFileAsync(Backups, "CLIP.MOV", MediaSamples.Movie(), ct);
+        var (_, placed) = await pro.RenamingAsync(_phone.Id, FileNaming.DatePlace, 5, ct);
+        await Assert.That(placed.Single(r => r.Now == "CLIP.MOV").After).Matches(@"^\d{4}-\d\d-\d\d \d\d\.\d\d\.\d\d \S.*\.MOV$");
+
+        // Back to the phone's names for what arrives: nothing is renamed.
+        await Assert.That(await _backup.RenameAsync(_phone.Id, FileNaming.AsOnPhone, ct)).IsEqualTo(0);
+        await Assert.That(((await _store.PhonesAsync(ct)).Single().Names, (await NotesAsync(ct))[0])).IsEqualTo((FileNaming.AsOnPhone, "New backups keep the phone's names"));
+        await Assert.That(() => _backup.RenameAsync("nobody", FileNaming.Date, ct)).Throws<ArgumentException>();
+        await Assert.That(() => _backup.RenamingAsync("nobody", FileNaming.Date, 5, ct)).Throws<ArgumentException>();
+    }
+
+    [Test]
+    public async Task A_Rename_That_Cannot_Be_Made_Renames_Nothing(CancellationToken ct)
+    {
+        await HeldToRenameAsync(ct);
+        var refused = await Assert.ThrowsAsync<IOException>(() => ProComputer(new FailingDisk().Fail("move", _ => true, "The disk is full.")).RenameAsync(_phone.Id, FileNaming.Date, ct));
+        await Assert.That(refused!.Message).StartsWith("The copies could not be renamed. ");
+        await Assert.That(System.IO.File.Exists(Path.Combine(Backups, "IMG_A.JPG"))).IsTrue();
+        await Assert.That((await _store.PhonesAsync(ct)).Single().Names).IsEqualTo(FileNaming.AsOnPhone);
+        // Asked through the computer's address, it says why.
+        var api = new BackupApi(new TestApi(s => s.AddSingleton(ProComputer(new FailingDisk().Fail("move", _ => true, "The disk is full.")))));
+        var answer = await api.RenameAsync(Http.Post("backup/phones/x/names", "{\"kind\":\"date\"}").FromClient(), _phone.Id, ct);
+        await Assert.That((answer.StatusCode, answer.Text().StartsWith("The copies could not be renamed. ", StringComparison.Ordinal))).IsEqualTo((System.Net.HttpStatusCode.Conflict, true));
+    }
+
+    [Test]
+    public async Task Copies_Arrive_Named_By_Date_Once_Chosen_And_A_Phone_Can_Ask_For_It_After_Its_Backup(CancellationToken ct)
+    {
+        await _store.SavePhoneAsync(new BackupPhone(_phone.Id, "Jamie's iPhone", "iPhone", Backups, false, TestClock.Day, null, null, Names: FileNaming.Date), ct);
+        var backup = ProComputer();
+        var (serving, phone, _) = await ConnectedAsync(ct, backup);
+        await phone.SendAsync(new JsonObject { ["t"] = "backup" }, ct);
+        var held = await phone.ReceiveAsync(ct, "held");
+        await Assert.That(Wire.Text(held, "names")).IsEqualTo("Date");
+        byte[] picture = MediaSamples.Picture("C"), video = MediaSamples.Movie("C"), plain = [9, 9, 9];
+        await phone.SendAsync(new JsonObject { ["t"] = "offer", ["files"] = new JsonArray(File("p", "IMG_C.JPG", picture), File("v", "IMG_C.MOV", video), File("n", "NODATE.PNG", plain)) }, ct);
+        foreach (var (id, bytes) in new[] { ("p", picture), ("v", video), ("n", plain) })
+        {
+            await SendFileAsync(phone, id, bytes);
+            await phone.ReceiveAsync(ct, "got");
+        }
+        await phone.ReceiveAsync(ct, "done");
+        await Assert.That(Directory.GetFiles(Backups).Select(f => Path.GetFileName(f)).Order()).IsEquivalentTo(
+            ["2024-04-07 17.35.59.JPG", "2024-04-07 17.35.59.MOV", "NODATE.PNG"], CollectionOrdering.Matching);
+
+        // Asked after the backup: back to the phone's names, then by date again; a plan without Pro is said; a way of naming PhotoSense does not know ends it.
+        await phone.SendAsync(new JsonObject { ["t"] = "names", ["style"] = "AsOnPhone" }, ct);
+        await Assert.That((int)(await phone.ReceiveAsync(ct, "named"))["renamed"]!).IsEqualTo(0);
+        await phone.SendAsync(new JsonObject { ["t"] = "names", ["style"] = "Date" }, ct);
+        await Assert.That((int)(await phone.ReceiveAsync(ct, "named"))["renamed"]!).IsEqualTo(0);
+        await phone.SendAsync(new JsonObject { ["t"] = "bye" }, ct);
+        await serving;
+        await Assert.That((await _store.PhonesAsync(ct)).Single().Names).IsEqualTo(FileNaming.Date);
+
+        var (freeServing, freePhone, _) = await ConnectedAsync(ct);
+        await freePhone.SendAsync(new JsonObject { ["t"] = "backup" }, ct);
+        await HeldAsync(freePhone);
+        await freePhone.SendAsync(new JsonObject { ["t"] = "offer" }, ct);
+        await freePhone.ReceiveAsync(ct, "done");
+        await freePhone.SendAsync(new JsonObject { ["t"] = "names", ["style"] = "DatePlace" }, ct);
+        await Assert.That(Wire.Text(await freePhone.ReceiveAsync(ct, "named"), "problem")).StartsWith("Renaming copies by date is part of Pro.");
+        await freePhone.SendAsync(new JsonObject { ["t"] = "names", ["style"] = "sideways" }, ct);
+        var stopped = await Assert.ThrowsAsync<TransferException>(() => freeServing);
+        await Assert.That(stopped!.Message).IsEqualTo("The phone sent something PhotoSense does not understand.");
     }
 }

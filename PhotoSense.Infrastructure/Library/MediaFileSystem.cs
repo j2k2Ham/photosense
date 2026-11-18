@@ -16,7 +16,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// sends to the phone's own bin. Nothing is ever copied onto the phone: photos are copied to a computer.
 /// </para>
 /// </summary>
-public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor, IFavoritePhotos, ISharingCopies
+public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor, IFavoritePhotos, ISharingCopies, IPhotoDetails
 {
     /// <summary>Where what is removed from the phone's storage as a whole waits, as Android shows it: inside Pictures.</summary>
     public const string RemovedHere = "PhotoSense Removed";
@@ -184,6 +184,24 @@ public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, I
         // What the phone holds now is read afresh, whether or not the change was made.
         finally { _seen = null; }
     }
+
+    /// <inheritdoc />
+    public void ChangeAll(IReadOnlyList<DetailsChange> changes)
+    {
+        var entries = changes.Select(c => ((Find(c.Path) ?? throw new IOException($"{Path.GetFileName(c.Path)} is no longer on the phone.")).Id, c.Taken, c.Place)).ToList();
+        try { _store.ChangeDetails(entries); }
+        // What the phone holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public string? IdOf(string path) => Find(path)?.Id;
+
+    /// <inheritdoc />
+    public bool CanChangePlace(string path) => Find(path) is { IsVideo: false } && PlaceWritable.Contains(Path.GetExtension(path));
+
+    // The pictures Android writes a place into.
+    private static readonly HashSet<string> PlaceWritable = new([".jpg", ".jpeg", ".png", ".webp"], StringComparer.OrdinalIgnoreCase);
 
     /// <inheritdoc />
     public Task<SharedCopy> CopyForSharingAsync(string path, bool removeLocation, bool removeCamera, CancellationToken ct)

@@ -142,6 +142,9 @@ export const SearchIcon = (p: IconProps) => <Line size={19} {...p}><circle cx="1
 /** A past search: a clock. */
 export const ClockIcon = (p: IconProps) => <Line size={18} {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Line>;
 
+/** A date: a calendar's page. */
+export const CalendarIcon = (p: IconProps) => <Line size={18} {...p}><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></Line>;
+
 /** Favorite: a heart, filled once it is one. */
 export const HeartIcon = ({ filled, ...p }: IconProps & { readonly filled?: boolean }) => (
   <Line size={22} {...p}><path fill={filled ? 'currentColor' : 'none'} d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" /></Line>

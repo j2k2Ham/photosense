@@ -12,7 +12,7 @@ import { frame, gate, inFrame } from './frame';
 const api = vi.hoisted(() => ({
   usePhotoAccess: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), chooseMorePhotos: vi.fn(),
   usePhotoDetails: vi.fn(), setFavorite: vi.fn(), sharePhoto: vi.fn(), useSearch: vi.fn(), refreshSearch: vi.fn(),
-  useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(),
+  useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(), useFixes: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
@@ -44,6 +44,7 @@ beforeEach(() => {
   api.sharePhoto.mockResolvedValue(undefined);
   api.useSearch.mockReturnValue({ data: undefined, error: undefined });
   api.useTrips.mockReturnValue({ data: undefined });
+  api.useFixes.mockReturnValue({ data: undefined });
 });
 
 interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[]; backup?: LibraryBackupDto; safe?: SafeReviewDto; onReview?: () => void; removeLocation?: boolean }
@@ -179,8 +180,9 @@ describe('choosing in Library', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Stop selecting' }));
     expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Select' }));
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument();
+    // Back is told by the browser when it gets to it, which takes longer under load: waited for, not timed.
+    act(() => history.back());
+    expect(await screen.findByRole('button', { name: 'Select' })).toBeInTheDocument();
   });
 
   it('deletes what is chosen after a question naming it, says where it went, and Undo brings it back', async () => {
@@ -444,6 +446,15 @@ describe("Library's search", () => {
     expect(screen.queryByRole('button', { name: 'Search photos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Trips/ })).not.toBeInTheDocument();
     expect(api.useTrips).toHaveBeenLastCalledWith(false);
+    expect(api.useFixes).toHaveBeenLastCalledWith(false);
+  });
+
+  it('opens Fix dates and places from its tile, and Back closes it', async () => {
+    show();
+    await userEvent.click(screen.getByRole('button', { name: 'Needs fixing, Looking…' }));
+    expect(sheet('Fix dates and places')).toHaveTextContent('Looking at dates and places…');
+    await userEvent.click(within(sheet('Fix dates and places')).getByRole('button', { name: 'Back' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it("opens Trips from its tile, a trip's photo in the viewer, which Escape closes first, and Trips after", async () => {

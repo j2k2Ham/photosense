@@ -11,7 +11,7 @@ public sealed class PhotoSenseRoutes
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
-        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips)
+        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips, FixEndpoints fixes)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -49,6 +49,8 @@ public sealed class PhotoSenseRoutes
             .Post("backup/phones/{id}/folder", (r, v, ct) => backup.FolderAsync(r, v["id"], ct))
             .Post("backup/phones/{id}/pause", (r, v, ct) => backup.PausePhoneAsync(r, v["id"], ct))
             .Post("backup/phones/{id}/trips", (r, v, ct) => backup.TripsFolderAsync(r, v["id"], ct))
+            .Get("backup/phones/{id}/names", (r, v, ct) => backup.RenamingAsync(r, v["id"], ct))
+            .Post("backup/phones/{id}/names", (r, v, ct) => backup.RenameAsync(r, v["id"], ct))
             .Get("cleanup/categories", (r, _, ct) => categories.ReportAsync(r, ct))
             .Post("cleanup/categories/delete", (r, _, ct) => categories.DeleteAsync(r, ct))
             .Get("cleanup/categories/{category}", (r, v, ct) => categories.PhotosAsync(r, v["category"], ct))
@@ -65,6 +67,11 @@ public sealed class PhotoSenseRoutes
             .Get("search", (r, _, ct) => viewer.SearchAsync(r, ct))
             .Get("viewer/details", (r, _, ct) => viewer.DetailsAsync(r, ct))
             .Post("viewer/favorite", (r, _, ct) => viewer.FavoriteAsync(r, ct))
+            .Get("fixes", (r, _, ct) => fixes.ReportAsync(r, ct))
+            .Post("fixes/dates", (r, _, ct) => fixes.DatesAsync(r, ct))
+            .Post("fixes/places", (r, _, ct) => fixes.PlacesAsync(r, ct))
+            .Post("fixes/undo", (r, _, ct) => fixes.UndoAsync(r, ct))
+            .Post("fixes/names", (r, _, ct) => fixes.NamesAsync(r, ct))
             .Get("trips", (r, _, ct) => trips.ListAsync(r, ct))
             .Get("trips/towns", (r, _, ct) => trips.TownsAsync(r, ct))
             .Post("trips/home", (r, _, ct) => trips.HomeAsync(r, ct))

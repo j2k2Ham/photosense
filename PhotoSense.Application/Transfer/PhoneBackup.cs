@@ -30,6 +30,13 @@ public enum BackupStage
 /// <param name="Made">Where the computer made it, as it says: "Pictures/PhotoSense/2026-07 Glacier National Park".</param>
 public sealed record TripFolderRun(string Folder, BackupStage Stage, string? Problem, string? Made);
 
+/// <summary>The phone's copies on the computer being named by date, or the last time it was asked.</summary>
+/// <param name="Names">How they were to be named.</param>
+/// <param name="Stage">How it stands: running, ready once done, or failed with the problem.</param>
+/// <param name="Problem">Why they were not renamed.</param>
+/// <param name="Renamed">How many the computer renamed.</param>
+public sealed record NamesRun(FileNaming Names, BackupStage Stage, string? Problem, int? Renamed);
+
 /// <summary>A picture or video in the strip of those backing up, by its id in the library, and whether it is on the computer yet.</summary>
 /// <param name="Id">Its id, as Organize and Library know it.</param>
 /// <param name="Done">It is on the computer, checked.</param>
@@ -135,6 +142,9 @@ public sealed class PhoneBackup
         // The trip folder this backup ends by making, and where the computer made it.
         public string? TripFolder;
         public string? Made;
+        // How the computer is to name the copies, once this backup is done, and how many it renamed.
+        public FileNaming? Names;
+        public int? Renamed;
     }
 
     /// <summary>Backs up the library at <paramref name="root"/> to the computer the phone was paired with.</summary>
@@ -310,6 +320,32 @@ public sealed class PhoneBackup
         lock (_lock) return _run is { TripFolder: { } folder } run ? new TripFolderRun(folder, run.Stage, run.Problem, run.Made) : null;
     }
 
+    /// <summary>
+    /// Has the computer name this phone's copies by date, or by date and place, and those that arrive from then on
+    /// (Pro); or, with <see cref="FileNaming.AsOnPhone"/>, keep the phone's names for those that arrive. It goes on by
+    /// itself; <see cref="NamesRun"/> says how it stands.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The phone has been paired with no computer, a backup is running, or the plan is not Pro.</exception>
+    public async Task RenameOnComputerAsync(FileNaming naming, CancellationToken ct)
+    {
+        var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException(PairFirst);
+        if (naming != FileNaming.AsOnPhone && !(await _plan.CurrentAsync(ct)).Pro) throw new InvalidOperationException("Renaming copies by date is part of Pro.");
+        lock (_lock)
+        {
+            if (_run is { Stage: BackupStage.Running }) throw new InvalidOperationException($"A backup to {computer.Name} is running. Rename the files once it ends.");
+            Start(new Run { Names = naming }, computer, []);
+        }
+    }
+
+    /// <summary>The copies being named by date on the computer, or the last time it was asked; null when it was not since PhotoSense started.</summary>
+    public NamesRun? NamesRun()
+    {
+        lock (_lock) return _run is { Names: { } names } run ? new NamesRun(names, run.Stage, run.Problem, run.Renamed) : null;
+    }
+
+    /// <summary>How many of this phone's files the computer holds, as it last said.</summary>
+    public async Task<int> HeldAsync(CancellationToken ct) => (await _ledger.OnComputerAsync(ct)).Count;
+
     /// <summary>The computer backups go to, or null when the phone has been paired with none.</summary>
     public Task<BackupComputer?> ComputerAsync(CancellationToken ct) => _ledger.ComputerAsync(ct);
 
@@ -376,15 +412,17 @@ public sealed class PhoneBackup
             if (Wire.Text(first, "t") == "paused") throw new TransferException(Wire.Text(first, "why"));
             var folder = computer.Folder;
             var trips = computer.Trips;
+            var names = computer.Names;
             var held = (await Lists.ReceiveAsync(channel, "held", "sha256", first, last =>
                 {
                     folder = Wire.Text(last, "folder");
-                    // A computer from before trip folders does not say where it makes them.
+                    // A computer from before trip folders does not say where it makes them, nor how it names copies.
                     trips = last["trips"] is JsonValue said ? said.GetValue<string>() : trips;
+                    if (last["names"] is JsonValue naming && Enum.TryParse<FileNaming>(naming.GetValue<string>(), out var known)) names = known;
                 }, stop))
                 .Select(n => n?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
             await _ledger.KeepOnComputerAsync(held, all: true, stop);
-            computer = computer with { Folder = folder, Trips = trips, LastChecked = _clock.GetUtcNow() };
+            computer = computer with { Folder = folder, Trips = trips, Names = names, LastChecked = _clock.GetUtcNow() };
             await _ledger.SaveComputerAsync(computer, stop);
 
             var settings = await _ledger.SettingsAsync(stop);
@@ -424,6 +462,14 @@ public sealed class PhoneBackup
                 lock (_lock) run.Done.Add(id);
             }
             if (run.TripFolder is { } trip) await TripFolderAsync(channel, run, trip, items.Where(i => only!.Contains(i.Main.Id)), stop);
+            if (run.Names is { } naming)
+            {
+                await channel.SendAsync(new JsonObject { ["t"] = "names", ["style"] = naming.ToString() }, stop);
+                var named = await channel.ReceiveAsync(stop, "named");
+                if (named["problem"] is JsonValue problem) throw new TransferException(problem.GetValue<string>());
+                lock (_lock) run.Renamed = named["renamed"]!.GetValue<int>();
+                computer = computer with { Names = naming };
+            }
             var safe = await SafeAsync(stop);
             await channel.SendAsync(new JsonObject { ["t"] = "bye", ["safe"] = safe.Removable.Count, ["safeBytes"] = safe.Removable.Bytes }, stop);
             await _ledger.SaveComputerAsync(computer with { LastBackup = _clock.GetUtcNow() }, CancellationToken.None);

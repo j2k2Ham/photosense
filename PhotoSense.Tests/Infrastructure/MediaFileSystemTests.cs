@@ -165,4 +165,26 @@ public sealed class MediaFileSystemTests
         await Assert.That((top.Parent, top.Folders.Select(f => f.Name).Single())).IsEqualTo(((string?)null, "DCIM"));
         await Assert.That(browser.Browse(In("DCIM")).Parent).IsEqualTo(Root);
     }
+
+    [Test]
+    public async Task Dates_And_Places_Are_Changed_By_The_Phones_Ids_And_Only_A_JPEG_PNG_Or_WebP_Takes_A_Place(CancellationToken ct)
+    {
+        _store.Add("1", "DCIM/Camera/", "IMG_0001.JPG", Bytes());
+        _store.Add("2", "DCIM/Camera/", "IMG_0002.heic", Bytes());
+        _store.Add("3", "DCIM/Camera/", "VID_0003.jpg", Bytes(), video: true);
+        _store.Add("4", "Pictures/", "shot.webp", Bytes());
+        await Assert.That((_phone.IdOf(In("DCIM", "Camera", "IMG_0001.JPG")), _phone.IdOf(In("DCIM", "Camera", "gone.jpg")))).IsEqualTo(("1", (string?)null));
+        await Assert.That(new[] { "IMG_0001.JPG", "IMG_0002.heic", "VID_0003.jpg", "gone.jpg" }.Select(n => _phone.CanChangePlace(In("DCIM", "Camera", n))))
+            .IsEquivalentTo([true, false, false, false], CollectionOrdering.Matching);
+        await Assert.That(_phone.CanChangePlace(In("Pictures", "shot.webp"))).IsTrue();
+
+        var place = new PlaceChange(48.7, -113.8);
+        _phone.ChangeAll([new DetailsChange(In("DCIM", "Camera", "IMG_0001.JPG"), new DateTime(2026, 3, 2), place)]);
+        await Assert.That(_store.DetailsChanged.Single().Single()).IsEqualTo(("1", (DateTime?)new DateTime(2026, 3, 2), (PlaceChange?)place));
+        // Refused, nothing changes; a photo no longer there is said.
+        _store.Refuse = "You chose not to let PhotoSense change these photos.";
+        await Assert.That(() => _phone.ChangeAll([new DetailsChange(In("DCIM", "Camera", "IMG_0001.JPG"), null, place)])).Throws<IOException>();
+        var gone = Assert.Throws<IOException>(() => _phone.ChangeAll([new DetailsChange(In("DCIM", "Camera", "gone.jpg"), null, place)]));
+        await Assert.That(gone!.Message).IsEqualTo("gone.jpg is no longer on the phone.");
+    }
 }

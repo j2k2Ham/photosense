@@ -362,7 +362,7 @@ export const GUIDE: GuideTopic[] = [
     only: COMPUTER,
     title: 'Backing up a phone to a computer',
     summary: 'Pairing a phone or tablet with this computer, where its backups go, and what Phones shows of each.',
-    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive', 'trip folders', 'trips'],
+    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive', 'trip folders', 'trips', 'rename', 'file names', 'name by date', 'computer name'],
     sections: [
       {
         text: [
@@ -397,6 +397,7 @@ export const GUIDE: GuideTopic[] = [
           '**Backup** shows a backup arriving, file by file, each with a tick once it matched its checksum, and otherwise when the last one was.',
           '**On this computer** says how many of its photos and videos are here; **Checked** that each matched its SHA-256 checksum; **Safe to delete on the phone** how many the phone could remove, and how much space that frees there.',
           '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays. **Trip folders** says where they are made and how many were made when the phone asked; its **Change…** makes them in another folder from then on.',
+          '**File names** says how the phone’s copies are named here: **As on the phone** (IMG_4821.HEIC) to start with. **Rename by date…** opens **Rename files by date**: choose **Date and time** (2026-03-02 14.31.07.HEIC) or **Date, time and place** (2026-03-02 14.31.07 Big Sky.HEIC), see the first few names now and after, and **Rename** them. Copies backed up from then on are named the same way. A Live Photo’s video takes its picture’s name; files with the same date and time get -2, -3 at the end; a file that does not say when it was taken keeps its name. Only the copies on this computer change, as one move listed in **Recently moved**, where **Undo** puts the names back. Renaming is part of Pro, which a phone’s Pro covers. Once named by date, **Change names…** also offers **As on the phone** for what arrives from then on.',
           '**Pause backups** turns the phone away until **Resume backups**. **Activity** lists what happened.',
         ],
       },
@@ -595,7 +596,8 @@ export const GUIDE: GuideTopic[] = [
     summary: 'Every photo and video, by month: searching, trips, viewing one, sharing it, choosing several, and what can be done with them.',
     keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month',
       'year in review', 'recap', 'wrapped', 'stats', 'share card', 'brag', 'story', 'search', 'find', 'look for', 'favorite', 'heart', 'info', 'camera',
-      'share', 'location', 'gps', 'privacy', 'metadata', 'exif', 'trips', 'travel', 'vacation', 'holiday', 'map', 'home', 'journey', 'trip folder'],
+      'share', 'location', 'gps', 'privacy', 'metadata', 'exif', 'trips', 'travel', 'vacation', 'holiday', 'map', 'home', 'journey', 'trip folder',
+      'wrong date', 'fix date', 'missing location', 'needs fixing', '1970', '2000', 'rename', 'file names'],
     sections: [
       {
         text: [
@@ -645,6 +647,24 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'What is in each photo is named by Google’s ML Kit on your phone, with the model Google Play services keeps; a phone without Google Play services finds photos by place and date only. The arrow, or Back, closes Search.',
         ],
+      },
+      {
+        heading: 'Fix dates and places',
+        text: [
+          'The **Needs fixing** tile, beside **Trips**, opens **Fix dates and places**: how many photos and videos need a date or a place. Fixing is part of Pro.',
+          '**Camera clock not set** lists photos dated on a camera’s first day (Jan 1, 1970, 1980 or 2000) or in the future. Choose the day they were really taken, then **Fix**: each keeps its time of day. Your phone asks before they change.',
+          '**Missing location** lists photos with no place that were taken within 30 minutes of a photo that has one. **Add locations** gives each the place of the photo taken nearest in time, after your phone asks. Screenshots and photos saved from WhatsApp or Telegram are never given a place.',
+          'After each fix, PhotoSense says what changed, with **Undo**; the card keeps **Undo** until the next fix of that kind. Undo puts back what was there before, after your phone asks again.',
+          '**File names on** your computer shows how the copies there are named. **Rename** has the computer name them by date and time (2026-03-02 14.31.07.HEIC), and those backed up from then on too. Files on your phone keep their names. To undo it, open Organize on the computer and choose **Recently moved**.',
+        ],
+      },
+      {
+        only: IOS,
+        text: ['Photos keeps the new date and place with each photo; the file itself is not changed. Other apps that read Photos see them too.'],
+      },
+      {
+        only: ANDROID,
+        text: ['A JPEG, PNG or WebP picture has its own date and place written again in its file; the picture itself is untouched. A video, or a HEIC picture, gets its new date in Android’s own record, but cannot be given a place, so it is not listed under Missing location.'],
       },
       {
         heading: 'Trips',

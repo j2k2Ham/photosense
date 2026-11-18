@@ -31,7 +31,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         ct.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<BackupPhone>>([.. _phones.FindAll().OrderBy(d => d.PairedUtcTicks).Select(d =>
             new BackupPhone(d.Id, d.Name, d.Kind, d.Folder, d.Paused, Time(d.PairedUtcTicks), Time(d.LastBackupUtcTicks), Time(d.LastCheckedUtcTicks), d.Safe, d.SafeBytes,
-                d.TripFolders is { Count: > 0 } trips ? trips : null, d.TripsFolder))]);
+                d.TripFolders is { Count: > 0 } trips ? trips : null, d.TripsFolder, (FileNaming)d.Names))]);
     }
 
     /// <inheritdoc />
@@ -41,7 +41,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         _phones.Upsert(new PhoneDocument
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = phone.Folder, Paused = phone.Paused, PairedUtcTicks = phone.Paired.UtcTicks,
-            LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes, TripFolders = phone.TripFolders?.ToList(), TripsFolder = phone.TripsFolder,
+            LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes, TripFolders = phone.TripFolders?.ToList(), TripsFolder = phone.TripsFolder, Names = (int)phone.Names,
         });
         return Task.CompletedTask;
     }
@@ -122,6 +122,8 @@ internal sealed class LiteDbBackupStore : IBackupStore
         public List<string>? TripFolders { get; set; }
         /// <summary>Where its trip folders are made, as the person chose.</summary>
         public string? TripsFolder { get; set; }
+        /// <summary>How its copies are named here.</summary>
+        public int Names { get; set; }
     }
 
     private sealed class HeldDocument
@@ -188,7 +190,7 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
     {
         ct.ThrowIfCancellationRequested();
         return Task.FromResult(_computer.FindById("computer") is { } d
-            ? new BackupComputer(d.ComputerId, d.Name, d.Folder, Time(d.LastCheckedUtcTicks), Time(d.LastBackupUtcTicks), d.Trips)
+            ? new BackupComputer(d.ComputerId, d.Name, d.Folder, Time(d.LastCheckedUtcTicks), Time(d.LastBackupUtcTicks), d.Trips, (FileNaming)d.Names)
             : null);
     }
 
@@ -201,7 +203,7 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
             var document = new ComputerDocument
             {
                 Id = "computer", ComputerId = computer.ComputerId, Name = computer.Name, Folder = computer.Folder,
-                LastCheckedUtcTicks = computer.LastChecked?.UtcTicks, LastBackupUtcTicks = computer.LastBackup?.UtcTicks, Trips = computer.Trips,
+                LastCheckedUtcTicks = computer.LastChecked?.UtcTicks, LastBackupUtcTicks = computer.LastBackup?.UtcTicks, Trips = computer.Trips, Names = (int)computer.Names,
             };
             // Another computer holds none of what the one before did.
             if (_computer.FindById("computer") is { } before && before.ComputerId != computer.ComputerId)
@@ -303,6 +305,8 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
         public long? LastBackupUtcTicks { get; set; }
         /// <summary>Where it makes trip folders.</summary>
         public string? Trips { get; set; }
+        /// <summary>How it names this phone's copies.</summary>
+        public int Names { get; set; }
     }
 
     private sealed class SettingsDocument

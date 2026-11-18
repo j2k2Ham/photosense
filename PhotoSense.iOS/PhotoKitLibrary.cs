@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using AVFoundation;
+using CoreLocation;
 using ImageIO;
 using ObjCRuntime;
 using Photos;
@@ -250,6 +251,27 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         var done = PHPhotoLibrary.SharedPhotoLibrary.PerformChangesAndWait(() => PHAssetChangeRequest.ChangeRequest(asset).Favorite = favorite, out var error);
         if (!done)
             throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense change this photo." : $"The photo library did not change it: {error?.LocalizedDescription}");
+    }
+
+    /// <summary>
+    /// Gives pictures and videos the dates and places asked, all together, after iOS asks. Photos keeps them with each
+    /// item; the files are left as they are.
+    /// </summary>
+    public void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes)
+    {
+        var assets = changes.Select(c => (Asset: AssetOf(c.Id), c.Taken, c.Place)).ToList();
+        var done = PHPhotoLibrary.SharedPhotoLibrary.PerformChangesAndWait(() =>
+        {
+            foreach (var (asset, taken, place) in assets)
+            {
+                var request = PHAssetChangeRequest.ChangeRequest(asset);
+                // The date is as the clock showed it where it was taken; Photos keeps a moment, read in this phone's own zone.
+                if (taken is { } when) request.CreationDate = (NSDate)DateTime.SpecifyKind(when, DateTimeKind.Local);
+                if (place is not null) request.Location = place.Latitude is { } lat && place.Longitude is { } lon ? new CLLocation(lat, lon) : null;
+            }
+        }, out var error);
+        if (!done)
+            throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense change these photos." : $"The photo library did not change them: {error?.LocalizedDescription}");
     }
 
     /// <summary>

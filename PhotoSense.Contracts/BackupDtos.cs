@@ -171,6 +171,8 @@ public sealed class BackupPhoneDto
     [JsonPropertyName("tripsFolder")] public string TripsFolder { get; init; } = string.Empty;
     /// <summary>The same, whole, for the folder picker to start from.</summary>
     [JsonPropertyName("tripsPath")] public string TripsPath { get; init; } = string.Empty;
+    /// <summary>How its copies are named here: "asOnPhone", "date" or "datePlace".</summary>
+    [JsonPropertyName("names")] public string Names { get; init; } = string.Empty;
     /// <summary>The backup arriving from it now, if any.</summary>
     [JsonPropertyName("arriving")] public ArrivingBackupDto? Arriving { get; init; }
     /// <summary>What happened, the latest first.</summary>

@@ -284,6 +284,46 @@ internal sealed class MemoryTripStore : ITripStore
     }
 }
 
+/// <summary>The fixes made to a phone's dates and places, and the last of each kind, in memory.</summary>
+internal sealed class MemoryDetailsFixStore : IDetailsFixStore
+{
+    private readonly Dictionary<string, FixedDetails> _fixed = new(StringComparer.Ordinal);
+    private readonly Dictionary<FixKind, IReadOnlyList<FixedItem>> _last = [];
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, FixedDetails>> FixedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_fixed) return Task.FromResult<IReadOnlyDictionary<string, FixedDetails>>(new Dictionary<string, FixedDetails>(_fixed, StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task SaveFixedAsync(IReadOnlyDictionary<string, FixedDetails?> fixes, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_fixed)
+            foreach (var (id, fix) in fixes)
+                if (fix is null) _fixed.Remove(id);
+                else _fixed[id] = fix;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<FixedItem>> LastAsync(FixKind kind, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_last) return Task.FromResult(_last.GetValueOrDefault(kind) ?? []);
+    }
+
+    /// <inheritdoc />
+    public Task SaveLastAsync(FixKind kind, IReadOnlyList<FixedItem> items, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_last) _last[kind] = [.. items];
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Every store a program keeps, replaced by a stand-in in memory, so that no test but the stores' own touches the database.</summary>
 internal static class StandInStores
 {
@@ -303,6 +343,7 @@ internal static class StandInStores
             .AddSingleton<ISwipeStore>(new MemorySwipeStore())
             .AddSingleton<INoticeStore>(new MemoryNoticeStore())
             .AddSingleton<ITripStore>(new MemoryTripStore())
+            .AddSingleton<IDetailsFixStore>(new MemoryDetailsFixStore())
             // The computer's door for phones waits on a free port of its own, and tells no network.
             .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

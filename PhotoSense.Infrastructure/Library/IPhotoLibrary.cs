@@ -95,6 +95,10 @@ public interface IPhotoLibrary
     /// <exception cref="IOException">The library could not change it.</exception>
     void SetFavorite(string id, bool favorite);
 
+    /// <summary>Gives pictures and videos, by their ids, the dates and places asked, all together, after iOS asks; the files are left as they are.</summary>
+    /// <exception cref="IOException">The person said no, or the library could not change them: none changed.</exception>
+    void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
+
     /// <summary>
     /// A copy of one file of a picture or video for sharing, in the app's temporary folder, without its place and camera
     /// details as asked, fetched from the cloud first when it is kept there.

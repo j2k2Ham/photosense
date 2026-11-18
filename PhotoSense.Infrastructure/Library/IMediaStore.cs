@@ -58,6 +58,13 @@ public interface IMediaStore
     void SetFavorite(string id, bool favorite);
 
     /// <summary>
+    /// Gives pictures and videos, by their ids, the dates and places asked, all together, after Android asks: a picture's
+    /// own details are written again in its file, the picture itself untouched; a video's date is Android's record of it.
+    /// </summary>
+    /// <exception cref="IOException">The person said no, or the phone could not change them.</exception>
+    void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
+
+    /// <summary>
     /// A copy of a picture or video for sharing, in the app's cache, without its place and camera details as asked: a
     /// HEIC picture becomes a JPEG, as Android cannot rewrite HEIC's details; a video is re-written, not re-encoded.
     /// </summary>

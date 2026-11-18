@@ -133,6 +133,20 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
         return bytes.LongLength;
     }
 
+    /// <summary>Each change of dates and places asked for, in order, as the ids and what each was given.</summary>
+    public List<IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)>> DetailsChanged { get; } = [];
+
+    /// <inheritdoc />
+    public void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes)
+    {
+        if (Refuse is { } why)
+        {
+            Refuse = null;
+            throw new IOException(why);
+        }
+        DetailsChanged.Add(changes);
+    }
+
     /// <inheritdoc />
     public void SetFavorite(string id, bool favorite)
     {

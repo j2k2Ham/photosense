@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor, ISharingCopies
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor, ISharingCopies, IPhotoDetails
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -114,6 +114,23 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         // What the library holds now is read afresh, whether or not the change was made.
         finally { _seen = null; }
     }
+
+    /// <inheritdoc />
+    public void ChangeAll(IReadOnlyList<DetailsChange> changes)
+    {
+        // A Live Photo's picture and video are one item in Photos, changed once.
+        var items = changes.Select(c => (Shown: Find(c.Path) ?? throw new IOException($"{Path.GetFileName(c.Path)} is no longer in the library."), Change: c))
+            .GroupBy(c => c.Shown.Item.Id).Select(g => (g.Key, g.First().Change.Taken, g.First().Change.Place)).ToList();
+        try { _library.ChangeDetails(items); }
+        // What the library holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public string? IdOf(string path) => Find(path)?.Item.Id;
+
+    /// <inheritdoc />
+    public bool CanChangePlace(string path) => Find(path) is not null;
 
     /// <inheritdoc />
     public Task<SharedCopy> CopyForSharingAsync(string path, bool removeLocation, bool removeCamera, CancellationToken ct)

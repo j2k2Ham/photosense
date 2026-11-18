@@ -95,7 +95,7 @@ export function safeReview(overrides: Partial<SafeReviewDto> = {}): SafeReviewDt
 export function backupPhone(overrides: Partial<BackupPhoneDto> = {}): BackupPhoneDto {
   return {
     id: 'phone-1', name: "Alex's iPhone", kind: 'iPhone', folder: "Pictures/PhotoSense/Alex's iPhone", path: "C:\\Users\\alex\\Pictures\\PhotoSense\\Alex's iPhone", paused: false,
-    paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 6747, heldBytes: 32.1e9, safe: 5998, safeBytes: 28.1e9, tripFolders: 0, tripsFolder: 'Pictures/PhotoSense', tripsPath: 'C:\\Users\\alex\\Pictures\\PhotoSense', arriving: null, events: [], ...overrides,
+    paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 6747, heldBytes: 32.1e9, safe: 5998, safeBytes: 28.1e9, tripFolders: 0, tripsFolder: 'Pictures/PhotoSense', names: 'asOnPhone', tripsPath: 'C:\\Users\\alex\\Pictures\\PhotoSense', arriving: null, events: [], ...overrides,
   };
 }
 

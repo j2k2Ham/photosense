@@ -45,6 +45,9 @@ internal static class Stores
     /// <summary>A phone's notification settings, kept in <paramref name="db"/>.</summary>
     public static INoticeStore Notices(this LiteDatabase db) => On(db).GetRequiredService<INoticeStore>();
 
+    /// <summary>The fixes made to a phone's dates and places, kept in <paramref name="db"/>.</summary>
+    public static IDetailsFixStore Fixes(this LiteDatabase db) => On(db).GetRequiredService<IDetailsFixStore>();
+
     /// <summary>The home chosen for Trips, kept in <paramref name="db"/>.</summary>
     public static ITripStore TripHome(this LiteDatabase db) => On(db).GetRequiredService<ITripStore>();
     /// <summary>What has been read from each file for Organize.</summary>

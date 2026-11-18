@@ -7,6 +7,7 @@ using PhotoSense.Application.Removal;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
+using PhotoSense.Infrastructure.Metadata;
 using PhotoSense.Infrastructure.Transfer;
 
 using PhotoSense.Application;
@@ -81,7 +82,7 @@ public static class PhotoSensePhoneServices
     private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore, ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device,
         INotifier notifier, IShareSheet share, string name, ITransferListener? listener)
-        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, ISharingCopies
+        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, ISharingCopies, IPhotoDetails
     {
         s.AddSingleton(Options.Create(new PhotoStorageOptions
         {
@@ -120,6 +121,14 @@ public static class PhotoSensePhoneServices
         s.AddSingleton(share);
         s.AddSingleton(sp => new YearInReview(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<IPlanStore>(),
             sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<Trips>(), sp.GetRequiredService<TimeProvider>()));
-        return s.AddPhotoSenseApplication().AddPhotoSenseCore();
+        // Fix dates and places: the phone's own dates and places, changed after it asks, each fix kept by the phone's id.
+        s.AddSingleton<IPhotoDetails>(photos);
+        s.AddSingleton(sp => new PhotoFixes(sp.GetRequiredService<IPhotoRepository>(), photos, sp.GetRequiredService<IDetailsFixStore>(), sp.GetRequiredService<IMediaDetailsStore>(),
+            sp.GetRequiredService<OrganizeLibrary>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<Subscription>(), sp.GetRequiredService<TimeProvider>()));
+        s.AddPhotoSenseApplication().AddPhotoSenseCore();
+        // Registered after the core's own, so that a fix holds whatever a file says, Photos on an iPhone leaving the file as it was.
+        s.AddSingleton<IPhotoMetadataExtractor>(sp => new FixedPhotoMetadata(new BasicExifMetadataExtractor(), photos, sp.GetRequiredService<IDetailsFixStore>()));
+        s.AddSingleton<IMediaDetailsReader>(sp => new FixedMediaDetails(new ExifMediaDetailsReader(photos), photos, sp.GetRequiredService<IDetailsFixStore>()));
+        return s;
     }
 }
