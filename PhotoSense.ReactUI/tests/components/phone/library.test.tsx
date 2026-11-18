@@ -448,7 +448,7 @@ describe("Library's search", () => {
 
   it("opens Trips from its tile, a trip's photo in the viewer, which Escape closes first, and Trips after", async () => {
     const cover = { id: 'p1', fileName: 'IMG_9154.HEIC', sourcePath: '/Photo Library/IMG_9154.HEIC', isVideo: false } as PhotoDto;
-    const trip = { id: 'gla', name: 'Glacier National Park', folder: '2023-12 Glacier National Park', start: '2023-12-27', end: '2023-12-27', photos: 12, videos: 0, latitude: 48.7, longitude: -113.8, cover, folderMade: false };
+    const trip = { id: 'gla', name: 'Glacier National Park', folder: '2023-12 Glacier National Park', start: '2023-12-27', end: '2023-12-27', photos: 12, videos: 0, latitude: 48.7, longitude: -113.8, cover, folderMade: false, suggested: 'Glacier National Park' };
     api.useTrips.mockReturnValue({ data: { home: { town: 'Bozeman', region: 'Montana', country: 'US', latitude: 45.7, longitude: -111, days: 0 }, homeChosen: false, trips: [trip], computer: null, tripsFolder: null, folder: null } });
     api.useTrip.mockReturnValue({ data: { trip, days: [{ date: '2023-12-27', photos: [cover] }] } });
     show();

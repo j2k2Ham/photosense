@@ -92,6 +92,20 @@ internal sealed class TripEndpoints
         catch (InvalidOperationException ex) { return await Answers.RefuseAsync(req, HttpStatusCode.Conflict, ex.Message, ct); }
     }
 
+    /// <summary>POST /api/trips/{id}/name: names a trip as the person wants it, its folder too; with no name, PhotoSense's own again.</summary>
+    public async Task<ApiResponse> RenameAsync(ApiRequest req, string id, CancellationToken ct)
+    {
+        if (Refused(req, ct) is { } refused) return await refused;
+        if (await FindAsync(id, ct) is null) return await Gone(req, ct);
+        var asked = await req.ReadJsonAsync<TripNameRequest>(Json, ct);
+        try
+        {
+            await _trips!.RenameAsync(id, asked?.Name, ct);
+            return req.CreateResponse(HttpStatusCode.NoContent);
+        }
+        catch (ArgumentException ex) { return await Answers.RefuseAsync(req, HttpStatusCode.BadRequest, ex.Message, ct); }
+    }
+
     private async Task<Trip?> FindAsync(string id, CancellationToken ct) => (await _trips!.FindAsync(ct)).Found.FirstOrDefault(t => t.Id == id);
 
     private static Task<ApiResponse> Gone(ApiRequest req, CancellationToken ct)
@@ -100,7 +114,7 @@ internal sealed class TripEndpoints
     private TripDto Dto(Trip t, IReadOnlySet<string> made) => new()
     {
         Id = t.Id, Name = t.Name, Folder = t.Folder, Start = Day(t.Start), End = Day(t.End), Photos = t.Photos.Count, Videos = t.Videos,
-        Latitude = t.Latitude, Longitude = t.Longitude, Cover = _mapper.Map(t.Cover), FolderMade = made.Contains(t.Folder),
+        Latitude = t.Latitude, Longitude = t.Longitude, Cover = _mapper.Map(t.Cover), FolderMade = made.Contains(t.Folder), Suggested = t.Suggested,
     };
 
     private static string Day(DateTime when) => when.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

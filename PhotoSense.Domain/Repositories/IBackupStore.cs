@@ -12,8 +12,9 @@ namespace PhotoSense.Domain.Repositories;
 /// <param name="Safe">How many of the phone's pictures and videos it said could be deleted from it, as their copies are here, after its keep rules.</param>
 /// <param name="SafeBytes">How much those take on the phone.</param>
 /// <param name="TripFolders">The trip folders made on this computer when the phone asked, where its files may be too; null for none.</param>
+/// <param name="TripsFolder">The folder its trip folders are made in, as the person chose; null for the one beside the phones' folders, Pictures/PhotoSense.</param>
 public sealed record BackupPhone(string Id, string Name, string? Kind, string Folder, bool Paused, DateTimeOffset Paired, DateTimeOffset? LastBackup, DateTimeOffset? LastChecked, int Safe = 0, long SafeBytes = 0,
-    IReadOnlyList<string>? TripFolders = null);
+    IReadOnlyList<string>? TripFolders = null, string? TripsFolder = null);
 
 /// <summary>A file this computer keeps for a phone, by its checksum.</summary>
 /// <param name="PhoneId">The phone it came from.</param>

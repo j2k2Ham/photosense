@@ -443,6 +443,8 @@ export interface PairingStateDto {
   /** On a phone once paired: where the computer puts its backups. */
   folder: string | null;
   problem: string | null;
+  /** On a computer: what it is called, as phones show it. */
+  name?: string | null;
 }
 /** What the scans so far have found to free, by kind (PhotoSense.Contracts.Duplicates.FindingsDto). */
 export interface FindingsDto {
@@ -532,6 +534,10 @@ export interface BackupPhoneDto {
   safeBytes: number;
   /** How many trip folders were made here when it asked. */
   tripFolders: number;
+  /** Where its trip folders are made, as the person knows it: "Pictures/PhotoSense". */
+  tripsFolder: string;
+  /** The same, whole, for the folder picker to start from. */
+  tripsPath: string;
   arriving: { done: number; total: number; bytes: number; totalBytes: number; started: string; arrived: string[] } | null;
   events: { at: string; text: string }[];
 }
@@ -764,6 +770,8 @@ export interface TripDto {
   cover: PhotoDto;
   /** The computer has made its folder. */
   folderMade: boolean;
+  /** PhotoSense's own name for it, which `name` is unless the person named it. */
+  suggested: string;
 }
 
 /** The trip folder being made on the computer, or the last one asked for (PhotoSense.Contracts.Organize.TripFolderDto). */

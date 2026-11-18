@@ -31,7 +31,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         ct.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<BackupPhone>>([.. _phones.FindAll().OrderBy(d => d.PairedUtcTicks).Select(d =>
             new BackupPhone(d.Id, d.Name, d.Kind, d.Folder, d.Paused, Time(d.PairedUtcTicks), Time(d.LastBackupUtcTicks), Time(d.LastCheckedUtcTicks), d.Safe, d.SafeBytes,
-                d.TripFolders is { Count: > 0 } trips ? trips : null))]);
+                d.TripFolders is { Count: > 0 } trips ? trips : null, d.TripsFolder))]);
     }
 
     /// <inheritdoc />
@@ -41,7 +41,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         _phones.Upsert(new PhoneDocument
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = phone.Folder, Paused = phone.Paused, PairedUtcTicks = phone.Paired.UtcTicks,
-            LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes, TripFolders = phone.TripFolders?.ToList(),
+            LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes, TripFolders = phone.TripFolders?.ToList(), TripsFolder = phone.TripsFolder,
         });
         return Task.CompletedTask;
     }
@@ -120,6 +120,8 @@ internal sealed class LiteDbBackupStore : IBackupStore
         public long SafeBytes { get; set; }
         /// <summary>The trip folders made when it asked.</summary>
         public List<string>? TripFolders { get; set; }
+        /// <summary>Where its trip folders are made, as the person chose.</summary>
+        public string? TripsFolder { get; set; }
     }
 
     private sealed class HeldDocument

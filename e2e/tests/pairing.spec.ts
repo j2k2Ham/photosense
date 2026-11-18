@@ -19,4 +19,21 @@ test.describe('phones and pairing', () => {
     await pairing.getByRole('button', { name: 'Close' }).click();
     await expect(pairing).toBeHidden();
   });
+
+  test('Pair a phone says what phones will call this computer, and Rename names it, kept for the next time it opens', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: /^Phones/ }).click();
+    await page.getByRole('region', { name: 'No phones yet' }).getByRole('button', { name: 'Pair a phone' }).click();
+    const pairing = page.getByRole('dialog', { name: 'Pair a phone' });
+    // Until named, the program's own machine name.
+    await expect(pairing).toContainText(/Phones will call this computer \S+\./, { timeout: 20_000 });
+    await pairing.getByRole('button', { name: 'Rename…' }).click();
+    const field = pairing.getByRole('textbox', { name: 'Name this computer' });
+    await field.fill('Office PC');
+    await field.press('Enter');
+    await expect(pairing).toContainText('Phones will call this computer Office PC.');
+    await pairing.getByRole('button', { name: 'Close' }).click();
+    await page.getByRole('region', { name: 'No phones yet' }).getByRole('button', { name: 'Pair a phone' }).click();
+    await expect(pairing).toContainText('Phones will call this computer Office PC.');
+  });
 });

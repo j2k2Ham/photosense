@@ -1,14 +1,17 @@
 namespace PhotoSense.Domain.ValueObjects;
 
 /// <summary>
-/// What makes a trip, as Jamie set it (2026-11-18): photos taken more than 50 km from home are away; those taken away
+/// What makes a trip, as Jamie set it (2026-11-18): photos taken more than 30 miles from home are away; those taken away
 /// are one trip until a photo at home, or more than two days without one away; and a trip has at least ten photos and
 /// videos, so a day trip with that many counts.
 /// </summary>
 public static class TripRules
 {
-    /// <summary>How far from home a photo has to be taken to be away, in kilometres.</summary>
-    public const double AwayKm = 50;
+    /// <summary>How far from home a photo has to be taken to be away, in miles.</summary>
+    public const double AwayMiles = 30;
+
+    /// <summary>The same, in kilometres, as distances are worked out.</summary>
+    public const double AwayKm = AwayMiles * 1.609344;
 
     /// <summary>The fewest photos and videos a trip has.</summary>
     public const int Fewest = 10;

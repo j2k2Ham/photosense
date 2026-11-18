@@ -197,6 +197,8 @@ internal sealed class PairingApi(TestApi api)
 {
     /// <summary>POST /pairing/open.</summary>
     public Task<ApiResponse> OpenAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/open");
+    /// <summary>POST /pairing/name.</summary>
+    public Task<ApiResponse> NameAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/name");
     /// <summary>POST /pairing/close.</summary>
     public Task<ApiResponse> CloseAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "pairing/close");
     /// <summary>POST /pairing/scan.</summary>
@@ -236,6 +238,8 @@ internal sealed class BackupApi(TestApi api)
     public Task<ApiResponse> PhonesAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/phones");
     /// <summary>POST /backup/phones/{id}/folder.</summary>
     public Task<ApiResponse> FolderAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/folder");
+    /// <summary>POST /backup/phones/{id}/trips.</summary>
+    public Task<ApiResponse> TripsFolderAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/trips");
     /// <summary>POST /backup/phones/{id}/pause.</summary>
     public Task<ApiResponse> PausePhoneAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/pause");
 }

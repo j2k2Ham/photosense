@@ -367,6 +367,8 @@ export const scanPairing = () => pairing('scan');
 export const enterPairingCode = (code: string) => pairing('code', { code });
 /** The person's answer to whether the numbers on the two match. */
 export const confirmPairing = (same: boolean) => pairing('confirm', { same });
+/** On a computer: names it as phones show it. */
+export const nameComputer = (name: string) => pairing('name', { name });
 
 /** On a computer: stops waiting for a phone. */
 export async function closePairing() {
@@ -460,7 +462,7 @@ export function useBackupPhones(on: boolean) {
   return useSWR<BackupPhoneDto[]>(on ? phonesUrl : null, json, { refreshInterval: latest => (latest?.some(p => p.arriving) ? 2000 : 10_000) });
 }
 
-async function phoneChange(id: string, what: 'folder' | 'pause', body: unknown) {
+async function phoneChange(id: string, what: 'folder' | 'pause' | 'trips', body: unknown) {
   const phone = await json<BackupPhoneDto>(`${phonesUrl}/${encodeURIComponent(id)}/${what}`, { method: 'POST', body: JSON.stringify(body) });
   await mutate(phonesUrl);
   return phone;
@@ -468,6 +470,8 @@ async function phoneChange(id: string, what: 'folder' | 'pause', body: unknown) 
 
 /** On a computer: sends a phone's backups to another folder from now on. */
 export const moveBackups = (id: string, folder: string) => phoneChange(id, 'folder', { folder });
+/** On a computer: makes a phone's trip folders in another folder from now on; those made already stay. */
+export const tripsGoTo = (id: string, folder: string) => phoneChange(id, 'trips', { folder });
 /** On a computer: pauses a phone's backups, or lets them run again. */
 export const pausePhone = (id: string, paused: boolean) => phoneChange(id, 'pause', { paused });
 
@@ -648,6 +652,12 @@ const refreshTrips = () => mutate((key: unknown) => typeof key === 'string' && k
 /** Makes `town` home for Trips, or with null lets PhotoSense work it out again. */
 export async function chooseHome(town: TownDto | null): Promise<void> {
   await post(`${tripsUrl}/home`, JSON.stringify({ town }));
+  await refreshTrips();
+}
+
+/** Names a trip as the person wants it, its folder too; with null, PhotoSense's own name again. */
+export async function renameTrip(id: string, name: string | null): Promise<void> {
+  await post(`${tripsUrl}/${encodeURIComponent(id)}/name`, JSON.stringify({ name }));
   await refreshTrips();
 }
 

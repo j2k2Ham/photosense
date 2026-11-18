@@ -150,6 +150,13 @@ export class Phone {
         this.asked.push(`trips/home ${asked.town?.town ?? 'worked out'}`);
         return route.fulfill({ status: 204 });
       }
+      if (what.endsWith('/name')) {
+        const id = what.split('/')[0];
+        const name = JSON.parse(route.request().postData()!).name as string | null;
+        this.asked.push(`trips/name ${id} ${name}`);
+        this.trips = { ...this.trips, trips: this.trips.trips.map(t => (t.id === id ? { ...t, name: name ?? t.suggested, folder: `${(t.folder as string).slice(0, 7)} ${name ?? t.suggested}` } : t)) };
+        return route.fulfill({ status: 204 });
+      }
       if (what.endsWith('/folder')) {
         const id = what.split('/')[0];
         this.asked.push(`trips/folder ${id}`);

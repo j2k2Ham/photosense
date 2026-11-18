@@ -20,7 +20,6 @@ import { SearchField, SearchScreen } from './Search';
 import { Viewer } from './Viewer';
 import { TripsScreen, TripsTile } from './Trips';
 import { YearCard } from './YearInReview';
-import type { DistanceUnit } from '../../lib/distance';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet, Sheet } from './Sheet';
 import { largest, limitLine } from '../../lib/plan';
@@ -59,15 +58,13 @@ interface Props {
   onYear?(): void;
   /** Whether Share photo starts with Remove location on, as Settings has it. */
   readonly removeLocation?: boolean;
-  /** How distances are said, as Settings has it. */
-  readonly unit?: DistanceUnit;
 }
 
 /**
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter, with the search field
  * above them (26). Tapping one opens it; Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true, unit = 'miles' }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true }: Props) {
   const { platform, ios, tablet, words } = usePhone();
   const backedUp = useMemo<BackedUp | undefined>(() => (backup?.computer ? { on: new Set(backup.onComputer), waiting: new Set(backup.waiting) } : undefined), [backup]);
   const [bannerHidden, setBannerHidden] = useState(false);
@@ -229,7 +226,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
       {searching && <SearchScreen files={files} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setSearching(false)} />}
-      {tripping && <TripsScreen files={files} unit={unit} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setTripping(false)} />}
+      {tripping && <TripsScreen files={files} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setTripping(false)} />}
       {viewed && (
         <Viewer file={viewed} places={places} root={root!} removeLocation={removeLocation} notify={notify} onClose={() => setViewing(undefined)}
           onSend={() => { onSend([viewed.id]); setViewing(undefined); }} onPut={() => act('put', [viewed])} onDelete={() => act('delete', [viewed])} />

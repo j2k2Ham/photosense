@@ -246,10 +246,27 @@ internal sealed class MemoryNoticeStore : INoticeStore
     }
 }
 
-/// <summary>The home chosen for Trips, in memory.</summary>
+/// <summary>The home chosen for Trips, and the names given trips, in memory.</summary>
 internal sealed class MemoryTripStore : ITripStore
 {
     private HomeTown? _home;
+    private readonly Dictionary<string, string> _names = new(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, string>> NamesAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>(_names, StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task SaveNameAsync(string tripId, string? name, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (name is null) _names.Remove(tripId);
+        else _names[tripId] = name;
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc />
     public Task<HomeTown?> HomeAsync(CancellationToken ct)

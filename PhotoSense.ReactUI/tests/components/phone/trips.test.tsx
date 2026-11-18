@@ -9,7 +9,7 @@ import { organizeFile, photo } from '../../fixtures';
 import { deferred } from '../../deferred';
 import { frame, inFrame } from './frame';
 
-const api = vi.hoisted(() => ({ useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(), chooseHome: vi.fn(), makeTripFolder: vi.fn() }));
+const api = vi.hoisted(() => ({ useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(), chooseHome: vi.fn(), makeTripFolder: vi.fn(), renameTrip: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 const ROOT = '/Photo Library';
@@ -17,7 +17,7 @@ const home: TownDto = { town: 'Bozeman', region: 'Montana', country: 'US', latit
 const pic = (id: string, fileName: string, more: Partial<PhotoDto> = {}) => photo({ id, fileName, sourcePath: `${ROOT}/${fileName}`, ...more });
 const trip = (more: Partial<TripDto> = {}): TripDto => ({
   id: 'gla', name: 'Glacier National Park', folder: '2026-07 Glacier National Park', start: '2026-07-18', end: '2026-07-21', photos: 512, videos: 2,
-  latitude: 48.68, longitude: -113.8, cover: pic('c1', 'IMG_1.HEIC'), folderMade: false, ...more,
+  latitude: 48.68, longitude: -113.8, cover: pic('c1', 'IMG_1.HEIC'), folderMade: false, suggested: 'Glacier National Park', ...more,
 });
 const yellowstone = trip({ id: 'yel', name: 'Yellowstone', folder: '2026-08 Yellowstone', start: '2026-08-09', end: '2026-08-12', photos: 388, videos: 0, latitude: 44.43, longitude: -110.59, cover: pic('v1', 'CLIP.MOV', { isVideo: true }) });
 const trips = (more: Partial<TripsDto> = {}): TripsDto => ({
@@ -40,11 +40,12 @@ beforeEach(() => {
   api.useTowns.mockReset().mockReturnValue({ data: [{ ...home, days: 120 }, { ...home, town: 'Butte', days: 12 }, { ...home, town: 'Anaconda', days: 1 }] });
   api.chooseHome.mockReset().mockResolvedValue(undefined);
   api.makeTripFolder.mockReset().mockResolvedValue(undefined);
+  api.renameTrip.mockReset().mockResolvedValue(undefined);
 });
 
 function show(platform: Platform = 'ios', more: { frozen?: boolean; tablet?: boolean } = {}) {
   const onOpen = vi.fn(), notify = vi.fn(), onClose = vi.fn();
-  const ui = (frozen = more.frozen) => <TripsScreen files={files} unit="miles" frozen={frozen} onOpen={onOpen} notify={notify} onClose={onClose} />;
+  const ui = (frozen = more.frozen) => <TripsScreen files={files} frozen={frozen} onOpen={onOpen} notify={notify} onClose={onClose} />;
   const view = inFrame(ui(), frame(platform, { tablet: more.tablet }));
   return { onOpen, notify, onClose, again: (frozen?: boolean) => view.again(ui(frozen)), layer: () => screen.getByRole('dialog') };
 }
@@ -92,7 +93,7 @@ describe('Trips (29–31)', () => {
     expect(layer()).toHaveTextContent('None of your photos say where they were taken, so there are no trips yet.');
     answer = { data: trips({ trips: [] }) };
     again();
-    expect(layer()).toHaveTextContent('No trips yet. A trip is at least 10 photos and videos taken more than about 30 miles from home');
+    expect(layer()).toHaveTextContent('No trips yet. A trip is at least 10 photos and videos taken more than 30 miles from home');
   });
 
   it('shows the trips as pins on a plain map, with home, and a pin opens its trip', async () => {
@@ -195,7 +196,7 @@ describe('Home', () => {
     const { layer } = show();
     await userEvent.click(within(layer()).getByRole('button', { name: 'Change' }));
     const sheet = screen.getByRole('dialog', { name: 'Home' });
-    expect(sheet).toHaveTextContent('Photos taken more than 50 km (about 30 miles) from home make trips.');
+    expect(sheet).toHaveTextContent('Photos taken more than 30 miles from home make trips.');
     expect(within(sheet).getByRole('button', { name: /^Where most photos are taken/ })).toHaveTextContent('Bozeman, Montana');
     expect(within(sheet).getByRole('button', { name: /^Butte, Montana/ })).toHaveTextContent('12 days');
     expect(within(sheet).getByRole('button', { name: /^Anaconda, Montana/ })).toHaveTextContent('1 day');
@@ -218,5 +219,41 @@ describe('Home', () => {
     sheet = screen.getByRole('dialog', { name: 'Home' });
     await userEvent.click(within(sheet).getByRole('button', { name: /^Where most photos are taken/ }));
     expect(api.chooseHome).toHaveBeenLastCalledWith(null);
+  });
+});
+
+describe('Renaming a trip', () => {
+  it('names it as the person types, its folder too, and Escape puts the sheet away first', async () => {
+    const { layer, onClose } = show();
+    await userEvent.click(within(layer()).getByRole('button', { name: /^Glacier National Park/ }));
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Rename' }));
+    const sheet = screen.getByRole('dialog', { name: 'Rename trip' });
+    expect(sheet).toHaveTextContent('Its folder on the computer takes the name too, with the month before it.');
+    expect(within(sheet).queryByRole('button', { name: /Use PhotoSense/ })).not.toBeInTheDocument();
+    const field = within(sheet).getByRole('textbox', { name: 'Name' });
+    expect(field).toHaveValue('Glacier National Park');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'Glacier with Sam{Enter}');
+    expect(api.renameTrip).toHaveBeenCalledWith('gla', 'Glacier with Sam');
+    expect(screen.queryByRole('dialog', { name: 'Rename trip' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Rename' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Rename trip' })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("gives a renamed trip PhotoSense's name again, saves with Save, and says why it could not", async () => {
+    answer = { data: trips({ trips: [trip({ name: 'Glacier with Sam' })] }) };
+    const { layer, notify } = show();
+    await userEvent.click(within(layer()).getByRole('button', { name: /^Glacier with Sam/ }));
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Rename' }));
+    let sheet = screen.getByRole('dialog', { name: 'Rename trip' });
+    api.renameTrip.mockRejectedValueOnce(new Error("A trip's name can be at most 60 letters."));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Save' }));
+    expect(notify).toHaveBeenCalledWith("A trip's name can be at most 60 letters.", 'error');
+    sheet = screen.getByRole('dialog', { name: 'Rename trip' });
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Use PhotoSense’s name: Glacier National Park' }));
+    expect(api.renameTrip).toHaveBeenLastCalledWith('gla', null);
   });
 });

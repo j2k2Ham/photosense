@@ -37,6 +37,26 @@ internal sealed class LiteDbPairingStore : IPairingStore
     }
 
     /// <inheritdoc />
+    public Task<string?> SelfNameAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_self.FindById("self")?.Name);
+    }
+
+    /// <inheritdoc />
+    public async Task SaveSelfNameAsync(string name, CancellationToken ct)
+    {
+        // The id is made first, so that naming a device never leaves it without one.
+        await SelfIdAsync(ct);
+        lock (_self)
+        {
+            var self = _self.FindById("self")!;
+            self.Name = name;
+            _self.Update(self);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<PairedDevice?> GetAsync(string id, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -69,5 +89,7 @@ internal sealed class LiteDbPairingStore : IPairingStore
         [BsonId] public string Id { get; set; } = string.Empty;
         /// <summary>This device's own id.</summary>
         public string DeviceId { get; set; } = string.Empty;
+        /// <summary>What the person named it; null until they did.</summary>
+        public string? Name { get; set; }
     }
 }

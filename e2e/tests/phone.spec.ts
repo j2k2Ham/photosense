@@ -287,7 +287,7 @@ test.describe('on a phone', () => {
     const home = { town: 'Bozeman', region: 'Montana', country: 'US', latitude: 45.68, longitude: -111.04, days: 0 };
     const glacier = {
       id: '20260718094100', name: 'Glacier National Park', folder: '2026-07 Glacier National Park', start: '2026-07-18', end: '2026-07-19', photos: 12, videos: 0,
-      latitude: 48.68, longitude: -113.8, cover: picture(1), folderMade: false,
+      latitude: 48.68, longitude: -113.8, cover: picture(1), folderMade: false, suggested: 'Glacier National Park',
     };
     const bigSky = { ...glacier, id: '20260301090000', name: 'Big Sky, Montana', folder: '2026-03 Big Sky', start: '2026-03-01', end: '2026-03-04', photos: 214, latitude: 45.28, longitude: -111.37 };
     phone.trips = { home, homeChosen: false, trips: [glacier, bigSky], computer: 'Studio iMac', tripsFolder: 'Pictures/PhotoSense', folder: null };
@@ -323,7 +323,16 @@ test.describe('on a phone', () => {
     await expect(trip.getByRole('button', { name: 'Folder created' })).toBeDisabled();
     expect(phone.asked).toContain(`trips/folder ${glacier.id}`);
 
-    await trip.getByRole('button', { name: 'Back' }).click();
+    // Renamed: the trip and its folder take the name.
+    await trip.getByRole('button', { name: 'Rename' }).click();
+    const naming = page.getByRole('dialog', { name: 'Rename trip' });
+    await naming.getByRole('textbox', { name: 'Name' }).fill('Glacier with Sam');
+    await naming.getByRole('button', { name: 'Save' }).click();
+    await expect(naming).toBeHidden();
+    expect(phone.asked).toContain(`trips/name ${glacier.id} Glacier with Sam`);
+    await expect(page.getByRole('dialog', { name: 'Glacier with Sam' }).getByRole('heading', { name: 'Glacier with Sam', level: 2 })).toBeVisible();
+
+    await page.getByRole('dialog', { name: 'Glacier with Sam' }).getByRole('button', { name: 'Back' }).click();
     await trips.getByRole('button', { name: 'Change' }).click();
     const sheet = page.getByRole('dialog', { name: 'Home' });
     await sheet.getByRole('button', { name: /^Butte, Montana/ }).click();

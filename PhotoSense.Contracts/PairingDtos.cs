@@ -24,6 +24,15 @@ public sealed class PairingStateDto
     [JsonPropertyName("folder")] public string? Folder { get; init; }
     /// <summary>Why pairing stopped.</summary>
     [JsonPropertyName("problem")] public string? Problem { get; init; }
+    /// <summary>On a computer: what it is called, as phones show it.</summary>
+    [JsonPropertyName("name")] public string? Name { get; init; }
+}
+
+/// <summary>A name for this computer, as phones show it.</summary>
+public sealed class ComputerNameRequest
+{
+    /// <summary>The name.</summary>
+    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
 }
 
 /// <summary>The code typed on the phone.</summary>

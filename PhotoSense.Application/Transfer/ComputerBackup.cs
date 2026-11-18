@@ -115,6 +115,22 @@ public sealed class ComputerBackup
         return moved;
     }
 
+    /// <summary>Makes a phone's trip folders in another folder from now on; those made already stay where they are.</summary>
+    /// <exception cref="ArgumentException">No such phone.</exception>
+    /// <exception cref="DirectoryNotFoundException">The folder is not there.</exception>
+    public async Task<BackupPhone> TripsGoToAsync(string phoneId, string folder, CancellationToken ct)
+    {
+        var phone = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
+        if (!_files.FolderExists(folder)) throw new DirectoryNotFoundException($"Folder not found: {folder}");
+        var moved = phone with { TripsFolder = folder };
+        await _store.SavePhoneAsync(moved, ct);
+        await NoteAsync(phoneId, $"Trip folders now go in {Named(folder)}", ct);
+        return moved;
+    }
+
+    /// <summary>Where a phone's trip folders are made: where the person chose, or beside the phones' folders.</summary>
+    public string TripsIn(BackupPhone phone) => phone.TripsFolder ?? _root;
+
     /// <summary>Pauses a phone's backups on this computer, or lets them run again; a backup arriving now is let finish.</summary>
     /// <exception cref="ArgumentException">No such phone.</exception>
     public async Task<BackupPhone> PauseAsync(string phoneId, bool paused, CancellationToken ct)
@@ -150,7 +166,7 @@ public sealed class ComputerBackup
         if (!_files.FolderExists(record.Folder)) _files.MakeFolder(record.Folder);
         record = record with { LastChecked = _clock.GetUtcNow() };
         await _store.SavePhoneAsync(record, ct);
-        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(_root) }, ct);
+        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)) }, ct);
 
         var offered = await Lists.ReceiveAsync(channel, "offer", "files", null, null, ct);
         var files = offered.OfType<JsonObject>().Select(f => (Id: Wire.Text(f, "id"), Name: PhoneReceiving.Plain(Wire.Text(f, "name")), Size: Size(f), Sha256: Sha(f))).ToList();
@@ -225,7 +241,7 @@ public sealed class ComputerBackup
     private async Task<(BackupPhone Record, JsonObject Answer)> TripFolderAsync(BackupPhone record, string asked, IReadOnlyCollection<string> checksums, CancellationToken ct)
     {
         var name = PhoneReceiving.Plain(asked);
-        var folder = Path.Combine(_root, name);
+        var folder = Path.Combine(TripsIn(record), name);
         var wanted = checksums.ToHashSet(StringComparer.Ordinal);
         var going = (await _store.HeldAsync(record.Id, ct)).Where(h => wanted.Contains(h.Sha256) && !PhotoPath.Comparer.Equals(Path.GetDirectoryName(h.Path), folder)).ToList();
         if (going.Count == 0 && !_files.FolderExists(folder)) _files.MakeFolder(folder);

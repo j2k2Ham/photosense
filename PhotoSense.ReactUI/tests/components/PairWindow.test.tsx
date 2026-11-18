@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PairWindow } from '../../components/PairWindow';
 import type { PairingStateDto } from '../../types';
 
-const api = vi.hoisted(() => ({ usePairing: vi.fn(), openPairing: vi.fn(), closePairing: vi.fn(), confirmPairing: vi.fn() }));
+const api = vi.hoisted(() => ({ usePairing: vi.fn(), openPairing: vi.fn(), closePairing: vi.fn(), confirmPairing: vi.fn(), nameComputer: vi.fn() }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 
 let state: PairingStateDto | undefined;
@@ -18,6 +18,7 @@ beforeEach(() => {
   api.openPairing.mockResolvedValue(state);
   api.closePairing.mockResolvedValue(undefined);
   api.confirmPairing.mockResolvedValue(state);
+  api.nameComputer.mockResolvedValue(state);
 });
 
 const window = () => screen.getByRole('dialog', { name: 'Pair a phone' });
@@ -93,5 +94,39 @@ describe('Pair a phone, on the computer', () => {
     fireEvent.mouseDown(window().parentElement!);
     expect(onClose).toHaveBeenCalledTimes(3);
     expect(api.closePairing).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('Naming the computer, in Pair a phone', () => {
+  it('says what phones will call it, and Rename names it as the person types, Enter or Save keeping it', async () => {
+    state = at({ name: 'DESKTOP-4K2J9' });
+    const notify = vi.fn();
+    render(<PairWindow notify={notify} onClose={vi.fn()} />);
+    expect(window()).toHaveTextContent('Phones will call this computer DESKTOP-4K2J9.');
+    await userEvent.click(within(window()).getByRole('button', { name: 'Rename…' }));
+    const field = within(window()).getByRole('textbox', { name: 'Name this computer' });
+    expect(field).toHaveValue('DESKTOP-4K2J9');
+    await userEvent.clear(field);
+    await userEvent.type(field, "Jamie's laptop{Enter}");
+    expect(api.nameComputer).toHaveBeenCalledWith("Jamie's laptop");
+    expect(within(window()).queryByRole('textbox')).not.toBeInTheDocument();
+
+    await userEvent.click(within(window()).getByRole('button', { name: 'Rename…' }));
+    await userEvent.click(within(window()).getByRole('button', { name: 'Cancel' }));
+    expect(within(window()).queryByRole('textbox')).not.toBeInTheDocument();
+
+    api.nameComputer.mockRejectedValueOnce(new Error('Give this computer a name of 1 to 40 letters.'));
+    await userEvent.click(within(window()).getByRole('button', { name: 'Rename…' }));
+    await userEvent.clear(within(window()).getByRole('textbox', { name: 'Name this computer' }));
+    await userEvent.click(within(window()).getByRole('button', { name: 'Save' }));
+    expect(notify).toHaveBeenCalledWith('Give this computer a name of 1 to 40 letters.', 'error');
+    expect(within(window()).getByRole('textbox', { name: 'Name this computer' })).toBeInTheDocument();
+  });
+
+  it('offers no Rename until the name is known', () => {
+    state = at({ name: null });
+    render(<PairWindow notify={vi.fn()} onClose={vi.fn()} />);
+    expect(window()).toHaveTextContent('Phones will call this computer ….');
+    expect(within(window()).getByRole('button', { name: 'Rename…' })).toBeDisabled();
   });
 });

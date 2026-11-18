@@ -369,6 +369,8 @@ public sealed class PhoneBackup
             // Both know each other: the pairing is proved, and no number is ever compared here.
             var linked = await Pairing.PhoneAsync(stream, new Device(self, _name), _pairs, (_, _, _) => Task.FromResult(false), ticket: null, stop);
             using var channel = linked.Channel;
+            // The computer may have been named again since.
+            computer = computer with { Name = linked.Other.Name };
             await channel.SendAsync(new JsonObject { ["t"] = "backup", ["kind"] = _device.Kind, ["plan"] = PlanMessage.Write(await _plan.CurrentAsync(stop)) }, stop);
             var first = await channel.ReceiveAsync(stop, "held", "paused");
             if (Wire.Text(first, "t") == "paused") throw new TransferException(Wire.Text(first, "why"));

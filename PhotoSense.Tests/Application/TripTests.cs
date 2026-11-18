@@ -135,6 +135,40 @@ public class TripTests
     }
 
     [Test]
+    public async Task A_Trip_Can_Be_Named_By_The_Person_Its_Folder_Too_And_Given_PhotoSenses_Name_Again(CancellationToken ct)
+    {
+        await HomeDaysAsync(3);
+        await ManyAsync(10, 1, new DateTime(2026, 3, 1, 9, 0, 0));
+        var id = (await Trips.FindAsync(ct)).Found.Single().Id;
+
+        await Trips.RenameAsync(id, "  Spring break ", ct);
+        var named = (await Trips.FindAsync(ct)).Found.Single();
+        await Assert.That((named.Name, named.Folder, named.Suggested, named.Named)).IsEqualTo(("Spring break", "2026-03 Spring break", "Far, State", true));
+
+        await Trips.RenameAsync(id, "   ", ct);
+        var again = (await Trips.FindAsync(ct)).Found.Single();
+        await Assert.That((again.Name, again.Folder, again.Named)).IsEqualTo(("Far, State", "2026-03 Far", false));
+        await Trips.RenameAsync(id, "Spring break", ct);
+        await Trips.RenameAsync(id, null, ct);
+        await Assert.That((await Trips.FindAsync(ct)).Found.Single().Named).IsFalse();
+
+        var tooLong = await Assert.ThrowsAsync<ArgumentException>(() => Trips.RenameAsync(id, new string('x', PhotoSense.Application.Organizing.Trips.LongestName + 1), ct));
+        await Assert.That(tooLong!.Message).IsEqualTo("A trip's name can be at most 60 letters.");
+    }
+
+    [Test]
+    public async Task Away_Is_More_Than_30_Miles_From_Home(CancellationToken ct)
+    {
+        await Assert.That(Math.Round(TripRules.AwayKm, 2)).IsEqualTo(48.28);
+        await HomeDaysAsync(3);
+        // 0.43 degrees north is some 47.8 km, 29.7 miles: at home. 0.44 is some 48.9 km, 30.4 miles: away.
+        await ManyAsync(10, 0.43, new DateTime(2026, 3, 1, 9, 0, 0));
+        await Assert.That((await Trips.FindAsync(ct)).Found.Count).IsEqualTo(0);
+        await ManyAsync(10, 0.44, new DateTime(2026, 4, 1, 9, 0, 0));
+        await Assert.That((await Trips.FindAsync(ct)).Found.Count).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task With_No_Photo_That_Says_Where_It_Was_Taken_There_Is_No_Home_And_No_Trip(CancellationToken ct)
     {
         await _repo.AddOrUpdateAsync(TestPhotos.Make("IMG_1.HEIC", taken: new DateTime(2026, 1, 1)), ct);

@@ -1,4 +1,3 @@
-import type { DistanceUnit } from './distance';
 import type { TownDto, TripDto } from '../types';
 
 const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -35,9 +34,8 @@ export const townName = (t: TownDto) => (t.region ? `${t.town}, ${t.region}` : t
 /** What Trips says of how they were found: "Grouped by place and date from photos taken away from home in Bozeman, Montana." */
 export const homeNote = (home: TownDto) => `Grouped by place and date from photos taken away from home in ${townName(home)}.`;
 
-/** What Trips says when there is none yet, with how far away is away in the distances chosen. */
-export const noTripsLine = (unit: DistanceUnit) =>
-  `No trips yet. A trip is at least 10 photos and videos taken more than ${unit === 'km' ? '50 km' : 'about 30 miles'} from home, with no more than two days between them.`;
+/** What Trips says when there is none yet. */
+export const NO_TRIPS = 'No trips yet. A trip is at least 10 photos and videos taken more than 30 miles from home, with no more than two days between them.';
 
 /** A day of a trip, as its heading says: "Day 1 · Jul 18". */
 export function dayTitle(index: number, day: string): string {

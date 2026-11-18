@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { dayTitle, folderNote, homeNote, noTripsLine, townName, tripCount, tripDates, tripLine, tripMap } from '../../lib/trips';
+import { dayTitle, folderNote, homeNote, NO_TRIPS, townName, tripCount, tripDates, tripLine, tripMap } from '../../lib/trips';
 import type { TownDto, TripDto } from '../../types';
 import { photo } from '../fixtures';
 
 const town = (more: Partial<TownDto> = {}): TownDto => ({ town: 'Bozeman', region: 'Montana', country: 'US', latitude: 45.68, longitude: -111.04, days: 0, ...more });
 const trip = (more: Partial<TripDto> = {}): TripDto => ({
   id: 't1', name: 'Glacier National Park', folder: '2026-07 Glacier National Park', start: '2026-07-18', end: '2026-07-21', photos: 512, videos: 0,
-  latitude: 48.68, longitude: -113.8, cover: photo(), folderMade: false, ...more,
+  latitude: 48.68, longitude: -113.8, cover: photo(), folderMade: false, suggested: 'Glacier National Park', ...more,
 });
 
 describe('Trips\' words', () => {
@@ -30,8 +30,7 @@ describe('Trips\' words', () => {
     expect(townName(town())).toBe('Bozeman, Montana');
     expect(townName(town({ region: '' }))).toBe('Bozeman');
     expect(homeNote(town())).toBe('Grouped by place and date from photos taken away from home in Bozeman, Montana.');
-    expect(noTripsLine('miles')).toBe('No trips yet. A trip is at least 10 photos and videos taken more than about 30 miles from home, with no more than two days between them.');
-    expect(noTripsLine('km')).toContain('more than 50 km from home');
+    expect(NO_TRIPS).toBe('No trips yet. A trip is at least 10 photos and videos taken more than 30 miles from home, with no more than two days between them.');
     expect(dayTitle(0, '2026-07-18')).toBe('Day 1 · Jul 18');
   });
 

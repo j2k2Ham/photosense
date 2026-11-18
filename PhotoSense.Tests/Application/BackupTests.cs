@@ -609,6 +609,55 @@ public sealed class BackupTests : IDisposable
     }
 
     [Test]
+    public async Task A_Trip_Named_By_The_Person_Gets_Its_Folder_Where_They_Chose_And_The_Phone_Learns_The_Computers_New_Name(CancellationToken ct)
+    {
+        Library();
+        var id = await TripAsync(ct);
+        await PairedAsync(ct);
+        await BackedUpAsync(ct);
+        var phoneId = (await NotedOnComputerAsync("14 items backed up and checked", ct)).GetProperty("id").GetString()!;
+
+        await Assert.That((await AskAsync("POST", $"trips/{id}/name", ct, new { name = "Glacier with Sam" })).Status).IsEqualTo(HttpStatusCode.NoContent);
+        var trip = (await PhoneAsync("GET", "trips", ct)).GetProperty("trips")[0];
+        await Assert.That((trip.GetProperty("name").GetString(), trip.GetProperty("folder").GetString(), trip.GetProperty("suggested").GetString()))
+            .IsEqualTo(("Glacier with Sam", "2026-07 Glacier with Sam", "Glacier National Park"));
+        await Assert.That(await AskAsync("POST", $"trips/{id}/name", ct, new { name = new string('x', 61) })).IsEqualTo((HttpStatusCode.BadRequest, "A trip's name can be at most 60 letters."));
+        await Assert.That((await AskAsync("POST", "trips/nope/name", ct, new { name = "x" })).Status).IsEqualTo(HttpStatusCode.NotFound);
+        // Anything but a name gives it PhotoSense's again; then the person's once more.
+        await Assert.That((await AskAsync("POST", $"trips/{id}/name", ct, "not a request")).Status).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That((await PhoneAsync("GET", "trips", ct)).GetProperty("trips")[0].GetProperty("name").GetString()).IsEqualTo("Glacier National Park");
+        await AskAsync("POST", $"trips/{id}/name", ct, new { name = "Glacier with Sam" });
+
+        // On the computer: trip folders go in Pictures/PhotoSense until the person chooses another folder.
+        var phone = await PhoneOnComputerAsync(ct);
+        await Assert.That((phone.GetProperty("tripsFolder").GetString(), phone.GetProperty("tripsPath").GetString())).IsEqualTo(("Pictures/PhotoSense", Path.Combine(In("Home"), "Pictures", "PhotoSense")));
+        var trips = Directory.CreateDirectory(In("Trips")).FullName;
+        var chosen = (await _computer.TripsFolderAsync(Http.Post("backup/phones/x/trips", JsonSerializer.Serialize(new { folder = trips })).FromClient(), phoneId, ct)).Json();
+        await Assert.That(chosen.GetProperty("tripsFolder").GetString()).IsEqualTo(trips);
+        var nowhere = await _computer.TripsFolderAsync(Http.Post("backup/phones/x/trips", JsonSerializer.Serialize(new { folder = In("Nowhere") })).FromClient(), phoneId, ct);
+        await Assert.That((nowhere.StatusCode, nowhere.Text())).IsEqualTo((HttpStatusCode.BadRequest, $"Folder not found: {In("Nowhere")}"));
+        foreach (var body in new[] { "{}", "not json" })
+        {
+            var none = await _computer.TripsFolderAsync(Http.Post("backup/phones/x/trips", body).FromClient(), phoneId, ct);
+            await Assert.That((none.StatusCode, none.Text())).IsEqualTo((HttpStatusCode.BadRequest, "Choose a folder."));
+        }
+        var stranger = await _computer.TripsFolderAsync(Http.Post("backup/phones/x/trips", JsonSerializer.Serialize(new { folder = trips })).FromClient(), "nobody", ct);
+        await Assert.That(stranger.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        await Assert.That((await new BackupApi(new TestApi()).TripsFolderAsync(Http.Post("backup/phones/x/trips", "{}").FromClient(), phoneId, ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+
+        // The computer named again: the phone learns it at its next connection.
+        await _door.RenameAsync("Office PC", ct);
+        await Assert.That((await AskAsync("POST", $"trips/{id}/folder", ct)).Status).IsEqualTo(HttpStatusCode.Accepted);
+        await Backup.Running;
+        var made = await PhoneAsync("GET", "trips", ct);
+        await Assert.That((made.GetProperty("computer").GetString(), made.GetProperty("tripsFolder").GetString(), made.GetProperty("folder").GetProperty("made").GetString()))
+            .IsEqualTo(("Office PC", trips, Path.Combine(trips, "2026-07 Glacier with Sam")));
+        await Assert.That(Directory.GetFiles(Path.Combine(trips, "2026-07 Glacier with Sam")).Length).IsEqualTo(10);
+        await Assert.That((await PhoneAsync("GET", "backup", ct)).GetProperty("computer").GetString()).IsEqualTo("Office PC");
+        await Assert.That(Names(await PhoneOnComputerAsync(ct))).Contains($"Trip folders now go in {trips}");
+    }
+
+    [Test]
     public async Task A_Trip_Folder_Needs_A_Computer_Waits_For_A_Backup_Running_And_Says_Why_The_Computer_Refused(CancellationToken ct)
     {
         Library();
@@ -647,7 +696,7 @@ public sealed class BackupTests : IDisposable
     {
         var computer = await new TestApi().SendAsync(Http.Get("trips").FromClient(), ct, "trips");
         await Assert.That((computer.StatusCode, computer.Text())).IsEqualTo((HttpStatusCode.NotFound, "Only a phone has Trips."));
-        foreach (var (method, path) in new[] { ("GET", "trips"), ("GET", "trips/towns"), ("POST", "trips/home"), ("GET", "trips/x"), ("POST", "trips/x/folder") })
+        foreach (var (method, path) in new[] { ("GET", "trips"), ("GET", "trips/towns"), ("POST", "trips/home"), ("GET", "trips/x"), ("POST", "trips/x/folder"), ("POST", "trips/x/name") })
         {
             var stranger = await _router.AnswerAsync(method, new Uri("app://photosense/api/" + path), [], null, ct);
             await Assert.That(stranger.Status).IsEqualTo((int)HttpStatusCode.Unauthorized);

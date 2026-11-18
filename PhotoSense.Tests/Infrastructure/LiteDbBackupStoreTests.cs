@@ -111,7 +111,7 @@ public class LiteDbBackupStoreTests
             () => ledger.SaveSettingsAsync(BackupSettings.Default, gone), () => ledger.OnComputerAsync(gone), () => ledger.KeepOnComputerAsync(["aa"], true, gone),
             () => ledger.ChecksumAsync("f", 1, DateTime.UnixEpoch, gone), () => ledger.KeepChecksumAsync("f", 1, DateTime.UnixEpoch, "aa", gone),
             () => ledger.FoldersMadeAsync(gone), () => ledger.KeepFolderMadeAsync("2026-07 Glacier", gone),
-            () => db.TripHome().HomeAsync(gone), () => db.TripHome().SaveHomeAsync(null, gone),
+            () => db.TripHome().HomeAsync(gone), () => db.TripHome().SaveHomeAsync(null, gone), () => db.TripHome().NamesAsync(gone), () => db.TripHome().SaveNameAsync("t", null, gone),
         ];
         foreach (var ask in asked) await Assert.That(ask).Throws<OperationCanceledException>();
         await Assert.That((await store.PhonesAsync(ct)).Count).IsEqualTo(0);
@@ -121,11 +121,11 @@ public class LiteDbBackupStoreTests
     public async Task A_Phones_Trip_Folders_Are_Kept_On_The_Computer_And_On_The_Phone_Until_Another_Computer(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
-        await db.Backups().SavePhoneAsync(new BackupPhone("p", "P", null, "f", false, Day, null, null, TripFolders: ["/t/2026-07 Glacier", "/t/2025-06 Butte"]), ct);
+        await db.Backups().SavePhoneAsync(new BackupPhone("p", "P", null, "f", false, Day, null, null, TripFolders: ["/t/2026-07 Glacier", "/t/2025-06 Butte"], TripsFolder: "/t"), ct);
         await db.Backups().SavePhoneAsync(new BackupPhone("q", "Q", null, "g", false, Day.AddDays(1), null, null), ct);
         var phones = await db.Backups().PhonesAsync(ct);
         await Assert.That(phones[0].TripFolders).IsEquivalentTo(["/t/2026-07 Glacier", "/t/2025-06 Butte"], CollectionOrdering.Matching);
-        await Assert.That(phones[1].TripFolders).IsNull();
+        await Assert.That((phones[0].TripsFolder, phones[1].TripsFolder, phones[1].TripFolders)).IsEqualTo(("/t", (string?)null, (IReadOnlyList<string>?)null));
 
         var ledger = db.Ledger();
         await ledger.SaveComputerAsync(new BackupComputer("c1", "Studio iMac", "f", null, null, "Pictures/PhotoSense"), ct);
@@ -150,5 +150,24 @@ public class LiteDbBackupStoreTests
         await Assert.That(await db.TripHome().HomeAsync(ct)).IsEqualTo(bozeman);
         await db.TripHome().SaveHomeAsync(null, ct);
         await Assert.That(await db.TripHome().HomeAsync(ct)).IsNull();
+
+        await db.TripHome().SaveNameAsync("t1", "Spring break", ct);
+        await db.TripHome().SaveNameAsync("t2", "Glacier", ct);
+        await db.TripHome().SaveNameAsync("t2", null, ct);
+        await Assert.That(await db.TripHome().NamesAsync(ct)).IsEquivalentTo(new Dictionary<string, string> { ["t1"] = "Spring break" });
+    }
+
+    [Test]
+    public async Task A_Device_Keeps_The_Name_The_Person_Gave_It_Beside_Its_Id(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var pairs = db.Pairings(new TestClock());
+        await Assert.That(await pairs.SelfNameAsync(ct)).IsNull();
+        // Named before it had an id: one is made, and kept.
+        await pairs.SaveSelfNameAsync("Jamie's laptop", ct);
+        var id = await pairs.SelfIdAsync(ct);
+        await pairs.SaveSelfNameAsync("Office PC", ct);
+        await Assert.That((await db.Pairings(new TestClock()).SelfNameAsync(ct), await db.Pairings(new TestClock()).SelfIdAsync(ct))).IsEqualTo(("Office PC", id));
+        await Assert.That(() => pairs.SelfNameAsync(new CancellationToken(canceled: true))).Throws<OperationCanceledException>();
     }
 }

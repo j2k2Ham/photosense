@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { moveBackups, organizeThumbnailUrl, pausePhone, useBackupPhones } from '../lib/apiClient';
+import { moveBackups, organizeThumbnailUrl, pausePhone, tripsGoTo, useBackupPhones } from '../lib/apiClient';
 import { checkedAt, gigabytes } from '../lib/backup';
 import { formatBytes } from '../lib/format';
 import { items } from '../lib/library';
@@ -48,7 +48,7 @@ export function activityTime(iso: string, now: Date): string {
 export function PhonesView({ notify, onPair }: Props) {
   const phones = useBackupPhones(true).data;
   const [chosenId, setChosenId] = useState<string>();
-  const [picking, setPicking] = useState(false);
+  const [picking, setPicking] = useState<'backups' | 'trips'>();
   const [busy, setBusy] = useState(false);
   const chosen = phones?.find(p => p.id === chosenId) ?? phones?.[0];
   const now = new Date();
@@ -106,13 +106,18 @@ export function PhonesView({ notify, onPair }: Props) {
             </div>
           ) : <Detail phone={chosen} now={now} busy={busy}
             onPause={() => void act(() => pausePhone(chosen.id, !chosen.paused), chosen.paused ? `Backups from ${chosen.name} run again.` : `Backups from ${chosen.name} are paused.`)}
-            onChangeFolder={() => setPicking(true)} />}
+            onChangeFolder={() => setPicking('backups')} onChangeTrips={() => setPicking('trips')} />}
       </section>
 
-      {picking && chosen && (
+      {picking === 'backups' && chosen && (
         <FolderPicker title={`Where backups from ${chosen.name} go`} startAt={chosen.path} pickLabel="Back up here"
-          onPick={folder => { setPicking(false); void act(() => moveBackups(chosen.id, folder), `Backups from ${chosen.name} now go to ${folder}.`); }}
-          onCancel={() => setPicking(false)} />
+          onPick={folder => { setPicking(undefined); void act(() => moveBackups(chosen.id, folder), `Backups from ${chosen.name} now go to ${folder}.`); }}
+          onCancel={() => setPicking(undefined)} />
+      )}
+      {picking === 'trips' && chosen && (
+        <FolderPicker title={`Where trip folders from ${chosen.name} go`} startAt={chosen.tripsPath} pickLabel="Make them here"
+          onPick={folder => { setPicking(undefined); void act(() => tripsGoTo(chosen.id, folder), `Trip folders from ${chosen.name} now go in ${folder}.`); }}
+          onCancel={() => setPicking(undefined)} />
       )}
     </div>
   );
@@ -124,10 +129,12 @@ interface DetailProps {
   readonly busy: boolean;
   onPause(): void;
   onChangeFolder(): void;
+  /** Chooses where its trip folders are made. */
+  onChangeTrips(): void;
 }
 
 /** One phone, as Phones shows it beside the list. */
-function Detail({ phone, now, busy, onPause, onChangeFolder }: DetailProps) {
+function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips }: DetailProps) {
   const arriving = phone.arriving;
   const percent = arriving && arriving.totalBytes > 0 ? arriving.bytes / arriving.totalBytes * 100 : 0;
   const stat = 'flex flex-col gap-1 rounded-[16px] border border-line bg-s1 p-4';
@@ -197,9 +204,13 @@ function Detail({ phone, now, busy, onPause, onChangeFolder }: DetailProps) {
             </div>
             <button type="button" onClick={onChangeFolder} className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">Change…</button>
           </div>
-          <div className="border-t border-line px-4 py-3">
-            <p className="text-[13.5px]">Trip folders</p>
-            <p className="text-[12.5px] text-t2">Made when the phone asks. {phone.tripFolders === 0 ? 'None so far.' : `${phone.tripFolders.toLocaleString()} so far.`}</p>
+          <div className="flex items-center gap-3 border-t border-line px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[13.5px]">Trip folders</p>
+              <p className="truncate font-mono text-[12.5px] text-t2" title={phone.tripsPath}>{phone.tripsFolder}</p>
+              <p className="text-[12.5px] text-t2">Made when the phone asks. {phone.tripFolders === 0 ? 'None so far.' : `${phone.tripFolders.toLocaleString()} so far.`}</p>
+            </div>
+            <button type="button" onClick={onChangeTrips} aria-label="Change… where trip folders go" className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">Change…</button>
           </div>
         </section>
         <section aria-label="Activity" className="rounded-[16px] border border-line bg-s1">

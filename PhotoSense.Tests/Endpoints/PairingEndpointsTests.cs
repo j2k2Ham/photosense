@@ -10,6 +10,8 @@ namespace PhotoSense.Tests.Endpoints;
 public sealed class PairingEndpointsTests : IDisposable
 {
     private readonly FakeCodeScanner _scanner = new();
+    private readonly FakeAdvertiser _telling = new();
+    private readonly MemoryPairs _pairs = new("computer-1");
     private readonly ComputerPairing _computerPairing;
     private readonly PairingApi _computer;
     private readonly PairingApi _phone;
@@ -17,14 +19,44 @@ public sealed class PairingEndpointsTests : IDisposable
 
     public PairingEndpointsTests()
     {
-        _computerPairing = new ComputerPairing(new TcpTransferListener(0), new FakeAdvertiser(), new MemoryPairs("computer-1"), "Studio iMac", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "photosense-home", "Pictures", "PhotoSense")), new TestClock());
+        _computerPairing = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "photosense-home", "Pictures", "PhotoSense")), new TestClock());
         _computer = new PairingApi(new TestApi(s => s.AddSingleton(_computerPairing)));
         var phone = new PhonePairing(_scanner, new FakeComputerFinder(), new TcpComputerConnector(), new MemoryPairs("phone-1"), new MemoryBackupLedger(), "Jamie's iPhone", new TestClock());
         _phone = new PairingApi(new TestApi(s => s.AddSingleton(phone)));
         _neither = new PairingApi(new TestApi());
     }
 
-    public void Dispose() => _computerPairing.Close();
+    public void Dispose() => _computerPairing.StopListening();
+
+    [Test]
+    public async Task The_Computer_Is_Named_By_The_Person_As_Phones_Show_It_On_The_Network_And_In_The_QR_Code(CancellationToken ct)
+    {
+        // Until named, its own name on the network.
+        await Assert.That((await _computer.StateAsync(Http.Get("pairing/state").FromClient(), ct)).Json().GetProperty("name").GetString()).IsEqualTo("DESKTOP-4K2J9");
+        var open = (await _computer.OpenAsync(Http.Post("pairing/open").FromClient(), ct)).Json();
+        await Assert.That((open.GetProperty("name").GetString(), _telling.Telling!.Value.Name)).IsEqualTo(("DESKTOP-4K2J9", "DESKTOP-4K2J9"));
+
+        var named = (await _computer.NameAsync(Http.Post("pairing/name", "{\"name\":\"  Jamie's laptop \"}").FromClient(), ct)).Json();
+        await Assert.That((named.GetProperty("name").GetString(), named.GetProperty("code").GetString())).IsEqualTo(("Jamie's laptop", open.GetProperty("code").GetString()));
+        await Assert.That(PairingLink.Read(named.GetProperty("link").GetString()!)!.ComputerName).IsEqualTo("Jamie's laptop");
+        await Assert.That((_telling.Telling!.Value.Name, await _pairs.SelfNameAsync(ct))).IsEqualTo(("Jamie's laptop", "Jamie's laptop"));
+
+        // Closed, it is named all the same; started again, it is still so named.
+        _computerPairing.StopListening();
+        var closed = (await _computer.NameAsync(Http.Post("pairing/name", "{\"name\":\"Office PC\"}").FromClient(), ct)).Json();
+        await Assert.That((closed.GetProperty("name").GetString(), closed.GetProperty("link").ValueKind, _telling.Telling)).IsEqualTo(("Office PC", JsonValueKind.Null, ((string, string, int)?)null));
+        var again = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "photosense-home", "Pictures", "PhotoSense")), new TestClock());
+        await again.ListenAsync(ct);
+        await Assert.That((again.State.Name, _telling.Telling!.Value.Name)).IsEqualTo(("Office PC", "Office PC"));
+        again.StopListening();
+
+        foreach (var body in new[] { "{\"name\":\"  \"}", "not json", $"{{\"name\":\"{new string('x', ComputerPairing.LongestName + 1)}\"}}" })
+        {
+            var refused = await _computer.NameAsync(Http.Post("pairing/name", body).FromClient(), ct);
+            await Assert.That((refused.StatusCode, refused.Text())).IsEqualTo((HttpStatusCode.BadRequest, "Give this computer a name of 1 to 40 letters."));
+        }
+        await Assert.That((await _phone.NameAsync(Http.Post("pairing/name", "{\"name\":\"x\"}").FromClient(), ct)).StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+    }
 
     [Test]
     public async Task A_Computer_Opens_Pair_A_Phone_With_A_QR_Code_And_A_Code_And_Closes_It(CancellationToken ct)

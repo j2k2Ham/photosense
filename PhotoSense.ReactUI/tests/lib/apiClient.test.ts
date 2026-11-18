@@ -829,6 +829,21 @@ describe('trips', () => {
     expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/trips`);
     answering('Pair with a computer first: in Settings, choose Computer.', 409);
     await expect(api.makeTripFolder('gla')).rejects.toThrow('Pair with a computer first');
+    answering(undefined, 204);
+    await api.renameTrip('gla', 'Glacier with Sam');
+    expect(lastRequest()).toEqual({ url: `${API}/trips/gla/name`, init: { method: 'POST', body: JSON.stringify({ name: 'Glacier with Sam' }), headers: json } });
+    await api.renameTrip('gla', null);
+    expect(lastRequest().init!.body).toBe('{"name":null}');
+  });
+
+  it("names the computer, and chooses where a phone's trip folders go", async () => {
+    const api = await load();
+    answering({ stage: 'idle', name: 'Office PC' });
+    await expect(api.nameComputer('Office PC')).resolves.toMatchObject({ name: 'Office PC' });
+    expect(lastRequest()).toEqual({ url: `${API}/pairing/name`, init: { method: 'POST', body: JSON.stringify({ name: 'Office PC' }), headers: json } });
+    answering({ id: 'p1' });
+    await api.tripsGoTo('p1', 'D:\\Trips');
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p1/trips`, init: { method: 'POST', body: JSON.stringify({ folder: 'D:\\Trips' }), headers: json } });
   });
 });
 

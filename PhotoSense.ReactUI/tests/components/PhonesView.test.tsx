@@ -6,7 +6,7 @@ import { activityTime, phoneStatus, PhonesView } from '../../components/PhonesVi
 import type { BackupPhoneDto } from '../../types';
 import { backupPhone } from '../fixtures';
 
-const api = vi.hoisted(() => ({ useBackupPhones: vi.fn(), moveBackups: vi.fn(), pausePhone: vi.fn() }));
+const api = vi.hoisted(() => ({ tripsGoTo: vi.fn(), useBackupPhones: vi.fn(), moveBackups: vi.fn(), pausePhone: vi.fn() }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The folder picker is tested on its own; here it picks a folder or is put away.
 vi.mock('../../components/FolderPicker', () => ({
@@ -26,6 +26,7 @@ beforeEach(() => {
   api.useBackupPhones.mockImplementation(() => ({ data: phones }));
   api.moveBackups.mockResolvedValue(backupPhone());
   api.pausePhone.mockResolvedValue(backupPhone());
+  api.tripsGoTo.mockResolvedValue(backupPhone());
 });
 
 const now = new Date(2026, 10, 13, 15, 0);
@@ -78,7 +79,7 @@ describe('Phones, on the computer', () => {
     expect(within(detail()).getByRole('region', { name: 'Checked' })).toHaveTextContent('All matchSHA-256 checksum of every file');
     expect(within(detail()).getByRole('region', { name: 'Safe to delete on the phone' })).toHaveTextContent('5,998 items28.1 GB after keep rules');
     expect(within(detail()).getByRole('region', { name: 'Files from this phone' })).toHaveTextContent("Pictures/PhotoSense/Alex's iPhone");
-    expect(within(detail()).getByRole('region', { name: 'Files from this phone' })).toHaveTextContent('Trip foldersMade when the phone asks. None so far.');
+    expect(within(detail()).getByRole('region', { name: 'Files from this phone' })).toHaveTextContent('Trip foldersPictures/PhotoSenseMade when the phone asks. None so far.');
     expect(within(within(detail()).getByRole('region', { name: 'Activity' })).getAllByRole('listitem').map(li => li.textContent)).toEqual([
       'Nov 13214 items backed up and checked', 'Nov 10Paired with this computer',
     ]);
@@ -142,5 +143,22 @@ describe('Phones, on the computer', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Pick D:\\Phones' }));
     expect(api.moveBackups).toHaveBeenCalledExactlyOnceWith('phone-1', 'D:\\Phones');
     await vi.waitFor(() => expect(notify).toHaveBeenCalledWith("Backups from Alex's iPhone now go to D:\\Phones.", 'ok'));
+  });
+});
+
+describe('Where trip folders go', () => {
+  it('is Pictures/PhotoSense to start with, and Change… makes them in the folder chosen from then on', async () => {
+    const notify = vi.fn();
+    render(<PhonesView notify={notify} onPair={vi.fn()} />);
+    const files = screen.getByRole('region', { name: 'Files from this phone' });
+    await userEvent.click(within(files).getByRole('button', { name: 'Change… where trip folders go' }));
+    expect(screen.getByRole('dialog', { name: "Where trip folders from Alex's iPhone go" })).toHaveTextContent('From C:\\Users\\alex\\Pictures\\PhotoSense');
+    await userEvent.click(screen.getByRole('button', { name: 'Pick D:\\Phones' }));
+    expect(api.tripsGoTo).toHaveBeenCalledWith('phone-1', 'D:\\Phones');
+    expect(notify).toHaveBeenCalledWith("Trip folders from Alex's iPhone now go in D:\\Phones.", 'ok');
+
+    await userEvent.click(within(files).getByRole('button', { name: 'Change… where trip folders go' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

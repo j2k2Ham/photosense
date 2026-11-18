@@ -33,6 +33,15 @@ internal sealed class PairingEndpoints
         return await StateAsync(req, Dto(await _computer!.OpenAsync(ct)), ct);
     }
 
+    /// <summary>POST /api/pairing/name: on a computer, names it as phones show it.</summary>
+    public async Task<ApiResponse> NameAsync(ApiRequest req, CancellationToken ct)
+    {
+        if (Refused(req, _computer, OnlyAComputer, ct) is { } refused) return await refused;
+        var request = await req.ReadJsonAsync<ComputerNameRequest>(Json, ct);
+        try { return await StateAsync(req, Dto(await _computer!.RenameAsync(request?.Name ?? string.Empty, ct)), ct); }
+        catch (ArgumentException ex) { return await RefuseAsync(req, HttpStatusCode.BadRequest, ex.Message, ct); }
+    }
+
     /// <summary>POST /api/pairing/close: on a computer, stops waiting for a phone.</summary>
     public async Task<ApiResponse> CloseAsync(ApiRequest req, CancellationToken ct)
     {
@@ -88,7 +97,7 @@ internal sealed class PairingEndpoints
     private static PairingStateDto Dto(ComputerPairingState s) => new()
     {
         Stage = s.Stage.ToString().ToLowerInvariant(), Link = s.Link, Code = s.Code, Expires = s.Expires?.ToString("O", CultureInfo.InvariantCulture),
-        Check = s.Check, Other = s.Phone, Problem = s.Problem,
+        Check = s.Check, Other = s.Phone, Problem = s.Problem, Name = s.Name,
     };
 
     private static PairingStateDto Dto(PhonePairingState s) => new()

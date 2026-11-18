@@ -140,6 +140,17 @@ internal sealed class BackupEndpoints
         catch (DirectoryNotFoundException ex) { return await RefuseAsync(req, HttpStatusCode.BadRequest, ex.Message, ct); }
     }
 
+    /// <summary>POST /api/backup/phones/{id}/trips: on a computer, makes a phone's trip folders in another folder from now on.</summary>
+    public async Task<ApiResponse> TripsFolderAsync(ApiRequest req, string id, CancellationToken ct)
+    {
+        if (Refused(req, _computer, OnlyAComputer, ct) is { } refused) return await refused;
+        var folder = (await req.ReadJsonAsync<BackupFolderRequest>(Json, ct))?.Folder;
+        if (string.IsNullOrWhiteSpace(folder)) return await RefuseAsync(req, HttpStatusCode.BadRequest, "Choose a folder.", ct);
+        try { return await AnswerAsync(req, await DtoAsync(await _computer!.TripsGoToAsync(id, folder, ct), ct), ct); }
+        catch (ArgumentException ex) { return await RefuseAsync(req, HttpStatusCode.NotFound, ex.Message, ct); }
+        catch (DirectoryNotFoundException ex) { return await RefuseAsync(req, HttpStatusCode.BadRequest, ex.Message, ct); }
+    }
+
     /// <summary>POST /api/backup/phones/{id}/pause: on a computer, pauses a phone's backups, or lets them run again.</summary>
     public async Task<ApiResponse> PausePhoneAsync(ApiRequest req, string id, CancellationToken ct)
     {
@@ -164,7 +175,7 @@ internal sealed class BackupEndpoints
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = _computer.Named(phone.Folder), Path = phone.Folder, Paused = phone.Paused, Paired = Time(phone.Paired)!,
             LastBackup = Time(phone.LastBackup), LastChecked = Time(phone.LastChecked), Held = held, HeldBytes = heldBytes, Safe = phone.Safe, SafeBytes = phone.SafeBytes,
-            TripFolders = phone.TripFolders?.Count ?? 0, Arriving = arriving, Events = [.. (await _computer.EventsAsync(phone.Id, ct)).Select(e => new BackupEventDto { At = Time(e.At)!, Text = e.Text })],
+            TripFolders = phone.TripFolders?.Count ?? 0, TripsFolder = _computer.Named(_computer.TripsIn(phone)), TripsPath = _computer.TripsIn(phone), Arriving = arriving, Events = [.. (await _computer.EventsAsync(phone.Id, ct)).Select(e => new BackupEventDto { At = Time(e.At)!, Text = e.Text })],
         };
     }
 

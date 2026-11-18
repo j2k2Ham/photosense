@@ -31,8 +31,12 @@ public sealed record TripDay(DateOnly Day, IReadOnlyList<Photo> Photos);
 /// <param name="Latitude">The middle of where they were taken: degrees north.</param>
 /// <param name="Longitude">The middle of where they were taken: degrees east.</param>
 /// <param name="Cover">The picture shown for it: its sharpest, or its first when none was measured.</param>
-public sealed record Trip(string Id, string Name, string Folder, DateTime Start, DateTime End, IReadOnlyList<Photo> Photos, double Latitude, double Longitude, Photo Cover)
+/// <param name="Suggested">PhotoSense's own name for it, which <paramref name="Name"/> is unless the person named it.</param>
+public sealed record Trip(string Id, string Name, string Folder, DateTime Start, DateTime End, IReadOnlyList<Photo> Photos, double Latitude, double Longitude, Photo Cover, string Suggested)
 {
+    /// <summary>The person named it.</summary>
+    public bool Named => Name != Suggested;
+
     /// <summary>How many of its photos are videos.</summary>
     public int Videos => Photos.Count(p => p.IsVideo);
 
@@ -51,6 +55,9 @@ public sealed record TripsFound(TripHome? Home, IReadOnlyList<Trip> Found);
 /// </summary>
 public sealed class Trips
 {
+    /// <summary>The longest name a trip can be given.</summary>
+    public const int LongestName = 60;
+
     private readonly IPhotoRepository _repo;
     private readonly IPlaceNameResolver _places;
     private readonly ITripStore _store;
@@ -78,8 +85,9 @@ public sealed class Trips
         var placed = await PlacedAsync(ct);
         var home = await HomeAsync(placed, ct);
         if (home is null) return new TripsFound(null, []);
+        var names = await _store.NamesAsync(ct);
         var trips = TripRules.Find(placed, p => (p.Photo.Latitude!.Value, p.Photo.Longitude!.Value), p => p.When, home.Town.Latitude, home.Town.Longitude)
-            .Select(Made).Reverse().ToList();
+            .Select(t => Made(t, names)).Reverse().ToList();
         // Two trips of one month to one place take their day too, so that each has a folder of its own.
         var clashing = trips.GroupBy(t => t.Folder, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1).SelectMany(g => g).ToHashSet();
         return new TripsFound(home, [.. trips.Select(t => clashing.Contains(t) ? t with { Folder = $"{t.Start:yyyy-MM-dd}{t.Folder[7..]}" } : t)]);
@@ -87,6 +95,15 @@ public sealed class Trips
 
     /// <summary>The towns photos were taken in, those on the most days first: what the person can choose as home.</summary>
     public async Task<IReadOnlyList<TownChoice>> TownsAsync(CancellationToken ct) => Ranked(await PlacedAsync(ct));
+
+    /// <summary>Names a trip as the person wants it called, its folder too; with null or nothing but spaces, PhotoSense's own name again.</summary>
+    /// <exception cref="ArgumentException">A name longer than <see cref="LongestName"/>.</exception>
+    public Task RenameAsync(string tripId, string? name, CancellationToken ct)
+    {
+        var trimmed = name?.Trim();
+        if (trimmed?.Length > LongestName) throw new ArgumentException($"A trip's name can be at most {LongestName} letters.");
+        return _store.SaveNameAsync(tripId, string.IsNullOrEmpty(trimmed) ? null : trimmed, ct);
+    }
 
     /// <summary>Makes <paramref name="town"/> home, or with null lets PhotoSense work it out again.</summary>
     public Task ChooseHomeAsync(HomeTown? town, CancellationToken ct) => _store.SaveHomeAsync(town, ct);
@@ -111,14 +128,17 @@ public sealed class Trips
             .Select(g => new TownChoice(new HomeTown(g.Key.Town, g.Key.Region, g.Key.Country, g.First().At.Latitude, g.First().At.Longitude), g.Select(p => p.When.Date).Distinct().Count()))
             .OrderByDescending(t => t.Days).ThenBy(t => t.Town.Town, StringComparer.Ordinal).ThenBy(t => t.Town.Region, StringComparer.Ordinal)];
 
-    private static Trip Made(IReadOnlyList<Placed> trip)
+    // A trip, under the name the person gave it, which names its folder too, or PhotoSense's.
+    private static Trip Made(IReadOnlyList<Placed> trip, IReadOnlyDictionary<string, string> names)
     {
-        var (name, shortName) = NameOf(trip);
+        var (suggested, shortName) = NameOf(trip);
         var start = trip[0].When;
+        var id = start.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        var given = names.GetValueOrDefault(id);
         var photos = trip.Select(p => p.Photo).ToList();
         var cover = photos.Where(p => !p.IsVideo).MaxBy(p => p.Sharpness ?? -1) ?? photos[0];
-        return new Trip(start.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture), name, $"{start:yyyy-MM} {shortName}", start, trip[^1].When, photos,
-            photos.Average(p => p.Latitude!.Value), photos.Average(p => p.Longitude!.Value), cover);
+        return new Trip(id, given ?? suggested, $"{start:yyyy-MM} {given ?? shortName}", start, trip[^1].When, photos,
+            photos.Average(p => p.Latitude!.Value), photos.Average(p => p.Longitude!.Value), cover, suggested);
     }
 
     // The landmark or town most were taken at; two towns when the second has at least a quarter of them too.

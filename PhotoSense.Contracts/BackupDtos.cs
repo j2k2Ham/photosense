@@ -167,6 +167,10 @@ public sealed class BackupPhoneDto
     [JsonPropertyName("safeBytes")] public long SafeBytes { get; init; }
     /// <summary>How many trip folders were made here when it asked.</summary>
     [JsonPropertyName("tripFolders")] public int TripFolders { get; init; }
+    /// <summary>Where its trip folders are made, as the person knows it: "Pictures/PhotoSense".</summary>
+    [JsonPropertyName("tripsFolder")] public string TripsFolder { get; init; } = string.Empty;
+    /// <summary>The same, whole, for the folder picker to start from.</summary>
+    [JsonPropertyName("tripsPath")] public string TripsPath { get; init; } = string.Empty;
     /// <summary>The backup arriving from it now, if any.</summary>
     [JsonPropertyName("arriving")] public ArrivingBackupDto? Arriving { get; init; }
     /// <summary>What happened, the latest first.</summary>

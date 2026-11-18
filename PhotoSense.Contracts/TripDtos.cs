@@ -45,6 +45,8 @@ public sealed class TripDto
     [JsonPropertyName("cover")] public PhotoItemDto Cover { get; init; } = new();
     /// <summary>The computer has made its folder.</summary>
     [JsonPropertyName("folderMade")] public bool FolderMade { get; init; }
+    /// <summary>PhotoSense's own name for it, which <see cref="Name"/> is unless the person named it.</summary>
+    [JsonPropertyName("suggested")] public string Suggested { get; init; } = string.Empty;
 }
 
 /// <summary>The trip folder being made on the computer, or the last one asked for.</summary>
@@ -93,6 +95,13 @@ public sealed class TripDetailDto
     [JsonPropertyName("trip")] public TripDto Trip { get; init; } = new();
     /// <summary>Its days, the first first.</summary>
     [JsonPropertyName("days")] public IReadOnlyList<TripDayDto> Days { get; init; } = [];
+}
+
+/// <summary>A trip's name as the person wants it; with none, PhotoSense's own again.</summary>
+public sealed class TripNameRequest
+{
+    /// <summary>The name; null or empty for PhotoSense's own.</summary>
+    [JsonPropertyName("name")] public string? Name { get; init; }
 }
 
 /// <summary>The home chosen; with no town, PhotoSense works it out again.</summary>

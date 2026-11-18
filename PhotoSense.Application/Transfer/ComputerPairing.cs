@@ -28,7 +28,11 @@ public enum ComputerPairingStage
 /// <param name="Check">The number to compare with the phone's while comparing.</param>
 /// <param name="Phone">The phone being paired, or just paired.</param>
 /// <param name="Problem">Why pairing stopped.</param>
-public sealed record ComputerPairingState(ComputerPairingStage Stage, string? Link, string? Code, DateTimeOffset? Expires, string? Check, string? Phone, string? Problem);
+public sealed record ComputerPairingState(ComputerPairingStage Stage, string? Link, string? Code, DateTimeOffset? Expires, string? Check, string? Phone, string? Problem)
+{
+    /// <summary>What this computer is called, as phones show it.</summary>
+    public string Name { get; init; } = string.Empty;
+}
 
 /// <summary>How a computer waits for phones and tells the network so: its own port, and multicast DNS.</summary>
 /// <param name="Listener">Waits for phones to connect.</param>
@@ -48,6 +52,9 @@ public sealed class ComputerPairing
     /// <summary>How long a code and a QR code stand before they change.</summary>
     public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
 
+    /// <summary>The longest name a computer can be given.</summary>
+    public const int LongestName = 40;
+
     private readonly ITransferListener _listener;
     private readonly ITransferAdvertiser _advertiser;
     private readonly IPairingStore _pairs;
@@ -62,12 +69,14 @@ public sealed class ComputerPairing
     private int _port;
     private bool _listening;
     private TaskCompletionSource<bool>? _answer;
+    // What the person named this computer, once known; until then its own name on the network.
+    private string? _named;
 
     /// <summary>Pairing through the listener and advertiser given.</summary>
     /// <param name="listener">Waits for phones to connect.</param>
     /// <param name="advertiser">Tells the network that this computer is waiting for phones.</param>
     /// <param name="pairs">The devices this computer has been paired with; a new pairing is kept there.</param>
-    /// <param name="name">What this computer is called, as the phone shows it.</param>
+    /// <param name="name">What this computer is called, as the phone shows it, until the person names it.</param>
     /// <param name="hosts">This computer's addresses on its networks, for the QR code.</param>
     /// <param name="backup">Keeps the backups of the phones paired with this computer.</param>
     /// <param name="clock">When the codes change, and how long a phone may stay silent.</param>
@@ -90,7 +99,7 @@ public sealed class ComputerPairing
             lock (_lock)
             {
                 if (_state is { Stage: ComputerPairingStage.Waiting, Expires: { } at } && at <= _clock.GetUtcNow()) Invite();
-                return _state;
+                return _state with { Name = Name };
             }
         }
     }
@@ -99,12 +108,14 @@ public sealed class ComputerPairing
     public async Task ListenAsync(CancellationToken ct)
     {
         var id = await _pairs.SelfIdAsync(ct);
+        var named = await _pairs.SelfNameAsync(ct);
         lock (_lock)
         {
             _id = id;
+            _named = named;
             if (_listening) return;
             _port = _listener.Start(ServeAsync);
-            _advertiser.Start(id, _name, _port);
+            _advertiser.Start(id, Name, _port);
             _listening = true;
         }
     }
@@ -130,9 +141,32 @@ public sealed class ComputerPairing
         lock (_lock)
         {
             Invite();
-            return _state;
+            return _state with { Name = Name };
         }
     }
+
+    /// <summary>
+    /// Names this computer as phones show it: kept, said on the network at once, and put in the QR code while Pair a
+    /// phone is open. A phone paired before learns the name at its next backup.
+    /// </summary>
+    /// <exception cref="ArgumentException">No name, or one longer than <see cref="LongestName"/>.</exception>
+    public async Task<ComputerPairingState> RenameAsync(string name, CancellationToken ct)
+    {
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0 || trimmed.Length > LongestName) throw new ArgumentException($"Give this computer a name of 1 to {LongestName} letters.");
+        await _pairs.SaveSelfNameAsync(trimmed, ct);
+        lock (_lock)
+        {
+            _named = trimmed;
+            if (_invitation is not null) _state = _state with { Link = new PairingLink(_id!, trimmed, _hosts(), _port, _invitation.Secret).Write() };
+            // Said again on the network under the new name.
+            if (_listening) _advertiser.Start(_id!, trimmed, _port);
+            return _state with { Name = trimmed };
+        }
+    }
+
+    // What this computer is called now. Read holding the lock, or where a moment's old name does no harm.
+    private string Name => _named ?? _name;
 
     /// <summary>Closes Pair a phone: phones it does not know are turned away again; a comparison still asked is answered no.</summary>
     public void Close()
@@ -156,7 +190,7 @@ public sealed class ComputerPairing
     {
         var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("000000", System.Globalization.CultureInfo.InvariantCulture);
         _invitation = new PairingInvitation(code, RandomNumberGenerator.GetBytes(32));
-        var link = new PairingLink(_id!, _name, _hosts(), _port, _invitation.Secret).Write();
+        var link = new PairingLink(_id!, Name, _hosts(), _port, _invitation.Secret).Write();
         _state = new ComputerPairingState(ComputerPairingStage.Waiting, link, code, _clock.GetUtcNow() + Lifetime, null, null, null);
     }
 
@@ -169,7 +203,7 @@ public sealed class ComputerPairing
         Linked linked;
         try
         {
-            linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, async (check, phone, token) =>
+            linked = await Pairing.ComputerAsync(stream, new Device(await _pairs.SelfIdAsync(ct), Name), _pairs, async (check, phone, token) =>
             {
                 compared = true;
                 return await AskAsync(check, phone, token);

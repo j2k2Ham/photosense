@@ -1,5 +1,5 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
-import { closePairing, confirmPairing, openPairing, usePairing } from '../lib/apiClient';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { closePairing, confirmPairing, nameComputer, openPairing, usePairing } from '../lib/apiClient';
 import { qrModules, qrPath } from '../lib/qr';
 import { Scrim } from './Scrim';
 import type { ToastKind } from './Toaster';
@@ -20,6 +20,46 @@ function QrCode({ text }: { readonly text: string }) {
       className="h-[220px] w-[220px] shrink-0 rounded-[14px] bg-white">
       <path d={qrPath(modules)} fill="#000" />
     </svg>
+  );
+}
+
+/** What phones will call this computer, with Rename, as it is first connected (Jamie, 2026-11-18). */
+function ComputerName({ name, notify }: { readonly name: string | null | undefined; notify(message: string, kind: ToastKind): void }) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+
+  async function save() {
+    setBusy(true);
+    try {
+      await nameComputer(field.current!.value);
+      setEditing(false);
+    } catch (e) {
+      notify(said(e), 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-line px-4 py-3">
+        <p className="min-w-0 flex-1 text-[14px] text-t2">Phones will call this computer <strong className="font-semibold text-t1">{name ?? '…'}</strong>.</p>
+        <button type="button" disabled={!name} onClick={() => setEditing(true)} className="pill-quiet h-8 shrink-0 px-3 text-[13px]">Rename…</button>
+      </div>
+    );
+  }
+  return (
+    <form className="flex flex-wrap items-end gap-2.5 rounded-xl border border-line px-4 py-3" onSubmit={e => { e.preventDefault(); void save(); }}>
+      <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-[13px] text-t2">
+        Name this computer
+        {/* The field the person came for, so it takes the keyboard at once; Rename… is offered only once the name is known. */}
+        {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+        <input ref={field} autoFocus defaultValue={name!} maxLength={40} className="h-10 rounded-lg border border-line bg-s1 px-3 text-[14.5px] text-t1" />
+      </label>
+      <button type="button" onClick={() => setEditing(false)} className="pill-quiet h-10 px-4 text-[14px]">Cancel</button>
+      <button type="submit" disabled={busy} className="pill-brand h-10 px-4 text-[14px]">Save</button>
+    </form>
   );
 }
 
@@ -70,6 +110,7 @@ export function PairWindow({ notify, onClose }: Props) {
   } else {
     body = (
       <>
+        <ComputerName name={state?.name} notify={notify} />
         <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
           {state?.link ? <QrCode text={state.link} /> : <div aria-hidden className="h-[220px] w-[220px] shrink-0 rounded-[14px] bg-s2" />}
           <div className="flex min-w-0 flex-1 flex-col gap-4">

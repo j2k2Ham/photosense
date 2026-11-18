@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { chooseHome, makeTripFolder, thumbnailUrl, useTowns, useTrip, useTrips } from '../../lib/apiClient';
+import { chooseHome, makeTripFolder, renameTrip, thumbnailUrl, useTowns, useTrip, useTrips } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
-import type { DistanceUnit } from '../../lib/distance';
 import { formatDuration } from '../../lib/format';
 import { deviceWord, usePhone } from '../../lib/phone';
 import { fileOf } from '../../lib/search';
-import { dayTitle, folderNote, homeNote, noTripsLine, townName, tripCount, tripDates, tripLine, tripMap } from '../../lib/trips';
+import { dayTitle, folderNote, homeNote, NO_TRIPS, townName, tripCount, tripDates, tripLine, tripMap } from '../../lib/trips';
 import type { OrganizeFileDto, PhotoDto, TownDto, TripDto, TripsDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, Radio, Segmented } from './Controls';
@@ -45,8 +44,6 @@ export function TripsTile({ trips, onOpen }: { readonly trips: TripsDto | undefi
 interface Props {
   /** The library's files, which a photo of a trip opens in the viewer. */
   readonly files: readonly OrganizeFileDto[];
-  /** How distances are said. */
-  readonly unit: DistanceUnit;
   /** The viewer is open over it, and puts itself away on Escape. */
   readonly frozen?: boolean;
   onOpen(file: OrganizeFileDto): void;
@@ -58,13 +55,14 @@ interface Props {
  * 29–31: Trips, over every tab: the trips as a list or on a plain map, home with Change, and a trip with its days and
  * Make a folder on the computer. Built on the phone; nothing about where photos were taken leaves it.
  */
-export function TripsScreen({ files, unit, frozen = false, onOpen, notify, onClose }: Props) {
+export function TripsScreen({ files, frozen = false, onOpen, notify, onClose }: Props) {
   const { platform, tablet } = usePhone();
   const trips = useTrips(true);
   const data = trips.data;
   const [view, setView] = useState<'list' | 'map'>('list');
   const [open, setOpen] = useState<string>();
   const [choosing, setChoosing] = useState(false);
+  const [naming, setNaming] = useState(false);
   const closeTrip = () => setOpen(undefined);
   useBackLayer(open !== undefined, closeTrip);
   useFolderEnded(data, notify);
@@ -77,10 +75,10 @@ export function TripsScreen({ files, unit, frozen = false, onOpen, notify, onClo
   }
 
   return (
-    <LayerScreen label={trip ? trip.name : 'Trips'} onBack={trip ? closeTrip : onClose} frozen={frozen || choosing}
+    <LayerScreen label={trip ? trip.name : 'Trips'} onBack={trip ? closeTrip : onClose} frozen={frozen || choosing || naming}
       footer={trip && data ? <FolderFooter trip={trip} trips={data} device={deviceWord(platform, tablet)} notify={notify} /> : undefined}>
       {trip
-        ? <TripView trip={trip} onBack={closeTrip} onPhoto={openPhoto} />
+        ? <TripView trip={trip} onBack={closeTrip} onPhoto={openPhoto} onRename={() => setNaming(true)} />
         : <>
           <PushedHeader title="Trips" onBack={onClose} />
           <div className="mx-auto flex w-full max-w-[720px] flex-col gap-3 px-4 pb-6">
@@ -93,7 +91,7 @@ export function TripsScreen({ files, unit, frozen = false, onOpen, notify, onClo
                 <p className="min-w-0 flex-1 text-[14px] leading-[1.4] text-t2">{homeNote(data.home)}</p>
                 <button type="button" onClick={() => setChoosing(true)} className="shrink-0 text-[14.5px] font-semibold text-acc">Change</button>
               </div>
-              {data.trips.length === 0 && <p className="py-8 text-center text-[15px] leading-[1.4] text-t2">{noTripsLine(unit)}</p>}
+              {data.trips.length === 0 && <p className="py-8 text-center text-[15px] leading-[1.4] text-t2">{NO_TRIPS}</p>}
               {data.trips.length > 0 && view === 'list' && (
                 <ul aria-label="Trips" className="flex flex-col gap-3">
                   {data.trips.map(t => (
@@ -114,6 +112,7 @@ export function TripsScreen({ files, unit, frozen = false, onOpen, notify, onClo
           </div>
         </>}
       {choosing && data?.home && <HomeSheet home={data.home} chosen={data.homeChosen} notify={notify} onClose={() => setChoosing(false)} />}
+      {naming && trip && <NameSheet trip={trip} notify={notify} onClose={() => setNaming(false)} />}
     </LayerScreen>
   );
 }
@@ -163,7 +162,7 @@ function TravelMap({ trips, home, onOpen }: { readonly trips: readonly TripDto[]
 }
 
 /** 31: a trip: its cover, name, dates and count, and a grid of what was taken each day. */
-function TripView({ trip, onBack, onPhoto }: { readonly trip: TripDto; onBack(): void; onPhoto(photo: PhotoDto): void }) {
+function TripView({ trip, onBack, onPhoto, onRename }: { readonly trip: TripDto; onBack(): void; onPhoto(photo: PhotoDto): void; onRename(): void }) {
   const detail = useTrip(trip.id);
   return (
     <>
@@ -174,6 +173,7 @@ function TripView({ trip, onBack, onPhoto }: { readonly trip: TripDto; onBack():
         <div className="relative aspect-[16/10] w-full overflow-hidden rounded-[20px]"><Cover photo={trip.cover} /></div>
         <h2 className="mt-4 font-title text-[28px] font-bold leading-tight">{trip.name}</h2>
         <p className="mt-1 text-[14.5px] text-t2">{tripDates(trip.start, trip.end)} · {tripCount(trip.photos, trip.videos)}</p>
+        <button type="button" onClick={onRename} className="mt-2 text-[15px] font-semibold text-acc">Rename</button>
       </div>
       {detail.error !== undefined && <p role="alert" className="px-4 py-8 text-center text-[15px] text-t2">The trip could not be read: {said(detail.error)}</p>}
       {detail.data?.days.map((day, i) => (
@@ -240,7 +240,7 @@ function HomeSheet({ home, chosen, notify, onClose }: { readonly home: TownDto; 
   return (
     <Sheet title="Home" onClose={onClose}>
       <div className="flex flex-col gap-3 px-4 pb-3 pt-2">
-        <p className="text-[14px] leading-[1.4] text-t2">Photos taken more than 50 km (about 30 miles) from home make trips.</p>
+        <p className="text-[14px] leading-[1.4] text-t2">Photos taken more than 30 miles from home make trips.</p>
         <ListGroup inSheet>
           <ListRow disabled={busy} onClick={() => void pick(null)} detail={chosen ? undefined : townName(home)}>
             <span className="flex items-center gap-3"><Radio on={!chosen} />Where most photos are taken</span>
@@ -252,6 +252,42 @@ function HomeSheet({ home, chosen, notify, onClose }: { readonly home: TownDto; 
           ))}
         </ListGroup>
       </div>
+    </Sheet>
+  );
+}
+
+/** Rename: the trip's name as the person wants it, which names its folder on the computer too, or PhotoSense's own again. */
+function NameSheet({ trip, notify, onClose }: { readonly trip: TripDto; notify: Notify; onClose(): void }) {
+  const [busy, setBusy] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+
+  async function save(name: string | null) {
+    setBusy(true);
+    try {
+      await renameTrip(trip.id, name);
+      onClose();
+    } catch (e) {
+      notify(said(e), 'error');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Sheet title="Rename trip" onClose={onClose}>
+      <form className="flex flex-col gap-3 px-4 pb-3 pt-2" onSubmit={e => { e.preventDefault(); void save(field.current!.value); }}>
+        <label className="flex flex-col gap-1.5 text-[14px] text-t2">
+          Name
+          {/* The field the person came for, so it takes the keyboard at once. */}
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+          <input ref={field} autoFocus defaultValue={trip.name} maxLength={60} enterKeyHint="done"
+            className="h-12 rounded-cell bg-cell px-4 text-[length:var(--fs-body)] text-t1 outline-none" />
+        </label>
+        <p className="text-[13px] leading-[1.4] text-t2">Its folder on the computer takes the name too, with the month before it.</p>
+        <PhoneButton disabled={busy} onClick={() => void save(field.current!.value)}>Save</PhoneButton>
+        {trip.name !== trip.suggested && (
+          <PhoneButton kind="text" disabled={busy} onClick={() => void save(null)}>Use PhotoSense’s name: {trip.suggested}</PhoneButton>
+        )}
+      </form>
     </Sheet>
   );
 }

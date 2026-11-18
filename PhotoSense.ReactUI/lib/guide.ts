@@ -374,6 +374,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Pairing a phone',
         steps: [
           'Open **Phones**, at the top left, and choose **Pair a phone**.',
+          'It says what phones will call this computer. To give it a name of your own, such as “Office PC”, choose **Rename…**, type the name, and **Save**. Phones paired already learn the new name at their next backup.',
           'It shows a QR code, and under **Or enter this code on the phone**, a six-digit code. Both change every 5 minutes.',
           'On the phone, choose **Connect your computer**, then **Scan the code** and point the phone at the QR code: the two are paired at once.',
           'Or, on the phone, choose **Enter the code instead** and type the six digits. Both then show the same number: check that they match before pairing on each.',
@@ -386,7 +387,7 @@ export const GUIDE: GuideTopic[] = [
           'Each phone’s backups go to **Pictures/PhotoSense**, in a folder named after the phone.',
           'Each file is checked by its SHA-256 checksum as it arrives, and only a file that arrived whole is kept. One whose name is taken in the folder arrives under a new name: nothing on this computer is replaced.',
           'Every time a phone backs up, this computer first checks the files it holds for it. One deleted or changed here is sent again by the phone; one moved between the phone’s folder and its trip folders is found where it is.',
-          'When a phone asks, this computer moves a trip’s copies into a folder of their own in **Pictures/PhotoSense**, named by the month and the place, such as **2026-07 Glacier National Park**. A name already taken there gets a number, and nothing is replaced. The move is listed in **Recently moved**, where **Undo** puts the copies back; either way they still count as backed up, and are not sent again.',
+          'When a phone asks, this computer moves a trip’s copies into a folder of their own in **Pictures/PhotoSense**, or the folder you chose for that phone’s trips, named by the month and the trip’s name, such as **2026-07 Glacier National Park**. A name already taken there gets a number, and nothing is replaced. The move is listed in **Recently moved**, where **Undo** puts the copies back; either way they still count as backed up, and are not sent again.',
         ],
       },
       {
@@ -395,7 +396,7 @@ export const GUIDE: GuideTopic[] = [
           '**Phones and tablets**, on the left, lists every phone paired with this computer, with when it last backed up. Choose one to see it.',
           '**Backup** shows a backup arriving, file by file, each with a tick once it matched its checksum, and otherwise when the last one was.',
           '**On this computer** says how many of its photos and videos are here; **Checked** that each matched its SHA-256 checksum; **Safe to delete on the phone** how many the phone could remove, and how much space that frees there.',
-          '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays. **Trip folders** says how many were made when the phone asked.',
+          '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays. **Trip folders** says where they are made and how many were made when the phone asked; its **Change…** makes them in another folder from then on.',
           '**Pause backups** turns the phone away until **Resume backups**. **Activity** lists what happened.',
         ],
       },
@@ -649,7 +650,8 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Trips',
         text: [
           'The **Trips** tile under the search field opens **Trips**: the photos and videos you took away from home, grouped by place and date, the latest trip first.',
-          'A trip is at least 10 photos and videos taken more than 50 km (about 30 miles) from home, with no more than two days between them. A photo taken at home ends a trip. Each is named after the landmark or town where you took the most, or two towns when you spent time in both.',
+          'A trip is at least 10 photos and videos taken more than 30 miles from home, with no more than two days between them. A photo taken at home ends a trip. Each is named after the landmark or town where you took the most, or two towns when you spent time in both.',
+          'To call a trip something of your own, open it and choose **Rename**, type the name, and **Save**. Its folder on your computer takes the name too. **Use PhotoSense’s name** gives it PhotoSense’s again.',
           'Home is the town where you took photos on the most days, and the note at the top of Trips names it. **Change** lets you choose another town among those in your photos, or go back to **Where most photos are taken**.',
           '**List** shows each trip with its dates and how many photos and videos it has. **Map** shows each trip as a pin with its count, beside **Home**; tap a pin to open the trip. The map is drawn on your phone, and where your photos were taken never leaves it.',
           'Tap a trip to see its cover, its dates and what you took each day. Tap a photo to view it.',
