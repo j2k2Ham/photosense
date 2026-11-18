@@ -150,6 +150,20 @@ public sealed class BackupTests : IDisposable
 
     private async Task<JsonElement> PhoneOnComputerAsync(CancellationToken ct) => (await _computer.PhonesAsync(Http.Get("backup/phones").FromClient(), ct)).Json()[0];
 
+    /// <summary>
+    /// The phone as the computer has it once the computer has noted <paramref name="last"/>: it notes what it received
+    /// as the connection closes, which can be just after the phone has finished.
+    /// </summary>
+    private async Task<JsonElement> NotedOnComputerAsync(string last, CancellationToken ct)
+    {
+        for (var tries = 0; ; tries++)
+        {
+            var phone = await PhoneOnComputerAsync(ct);
+            if (Names(phone).FirstOrDefault() == last || tries == 100) return phone;
+            await Task.Delay(50, ct);
+        }
+    }
+
     private static string[] Names(JsonElement phone) => [.. phone.GetProperty("events").EnumerateArray().Select(e => e.GetProperty("text").GetString()!)];
 
     [Test]
@@ -173,7 +187,7 @@ public sealed class BackupTests : IDisposable
         var library = await PhoneAsync("GET", "backup/library", ct);
         await Assert.That((library.GetProperty("computer").GetString(), library.GetProperty("onComputer").GetArrayLength(), library.GetProperty("waiting").GetArrayLength())).IsEqualTo(("Studio iMac", 3, 0));
 
-        var phone = await PhoneOnComputerAsync(ct);
+        var phone = await NotedOnComputerAsync("4 items backed up and checked", ct);
         await Assert.That((phone.GetProperty("name").GetString(), phone.GetProperty("kind").GetString(), phone.GetProperty("held").GetInt32(), phone.GetProperty("folder").GetString(), phone.GetProperty("path").GetString()))
             .IsEqualTo(("Jamie's iPhone", "iPhone", 4, "Pictures/PhotoSense/Jamie's iPhone", Folder));
         await Assert.That((phone.GetProperty("safe").GetInt32(), phone.GetProperty("arriving").ValueKind, phone.GetProperty("lastChecked").ValueKind)).IsEqualTo((2, JsonValueKind.Null, JsonValueKind.String));
@@ -315,7 +329,7 @@ public sealed class BackupTests : IDisposable
         var resumed = await BackedUpAsync(ct);
         await Assert.That((resumed.GetProperty("stage").GetString(), resumed.GetProperty("waiting").GetInt32(), resumed.GetProperty("folder").GetString())).IsEqualTo(("ready", 0, elsewhere));
         await Assert.That(Directory.GetFiles(elsewhere).Select(f => Path.GetFileName(f)!)).IsEquivalentTo(["IMG_0004.JPG"], CollectionOrdering.Matching);
-        await Assert.That(Names(await PhoneOnComputerAsync(ct)).Take(5)).IsEquivalentTo(
+        await Assert.That(Names(await NotedOnComputerAsync("1 item backed up and checked", ct)).Take(5)).IsEquivalentTo(
             ["1 item backed up and checked", "Receiving 1 item", $"Backups now go to {elsewhere}", "Backups resumed", "Backups paused on this computer"], CollectionOrdering.Matching);
 
         var nowhere = await _computer.FolderAsync(Http.Post("backup/phones/x/folder", JsonSerializer.Serialize(new { folder = In("Nowhere") })).FromClient(), phoneId, ct);
