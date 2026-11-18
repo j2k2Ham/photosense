@@ -16,7 +16,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// sends to the phone's own bin. Nothing is ever copied onto the phone: photos are copied to a computer.
 /// </para>
 /// </summary>
-public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor
+public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor, IFavoritePhotos, ISharingCopies
 {
     /// <summary>Where what is removed from the phone's storage as a whole waits, as Android shows it: inside Pictures.</summary>
     public const string RemovedHere = "PhotoSense Removed";
@@ -167,6 +167,29 @@ public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, I
         try { return await _store.CompressAsync(video.Id, target, progress, ct); }
         // The copy is a new file: the phone is read afresh.
         finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FavoritesAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlySet<string>>(Look().Files.Where(f => f.Value.Entry.Favorite).Select(f => f.Key).ToHashSet(PhotoPath.Comparer));
+    }
+
+    /// <inheritdoc />
+    public void SetFavorite(string path, bool favorite)
+    {
+        var entry = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer on the phone.");
+        try { _store.SetFavorite(entry.Id, favorite); }
+        // What the phone holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public Task<SharedCopy> CopyForSharingAsync(string path, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var entry = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer on the phone.");
+        return _store.CopyForSharingAsync(entry.Id, removeLocation, removeCamera, ct);
     }
 
     /// <summary>Forgets the folders made for photos that never came; a folder Android has goes when it is empty, as Android has it.</summary>

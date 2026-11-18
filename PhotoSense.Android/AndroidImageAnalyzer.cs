@@ -1,17 +1,31 @@
+using Android.Gms.Extensions;
 using Android.Graphics;
+using Android.Runtime;
 using Android.Util;
 using PhotoSense.Domain.Services;
+using Xamarin.Google.MLKit.Common;
+using Xamarin.Google.MLKit.Vision.Common;
+using Xamarin.Google.MLKit.Vision.Label;
+using Xamarin.Google.MLKit.Vision.Label.Defaults;
 
 namespace PhotoSense.AndroidApp;
 
 /// <summary>
 /// Pictures decoded by the phone itself, which reads HEIC, JPEG and the rest and turns them the right way up, and
-/// measured as on a computer. Magick.NET, which a computer uses, has no build for a phone.
+/// measured as on a computer. Magick.NET, which a computer uses, has no build for a phone. What is in each is named by
+/// Google's ML Kit, on the phone, with the model Google Play services keeps.
 /// </summary>
 public sealed class AndroidImageAnalyzer : IImageAnalyzer
 {
+    // Labels ML Kit is less sure of than this are left out: a search that finds the wrong photos is worse than one that misses.
+    private const float Sure = 0.7f;
+    private static readonly Lazy<IImageLabeler> Labeler = new(() => ImageLabeling.GetClient(ImageLabelerOptions.DefaultOptions));
+
     /// <inheritdoc />
-    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct) => Task.Run(() => Analyze(imageStream), ct);
+    public bool LabelsPictures => true;
+
+    /// <inheritdoc />
+    public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct) => Task.Run(() => AnalyzeAndLabelAsync(imageStream, ct), ct);
 
     /// <inheritdoc />
     public Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct) => Task.Run(() =>
@@ -20,7 +34,7 @@ public sealed class AndroidImageAnalyzer : IImageAnalyzer
         return Jpeg(image, 88);
     }, ct);
 
-    private static ImageAnalysis Analyze(Stream imageStream)
+    private static async Task<ImageAnalysis> AnalyzeAndLabelAsync(Stream imageStream, CancellationToken ct)
     {
         var bytes = Bytes(imageStream);
         using var work = Decode(bytes, ImageFingerprint.WorkEdge, out var size, out var type);
@@ -28,7 +42,24 @@ public sealed class AndroidImageAnalyzer : IImageAnalyzer
         var signature = Grid(work);
         // Decoded at the size sharpness is measured at (ImageFingerprint.SharpnessEdge), so it is measured as it is.
         var sharpness = ImageFingerprint.Sharpness(Rgb(work), work.Width, work.Height);
-        return new ImageAnalysis(size.Width, size.Height, FormatOf(type), null, ImageFingerprint.PerceptualHash(signature), signature, Jpeg(thumbnail, 82), sharpness);
+        var labels = await LabelsAsync(work, ct);
+        return new ImageAnalysis(size.Width, size.Height, FormatOf(type), null, ImageFingerprint.PerceptualHash(signature), signature, Jpeg(thumbnail, 82), sharpness, labels);
+    }
+
+    // What ML Kit sees in the picture, as words ("dog", "beach"). Null while Google Play services is still fetching its
+    // model, so that the next scan labels the picture; none on a phone where it cannot label at all.
+    private static async Task<string[]?> LabelsAsync(Bitmap image, CancellationToken ct)
+    {
+        try
+        {
+            var found = await Labeler.Value.Process(InputImage.FromBitmap(image, 0)).AsAsync<Java.Lang.Object>().WaitAsync(ct);
+            if (found is null || JavaList.FromJniHandle(found.Handle, JniHandleOwnership.DoNotTransfer) is not { } list) return [];
+            return [.. list.OfType<Java.Lang.Object>().Select(o => o.JavaCast<ImageLabel>()!).Where(l => l.Confidence >= Sure)
+                .Select(l => l.Text.ToLowerInvariant()).Distinct()];
+        }
+        catch (MlKitException e) when (e.ErrorCode == MlKitException.Unavailable) { return null; }
+        // ML Kit's other errors (no Google Play services, a model that cannot run): the picture is still found by place and date.
+        catch (Java.Lang.Exception) { return []; }
     }
 
     private static byte[] Bytes(Stream imageStream)

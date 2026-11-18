@@ -2,7 +2,7 @@ import useSWR, { mutate } from 'swr';
 import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
-  CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto,
+  CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -584,10 +584,39 @@ export function useYear(on: boolean) {
   return useSWR<YearReviewDto>(on ? `${API_BASE}/year` : null, json);
 }
 
-/** Hands a card, a PNG in base 64, to the phone's share sheet, named `name`. */
-export async function shareImage(image: string, name: string): Promise<void> {
-  const body = JSON.stringify({ image, name });
+// A request that answers with nothing, its body carried as json's are.
+async function post(url: string, body: string): Promise<void> {
   const carried: Record<string, string> = android ? { 'x-photosense-body': android.keep(body) } : {};
-  const res = await fetch(`${API_BASE}/share`, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...authHeaders, ...carried } });
+  const res = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...authHeaders, ...carried } });
   if (!res.ok) throw await failure(res);
 }
+
+/** Hands a card, a PNG in base 64, to the phone's share sheet, named `name`. */
+export const shareImage = (image: string, name: string) => post(`${API_BASE}/share`, JSON.stringify({ image, name }));
+
+const searchUrl = `${API_BASE}/search`;
+
+/** On a phone: the photos that match a search, latest first; nothing is asked while `query` is empty. Searches stay on the phone. */
+export function useSearch(query: string) {
+  return useSWR<SearchResultDto>(query ? `${searchUrl}?q=${encodeURIComponent(query)}` : null, json);
+}
+
+/** Asks every search again, for when Pro has been bought and things in photos can be searched. */
+export const refreshSearch = () => mutate((key: unknown) => typeof key === 'string' && key.startsWith(`${searchUrl}?`));
+
+const detailsUrl = (path: string) => `${API_BASE}/viewer/details?path=${encodeURIComponent(path)}`;
+
+/** On a phone: a picture or video's camera and whether it is a favorite; nothing is asked while `path` is undefined. */
+export function usePhotoDetails(path: string | undefined) {
+  return useSWR<PhotoDetailsDto>(path === undefined ? null : detailsUrl(path), json);
+}
+
+/** Marks a picture or video a favorite in the phone's own photos app, or takes the mark away. */
+export async function setFavorite(path: string, favorite: boolean): Promise<PhotoDetailsDto> {
+  const details = await json<PhotoDetailsDto>(`${API_BASE}/viewer/favorite`, { method: 'POST', body: JSON.stringify({ path, favorite }) });
+  await mutate(detailsUrl(path), details, { revalidate: false });
+  return details;
+}
+
+/** Hands a copy of a picture or video to the phone's share sheet, without where it was taken and the camera's details as asked. */
+export const sharePhoto = (path: string, removeLocation: boolean, removeCamera: boolean) => post(`${API_BASE}/share/photo`, JSON.stringify({ path, removeLocation, removeCamera }));

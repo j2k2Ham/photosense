@@ -163,7 +163,9 @@ public class ScanExecutionService : IScanExecutionService
         var existing = await _repo.GetByPathAsync(file, ct);
         if (existing is not null && existing.AnalysisVersion == AnalysisVersion
             && existing.FileSizeBytes == info.Length && existing.FileModifiedUtc == info.ModifiedUtc
-            && (existing.ContentHash is not null || !needsHash))
+            && (existing.ContentHash is not null || !needsHash)
+            // A phone that labels pictures reads once more a picture measured before it did.
+            && (!_analyzer.LabelsPictures || isVideo || existing.Labels is not null || existing.PerceptualHash is null))
         {
             if (existing.Set != set || existing.ScanRoot != root)
             {
@@ -219,6 +221,7 @@ public class ScanExecutionService : IScanExecutionService
             photo.PerceptualHash = analysis.PerceptualHash.ToString("X16");
             photo.Signature = analysis.Signature;
             photo.Sharpness = analysis.Sharpness;
+            photo.Labels = analysis.Labels is { } labels ? [.. labels] : null;
             await _thumbnails.SaveAsync(photo.ContentHash!, analysis.ThumbnailJpeg, ct);
             Interlocked.Increment(ref run.Analyzed);
         }

@@ -1,21 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { applyOrganize, chooseMorePhotos, organizeImageUrl, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, usePhotoAccess } from '../../lib/apiClient';
+import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, usePhotoAccess } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
-import { formatBytes, formatDuration, leaf } from '../../lib/format';
+import { formatDuration, leaf } from '../../lib/format';
 import {
-  albumsOf, byMonth, deleteQuestion, filterCounts, items, libraryFilters, monthName, newAlbumBase, shows, takenAt, whereIs,
+  albumsOf, byMonth, deleteQuestion, filterCounts, items, libraryFilters, monthName, newAlbumBase, shows,
   type Album, type BackedUp, type Library, type LibraryFilter,
 } from '../../lib/library';
 import { checkedAt, gigabytes } from '../../lib/backup';
-import { checkFolderName, placeInFull, resolveNames } from '../../lib/organize';
+import { checkFolderName, resolveNames } from '../../lib/organize';
 import { deviceWord, usePhone } from '../../lib/phone';
 import type { LibraryBackupDto, OrganizeDestination, OrganizeFileDto, OrganizePlaceDto, SafeReviewDto, YearReviewDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton } from './Controls';
-import { AddToFolderIcon, CheckIcon, ChevronBackIcon, CloseIcon, FolderIcon, LaptopIcon, SendIcon, TrashIcon } from './Icons';
+import { CheckIcon, CloseIcon, FolderIcon, LaptopIcon } from './Icons';
 import { MonthHeader, PhotoGrid, SelectionBar } from './PhotoGrid';
 import { RootHeader, Screen } from './Screens';
+import { SearchField, SearchScreen } from './Search';
+import { Viewer } from './Viewer';
 import { YearCard } from './YearInReview';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet, Sheet } from './Sheet';
@@ -53,13 +55,15 @@ interface Props {
   readonly year?: YearReviewDto;
   /** Opens Year in review. */
   onYear?(): void;
+  /** Whether Share photo starts with Remove location on, as Settings has it. */
+  readonly removeLocation?: boolean;
 }
 
 /**
- * Library: every picture and video on the phone, latest first, by month, narrowed by a filter. Tapping one opens it;
- * Select chooses several to send, put in an album or folder, or delete.
+ * Library: every picture and video on the phone, latest first, by month, narrowed by a filter, with the search field
+ * above them (26). Tapping one opens it; Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true }: Props) {
   const { platform, ios, tablet, words } = usePhone();
   const backedUp = useMemo<BackedUp | undefined>(() => (backup?.computer ? { on: new Set(backup.onComputer), waiting: new Set(backup.waiting) } : undefined), [backup]);
   const [bannerHidden, setBannerHidden] = useState(false);
@@ -72,6 +76,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   const [acting, setActing] = useState<{ files: OrganizeFileDto[]; sheet: 'put' | 'new' | 'delete' }>();
   const gate = usePlanGate();
   const [viewing, setViewing] = useState<string>();
+  const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const counts = useMemo(() => (root ? filterCounts(files, root, platform, backedUp) : undefined), [files, root, platform, backedUp]);
@@ -168,6 +173,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   return (
     <Screen label="Library">
       <RootHeader title={title} subtitle={subtitle} textAction={textAction} onStop={selecting && !ios ? stopSelecting : undefined} noGear={selecting} />
+      {!selecting && <SearchField onOpen={() => setSearching(true)} />}
       {access === 'selected' && (
         <div role="note" className="mx-4 mb-3 flex items-center gap-3 rounded-cell bg-acc-soft px-4 py-3.5 text-on-acc-soft">
           <p className="min-w-0 flex-1 text-[14.5px] leading-[1.4]">PhotoSense can see only the {all.toLocaleString()} photos you chose. Copies among the rest are not found.</p>
@@ -215,8 +221,9 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       {selecting && <SelectionBar count={chosen.length} onSend={() => { onSend(chosen.map(f => f.id)); stopSelecting(); }} onPut={() => act('put', chosen)} onDelete={() => act('delete', chosen)} />}
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
+      {searching && <SearchScreen files={files} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setSearching(false)} />}
       {viewed && (
-        <Viewer file={viewed} places={places} root={root!} onClose={() => setViewing(undefined)}
+        <Viewer file={viewed} places={places} root={root!} removeLocation={removeLocation} notify={notify} onClose={() => setViewing(undefined)}
           onSend={() => { onSend([viewed.id]); setViewing(undefined); }} onPut={() => act('put', [viewed])} onDelete={() => act('delete', [viewed])} />
       )}
       {acting?.sheet === 'put' && (
@@ -235,63 +242,6 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       })()}
       </>, document.body)}
     </Screen>
-  );
-}
-
-interface ViewerProps {
-  readonly file: OrganizeFileDto;
-  readonly places: readonly OrganizePlaceDto[];
-  readonly root: string;
-  onClose(): void;
-  onSend(): void;
-  onPut(): void;
-  onDelete(): void;
-}
-
-/** One picture or video, whole, on black: when and where it was taken, where it is, its size, and what can be done with it. */
-function Viewer({ file, places, root, onClose, onSend, onPut, onDelete }: ViewerProps) {
-  const { words } = usePhone();
-  useBackLayer(true, onClose);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-  const place = file.place == null ? 'No location' : placeInFull(places[file.place]);
-  const line = [formatBytes(file.sizeBytes), file.width > 0 ? `${file.width} × ${file.height}` : undefined, file.durationSeconds == null ? undefined : formatDuration(file.durationSeconds)];
-  const action = 'flex flex-col items-center gap-[3px] py-2 text-[11.5px] font-semibold';
-  return (
-    <div role="dialog" aria-modal aria-label={file.name} className="fixed inset-0 z-40 flex animate-fade-in flex-col bg-stage font-ui text-white">
-      <div className="flex items-center gap-3 px-3 pb-2 pt-[calc(var(--safe-t)+8px)]">
-        <button type="button" aria-label="Back" onClick={onClose} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/[.14]"><ChevronBackIcon /></button>
-        <div className="min-w-0 flex-1 text-center">
-          <p className="truncate font-code text-[14px] font-medium">{file.name}</p>
-          <p className="text-[12.5px] text-white/[.72]">{takenAt(file.date)}</p>
-        </div>
-        <span className="w-11 shrink-0" />
-      </div>
-      <div className="flex min-h-0 flex-1 items-center justify-center">
-        {file.isVideo
-          ? <span className="text-[15px] text-white/[.78]">PhotoSense cannot play videos yet.</span>
-          : (
-            // The small preview shows at once, under the whole picture, which can take a moment to arrive.
-            <span className="relative h-full w-full max-w-[680px]">
-              <img src={organizeThumbnailUrl(file.id)} alt="" className="absolute inset-0 h-full w-full object-contain" />
-              <img src={organizeImageUrl(file.id)} alt={file.name} className="absolute inset-0 h-full w-full object-contain" />
-            </span>
-          )}
-      </div>
-      <div className="mx-auto w-full max-w-[680px] px-5 pt-3 text-[13.5px] text-white/[.78]">
-        <p className="text-[15px] text-white">{place}</p>
-        <p>{whereIs(file.folder, root, words)}</p>
-        <p>{line.filter(Boolean).join(' · ')}</p>
-      </div>
-      <div className="mx-auto grid w-full max-w-[680px] grid-cols-3 px-2 pb-[calc(var(--safe-b)+8px)] pt-2">
-        <button type="button" onClick={onSend} className={action}><SendIcon size={22} />Send</button>
-        <button type="button" onClick={onPut} className={action}><AddToFolderIcon size={22} />{words.put}</button>
-        <button type="button" onClick={onDelete} className={`${action} text-[#FF6961]`}><TrashIcon size={22} />Delete</button>
-      </div>
-    </div>
   );
 }
 

@@ -61,6 +61,8 @@ internal sealed class PhotoDocument
     public bool IsScreenshot { get; set; }
     /// <summary>The burst it belongs to, as an iPhone marks it.</summary>
     public string? BurstId { get; set; }
+    /// <summary>What is in the picture, as a phone's labelling names it.</summary>
+    public string[]? Labels { get; set; }
 
     /// <summary>The record as the database holds it.</summary>
     public static PhotoDocument From(Photo p) => new()
@@ -92,6 +94,7 @@ internal sealed class PhotoDocument
         Sharpness = p.Sharpness,
         IsScreenshot = p.IsScreenshot,
         BurstId = p.BurstId,
+        Labels = p.Labels,
     };
 
     /// <summary>The record as the rest of PhotoSense knows it.</summary>
@@ -125,6 +128,7 @@ internal sealed class PhotoDocument
             Sharpness = Sharpness,
             IsScreenshot = IsScreenshot,
             BurstId = BurstId,
+            Labels = Labels,
         };
         entity.LoadCategories(Categories);
         return entity;

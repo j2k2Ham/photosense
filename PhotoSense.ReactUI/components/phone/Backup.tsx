@@ -209,7 +209,7 @@ export function SafeToDelete({ safe, notify, onRemoved, onBack }: SafeProps) {
             <ListRow detail={safe.folder ?? '—'}>Folder</ListRow>
           </ListGroup>
           <ListGroup header={`Keep on this ${device}`}>
-            {ios && <PhoneSwitch inList label="Favorites" detail={`${items(safe.favorites.count)} · ${gigabytes(safe.favorites.bytes)}`} on={safe.settings.keepFavorites} onChange={on => keep({ keepFavorites: on })} />}
+            <PhoneSwitch inList label="Favorites" detail={`${items(safe.favorites.count)} · ${gigabytes(safe.favorites.bytes)}`} on={safe.settings.keepFavorites} onChange={on => keep({ keepFavorites: on })} />
             <PhoneSwitch inList label="Last 30 days" detail={`${items(safe.recent.count)} · ${gigabytes(safe.recent.bytes)}`} on={safe.settings.keepRecent} onChange={on => keep({ keepRecent: on })} />
           </ListGroup>
           {ios && safe.cloudPhotos && (

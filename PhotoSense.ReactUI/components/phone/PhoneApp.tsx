@@ -192,7 +192,8 @@ export function PhoneApp(props: Props) {
       notice={notice} cover={cover}
       screens={{
         library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
-          backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} year={year} onYear={() => setWatching(true)} />,
+          backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} year={year} onYear={() => setWatching(true)}
+          removeLocation={props.settings.removeLocationWhenSharing} />,
         cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} swipe={swipe} library={library} onSwipe={setSwiping}
           lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
@@ -203,6 +204,7 @@ export function PhoneApp(props: Props) {
         {sheet === 'settings' && (
           <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
             plan={gate.plan} onSubscription={() => setSheet('subscription')} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
+            removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
             computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
             onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
             onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}

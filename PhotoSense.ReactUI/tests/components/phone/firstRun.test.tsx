@@ -70,7 +70,7 @@ function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn()
   const [started, setStarted] = React.useState(false);
   return (
     <PhoneApp platform={platform} tab={tab}
-      toasts={[]} theme="dark" errorCount={0} settings={{ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false }} onSettings={vi.fn()} scanning={scanning || started} progress={progress}
+      toasts={[]} theme="dark" errorCount={0} settings={{ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true }} onSettings={vi.fn()} scanning={scanning || started} progress={progress}
       onStarted={id => { setStarted(true); onStarted(id); }} onStopScan={onStop} notify={notify}
       onTab={next => { onTab(next); setTab(next); }} removeToast={vi.fn()} onTheme={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
   );

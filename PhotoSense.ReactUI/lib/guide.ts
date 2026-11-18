@@ -590,14 +590,78 @@ export const GUIDE: GuideTopic[] = [
     id: 'library',
     only: PHONES,
     title: 'Library',
-    summary: 'Every photo and video, by month: viewing one, choosing several, and what can be done with them.',
+    summary: 'Every photo and video, by month: searching, viewing one, sharing it, choosing several, and what can be done with them.',
     keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month',
-      'year in review', 'recap', 'wrapped', 'stats', 'share card', 'brag', 'story'],
+      'year in review', 'recap', 'wrapped', 'stats', 'share card', 'brag', 'story', 'search', 'find', 'look for', 'favorite', 'heart', 'info', 'camera',
+      'share', 'location', 'gps', 'privacy', 'metadata', 'exif'],
     sections: [
       {
         text: [
           '**Library** shows every photo and video, newest first, by month. The title says how many there are. A Live Photo is shown once, its video going with its picture.',
-          'Tap one to see it whole, with when and where it was taken, where it is kept and its size. The three buttons under it are **Send**, the way to put it somewhere, and **Delete**. A video shows its details, but PhotoSense does not play videos yet.',
+          'Tap one to see it whole, under the day it was taken, where and at what time. A video shows its details, but PhotoSense does not play videos yet.',
+        ],
+      },
+      {
+        heading: 'Viewing one',
+        tips: [
+          '**Share** opens **Share photo**: see **Sharing without the place**, below.',
+          '**Favorite** marks it a favorite in your phone’s own photos, or takes the mark away. The heart is filled while it is one.',
+          '**Info** shows its name, when and where it was taken, the camera, its size, and where it is kept, with **Send** and the way to put it somewhere. Tap **Info** again to hide them.',
+          '**Delete** asks first, naming what goes.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'The four are in the glass bar under the photo, as icons. The arrow at the top left, or a swipe from the left edge, goes back to Library.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'The four are in the bar at the foot, each with its name. The arrow at the top left, or Back, goes back to Library.',
+        ],
+      },
+      {
+        heading: 'Searching',
+        text: [
+          'Tap **Search photos**, at the top of Library, and type what you are looking for, then search. It knows places (“Butte”), months (“July”), years (“2023”) and what is in a photo (“dog”, “beach”), and you can mix them: “dog at the beach 2023”.',
+          'What you searched for is shown as chips: **In photo**, **Place**, **Month** and **Year**. Under them, how many photos match, and the photos, the latest first. Tap one to open it.',
+          'Before you search, **Recent** lists your last five searches and **Try** a few to start with. The × in the field clears it.',
+          'Searching by place and date is free. Searching for what is in photos is part of Pro: on the free plan a card says so, with **Get Pro**, and shows the photos that match the place and date of your search.',
+          'Search runs on this device, which names what is in each photo as it scans. Your photos and your searches are not uploaded.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'What is in each photo is named by Apple’s own image recognition on your iPhone or iPad. **Cancel** closes Search.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'What is in each photo is named by Google’s ML Kit on your phone, with the model Google Play services keeps; a phone without Google Play services finds photos by place and date only. The arrow, or Back, closes Search.',
+        ],
+      },
+      {
+        heading: 'Sharing without the place',
+        text: [
+          '**Share**, under a photo, opens **Share photo**. **Remove location**, on to start with, leaves where it was taken out of the copy you share; **Remove camera details** leaves out the camera’s model, lens and exposure. **Share** hands the copy to your phone’s share sheet; **Not now** puts it away.',
+          'The photo in your library keeps its location and details. Only the shared copy changes.',
+          'Whether **Remove location** starts on is set by **Remove location when sharing**, under **Privacy** in Settings.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'A photo keeps its kind, HEIC or JPEG; a video is copied as it is, not made smaller.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'A JPEG, PNG or WebP keeps its kind; any other picture, such as a HEIC, is shared as a JPEG. A video is copied as an MP4, as it is, not made smaller; the copy carries no camera details either way.',
         ],
       },
       {
@@ -960,7 +1024,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Safe to delete',
         tips: [
           'Once photos are on the computer, **Review**, on Library’s card, opens **Safe to delete**. It lists only photos and videos whose every file matched its copy on the computer at the last backup, and shows how much of this device’s storage removing them frees.',
-          'Under **Keep on this** device, **Last 30 days** leaves what you took lately here. Turn it off to remove those too.',
+          'Under **Keep on this** device, **Favorites** leaves your favorite photos here, and **Last 30 days** what you took lately. Turn one off to remove those too.',
           '**Remove** removes them, the largest first, after the phone’s own question. The copies on the computer stay. **Space freed** then shows the storage before and now.',
           'On the free plan each counts toward the day’s free removals; past them, **Remove the largest now** removes as many as are left today.',
         ],
@@ -968,7 +1032,6 @@ export const GUIDE: GuideTopic[] = [
       {
         only: IOS,
         tips: [
-          '**Favorites**, under **Keep on this iPhone**, leaves your favorite photos here too.',
           'Removed photos go to **Recently Deleted**, which keeps them for 30 days. If iCloud Photos is on, removing them here also removes them from iCloud and your other Apple devices; the copies on the computer are not affected.',
         ],
       },
@@ -1086,7 +1149,7 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'Settings',
     summary: 'Everything under the gear: your plan, the computer, the theme, photo access and the rest.',
-    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles', 'notifications'],
+    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles', 'notifications', 'location when sharing'],
     sections: [
       {
         tips: [
@@ -1097,6 +1160,7 @@ export const GUIDE: GuideTopic[] = [
           '**Photo access** says what PhotoSense may see, and opens the phone’s own settings for PhotoSense to change it. **Scan again** reads your library again.',
           '**PhotoSense Removed** says what waits there; **Delete permanently…** empties it.',
           '**Recently moved** lists what can still be undone. **Errors** lists what went wrong.',
+          '**Privacy**: **Remove location when sharing** sets whether **Share photo** starts with **Remove location** on.',
           '**Help** opens this guide. **About PhotoSense** shows the version and who makes it, with the support page, the terms and what others made that PhotoSense uses. **Privacy policy** opens the privacy policy.',
         ],
       },

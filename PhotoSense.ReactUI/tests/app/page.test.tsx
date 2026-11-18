@@ -1186,7 +1186,7 @@ describe('deleting permanently', () => {
     expect(sure()).toHaveTextContent('It can be turned back on under Settings in the menu.');
     await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
     expect(await toast('Deleted 2 files (2 KB) permanently.')).toBeInTheDocument();
-    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
 
     // Now the warning is all there is.
     await confirm();

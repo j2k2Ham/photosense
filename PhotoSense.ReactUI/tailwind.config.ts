@@ -8,7 +8,7 @@ const tokens = ['bg', 's1', 's2', 's3', 'pop', 'line', 't1', 't2', 't3', 'stage'
 const skin = ['cell', 'fill', 'fill2', 'sep', 'acc', 'on-acc', 'acc-soft', 'on-acc-soft', 'danger', 'on-danger', 'danger-t', 'danger-soft',
   'on-keep', 'keep-soft', 'amber-soft', 'bar', 'bar-hi', 'bar-on', 'bar-off', 'side', 'rail', 'sheet', 'sheet-cell',
   'toast', 'on-toast', 'toast-act', 'btn2-bg', 'btn2-fg', 'seg-bg', 'seg-bd', 'seg-on', 'seg-on-fg', 'chip-bg', 'chip-bd', 'chip-on-bg', 'chip-on-fg',
-  'ib-bg', 'tb-fg', 'grab', 'sw-on', 'sw-off', 'map', 'map-line', 'input', 'alert'];
+  'ib-bg', 'tb-fg', 'grab', 'sw-on', 'sw-off', 'map', 'map-line', 'input', 'alert', 'srch-bg'];
 
 const config: Config = {
   darkMode: 'class',

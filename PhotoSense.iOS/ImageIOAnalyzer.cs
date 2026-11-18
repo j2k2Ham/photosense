@@ -1,16 +1,23 @@
 using CoreGraphics;
 using CoreImage;
 using ImageIO;
+using Vision;
 using PhotoSense.Domain.Services;
 
 namespace PhotoSense.iOS;
 
 /// <summary>
 /// Pictures decoded by the phone itself, which reads HEIC, JPEG and the rest, and measured as on a computer.
-/// Magick.NET, which a computer uses, has no build for a phone.
+/// Magick.NET, which a computer uses, has no build for a phone. What is in each is named by Apple's Vision, on the phone.
 /// </summary>
 public sealed class ImageIOAnalyzer : IImageAnalyzer
 {
+    // Vision's own advice for labels that are seldom wrong: those it is 90% sure of at even a low recall.
+    private const float Recall = 0.01f, Precision = 0.9f;
+
+    /// <inheritdoc />
+    public bool LabelsPictures => true;
+
     /// <inheritdoc />
     public Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct) => Task.Run(() => Analyze(imageStream), ct);
 
@@ -35,7 +42,18 @@ public sealed class ImageIOAnalyzer : IImageAnalyzer
         // Decoded at the size sharpness is measured at (ImageFingerprint.SharpnessEdge), so it is measured as it is.
         var sharpness = ImageFingerprint.Sharpness(Rgb(work, (int)work.Width, (int)work.Height), (int)work.Width, (int)work.Height);
         return new ImageAnalysis(sideways ? down : across, sideways ? across : down, FormatOf(source.TypeIdentifier), null,
-            ImageFingerprint.PerceptualHash(signature), signature, Jpeg(thumbnail, 0.82f), sharpness);
+            ImageFingerprint.PerceptualHash(signature), signature, Jpeg(thumbnail, 0.82f), sharpness, Labels(work));
+    }
+
+    // What Vision sees in the picture, as words ("dog", "sport ball"). None where it cannot run, as on a simulator
+    // without the phone's neural engine: the picture is still found by place and date.
+    private static string[] Labels(CGImage image)
+    {
+        using var request = new VNClassifyImageRequest((VNRequestCompletionHandler?)null);
+        using var handler = new VNImageRequestHandler(image, new VNImageOptions());
+        if (!handler.Perform([request], out _) || request.Results is not { } seen) return [];
+        return [.. seen.Where(o => o.HasPrecisionRecallCurve ? o.HasMinimumRecall(Recall, Precision) : o.Confidence >= Precision)
+            .Select(o => o.Identifier.Replace('_', ' ').ToLowerInvariant()).Distinct()];
     }
 
     private static CGImageSource Source(Stream imageStream)

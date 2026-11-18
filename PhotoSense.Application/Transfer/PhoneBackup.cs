@@ -108,7 +108,7 @@ public sealed class PhoneBackup
     private readonly Subscription _plan;
     private readonly DailyRemovals _removals;
     private readonly IDeviceStatus _device;
-    private readonly IFavoritePhotos? _favorites;
+    private readonly IFavoritePhotos _favorites;
     private readonly string _name;
     private readonly string _root;
     private readonly TimeProvider _clock;
@@ -136,12 +136,12 @@ public sealed class PhoneBackup
     /// <param name="plan">Automatic backup is part of Pro; the computer is told of the plan.</param>
     /// <param name="removals">What Safe to delete deletes counts toward the day's free removals.</param>
     /// <param name="device">What sort the phone is, whether it is charging, its storage, and whether iCloud keeps its photos.</param>
-    /// <param name="favorites">The person's favorites, which Safe to delete can keep; null where there are none.</param>
+    /// <param name="favorites">The person's favorites, which Safe to delete can keep.</param>
     /// <param name="name">What this phone is called, as the computer shows it.</param>
     /// <param name="root">The library's folder.</param>
     /// <param name="clock">How long the computer may stay silent, and when things happen.</param>
     public PhoneBackup(IBackupLedger ledger, IComputerFinder finder, IPairingStore pairs, OrganizeLibrary library, IPhotoFileSystem files, Subscription plan, DailyRemovals removals,
-        IDeviceStatus device, IFavoritePhotos? favorites, string name, string root, TimeProvider clock)
+        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock)
     {
         _ledger = ledger;
         _finder = finder;
@@ -197,7 +197,7 @@ public sealed class PhoneBackup
         var settings = await _ledger.SettingsAsync(ct);
         var (items, on) = await ItemsAsync(ct);
         var safe = items.Where(i => On(i, on)).ToList();
-        var favorites = _favorites is null ? new HashSet<string>() : await _favorites.FavoritesAsync(ct);
+        var favorites = await _favorites.FavoritesAsync(ct);
         var since = _clock.GetLocalNow().DateTime - Recently;
         bool Favorite(PhotoItem i) => i.Files.Any(f => favorites.Contains(f.Path));
         bool Recent(PhotoItem i) => i.Main.Date >= since;
@@ -214,7 +214,7 @@ public sealed class PhoneBackup
     {
         var settings = await _ledger.SettingsAsync(ct);
         var (items, on) = await ItemsAsync(ct);
-        var favorites = _favorites is null ? new HashSet<string>() : await _favorites.FavoritesAsync(ct);
+        var favorites = await _favorites.FavoritesAsync(ct);
         var since = _clock.GetLocalNow().DateTime - Recently;
         return [.. items.Where(i => On(i, on))
             .Where(i => !(settings.KeepFavorites && i.Files.Any(f => favorites.Contains(f.Path))) && !(settings.KeepRecent && i.Main.Date >= since))

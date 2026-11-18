@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- What the share sheet may hand to another app: the cards PhotoSense draws, kept in its cache, and nothing else. -->
+<!-- What the share sheet may hand to another app: the cards PhotoSense draws and the copies of photos made to share, kept in its cache, and nothing else. -->
 <paths>
   <cache-path name="shared" path="shared/" />
 </paths>

@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor, ISharingCopies
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -104,6 +104,22 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
     {
         ct.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlySet<string>>(Look().Files.Where(f => f.Value.Item.Favorite).Select(f => f.Key).ToHashSet(PhotoPath.Comparer));
+    }
+
+    /// <inheritdoc />
+    public void SetFavorite(string path, bool favorite)
+    {
+        var shown = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer in the library.");
+        try { _library.SetFavorite(shown.Item.Id, favorite); }
+        // What the library holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public Task<SharedCopy> CopyForSharingAsync(string path, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var shown = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer in the library.");
+        return _library.CopyForSharingAsync(shown.Item.Id, shown.File.Kind, removeLocation, removeCamera, ct);
     }
 
     /// <inheritdoc />

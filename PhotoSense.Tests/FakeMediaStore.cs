@@ -1,3 +1,4 @@
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
@@ -80,6 +81,29 @@ internal sealed class FakeMediaStore : IMediaStore
         Add(id + "-smaller", original.Folder, Path.GetFileNameWithoutExtension(original.Name) + " (smaller).mp4", bytes, video: true);
         progress.Report(1);
         return Task.FromResult(bytes.LongLength);
+    }
+
+    /// <inheritdoc />
+    public void SetFavorite(string id, bool favorite)
+    {
+        if (Refuse is { } why)
+        {
+            Refuse = null;
+            throw new IOException(why);
+        }
+        var at = _entries.FindIndex(e => e.Id == id);
+        _entries[at] = _entries[at] with { Favorite = favorite };
+    }
+
+    /// <inheritdoc />
+    /// <remarks>A HEIC picture's copy is a JPEG, as on Android; the copy is kept nowhere.</remarks>
+    public Task<SharedCopy> CopyForSharingAsync(string id, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var entry = _entries.Single(e => e.Id == id);
+        var heic = entry.Name.EndsWith(".heic", StringComparison.OrdinalIgnoreCase);
+        var name = heic ? Path.ChangeExtension(entry.Name, ".jpg") : entry.Name;
+        return Task.FromResult(new SharedCopy(Path.Combine(Path.GetTempPath(), "shared", name), entry.IsVideo ? "video/mp4" : "image/jpeg"));
     }
 
     private sealed class OnlyForward(byte[] bytes) : MemoryStream(bytes, writable: false)

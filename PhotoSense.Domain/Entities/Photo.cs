@@ -55,6 +55,9 @@ public class Photo
     public bool IsScreenshot { get; set; }
     /// <summary>The burst the shot belongs to, as an iPhone marks it; null when the phone says of none, as elsewhere bursts are told by time.</summary>
     public string? BurstId { get; set; }
+
+    /// <summary>What is in the picture, as a phone's own labelling names it in lower case; null where nothing labelled it, empty where it found nothing.</summary>
+    public string[]? Labels { get; set; }
     /// <summary>Width times height: the larger copy of a shot is the better one to keep.</summary>
     public long PixelCount => (long)Width * Height;
     /// <summary>Whether the file is a video, by its extension.</summary>
@@ -90,6 +93,7 @@ public class Photo
             Sharpness = Sharpness,
             IsScreenshot = IsScreenshot,
             BurstId = BurstId,
+            Labels = Labels,
         };
         moved.LoadCategories(_categories);
         return moved;

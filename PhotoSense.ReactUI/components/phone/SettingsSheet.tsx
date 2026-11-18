@@ -38,6 +38,10 @@ interface Props {
   readonly lowStorage?: boolean;
   /** Turns low-storage alerts on or off; on asks the phone first. */
   onLowStorage(on: boolean): void;
+  /** Whether Share photo starts with Remove location on. */
+  readonly removeLocation?: boolean;
+  /** Changes whether Share photo starts with Remove location on; without it, Privacy is not shown. */
+  onRemoveLocation?(on: boolean): void;
   /** Pairs with a computer. */
   onPair(): void;
   /** Opens the Subscription page. */
@@ -60,7 +64,7 @@ interface Props {
  * Settings, from the gear, over every tab: the plan, which opens Subscription; the computer backups go to, or pairing
  * one; the theme and the unit of distance; the
  * photos PhotoSense may see and scanning again; what waits in PhotoSense Removed and Delete permanently; what was moved
- * and what went wrong; and help, about and privacy.
+ * and what went wrong; sharing without the place; and help, about and privacy.
  */
 export function SettingsSheet(p: Props) {
   const { ios } = usePhone();
@@ -107,6 +111,11 @@ export function SettingsSheet(p: Props) {
           <ListRow chevron detail={p.moves === undefined ? undefined : p.moves.toLocaleString()} onClick={then(p.onRecent)}>Recently moved</ListRow>
           <ListRow detail={p.errorCount === 0 ? 'None' : p.errorCount.toLocaleString()} onClick={then(p.onErrors)}>Errors</ListRow>
         </ListGroup>
+        {p.onRemoveLocation && (
+          <ListGroup header="Privacy">
+            <PhoneSwitch inList label="Remove location when sharing" detail="Applies to copies you share from PhotoSense" on={p.removeLocation ?? true} onChange={p.onRemoveLocation} />
+          </ListGroup>
+        )}
         <ListGroup header="About">
           <ListRow chevron onClick={then(p.onHelp)}>Help</ListRow>
           <ListRow chevron detail={p.version} onClick={then(p.onAbout)}>About PhotoSense</ListRow>

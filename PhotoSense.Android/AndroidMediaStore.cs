@@ -1,4 +1,6 @@
 using Android.Content;
+using Android.Graphics;
+using Android.Media;
 using Android.OS;
 using Android.Provider;
 using AndroidX.Media3.Common;
@@ -6,9 +8,13 @@ using AndroidX.Media3.Common.Audio;
 using AndroidX.Media3.Effect;
 using AndroidX.Media3.Transformer;
 using Microsoft.Win32.SafeHandles;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 using AndroidUri = Android.Net.Uri;
+using MediaStore = Android.Provider.MediaStore;
+using Path = System.IO.Path;
+using Stream = System.IO.Stream;
 using Presentation = AndroidX.Media3.Effect.Presentation;
 
 namespace PhotoSense.AndroidApp;
@@ -31,12 +37,13 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
 
     private IEnumerable<MediaEntry> Read(AndroidUri collection, bool video)
     {
-        string[] columns = [IBaseColumns.Id, MediaStore.IMediaColumns.RelativePath, MediaStore.IMediaColumns.DisplayName, MediaStore.IMediaColumns.Size, MediaStore.IMediaColumns.DateModified];
+        string[] columns = [IBaseColumns.Id, MediaStore.IMediaColumns.RelativePath, MediaStore.IMediaColumns.DisplayName, MediaStore.IMediaColumns.Size, MediaStore.IMediaColumns.DateModified,
+            MediaStore.IMediaColumns.IsFavorite];
         using var rows = Resolver.Query(collection, columns, null, null, null);
         if (rows is null) yield break;
         while (rows.MoveToNext())
             yield return new MediaEntry($"{(video ? "video" : "image")}/{rows.GetLong(0)}", rows.GetString(1) ?? "", rows.GetString(2) ?? "", rows.GetLong(3),
-                DateTimeOffset.FromUnixTimeSeconds(rows.GetLong(4)).UtcDateTime, video);
+                DateTimeOffset.FromUnixTimeSeconds(rows.GetLong(4)).UtcDateTime, video, rows.GetInt(5) == 1);
     }
 
     // "image/12" is the twelfth picture; "video/7", a video.
@@ -223,6 +230,120 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
 
         public void OnError(Composition? composition, ExportResult? exportResult, ExportException? exportException)
             => done.TrySetException(new IOException($"The phone could not compress the video: {exportException?.Message}"));
+    }
+
+    /// <summary>Marks a picture or video a favorite, or takes the mark away, after Android asks the person when it is another app's.</summary>
+    public void SetFavorite(string id, bool favorite)
+    {
+        var uri = UriOf(id);
+        if (Mine([uri]))
+        {
+            var values = new ContentValues();
+            values.Put(MediaStore.IMediaColumns.IsFavorite, favorite ? 1 : 0);
+            Resolver.Update(uri, values, null, null);
+            return;
+        }
+        if (!MainActivity.Ask(MediaStore.CreateFavoriteRequest(Resolver, new List<AndroidUri> { uri }, favorite)!)) throw new IOException("You chose not to let PhotoSense change this photo.");
+    }
+
+    /// <summary>
+    /// A copy of a picture or video for sharing, in the app's cache, without where it was taken and the camera's details
+    /// as asked; the copy shared before is deleted first. A JPEG, PNG or WebP keeps its format, with its details taken
+    /// out by <c>ExifInterface</c>; any other picture, a HEIC among them, is made again as a JPEG with only the details
+    /// kept. A video is re-written as an MP4 as it is, not encoded again, keeping only where it was taken when asked.
+    /// </summary>
+    public Task<SharedCopy> CopyForSharingAsync(string id, bool removeLocation, bool removeCamera, CancellationToken ct) => Task.Run(() =>
+    {
+        var uri = UriOf(id);
+        var (_, name) = Where(uri);
+        var folder = Path.Combine(context.CacheDir!.AbsolutePath, "shared");
+        if (Directory.Exists(folder)) Directory.Delete(folder, true);
+        Directory.CreateDirectory(folder);
+        try
+        {
+            return id.StartsWith("video/", StringComparison.Ordinal)
+                ? VideoCopy(WithItsPlace(uri), Path.Combine(folder, Path.ChangeExtension(name, ".mp4")), removeLocation, ct)
+                : PictureCopy(WithItsPlace(uri), Resolver.GetType(uri), folder, name, removeLocation, removeCamera);
+        }
+        catch (Java.Lang.Exception e) { throw new IOException($"The copy of {name} could not be made: {e.Message}"); }
+    }, ct);
+
+    private SharedCopy PictureCopy(AndroidUri source, string? mime, string folder, string name, bool removeLocation, bool removeCamera)
+    {
+        byte[] bytes;
+        using (var from = Resolver.OpenInputStream(source) ?? throw new IOException($"{name} is no longer on the phone."))
+        using (var read = new MemoryStream())
+        {
+            from.CopyTo(read);
+            bytes = read.ToArray();
+        }
+        IEnumerable<string> leaveOut = [.. removeLocation ? SharingDetails.ExifPlace : [], .. removeCamera ? SharingDetails.ExifCamera : []];
+        if (mime is "image/jpeg" or "image/png" or "image/webp")
+        {
+            var file = Path.Combine(folder, name);
+            File.WriteAllBytes(file, bytes);
+            var details = new ExifInterface(file);
+            foreach (var detail in leaveOut) details.SetAttribute(detail, null);
+            details.SaveAttributes();
+            return new SharedCopy(file, mime);
+        }
+        // Android cannot write a HEIC's details: it is made again as a JPEG, upright, with what is kept copied across.
+        var jpeg = Path.Combine(folder, Path.ChangeExtension(name, ".jpg"));
+        using (var image = ImageDecoder.DecodeBitmap(ImageDecoder.CreateSource(Java.Nio.ByteBuffer.Wrap(bytes)), new InMemory()))
+        using (var output = File.Create(jpeg))
+            if (!image.Compress(Bitmap.CompressFormat.Jpeg!, 95, output)) throw new IOException($"{name} could not be made into a JPEG.");
+        var was = new ExifInterface(new MemoryStream(bytes));
+        var made = new ExifInterface(jpeg);
+        foreach (var detail in SharingDetails.ExifWhen.Concat(SharingDetails.ExifPlace).Concat(SharingDetails.ExifCamera).Except(leaveOut))
+            if (was.GetAttribute(detail) is { } value) made.SetAttribute(detail, value);
+        made.SaveAttributes();
+        return new SharedCopy(jpeg, "image/jpeg");
+    }
+
+    // A picture decoded whole into memory, where it can be written out again.
+    private sealed class InMemory : Java.Lang.Object, ImageDecoder.IOnHeaderDecodedListener
+    {
+        public void OnHeaderDecoded(ImageDecoder decoder, ImageDecoder.ImageInfo info, ImageDecoder.Source source) => decoder.Allocator = ImageDecoderAllocator.Software;
+    }
+
+    // Every sample of the video and its sound written into a new MP4 as it is. Android's muxer writes no details of its
+    // own but the turn of the picture and, when asked, where it was taken.
+    private SharedCopy VideoCopy(AndroidUri source, string file, bool removeLocation, CancellationToken ct)
+    {
+        using var extractor = new MediaExtractor();
+        extractor.SetDataSource(context, source, null);
+        var muxer = new MediaMuxer(file, MuxerOutputType.Mpeg4);
+        try
+        {
+            var tracks = new Dictionary<int, int>();
+            var largest = 1 << 20;
+            for (var i = 0; i < extractor.TrackCount; i++)
+            {
+                var format = extractor.GetTrackFormat(i);
+                if (format.GetString(MediaFormat.KeyMime) is not { } kind || !(kind.StartsWith("video/", StringComparison.Ordinal) || kind.StartsWith("audio/", StringComparison.Ordinal))) continue;
+                extractor.SelectTrack(i);
+                tracks[i] = muxer.AddTrack(format);
+                if (format.ContainsKey(MediaFormat.KeyMaxInputSize)) largest = Math.Max(largest, format.GetInteger(MediaFormat.KeyMaxInputSize));
+            }
+            using (var told = new MediaMetadataRetriever())
+            {
+                told.SetDataSource(context, source);
+                if (int.TryParse(told.ExtractMetadata(MetadataKey.VideoRotation), out var turned)) muxer.SetOrientationHint(turned);
+                if (!removeLocation && SharingDetails.Iso6709(told.ExtractMetadata(MetadataKey.Location)) is { } at) muxer.SetLocation((float)at.Latitude, (float)at.Longitude);
+            }
+            muxer.Start();
+            var buffer = Java.Nio.ByteBuffer.Allocate(largest)!;
+            var sample = new MediaCodec.BufferInfo();
+            for (int size; (size = extractor.ReadSampleData(buffer, 0)) >= 0; extractor.Advance())
+            {
+                ct.ThrowIfCancellationRequested();
+                sample.Set(0, size, extractor.SampleTime, extractor.SampleFlags.HasFlag(MediaExtractorSampleFlags.Sync) ? MediaCodecBufferFlags.KeyFrame : MediaCodecBufferFlags.None);
+                muxer.WriteSampleData(tracks[extractor.SampleTrackIndex], buffer, sample);
+            }
+            muxer.Stop();
+            return new SharedCopy(file, "video/mp4");
+        }
+        finally { muxer.Release(); }
     }
 
     // Whether PhotoSense made all of them itself, and so may change them without asking.

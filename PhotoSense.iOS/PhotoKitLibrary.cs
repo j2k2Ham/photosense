@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
 using AVFoundation;
+using ImageIO;
 using ObjCRuntime;
 using Photos;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
@@ -239,6 +241,109 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
             else kept.TrySetException(new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense add the smaller copy." : $"The photo library would not keep the smaller copy: {error?.LocalizedDescription}"));
         });
         return kept.Task;
+    }
+
+    /// <summary>Marks a picture or video a favorite in Photos, or takes the mark away.</summary>
+    public void SetFavorite(string id, bool favorite)
+    {
+        var asset = AssetOf(id);
+        var done = PHPhotoLibrary.SharedPhotoLibrary.PerformChangesAndWait(() => PHAssetChangeRequest.ChangeRequest(asset).Favorite = favorite, out var error);
+        if (!done)
+            throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense change this photo." : $"The photo library did not change it: {error?.LocalizedDescription}");
+    }
+
+    /// <summary>
+    /// A copy of a picture or video as Photos shows it, edits and all, in the app's temporary folder, without where it
+    /// was taken and the camera's details as asked. A picture keeps its format and is not encoded again; a video is
+    /// re-written as it is, not encoded again. The copy shared before is deleted first.
+    /// </summary>
+    public async Task<SharedCopy> CopyForSharingAsync(string id, LibraryFileKind kind, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var asset = AssetOf(id);
+        var name = PHAssetResource.GetAssetResources(asset).FirstOrDefault(r => KindOf(r.ResourceType) == kind)?.OriginalFilename ?? "Photo";
+        var folder = Path.Combine(Path.GetTempPath(), "shared");
+        if (Directory.Exists(folder)) Directory.Delete(folder, true);
+        Directory.CreateDirectory(folder);
+        return kind == LibraryFileKind.Photo
+            ? await PictureCopyAsync(asset, Path.Combine(folder, Path.GetFileNameWithoutExtension(name)), removeLocation, removeCamera, ct)
+            : await VideoCopyAsync(asset, Path.Combine(folder, Path.GetFileNameWithoutExtension(name) + ".mov"), removeLocation, removeCamera, ct);
+    }
+
+    // The picture's own bytes written again with its details less those asked, by ImageIO, which copies the image
+    // itself as it is.
+    private static async Task<SharedCopy> PictureCopyAsync(PHAsset asset, string named, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var (data, type) = await PictureAsync(asset, ct);
+        using var source = CGImageSource.FromData(data) ?? throw new IOException("The picture could not be read.");
+        type = source.TypeIdentifier ?? type;
+        var file = named + ExtensionOf(type);
+        var details = source.CopyMetadata(0, (NSDictionary?)null) is { } read ? new CGMutableImageMetadata(read) : new CGMutableImageMetadata();
+        foreach (var tag in details.GetTags() ?? Array.Empty<CGImageMetadataTag>())
+            if ($"{tag.Prefix}:{tag.Name}" is var path && (removeLocation && SharingDetails.IsPlace(path) || removeCamera && SharingDetails.IsCamera(path)))
+                details.RemoveTag(null, new NSString(path));
+        using var destination = CGImageDestination.Create(NSUrl.FromFilename(file), type, 1) ?? throw new IOException("The copy could not be made.");
+        var options = new CGCopyImageSourceOptions { Metadata = details, NullableMergeMetadata = false, NullableShouldExcludeGps = removeLocation };
+        if (!destination.CopyImageSource(source, options, out var error))
+            throw new IOException($"The copy could not be made: {error?.LocalizedDescription}");
+        return new SharedCopy(file, MimeOf(type));
+    }
+
+    // The picture as Photos shows it, with its kind, fetched from iCloud when it is kept there.
+    private static async Task<(NSData Data, string Type)> PictureAsync(PHAsset asset, CancellationToken ct)
+    {
+        var got = new TaskCompletionSource<(NSData, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var options = new PHImageRequestOptions { NetworkAccessAllowed = true, Version = PHImageRequestOptionsVersion.Current, DeliveryMode = PHImageRequestOptionsDeliveryMode.HighQualityFormat };
+        var request = PHImageManager.DefaultManager.RequestImageDataAndOrientation(asset, options, (data, type, _, _) =>
+        {
+            if (data is null) got.TrySetException(new IOException("The picture could not be fetched from iCloud. Check the phone's connection and try again."));
+            else got.TrySetResult((data, type ?? "public.jpeg"));
+        });
+        await using (ct.Register(() =>
+        {
+            PHImageManager.DefaultManager.CancelImageRequest(request);
+            got.TrySetCanceled(ct);
+        }))
+            return await got.Task;
+    }
+
+    // The video as iOS plays it, written again as it is, with its details less those asked.
+    private static async Task<SharedCopy> VideoCopyAsync(PHAsset asset, string file, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var video = await VideoAsync(asset, ct);
+        using var export = new AVAssetExportSession(video, AVAssetExportSessionPreset.Passthrough)
+        {
+            OutputUrl = NSUrl.FromFilename(file), OutputFileType = AVFileTypes.QuickTimeMovie.GetConstant()!,
+            Metadata = [.. video.Metadata.Where(m => m.MetadataIdentifier?.ToString() is not { } said || !(removeLocation && SharingDetails.IsPlace(said) || removeCamera && SharingDetails.IsCamera(said)))],
+        };
+        using (ct.Register(export.CancelExport)) await export.ExportTaskAsync();
+        ct.ThrowIfCancellationRequested();
+        if (export.Status != AVAssetExportSessionStatus.Completed)
+            throw new IOException($"The copy could not be made: {export.Error?.LocalizedDescription}");
+        return new SharedCopy(file, "video/quicktime");
+    }
+
+    private static string ExtensionOf(string type) => type switch
+    {
+        "public.heic" => ".HEIC",
+        "public.png" => ".PNG",
+        "public.tiff" => ".TIF",
+        "com.compuserve.gif" => ".GIF",
+        _ => ".JPG",
+    };
+
+    private static string MimeOf(string type) => type switch
+    {
+        "public.heic" => "image/heic",
+        "public.png" => "image/png",
+        "public.tiff" => "image/tiff",
+        "com.compuserve.gif" => "image/gif",
+        _ => "image/jpeg",
+    };
+
+    private static PHAsset AssetOf(string id)
+    {
+        var found = PHAsset.FetchAssetsUsingLocalIdentifiers([id], null);
+        return found.Count > 0 && found[0] is PHAsset asset ? asset : throw new IOException("The picture or video is no longer in the photo library.");
     }
 
     [DllImport(Constants.ObjectiveCLibrary, EntryPoint = "objc_msgSend")]

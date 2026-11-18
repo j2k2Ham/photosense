@@ -78,4 +78,20 @@ internal sealed class FakeShareSheet : IShareSheet
         Shared.Add((png, name));
         return Task.CompletedTask;
     }
+
+    /// <summary>The files shared, with what they are, in order.</summary>
+    public List<(string File, string MimeType)> Files { get; } = [];
+
+    /// <inheritdoc />
+    public Task ShareFileAsync(string file, string mimeType, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (Fail is { } why)
+        {
+            Fail = null;
+            throw new IOException(why);
+        }
+        Files.Add((file, mimeType));
+        return Task.CompletedTask;
+    }
 }

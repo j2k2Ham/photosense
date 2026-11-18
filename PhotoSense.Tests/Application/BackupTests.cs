@@ -514,7 +514,7 @@ public sealed class BackupTests : IDisposable
     {
         var services = new TestApi().Services;
         var computer = new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(),
-            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), null, "PC", In("Pictures"), new TestClock());
+            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock());
         var refused = await new BackupApi(new TestApi(s => s.AddSingleton(computer))).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);
         await Assert.That((refused.StatusCode, refused.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is on its computer."));
         var neither = await new BackupApi(new TestApi()).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);

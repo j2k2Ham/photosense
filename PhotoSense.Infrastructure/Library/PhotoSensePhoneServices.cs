@@ -81,7 +81,7 @@ public static class PhotoSensePhoneServices
     private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore, ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device,
         INotifier notifier, IShareSheet share, string name, ITransferListener? listener)
-        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether
+        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, ISharingCopies
     {
         s.AddSingleton(Options.Create(new PhotoStorageOptions
         {
@@ -101,7 +101,7 @@ public static class PhotoSensePhoneServices
         // Backing up to that computer, and what is then safe to delete from the phone.
         s.AddSingleton(device);
         s.AddSingleton(sp => new PhoneBackup(sp.GetRequiredService<IBackupLedger>(), computers, sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos,
-            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos as IFavoritePhotos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
         // Swipe to clean: a set a day, what is marked deleted together at the end.
         s.AddSingleton(sp => new SwipeToClean(sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos, sp.GetRequiredService<PhoneBackup>(),
             sp.GetRequiredService<DailyRemovals>(), Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
@@ -111,6 +111,10 @@ public static class PhotoSensePhoneServices
             sp.GetRequiredService<DailyRemovals>()));
         s.AddSingleton(sp => new PhoneNotices(sp.GetRequiredService<INoticeStore>(), notifier, device, sp.GetRequiredService<CleanUpCategories>(), sp.GetRequiredService<Subscription>(),
             sp.GetRequiredService<TimeProvider>()));
+        // Search, favorites, and copies to share without their place: Library and its viewer.
+        s.AddSingleton<IFavoritePhotos>(photos);
+        s.AddSingleton<ISharingCopies>(photos);
+        s.AddSingleton(sp => new PhotoSearch(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<Subscription>()));
         // Year in review, and the share sheet its cards and the result screens' go to.
         s.AddSingleton(share);
         s.AddSingleton(sp => new YearInReview(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<IPlanStore>(),

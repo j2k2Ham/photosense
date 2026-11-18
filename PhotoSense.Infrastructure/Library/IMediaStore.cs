@@ -1,3 +1,4 @@
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Infrastructure.Library;
@@ -9,7 +10,8 @@ namespace PhotoSense.Infrastructure.Library;
 /// <param name="Length">Its size.</param>
 /// <param name="ModifiedUtc">When it last changed.</param>
 /// <param name="IsVideo">It is a video rather than a picture.</param>
-public sealed record MediaEntry(string Id, string Folder, string Name, long Length, DateTime ModifiedUtc, bool IsVideo);
+/// <param name="Favorite">It is a favorite (<c>IS_FAVORITE</c>).</param>
+public sealed record MediaEntry(string Id, string Folder, string Name, long Length, DateTime ModifiedUtc, bool IsVideo, bool Favorite = false);
 
 /// <summary>Changes to an Android phone's pictures and videos, made together.</summary>
 public sealed class MediaChange
@@ -50,4 +52,15 @@ public interface IMediaStore
     /// </summary>
     /// <exception cref="IOException">The video could not be read or written; nothing is kept.</exception>
     Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
+
+    /// <summary>Marks a picture or video a favorite, or takes the mark away, after Android asks the person.</summary>
+    /// <exception cref="IOException">The person said no, or the phone could not change it.</exception>
+    void SetFavorite(string id, bool favorite);
+
+    /// <summary>
+    /// A copy of a picture or video for sharing, in the app's cache, without its place and camera details as asked: a
+    /// HEIC picture becomes a JPEG, as Android cannot rewrite HEIC's details; a video is re-written, not re-encoded.
+    /// </summary>
+    /// <exception cref="IOException">It could not be copied.</exception>
+    Task<SharedCopy> CopyForSharingAsync(string id, bool removeLocation, bool removeCamera, CancellationToken ct);
 }

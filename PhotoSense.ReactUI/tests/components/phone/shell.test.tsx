@@ -201,6 +201,19 @@ describe('Settings', () => {
     expect(calls.onLowStorage).toHaveBeenCalledWith(true);
   });
 
+  it('turns Remove location when sharing off or on under Privacy, on to start with', async () => {
+    const onRemoveLocation = vi.fn();
+    const { calls, view } = show();
+    expect(screen.queryByRole('region', { name: 'Privacy' })).not.toBeInTheDocument();
+    view.again(<SettingsSheet theme="auto" unit="miles" errorCount={0} onRemoveLocation={onRemoveLocation} {...calls} />);
+    const location = screen.getByRole('switch', { name: 'Remove location when sharing Applies to copies you share from PhotoSense' });
+    expect(location).toBeChecked();
+    await userEvent.click(location);
+    expect(onRemoveLocation).toHaveBeenCalledWith(false);
+    view.again(<SettingsSheet theme="auto" unit="miles" errorCount={0} removeLocation={false} onRemoveLocation={onRemoveLocation} {...calls} />);
+    expect(screen.getByRole('switch', { name: /^Remove location when sharing/ })).not.toBeChecked();
+  });
+
   it('chooses the theme, Auto among them', async () => {
     const { calls } = show();
     const themes = screen.getByRole('radiogroup', { name: 'Theme' });
@@ -336,10 +349,10 @@ describe('Delete permanently', () => {
 
 describe('PhotoSense on a phone', () => {
   const notify = vi.fn(), onSettings = vi.fn(), onAbout = vi.fn();
-  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false };
+  let settings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true };
   beforeEach(() => {
     localStorage.setItem('photosense-first-run', 'done');
-    settings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false };
+    settings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true };
     for (const f of [notify, onSettings, onAbout]) f.mockReset();
   });
 
@@ -534,6 +547,12 @@ describe('PhotoSense on a phone', () => {
       api.usePlan.mockReturnValue({});
     });
 
+    it('keeps Remove location when sharing in the page\'s settings', async () => {
+      render(<App />);
+      await userEvent.click(within(await gear()).getByRole('switch', { name: /^Remove location when sharing/ }));
+      expect(onSettings).toHaveBeenCalledExactlyOnceWith({ removeLocationWhenSharing: false });
+    });
+
     it('deletes permanently after both questions, remembering not to ask twice again when told', async () => {
       render(<App />);
       await userEvent.click(within(await gear()).getByRole('button', { name: 'Delete permanently…' }));
@@ -550,7 +569,7 @@ describe('PhotoSense on a phone', () => {
     });
 
     it('asks once when told not to ask twice, and says what could not be deleted, that nothing was left, or what went wrong', async () => {
-      settings = { eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false };
+      settings = { eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true };
       api.eraseRemoved.mockClear();
       api.eraseRemoved.mockResolvedValueOnce({ erased: 35, bytes: 1, skipped: 2, problems: ['You chose not to delete them.'] });
       render(<App platform="android" />);

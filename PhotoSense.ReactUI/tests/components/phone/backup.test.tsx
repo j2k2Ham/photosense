@@ -123,10 +123,10 @@ describe('Safe to delete', () => {
     expect(page).toHaveTextContent('Removed items stay in Recently Deleted for 30 days.');
   });
 
-  it('on Android: no favorites, no iCloud, the bin; and on the free plan, what is left today', () => {
+  it('on Android: favorites as on an iPhone, no iCloud, the bin; and on the free plan, what is left today', () => {
     show(safeReview({ cloudPhotos: true, checked: { count: 1, bytes: 1 }, folder: null, computer: null }), { platform: 'android', plan: plan() });
     const page = screen.getByRole('dialog', { name: 'Safe to delete' });
-    expect(within(page).queryByRole('switch', { name: /Favorites/ })).not.toBeInTheDocument();
+    expect(within(page).getByRole('switch', { name: 'Favorites 214 items · 1.1 GB' })).toBeChecked();
     expect(within(page).queryByRole('note')).not.toBeInTheDocument();
     expect(page).toHaveTextContent('can be freed from this phone');
     expect(page).toHaveTextContent('1 photo or videoEach one matches');

@@ -121,6 +121,26 @@ export class Phone {
       this.shared.push({ name: asked.name, png: Buffer.from(asked.image, 'base64')[0] === 0x89 && Buffer.from(asked.image, 'base64').subarray(1, 4).toString() === 'PNG' });
       return route.fulfill({ status: 204 });
     });
+    // Search, a picture's camera and favorite mark, and sharing a copy of one: only a phone has them.
+    await page.route(url => url.pathname.endsWith('/api/search'), route => {
+      const q = new URL(route.request().url()).searchParams.get('q') ?? '';
+      this.asked.push(`search ${q}`);
+      return json(route, this.found(q));
+    });
+    await page.route(url => url.pathname.endsWith('/api/viewer/details'), route => {
+      const path = new URL(route.request().url()).searchParams.get('path')!;
+      return json(route, { camera: this.camera, favorite: this.favorites.has(path) });
+    });
+    await page.route(url => url.pathname.endsWith('/api/viewer/favorite'), route => {
+      const asked = JSON.parse(route.request().postData()!);
+      if (asked.favorite) this.favorites.add(asked.path);
+      else this.favorites.delete(asked.path);
+      return json(route, { camera: this.camera, favorite: asked.favorite });
+    });
+    await page.route(url => url.pathname.endsWith('/api/share/photo'), route => {
+      this.sharedPhotos.push(JSON.parse(route.request().postData()!));
+      return route.fulfill({ status: 204 });
+    });
     // Notifications, which only a phone sends: off until turned on, when the phone asks; what one tapped opens, once.
     await page.route(url => url.pathname.endsWith('/api/notices/opened'), async route => {
       const opens = this.opens;
@@ -157,6 +177,15 @@ export class Phone {
       return json(route, now);
     });
   }
+
+  /** What a search finds, as the phone would answer it: nothing unless the test says otherwise. */
+  found: (q: string) => Record<string, unknown> = () => ({ parts: [], photos: [], total: 0, videos: 0, proNeeded: false });
+  /** The camera every picture says it was taken with. */
+  camera: string | null = 'iPhone 15 Pro';
+  /** The pictures marked favorite, by path. */
+  readonly favorites = new Set<string>();
+  /** The copies of photos handed to the share sheet, with what each left out. */
+  readonly sharedPhotos: { path: string; removeLocation: boolean; removeCamera: boolean }[] = [];
 
   /** Year in review as the phone would say it; none due unless the test gives one. */
   year: Record<string, unknown> = { year: null };

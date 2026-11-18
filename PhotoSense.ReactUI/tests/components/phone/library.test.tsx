@@ -11,6 +11,7 @@ import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({
   usePhotoAccess: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), chooseMorePhotos: vi.fn(),
+  usePhotoDetails: vi.fn(), setFavorite: vi.fn(), sharePhoto: vi.fn(), useSearch: vi.fn(), refreshSearch: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
@@ -37,17 +38,21 @@ beforeEach(() => {
   api.applyOrganize.mockResolvedValue(applied());
   api.removeOrganize.mockResolvedValue(applied());
   api.undoChange.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
+  api.usePhotoDetails.mockReturnValue({ data: { camera: 'iPhone 15 Pro', favorite: false } });
+  api.setFavorite.mockResolvedValue({ camera: 'iPhone 15 Pro', favorite: true });
+  api.sharePhoto.mockResolvedValue(undefined);
+  api.useSearch.mockReturnValue({ data: undefined, error: undefined });
 });
 
-interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[]; backup?: LibraryBackupDto; safe?: SafeReviewDto; onReview?: () => void }
+interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[]; backup?: LibraryBackupDto; safe?: SafeReviewDto; onReview?: () => void; removeLocation?: boolean }
 
 /** Library in a phone's frame, holding whether it is choosing as PhoneApp does. */
-function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false, made, backup, safe, onReview }: ShowProps = {}) {
+function show({ lib = library(), platform = 'ios', more = {}, selecting: start = false, made, backup, safe, onReview, removeLocation }: ShowProps = {}) {
   const notify = vi.fn(), onSelecting = vi.fn(), onSend = vi.fn();
   function Holder() {
     const [selecting, setSelecting] = React.useState(start);
     const [filter, setFilter] = React.useState<LibraryFilter>('all');
-    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} onSend={onSend} backup={backup} safe={safe} onReview={onReview} />;
+    return <LibraryScreen library={lib} selecting={selecting} onSelecting={on => { onSelecting(on); setSelecting(on); }} filter={filter} onFilter={setFilter} made={made} notify={notify} onSend={onSend} backup={backup} safe={safe} onReview={onReview} removeLocation={removeLocation} />;
   }
   const view = inFrame(<Holder />, frame(platform, more), planGate);
   return { ...view, notify, onSelecting, onSend };
@@ -305,45 +310,136 @@ describe('choosing in Library', () => {
 });
 
 describe('the viewer', () => {
-  it('shows a picture whole, when and where it was taken, where it is and its size, and Back closes it', async () => {
+  it('shows a picture whole under its date, place and time, and Info says what it is and where; Back and Escape close it', async () => {
     show();
     await userEvent.click(tile('IMG_9154.HEIC'));
     const viewer = sheet('IMG_9154.HEIC');
     expect(within(viewer).getByRole('img', { name: 'IMG_9154.HEIC' })).toHaveAttribute('src', 'http://localhost:7071/api/organize/files/f1/image');
-    expect(viewer).toHaveTextContent('Dec 27, 2023, 11:34 PM');
-    expect(viewer).toHaveTextContent('West Glacier, Anaconda, Montana, US');
-    expect(viewer).toHaveTextContent('Photo Library');
-    expect(viewer).toHaveTextContent('5.8 MB · 4032 × 3024');
+    expect(viewer).toHaveTextContent('Dec 27, 2023West Glacier, Anaconda, Montana, US · 11:34 PM');
+    expect(api.usePhotoDetails).toHaveBeenLastCalledWith('/Photo Library/IMG_9154.HEIC');
+    const tools = within(viewer).getByRole('toolbar', { name: 'Photo' });
+    expect(within(tools).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Share', 'Favorite', 'Info', 'Delete']);
+    expect(within(viewer).queryByRole('region', { name: 'Info' })).not.toBeInTheDocument();
+    await userEvent.click(within(tools).getByRole('button', { name: 'Info' }));
+    expect(within(tools).getByRole('button', { name: 'Info' })).toHaveAttribute('aria-pressed', 'true');
+    const info = within(viewer).getByRole('region', { name: 'Info' });
+    expect(info).toHaveTextContent('NameIMG_9154.HEICDateDec 27, 2023, 11:34 PMPlaceWest Glacier, Anaconda, Montana, USCameraiPhone 15 ProSize5.8 MB · 4032 × 3024AlbumPhoto Library');
+    await userEvent.click(within(tools).getByRole('button', { name: 'Info' }));
+    expect(within(viewer).queryByRole('region', { name: 'Info' })).not.toBeInTheDocument();
     await userEvent.click(within(viewer).getByRole('button', { name: 'Back' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
+    // A camera not yet said, and one the picture does not say.
+    api.usePhotoDetails.mockReturnValue({ data: undefined });
     await userEvent.click(tile('IMG_9043.HEIC'));
-    expect(sheet('IMG_9043.HEIC')).toHaveTextContent('No location');
-    expect(sheet('IMG_9043.HEIC')).toHaveTextContent('Photo Library › Anaconda');
+    expect(sheet('IMG_9043.HEIC')).toHaveTextContent('Nov 2, 2023No location · 8:00 AM');
+    await userEvent.click(within(sheet('IMG_9043.HEIC')).getByRole('button', { name: 'Info' }));
+    expect(within(sheet('IMG_9043.HEIC')).getByRole('region', { name: 'Info' })).toHaveTextContent('PlaceNo locationCamera…');
+    expect(within(sheet('IMG_9043.HEIC')).getByRole('region', { name: 'Info' })).toHaveTextContent('AlbumPhoto Library › Anaconda');
+    api.usePhotoDetails.mockReturnValue({ data: { camera: null, favorite: false } });
+    await userEvent.click(within(sheet('IMG_9043.HEIC')).getByRole('button', { name: 'Info' }));
+    await userEvent.click(within(sheet('IMG_9043.HEIC')).getByRole('button', { name: 'Info' }));
+    expect(within(sheet('IMG_9043.HEIC')).getByRole('region', { name: 'Info' })).toHaveTextContent('CameraNot known');
+    // A key the viewer does not use leaves it open.
     await userEvent.keyboard('a');
     expect(sheet('IMG_9043.HEIC')).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('says a video is not played, with how long it is, and acts on the one file shown', async () => {
-    const { notify, onSend } = show();
+  it('on Android, a bar with labels; a video is not played; Info sends or moves the one file shown, and Delete asks first', async () => {
+    const { notify, onSend } = show({ platform: 'android' });
     await userEvent.click(tile('IMG_9080.MOV'));
     const viewer = sheet('IMG_9080.MOV');
     expect(viewer).toHaveTextContent('PhotoSense cannot play videos yet.');
-    expect(viewer).toHaveTextContent('5.8 MB · 0:47');
+    expect(within(viewer).getByRole('toolbar', { name: 'Photo' })).toHaveTextContent('ShareFavoriteInfoDelete');
+    await userEvent.click(within(viewer).getByRole('button', { name: 'Info' }));
+    expect(within(viewer).getByRole('region', { name: 'Info' })).toHaveTextContent('Size5.8 MB · 0:47FolderPhone');
     await userEvent.click(within(viewer).getByRole('button', { name: 'Delete' }));
     await userEvent.click(within(sheet('Delete 1 item?')).getByRole('button', { name: 'Delete 1 item' }));
     expect(api.removeOrganize).toHaveBeenCalledWith(ROOT, ['f2']);
-    expect(notify).toHaveBeenLastCalledWith('2 items moved to PhotoSense Removed.', 'ok', expect.anything());
+    expect(notify).toHaveBeenLastCalledWith('2 items moved to Pictures/PhotoSense Removed.', 'ok', expect.anything());
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await userEvent.click(tile('IMG_9154.HEIC'));
-    await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Add to album' }));
-    await userEvent.click(within(sheet('Add 1 to an album')).getByRole('button', { name: 'Done' }));
+    await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Info' }));
+    await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Move to folder' }));
+    await userEvent.click(within(sheet('Move 1 to a folder')).getByRole('button', { name: 'Done' }));
     await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Send' }));
     expect(onSend).toHaveBeenCalledExactlyOnceWith(['f1']);
     expect(screen.queryByRole('dialog', { name: 'IMG_9154.HEIC' })).not.toBeInTheDocument();
+  });
+
+  it('marks a favorite in the phone\'s own photos, shows the mark, and says why when the phone refuses', async () => {
+    const { notify } = show();
+    await userEvent.click(tile('IMG_9154.HEIC'));
+    const favorite = within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Favorite' });
+    expect(favorite).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(favorite);
+    expect(api.setFavorite).toHaveBeenCalledWith('/Photo Library/IMG_9154.HEIC', true);
+    api.usePhotoDetails.mockReturnValue({ data: { camera: 'iPhone 15 Pro', favorite: true } });
+    api.setFavorite.mockRejectedValue(new Error('You chose not to let PhotoSense change this photo.'));
+    await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Info' }));
+    expect(favorite).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(favorite);
+    expect(api.setFavorite).toHaveBeenLastCalledWith('/Photo Library/IMG_9154.HEIC', false);
+    expect(notify).toHaveBeenLastCalledWith('You chose not to let PhotoSense change this photo.', 'error');
+    api.setFavorite.mockRejectedValue('The phone is busy.');
+    await userEvent.click(favorite);
+    expect(notify).toHaveBeenLastCalledWith('The phone is busy.', 'error');
+  });
+
+  it('shares a copy without the place to start with, or the camera too, as asked; the library keeps both', async () => {
+    const { notify } = show();
+    await userEvent.click(tile('IMG_9154.HEIC'));
+    await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Share' }));
+    const share = sheet('Share photo');
+    expect(share).toHaveTextContent('Shares a copy without location');
+    expect(share).toHaveTextContent('West Glacier, Anaconda, Montana, US is left out of the copy.');
+    expect(share).toHaveTextContent('The photo in your library keeps its location and details. Only the shared copy changes.');
+    await userEvent.click(within(share).getByText('Remove camera details'));
+    expect(share).toHaveTextContent('Shares a copy without location or camera details');
+    await userEvent.click(within(share).getByText('Remove location'));
+    expect(share).toHaveTextContent('Shares a copy without camera details');
+    expect(share).toHaveTextContent('The copy includes West Glacier, Anaconda, Montana, US.');
+    api.sharePhoto.mockRejectedValueOnce(new Error('PhotoSense has to be open on the screen to share.'));
+    await userEvent.click(within(share).getByRole('button', { name: 'Share' }));
+    expect(api.sharePhoto).toHaveBeenLastCalledWith('/Photo Library/IMG_9154.HEIC', false, true);
+    expect(notify).toHaveBeenLastCalledWith('PhotoSense has to be open on the screen to share.', 'error');
+    await userEvent.click(within(share).getByRole('button', { name: 'Share' }));
+    expect(screen.queryByRole('dialog', { name: 'Share photo' })).not.toBeInTheDocument();
+  });
+
+  it('starts with the place kept when Settings says so, says when a file has none, and Not now puts it away', async () => {
+    show({ removeLocation: false });
+    await userEvent.click(tile('IMG_9080.MOV'));
+    await userEvent.click(within(sheet('IMG_9080.MOV')).getByRole('button', { name: 'Share' }));
+    const share = sheet('Share photo');
+    expect(share).toHaveTextContent('Shares the original file');
+    expect(share).toHaveTextContent('This photo does not say where it was taken.');
+    expect(share).toHaveTextContent('Video');
+    await userEvent.click(within(share).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('dialog', { name: 'Share photo' })).not.toBeInTheDocument();
+    expect(sheet('IMG_9080.MOV')).toBeInTheDocument();
+  });
+});
+
+describe("Library's search", () => {
+  it('opens Search from the field, not while choosing, and opens a match in the viewer', async () => {
+    api.useSearch.mockImplementation((q: string) => ({ data: q ? { parts: [{ kind: 'place', text: 'West Glacier' }], photos: [{ id: 'p1', fileName: 'IMG_9154.HEIC', sourcePath: '/Photo Library/IMG_9154.HEIC', isVideo: false }], total: 1, videos: 0, proNeeded: false } : undefined }));
+    show();
+    await userEvent.click(screen.getByRole('button', { name: 'Search photos' }));
+    await userEvent.type(within(sheet('Search')).getByRole('searchbox', { name: 'Search photos' }), 'West Glacier{Enter}');
+    await userEvent.click(within(sheet('Search')).getByRole('button', { name: 'IMG_9154.HEIC' }));
+    expect(sheet('IMG_9154.HEIC')).toBeInTheDocument();
+    await userEvent.click(within(sheet('IMG_9154.HEIC')).getByRole('button', { name: 'Back' }));
+    await userEvent.click(within(sheet('Search')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('has no search field while choosing', () => {
+    show({ selecting: true });
+    expect(screen.queryByRole('button', { name: 'Search photos' })).not.toBeInTheDocument();
   });
 });
 

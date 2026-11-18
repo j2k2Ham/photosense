@@ -18,7 +18,7 @@ export async function openOrganize(page: Page, root: string) {
  */
 export async function phoneTab(page: Page, name: string) {
   // An iPad's sidebar says how many beside a tab's name once it knows: "Library 2".
-  await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name: new RegExp(`^${name}( [\d,]+)?$`) }).click();
+  await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name: new RegExp(`^${name}( [\\d,]+)?$`) }).click();
 }
 
 /** In the phone app, Settings, from the gear of the screen showing. */

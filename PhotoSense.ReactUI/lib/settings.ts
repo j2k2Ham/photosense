@@ -10,10 +10,12 @@ export interface AppSettings {
   distanceUnit: DistanceUnit;
   /** Phones has been opened on this computer, so its tab no longer has the dot that says it is new. */
   phonesSeen: boolean;
+  /** On a phone, Share photo starts with Remove location on. */
+  removeLocationWhenSharing: boolean;
 }
 
 /** The settings until the person changes them. */
-export const defaultAppSettings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false };
+export const defaultAppSettings: AppSettings = { eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true };
 
 const KEY = 'photosense-settings';
 

@@ -135,3 +135,17 @@ export const ChatIcon = (p: IconProps) => <Line {...p}><path d="M4 11.5a7.5 7 0 
 
 /** Share: an arrow rising out of a tray. */
 export const ShareIcon = (p: IconProps) => <Line size={20} stroke={2} {...p}><path d="M12 3.5v11M7.5 8 12 3.5 16.5 8" /><path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></Line>;
+
+/** Search: a magnifying glass. */
+export const SearchIcon = (p: IconProps) => <Line size={19} {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Line>;
+
+/** A past search: a clock. */
+export const ClockIcon = (p: IconProps) => <Line size={18} {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Line>;
+
+/** Favorite: a heart, filled once it is one. */
+export const HeartIcon = ({ filled, ...p }: IconProps & { readonly filled?: boolean }) => (
+  <Line size={22} {...p}><path fill={filled ? 'currentColor' : 'none'} d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" /></Line>
+);
+
+/** Info: an i in a circle. */
+export const InfoIcon = (p: IconProps) => <Line size={22} {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.1" /></Line>;

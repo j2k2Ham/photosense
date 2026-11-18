@@ -105,8 +105,13 @@ export const items = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'item' : 
 
 /** "Dec 27, 2023, 11:34 PM": when a file was taken, as the camera's clock had it. */
 export function takenAt(date: string): string {
+  return `${shortDate(date)}, ${clockTime(date)}`;
+}
+
+/** The time of day of a date, as a phone's clock says it: "9:41 AM". */
+export function clockTime(date: string): string {
   const hour = Number(date.slice(11, 13));
-  return `${shortDate(date)}, ${hour % 12 || 12}:${date.slice(14, 16)} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `${hour % 12 || 12}:${date.slice(14, 16)} ${hour < 12 ? 'AM' : 'PM'}`;
 }
 
 /** Where a file is, in the platform's words: "Photo Library", "Photo Library › Trips › Butte", "Phone/DCIM/Camera". */

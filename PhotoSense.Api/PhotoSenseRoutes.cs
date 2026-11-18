@@ -11,7 +11,7 @@ public sealed class PhotoSenseRoutes
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
-        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year)
+        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -60,6 +60,10 @@ public sealed class PhotoSenseRoutes
             .Get("notices/opened", (r, _, ct) => notices.OpenedAsync(r, ct))
             .Get("year", (r, _, ct) => year.YearAsync(r, ct))
             .Post("share", (r, _, ct) => year.ShareAsync(r, ct))
+            .Post("share/photo", (r, _, ct) => viewer.SharePhotoAsync(r, ct))
+            .Get("search", (r, _, ct) => viewer.SearchAsync(r, ct))
+            .Get("viewer/details", (r, _, ct) => viewer.DetailsAsync(r, ct))
+            .Post("viewer/favorite", (r, _, ct) => viewer.FavoriteAsync(r, ct))
             .Get("swipe", (r, _, ct) => swipe.StateAsync(r, ct))
             .Post("swipe/decide", (r, _, ct) => swipe.DecideAsync(r, ct))
             .Post("swipe/undo", (r, _, ct) => swipe.UndoAsync(r, ct))

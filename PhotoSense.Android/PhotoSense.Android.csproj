@@ -36,6 +36,8 @@
     <PackageReference Include="Xamarin.AndroidX.Work.Runtime" Version="2.12.0" />
     <!-- Compressing large videos to HEVC on the phone (Jamie, 2026-11-17). -->
     <PackageReference Include="Xamarin.AndroidX.Media3.Transformer" Version="1.11.1" />
+    <!-- What is in a photo, for search, named on the phone by Google Play services' own model, which the app does not bundle (Jamie, 2026-11-18). -->
+    <PackageReference Include="Xamarin.GooglePlayServices.MLKit.ImageLabeling" Version="116.0.8.20" />
   </ItemGroup>
   <ItemGroup>
     <!-- The page, built for a program that hands it out itself: in PhotoSense.ReactUI,

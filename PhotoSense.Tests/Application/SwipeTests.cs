@@ -292,7 +292,7 @@ public sealed class SwipeTests : IDisposable
         var services = computer.Services;
         var onDisk = new SwipeToClean(new MemorySwipeStore(), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
             new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
-                TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), null, "PC", In("Pictures"), new TestClock()),
+                TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock()),
             TestPlans.Removals(), In("Pictures"), new TestClock());
         var asked = await new TestApi(s => s.AddSingleton(onDisk)).SendAsync(Http.Post("swipe/delete").FromClient(), ct, "swipe/delete");
         await Assert.That((asked.StatusCode, asked.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is swiped."));

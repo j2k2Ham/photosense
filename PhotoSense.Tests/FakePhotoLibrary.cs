@@ -1,3 +1,4 @@
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
@@ -130,6 +131,36 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
         Add($"{id}-smaller-{Compressed.Count}", (LibraryFileKind.Video, name, bytes));
         progress.Report(1);
         return bytes.LongLength;
+    }
+
+    /// <inheritdoc />
+    public void SetFavorite(string id, bool favorite)
+    {
+        if (Refuse is { } why)
+        {
+            Refuse = null;
+            throw new IOException(why);
+        }
+        var at = _items.FindIndex(i => i.Id == id);
+        _items[at] = _items[at] with { Favorite = favorite };
+    }
+
+    /// <summary>The copies made for sharing: of what, and what was left out.</summary>
+    public List<(string Id, LibraryFileKind Kind, bool RemoveLocation, bool RemoveCamera)> Copied { get; } = [];
+
+    /// <inheritdoc />
+    /// <remarks>The copy is named after the file and kept nowhere: the test's share sheet only notes it.</remarks>
+    public Task<SharedCopy> CopyForSharingAsync(string id, LibraryFileKind kind, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (Refuse is { } why)
+        {
+            Refuse = null;
+            throw new IOException(why);
+        }
+        Copied.Add((id, kind, removeLocation, removeCamera));
+        var name = _items.Single(i => i.Id == id).Files.First(f => f.Kind == kind).FileName;
+        return Task.FromResult(new SharedCopy(Path.Combine(Path.GetTempPath(), "shared", name), kind == LibraryFileKind.Photo ? "image/heic" : "video/quicktime"));
     }
 
     private (List<string> Path, List<string> Items)? Find(IReadOnlyList<string> path)

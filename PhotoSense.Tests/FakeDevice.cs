@@ -29,6 +29,13 @@ internal sealed class FakeFavorites : IFavoritePhotos
     public HashSet<string> Paths { get; } = [];
 
     /// <inheritdoc />
+    public void SetFavorite(string path, bool favorite)
+    {
+        if (favorite) Paths.Add(path);
+        else Paths.Remove(path);
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlySet<string>> FavoritesAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

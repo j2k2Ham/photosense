@@ -141,16 +141,16 @@ describe('the skin', () => {
 describe('the settings', () => {
   it('ask twice before deleting permanently until told not to, and the change is remembered', () => {
     const { result } = renderHook(() => useAppSettings());
-    expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
 
     act(() => result.current[1]({ eraseAskTwice: false }));
-    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
-    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
+    expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
     // The next visit starts from what was left.
-    expect(renderHook(() => useAppSettings()).result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
+    expect(renderHook(() => useAppSettings()).result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
     // A change that names nothing leaves everything as it is.
     act(() => result.current[1]({}));
-    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
   });
 
   it('change where they are shown when changed elsewhere on the page or in another tab', () => {
@@ -170,17 +170,17 @@ describe('the settings', () => {
 
   it('have their defaults for anything not saved, or saved in a way that cannot be read', () => {
     localStorage.setItem('photosense-settings', '{"somethingOlder":1}');
-    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, somethingOlder: 1 });
+    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true, somethingOlder: 1 });
     localStorage.setItem('photosense-settings', 'not json');
-    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false });
+    expect(loadAppSettings()).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
   });
 
   it('still work for this visit where the browser refuses to remember them', () => {
     refuseStorage();
     const { result } = renderHook(() => useAppSettings());
-    expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
     act(() => result.current[1]({ eraseAskTwice: false }));
-    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false });
+    expect(result.current[0]).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
   });
 });
 

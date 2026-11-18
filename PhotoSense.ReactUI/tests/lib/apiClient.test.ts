@@ -755,6 +755,43 @@ describe('Year in review and sharing', () => {
   });
 });
 
+describe('search and the viewer', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('searches only once something is asked, and asks every search again once Pro is bought', async () => {
+    const api = await load();
+    api.useSearch('');
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useSearch('dog & cat 2023');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/search?q=dog%20%26%20cat%202023`);
+    await api.refreshSearch();
+    const asked = swr.mutate.mock.lastCall![0] as (key: unknown) => boolean;
+    expect([asked(`${API}/search?q=dog`), asked(`${API}/searches`), asked(`${API}/plan`), asked(undefined)]).toEqual([true, false, false, false]);
+  });
+
+  it("asks for a picture's details only while one is shown, and marks a favorite, keeping what the phone says", async () => {
+    const api = await load();
+    api.usePhotoDetails(undefined);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.usePhotoDetails('/Photo Library/IMG_1.HEIC');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/viewer/details?path=%2FPhoto%20Library%2FIMG_1.HEIC`);
+    const details = { camera: 'iPhone 15 Pro', favorite: true };
+    answering(details);
+    await expect(api.setFavorite('/Photo Library/IMG_1.HEIC', true)).resolves.toEqual(details);
+    expect(lastRequest()).toEqual({ url: `${API}/viewer/favorite`, init: { method: 'POST', body: JSON.stringify({ path: '/Photo Library/IMG_1.HEIC', favorite: true }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/viewer/details?path=%2FPhoto%20Library%2FIMG_1.HEIC`, details, { revalidate: false });
+  });
+
+  it("hands a copy of a photo to the phone's share sheet, without what was asked, and says why it could not", async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.sharePhoto('/Photo Library/IMG_1.HEIC', true, false);
+    expect(lastRequest()).toEqual({ url: `${API}/share/photo`, init: { method: 'POST', body: JSON.stringify({ path: '/Photo Library/IMG_1.HEIC', removeLocation: true, removeCamera: false }), headers: json } });
+    answering('IMG_1.HEIC is no longer in the library.', 409);
+    await expect(api.sharePhoto('/Photo Library/IMG_1.HEIC', true, true)).rejects.toThrow('IMG_1.HEIC is no longer in the library.');
+  });
+});
+
 describe('the plan', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };

@@ -63,7 +63,7 @@ describe('the guide itself', () => {
     for (const word of ['album', 'PhotoSense Removed', 'Recently Deleted', 'App Store', 'Apple Account', 'iCloud', 'iPad', 'Favorites']) expect(ios).toContain(word);
     for (const word of ['Google Play', 'Pictures/PhotoSense Removed', 'DCIM/Camera', 'Google account', 'about once an hour']) expect(ios).not.toContain(word);
     for (const word of ['folder', 'Pictures/PhotoSense Removed', 'DCIM/Camera', 'Google Play', 'Google account', 'bin', 'about once an hour']) expect(android).toContain(word);
-    for (const word of ['App Store', 'Apple Account', 'Recently Deleted', 'iCloud', 'iPad', 'Favorites', 'album']) expect(android).not.toContain(word);
+    for (const word of ['App Store', 'Apple Account', 'Recently Deleted', 'iCloud', 'iPad', 'album']) expect(android).not.toContain(word);
     // A computer's guide has the computer's own screens, and a phone's has none of them.
     for (const word of ['_PhotoSense_Removed', 'Browse', 'Recycle Bin', 'Pair a phone', 'PhotoSense Free']) expect(computer).toContain(word);
     for (const word of ['App Store', 'Google Play', 'Library', 'Backup folder']) expect(computer).not.toContain(word);
@@ -116,7 +116,15 @@ describe('the guide itself', () => {
       expect(ids('reminder', platform)).toContain('phone-plan');
       expect(ids('wrapped', platform)).toEqual(['library']);
       expect(ids('share card', platform)).toContain('library');
+      expect(ids('search', platform)).toContain('library');
+      expect(ids('look for', platform)).toContain('library');
+      expect(ids('favorite', platform)).toContain('library');
+      expect(ids('gps', platform)).toContain('library');
+      expect(ids('location when sharing', platform)).toContain('phone-settings');
     }
+    // What is in a photo is named by each phone's own recognition.
+    expect(ids('ml kit', 'android')).toContain('library');
+    expect(ids('ml kit', 'ios')).toEqual([]);
     // What another platform has is not found.
     expect(ids('google play', 'ios')).toEqual([]);
     expect(ids('icloud', 'android')).toEqual([]);
@@ -214,7 +222,7 @@ describe('the help window', () => {
     expect(page()).not.toHaveTextContent('Recently Deleted');
     expect(within(page()).queryByRole('button', { name: /^(Go to|Show|Open)/ })).not.toBeInTheDocument();
     await userEvent.type(search(), 'google play');
-    expect(topics().map(t => t.firstElementChild!.textContent)).toEqual(['The free plan and Pro']);
+    expect(topics().map(t => t.firstElementChild!.textContent)).toEqual(['Library', 'The free plan and Pro']);
   });
 
   it('closes on Escape, on its own button and on a press outside it, and on nothing else', async () => {

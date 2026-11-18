@@ -693,3 +693,30 @@ export interface YearReviewDto {
   longestStreak: number;
   sessions: number;
 }
+
+/** What a search names, part by part (PhotoSense.Contracts.Cleaning.SearchPartDto). */
+export interface SearchPartDto {
+  kind: 'inPhoto' | 'place' | 'month' | 'year';
+  /** The words, as written. */
+  text: string;
+}
+
+/** What a search found, latest first, up to 500 (PhotoSense.Contracts.Cleaning.SearchResultDto). */
+export interface SearchResultDto {
+  parts: SearchPartDto[];
+  photos: PhotoDto[];
+  /** How many match in all. */
+  total: number;
+  /** How many of those that match are videos; the rest are pictures. */
+  videos: number;
+  /** It named things in photos, which only Pro searches: the free plan matched its date and place alone. */
+  proNeeded: boolean;
+}
+
+/** What the viewer shows beside a picture or video (PhotoSense.Contracts.Cleaning.PhotoDetailsDto). */
+export interface PhotoDetailsDto {
+  /** The camera it was taken with; null when not known. */
+  camera: string | null;
+  /** It is a favorite in the phone's own photos app. */
+  favorite: boolean;
+}

@@ -1,3 +1,4 @@
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Infrastructure.Library;
@@ -89,4 +90,15 @@ public interface IPhotoLibrary
     /// </summary>
     /// <exception cref="IOException">The video could not be fetched, read or written; nothing is kept.</exception>
     Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
+
+    /// <summary>Marks a picture or video a favorite in Photos, or takes the mark away.</summary>
+    /// <exception cref="IOException">The library could not change it.</exception>
+    void SetFavorite(string id, bool favorite);
+
+    /// <summary>
+    /// A copy of one file of a picture or video for sharing, in the app's temporary folder, without its place and camera
+    /// details as asked, fetched from the cloud first when it is kept there.
+    /// </summary>
+    /// <exception cref="IOException">It could not be fetched or copied.</exception>
+    Task<SharedCopy> CopyForSharingAsync(string id, LibraryFileKind kind, bool removeLocation, bool removeCamera, CancellationToken ct);
 }

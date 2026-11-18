@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { expect, message, test } from '../fixtures/app';
 import { Phone, SAFE } from '../fixtures/phone';
 import { phoneSettings, phoneTab, question } from '../fixtures/screens';
@@ -198,6 +199,55 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('list', { name: 'Large videos' })).toBeVisible();
   });
 
+  test('Search finds photos by what the phone says, opens one, and the viewer marks it a favorite and shares a copy without its place @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2023, 6, 4, 9, 41) });
+    const phone = new Phone();
+    phone.root = photos.root;
+    const file = path.join(photos.root, 'IMG_0001.JPG');
+    phone.found = q => ({
+      parts: [{ kind: 'inPhoto', text: 'dog' }, { kind: 'year', text: '2023' }], total: 1, videos: 0, proNeeded: q.includes('dog'),
+      photos: [{ id: 'p1', fileName: 'IMG_0001.JPG', sourcePath: file, folder: photos.root, isVideo: false, fileSizeBytes: 1, width: 0, height: 0, set: 'Unknown', kept: false }],
+    });
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const library = page.getByRole('region', { name: 'Library' });
+    await expect(library.getByRole('button', { name: 'IMG_0001.JPG' })).toBeVisible({ timeout: 60_000 });
+
+    await library.getByRole('button', { name: 'Search photos' }).click();
+    const search = page.getByRole('dialog', { name: 'Search' });
+    await expect(search.getByRole('region', { name: 'Try' })).toContainText('dog at the beach');
+    await search.getByRole('searchbox', { name: 'Search photos' }).fill('dog 2023');
+    await search.getByRole('searchbox', { name: 'Search photos' }).press('Enter');
+    await expect(search.getByRole('list', { name: 'Searched for' })).toHaveText('In photodogYear2023');
+    await expect(search.getByRole('note')).toHaveText(/is part of Pro\. Showing photos that match 2023\./);
+    await expect(search.getByRole('heading', { name: '1 photo' })).toBeVisible();
+    await expect(search).toContainText('Your photos and searches are not uploaded.');
+    expect(phone.asked).toContain('search dog 2023');
+    await search.getByRole('list', { name: 'Matches' }).getByRole('button', { name: 'IMG_0001.JPG' }).click();
+
+    const viewer = page.getByRole('dialog', { name: 'IMG_0001.JPG' });
+    const tools = viewer.getByRole('toolbar', { name: 'Photo' });
+    await tools.getByRole('button', { name: 'Info' }).click();
+    await expect(viewer.getByRole('region', { name: 'Info' })).toContainText('CameraiPhone 15 Pro');
+    await tools.getByRole('button', { name: 'Favorite' }).click();
+    await expect(tools.getByRole('button', { name: 'Favorite' })).toHaveAttribute('aria-pressed', 'true');
+    expect([...phone.favorites]).toEqual([file]);
+
+    await tools.getByRole('button', { name: 'Share' }).click();
+    const share = page.getByRole('dialog', { name: 'Share photo' });
+    await expect(share).toContainText('Shares a copy without location');
+    await share.getByText('Remove camera details').click();
+    await share.getByRole('button', { name: 'Share', exact: true }).click();
+    await expect(share).toBeHidden();
+    expect(phone.sharedPhotos).toEqual([{ path: file, removeLocation: true, removeCamera: true }]);
+    await viewer.getByRole('button', { name: 'Back' }).click();
+    await expect(viewer).toBeHidden();
+    // Recent keeps the search, on this phone.
+    await search.getByRole('button', { name: 'Clear' }).click();
+    await expect(search.getByRole('region', { name: 'Recent' })).toContainText('dog 2023');
+  });
+
   test('Year in review shows in Library while it is due, goes card by card, and shares the card showing, drawn as a picture @phone', async ({ page }) => {
     const phone = new Phone();
     phone.year = {
@@ -282,7 +332,7 @@ test.describe('on a phone', () => {
 
     await library.getByRole('button', { name: 'IMG_0001.JPG' }).click();
     const viewer = page.getByRole('dialog', { name: 'IMG_0001.JPG' });
-    await expect(viewer).toContainText('Dec 27, 2023, 11:34 PM');
+    await expect(viewer).toContainText('Dec 27, 2023No location · 11:34 PM');
     await viewer.getByRole('button', { name: 'Back' }).click();
 
     const bar = page.getByRole('toolbar', { name: 'What is selected' });
