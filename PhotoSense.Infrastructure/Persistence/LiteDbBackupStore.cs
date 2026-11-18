@@ -30,7 +30,8 @@ internal sealed class LiteDbBackupStore : IBackupStore
     {
         ct.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<BackupPhone>>([.. _phones.FindAll().OrderBy(d => d.PairedUtcTicks).Select(d =>
-            new BackupPhone(d.Id, d.Name, d.Kind, d.Folder, d.Paused, Time(d.PairedUtcTicks), Time(d.LastBackupUtcTicks), Time(d.LastCheckedUtcTicks), d.Safe, d.SafeBytes))]);
+            new BackupPhone(d.Id, d.Name, d.Kind, d.Folder, d.Paused, Time(d.PairedUtcTicks), Time(d.LastBackupUtcTicks), Time(d.LastCheckedUtcTicks), d.Safe, d.SafeBytes,
+                d.TripFolders is { Count: > 0 } trips ? trips : null))]);
     }
 
     /// <inheritdoc />
@@ -40,7 +41,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         _phones.Upsert(new PhoneDocument
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = phone.Folder, Paused = phone.Paused, PairedUtcTicks = phone.Paired.UtcTicks,
-            LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes,
+            LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes, TripFolders = phone.TripFolders?.ToList(),
         });
         return Task.CompletedTask;
     }
@@ -117,6 +118,8 @@ internal sealed class LiteDbBackupStore : IBackupStore
         public int Safe { get; set; }
         /// <summary>How much those take on it.</summary>
         public long SafeBytes { get; set; }
+        /// <summary>The trip folders made when it asked.</summary>
+        public List<string>? TripFolders { get; set; }
     }
 
     private sealed class HeldDocument
@@ -159,12 +162,14 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
     private readonly ILiteCollection<SettingsDocument> _settings;
     private readonly ILiteCollection<OnComputerDocument> _onComputer;
     private readonly ILiteCollection<ChecksumDocument> _checksums;
+    private readonly ILiteCollection<FolderMadeDocument> _foldersMade;
 
     /// <summary>Uses a database that other stores share; the caller disposes it.</summary>
     /// <param name="db">The shared database.</param>
     public LiteDbBackupLedger(LiteDatabase db)
     {
         LiteDbMapping.Prepare<ComputerDocument>();
+        LiteDbMapping.Prepare<FolderMadeDocument>();
         LiteDbMapping.Prepare<SettingsDocument>();
         LiteDbMapping.Prepare<OnComputerDocument>();
         LiteDbMapping.Prepare<ChecksumDocument>();
@@ -173,6 +178,7 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
         _settings = db.GetCollection<SettingsDocument>("backup_settings");
         _onComputer = db.GetCollection<OnComputerDocument>("backup_on_computer");
         _checksums = db.GetCollection<ChecksumDocument>("backup_checksums");
+        _foldersMade = db.GetCollection<FolderMadeDocument>("backup_trip_folders");
     }
 
     /// <inheritdoc />
@@ -180,7 +186,7 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
     {
         ct.ThrowIfCancellationRequested();
         return Task.FromResult(_computer.FindById("computer") is { } d
-            ? new BackupComputer(d.ComputerId, d.Name, d.Folder, Time(d.LastCheckedUtcTicks), Time(d.LastBackupUtcTicks))
+            ? new BackupComputer(d.ComputerId, d.Name, d.Folder, Time(d.LastCheckedUtcTicks), Time(d.LastBackupUtcTicks), d.Trips)
             : null);
     }
 
@@ -193,13 +199,14 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
             var document = new ComputerDocument
             {
                 Id = "computer", ComputerId = computer.ComputerId, Name = computer.Name, Folder = computer.Folder,
-                LastCheckedUtcTicks = computer.LastChecked?.UtcTicks, LastBackupUtcTicks = computer.LastBackup?.UtcTicks,
+                LastCheckedUtcTicks = computer.LastChecked?.UtcTicks, LastBackupUtcTicks = computer.LastBackup?.UtcTicks, Trips = computer.Trips,
             };
             // Another computer holds none of what the one before did.
             if (_computer.FindById("computer") is { } before && before.ComputerId != computer.ComputerId)
                 _db.Together(() =>
                 {
                     _onComputer.DeleteAll();
+                    _foldersMade.DeleteAll();
                     _computer.Upsert(document);
                 });
             else _computer.Upsert(document);
@@ -258,6 +265,21 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FoldersMadeAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlySet<string>>(_foldersMade.FindAll().Select(d => d.Id).ToHashSet(StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task KeepFolderMadeAsync(string folder, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _foldersMade.Upsert(new FolderMadeDocument { Id = folder });
+        return Task.CompletedTask;
+    }
+
     // As the phone's own paths are compared: two spellings of one path are one file.
     private static string Key(string path) => Domain.ValueObjects.PhotoPath.Key(path);
 
@@ -277,6 +299,8 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
         public long? LastCheckedUtcTicks { get; set; }
         /// <summary>When a backup last finished, in UTC ticks.</summary>
         public long? LastBackupUtcTicks { get; set; }
+        /// <summary>Where it makes trip folders.</summary>
+        public string? Trips { get; set; }
     }
 
     private sealed class SettingsDocument
@@ -298,6 +322,12 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
     private sealed class OnComputerDocument
     {
         /// <summary>A checksum the computer holds.</summary>
+        [BsonId] public string Id { get; set; } = string.Empty;
+    }
+
+    private sealed class FolderMadeDocument
+    {
+        /// <summary>The trip folder's name.</summary>
         [BsonId] public string Id { get; set; } = string.Empty;
     }
 

@@ -530,6 +530,8 @@ export interface BackupPhoneDto {
   heldBytes: number;
   safe: number;
   safeBytes: number;
+  /** How many trip folders were made here when it asked. */
+  tripFolders: number;
   arriving: { done: number; total: number; bytes: number; totalBytes: number; started: string; arrived: string[] } | null;
   events: { at: string; text: string }[];
 }
@@ -675,14 +677,24 @@ export interface YearPlaceDto {
   photos: number;
 }
 
+/** A trip of the year, as Year in review lists it (PhotoSense.Contracts.Cleaning.YearTripDto). */
+export interface YearTripDto {
+  name: string;
+  /** The month it started, 1 to 12. */
+  month: number;
+  photos: number;
+}
+
 /** Year in review: the year due now, or null, and that year in photos (PhotoSense.Contracts.Cleaning.YearReviewDto). */
 export interface YearReviewDto {
   /** December for the year ending, January for the year just ended; null the rest of the year. */
   year: number | null;
   photos: number;
   videos: number;
-  places: number;
-  topPlaces: YearPlaceDto[];
+  /** How many trips started that year. */
+  trips: number;
+  /** The three trips with the most photos, in the order they were taken. */
+  topTrips: YearTripDto[];
   /** January first. */
   months: number[];
   /** 1 to 12; 0 when none was taken. */
@@ -719,4 +731,74 @@ export interface PhotoDetailsDto {
   camera: string | null;
   /** It is a favorite in the phone's own photos app. */
   favorite: boolean;
+}
+
+/** A town, home or one that could be (PhotoSense.Contracts.Organize.TownDto). */
+export interface TownDto {
+  town: string;
+  /** The state, province or county it is in; empty when not known. */
+  region: string;
+  country: string;
+  latitude: number;
+  longitude: number;
+  /** The days photos were taken there; 0 where it does not matter. */
+  days: number;
+}
+
+/** A trip, as the list and the map show it (PhotoSense.Contracts.Organize.TripDto). */
+export interface TripDto {
+  id: string;
+  /** "Glacier National Park", "Big Sky, Montana", "Anaconda and Butte". */
+  name: string;
+  /** The folder it becomes on the computer: "2026-07 Glacier National Park". */
+  folder: string;
+  /** The day it started, "2026-07-18". */
+  start: string;
+  end: string;
+  /** Its pictures and videos. */
+  photos: number;
+  /** How many of them are videos. */
+  videos: number;
+  latitude: number;
+  longitude: number;
+  cover: PhotoDto;
+  /** The computer has made its folder. */
+  folderMade: boolean;
+}
+
+/** The trip folder being made on the computer, or the last one asked for (PhotoSense.Contracts.Organize.TripFolderDto). */
+export interface TripFolderDto {
+  /** The trip. */
+  id: string;
+  stage: 'running' | 'ready' | 'failed';
+  problem: string | null;
+  /** Where the computer made it: "Pictures/PhotoSense/2026-07 Glacier National Park". */
+  made: string | null;
+}
+
+/** Trips: home, the trips, the latest first, and the computer their folders are made on (PhotoSense.Contracts.Organize.TripsDto). */
+export interface TripsDto {
+  /** Null when no photo says where it was taken. */
+  home: TownDto | null;
+  /** The person chose home; otherwise PhotoSense worked it out. */
+  homeChosen: boolean;
+  trips: TripDto[];
+  /** The computer the phone backs up to; null when it has been paired with none. */
+  computer: string | null;
+  /** Where the computer makes trip folders, as it last said ("Pictures/PhotoSense"); null until it has said. */
+  tripsFolder: string | null;
+  folder: TripFolderDto | null;
+}
+
+/** A day of a trip (PhotoSense.Contracts.Organize.TripDayDto). */
+export interface TripDayDto {
+  /** "2026-07-18". */
+  date: string;
+  photos: PhotoDto[];
+}
+
+/** A trip with its days (PhotoSense.Contracts.Organize.TripDetailDto). */
+export interface TripDetailDto {
+  trip: TripDto;
+  days: TripDayDto[];
 }

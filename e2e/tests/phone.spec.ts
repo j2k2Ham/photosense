@@ -251,7 +251,7 @@ test.describe('on a phone', () => {
   test('Year in review shows in Library while it is due, goes card by card, and shares the card showing, drawn as a picture @phone', async ({ page }) => {
     const phone = new Phone();
     phone.year = {
-      year: 2026, photos: 7512, videos: 316, places: 12, topPlaces: [{ town: 'Butte', photos: 512 }], months: [1, 2, 3, 4, 5, 6, 1402, 8, 9, 10, 11, 12], busiestMonth: 7,
+      year: 2026, photos: 7512, videos: 316, trips: 3, topTrips: [{ name: 'Glacier National Park', month: 7, photos: 512 }], months: [1, 2, 3, 4, 5, 6, 1402, 8, 9, 10, 11, 12], busiestMonth: 7,
       busiestPlace: { town: 'West Glacier', photos: 512 }, freed: 41_600_000_000, removed: 9846, longestStreak: 38, sessions: 142,
     };
     await phone.attach(page);
@@ -259,12 +259,14 @@ test.describe('on a phone', () => {
     await phoneTab(page, 'Library');
     const card = page.getByRole('region', { name: 'Year in review' });
     await expect(card).toContainText('Your 2026 in photos');
-    await expect(card).toContainText('7,512 photos, 12 places, 41.6 GB freed');
+    await expect(card).toContainText('7,512 photos, 3 trips, 41.6 GB freed');
     await card.getByRole('button', { name: 'Watch' }).click();
 
     const stories = page.getByRole('dialog', { name: 'Year in review' });
     await expect(stories.getByRole('heading', { level: 2 })).toHaveText('2026');
     await stories.getByRole('button', { name: 'Next card' }).click();
+    await expect(stories.getByRole('heading', { level: 2 })).toHaveText('3 trips');
+    await expect(stories).toContainText('Most photos: Glacier National Park, with 512.');
     await stories.getByRole('button', { name: 'Next card' }).click();
     await expect(stories.getByRole('heading', { level: 2 })).toHaveText('July');
     await expect(stories).toContainText('1,402 photos. 512 of them are from West Glacier.');
@@ -272,6 +274,63 @@ test.describe('on a phone', () => {
     await expect.poll(() => phone.shared).toEqual([{ name: 'PhotoSense 2026.png', png: true }]);
     await stories.getByRole('button', { name: 'Close' }).click();
     await expect(stories).toBeHidden();
+  });
+
+  test('Trips lists the trips away from home, shows them on the map, opens one by day, makes its folder on the computer, and Change asks for home @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2026, 6, 18, 9, 41) });
+    photos.picture('IMG_0002.JPG', { seed: 2, taken: new Date(2026, 6, 19, 10, 5) });
+    const phone = new Phone();
+    phone.root = photos.root;
+    const picture = (n: number) => ({
+      id: `p${n}`, fileName: `IMG_000${n}.JPG`, sourcePath: path.join(photos.root, `IMG_000${n}.JPG`), folder: photos.root, isVideo: false, fileSizeBytes: 1, width: 0, height: 0, set: 'Unknown', kept: false,
+    });
+    const home = { town: 'Bozeman', region: 'Montana', country: 'US', latitude: 45.68, longitude: -111.04, days: 0 };
+    const glacier = {
+      id: '20260718094100', name: 'Glacier National Park', folder: '2026-07 Glacier National Park', start: '2026-07-18', end: '2026-07-19', photos: 12, videos: 0,
+      latitude: 48.68, longitude: -113.8, cover: picture(1), folderMade: false,
+    };
+    const bigSky = { ...glacier, id: '20260301090000', name: 'Big Sky, Montana', folder: '2026-03 Big Sky', start: '2026-03-01', end: '2026-03-04', photos: 214, latitude: 45.28, longitude: -111.37 };
+    phone.trips = { home, homeChosen: false, trips: [glacier, bigSky], computer: 'Studio iMac', tripsFolder: 'Pictures/PhotoSense', folder: null };
+    phone.tripDays[glacier.id] = { trip: glacier, days: [{ date: '2026-07-18', photos: [picture(1)] }, { date: '2026-07-19', photos: [picture(2)] }] };
+    phone.towns = [{ ...home, days: 120 }, { ...home, town: 'Butte', days: 12 }];
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const library = page.getByRole('region', { name: 'Library' });
+    await expect(library.getByRole('button', { name: 'IMG_0001.JPG' })).toBeVisible({ timeout: 60_000 });
+
+    await library.getByRole('button', { name: 'Trips, 2 trips' }).click();
+    const trips = page.getByRole('dialog', { name: 'Trips' });
+    await expect(trips).toContainText('Grouped by place and date from photos taken away from home in Bozeman, Montana.');
+    await expect(trips.getByRole('list', { name: 'Trips' }).getByRole('button')).toHaveText([/^Glacier National ParkJul 18 – 19, 2026 · 12 photos/, /^Big Sky, MontanaMar 1 – 4, 2026 · 214 photos/]);
+    await trips.getByRole('radio', { name: 'Map' }).click();
+    const map = trips.getByRole('group', { name: 'Map' });
+    await expect(map.getByRole('img', { name: 'Home, Bozeman, Montana' })).toBeVisible();
+    await map.getByRole('button', { name: 'Glacier National Park, 12 photos' }).click();
+
+    const trip = page.getByRole('dialog', { name: 'Glacier National Park' });
+    await expect(trip.getByRole('region', { name: 'Day 2 · Jul 19' })).toBeVisible();
+    // An iPad at a computer's width.
+    await expect(trip).toContainText(/Puts this trip’s copies in Pictures\/PhotoSense\/2026-07 Glacier National Park\. Nothing changes on this (iPhone|iPad)\./);
+    await trip.getByRole('region', { name: 'Day 1 · Jul 18' }).getByRole('button', { name: 'IMG_0001.JPG' }).click();
+    const viewer = page.getByRole('dialog', { name: 'IMG_0001.JPG' });
+    await expect(viewer).toBeVisible();
+    await viewer.getByRole('button', { name: 'Back' }).click();
+    await expect(viewer).toBeHidden();
+
+    await trip.getByRole('button', { name: 'Make a folder on Studio iMac' }).click();
+    await expect(message(page, 'Created Pictures/PhotoSense/2026-07 Glacier National Park on Studio iMac.')).toBeVisible();
+    await expect(trip.getByRole('button', { name: 'Folder created' })).toBeDisabled();
+    expect(phone.asked).toContain(`trips/folder ${glacier.id}`);
+
+    await trip.getByRole('button', { name: 'Back' }).click();
+    await trips.getByRole('button', { name: 'Change' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Home' });
+    await sheet.getByRole('button', { name: /^Butte, Montana/ }).click();
+    await expect(sheet).toBeHidden();
+    expect(phone.asked).toContain('trips/home Butte');
+    await trips.getByRole('button', { name: 'Back' }).click();
+    await expect(trips).toBeHidden();
   });
 
   test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {

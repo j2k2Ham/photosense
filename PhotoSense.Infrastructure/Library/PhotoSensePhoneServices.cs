@@ -115,10 +115,11 @@ public static class PhotoSensePhoneServices
         s.AddSingleton<IFavoritePhotos>(photos);
         s.AddSingleton<ISharingCopies>(photos);
         s.AddSingleton(sp => new PhotoSearch(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<Subscription>()));
-        // Year in review, and the share sheet its cards and the result screens' go to.
+        // Trips, away from home; Year in review counts them, and its cards and the result screens' go to the share sheet.
+        s.AddSingleton(sp => new Trips(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<ITripStore>()));
         s.AddSingleton(share);
         s.AddSingleton(sp => new YearInReview(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<IPlanStore>(),
-            sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<Trips>(), sp.GetRequiredService<TimeProvider>()));
         return s.AddPhotoSenseApplication().AddPhotoSenseCore();
     }
 }

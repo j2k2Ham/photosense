@@ -9,36 +9,31 @@ public sealed class IosShareSheet : IShareSheet
     public Task ShareImageAsync(byte[] png, string name, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var page = PageViewController.Shown ?? throw new IOException("PhotoSense has to be open on the screen to share.");
         var image = UIImage.LoadFromData(NSData.FromArray(png)) ?? throw new IOException("The card could not be made into a picture.");
-        var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        page.InvokeOnMainThread(() =>
-        {
-            var sheet = new UIActivityViewController([image], null);
-            if (sheet.PopoverPresentationController is { } popover)
-            {
-                popover.SourceView = page.View;
-                popover.SourceRect = new CGRect(page.View!.Bounds.GetMidX(), page.View.Bounds.GetMidY(), 0, 0);
-            }
-            page.PresentViewController(sheet, true, shown.SetResult);
-        });
-        return shown.Task;
+        return ShowAsync(image);
     }
 
     /// <inheritdoc />
     public Task ShareFileAsync(string file, string mimeType, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        // Given as the file itself, so that what it is shared to takes its name and kind from it.
+        return ShowAsync(NSUrl.FromFilename(file));
+    }
+
+    // The share sheet with what is shared, over the page; done once it is shown.
+    private static Task ShowAsync(NSObject shared)
+    {
         var page = PageViewController.Shown ?? throw new IOException("PhotoSense has to be open on the screen to share.");
         var shown = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         page.InvokeOnMainThread(() =>
         {
-            // Given as the file itself, so that what it is shared to takes its name and kind from it.
-            var sheet = new UIActivityViewController([NSUrl.FromFilename(file)], null);
-            if (sheet.PopoverPresentationController is { } popover)
+            var sheet = new UIActivityViewController([shared], null);
+            // An iPad shows it as a popover, which must point somewhere: the middle of the page.
+            if (sheet.PopoverPresentationController is { } popover && page.View is { } view)
             {
-                popover.SourceView = page.View;
-                popover.SourceRect = new CGRect(page.View!.Bounds.GetMidX(), page.View.Bounds.GetMidY(), 0, 0);
+                popover.SourceView = view;
+                popover.SourceRect = new CGRect(view.Bounds.GetMidX(), view.Bounds.GetMidY(), 0, 0);
             }
             page.PresentViewController(sheet, true, shown.SetResult);
         });

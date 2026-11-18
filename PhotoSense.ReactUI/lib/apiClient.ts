@@ -3,6 +3,7 @@ import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
   CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
+  TownDto, TripDetailDto, TripsDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -620,3 +621,39 @@ export async function setFavorite(path: string, favorite: boolean): Promise<Phot
 
 /** Hands a copy of a picture or video to the phone's share sheet, without where it was taken and the camera's details as asked. */
 export const sharePhoto = (path: string, removeLocation: boolean, removeCamera: boolean) => post(`${API_BASE}/share/photo`, JSON.stringify({ path, removeLocation, removeCamera }));
+
+const tripsUrl = `${API_BASE}/trips`;
+
+/**
+ * On a phone: home, the trips, the latest first, the computer, and the trip folder being made; asked every second while
+ * one is being made. Nothing is asked while `on` is false.
+ */
+export function useTrips(on: boolean) {
+  return useSWR<TripsDto>(on ? tripsUrl : null, json, { refreshInterval: latest => (latest?.folder?.stage === 'running' ? 1000 : 0) });
+}
+
+/** On a phone: a trip with its days; nothing is asked while `id` is undefined. */
+export function useTrip(id: string | undefined) {
+  return useSWR<TripDetailDto>(id === undefined ? null : `${tripsUrl}/${encodeURIComponent(id)}`, json);
+}
+
+/** On a phone: the towns photos were taken in, those on the most days first, to choose home from; nothing is asked while `on` is false. */
+export function useTowns(on: boolean) {
+  return useSWR<TownDto[]>(on ? `${tripsUrl}/towns` : null, json);
+}
+
+// Trips and every trip asked for, which a new home changes.
+const refreshTrips = () => mutate((key: unknown) => typeof key === 'string' && key.startsWith(tripsUrl));
+
+/** Makes `town` home for Trips, or with null lets PhotoSense work it out again. */
+export async function chooseHome(town: TownDto | null): Promise<void> {
+  await post(`${tripsUrl}/home`, JSON.stringify({ town }));
+  await refreshTrips();
+}
+
+/** Makes a trip's folder on the computer, sending first what is not there yet; `useTrips` says how it stands. */
+export async function makeTripFolder(id: string): Promise<void> {
+  await post(`${tripsUrl}/${encodeURIComponent(id)}/folder`, '{}');
+  await mutate(tripsUrl);
+}
+

@@ -362,7 +362,7 @@ export const GUIDE: GuideTopic[] = [
     only: COMPUTER,
     title: 'Backing up a phone to a computer',
     summary: 'Pairing a phone or tablet with this computer, where its backups go, and what Phones shows of each.',
-    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive'],
+    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive', 'trip folders', 'trips'],
     sections: [
       {
         text: [
@@ -385,7 +385,8 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'Each phone’s backups go to **Pictures/PhotoSense**, in a folder named after the phone.',
           'Each file is checked by its SHA-256 checksum as it arrives, and only a file that arrived whole is kept. One whose name is taken in the folder arrives under a new name: nothing on this computer is replaced.',
-          'Every time a phone backs up, this computer first checks the files it holds for it. One moved, deleted or changed here is sent again by the phone.',
+          'Every time a phone backs up, this computer first checks the files it holds for it. One deleted or changed here is sent again by the phone; one moved between the phone’s folder and its trip folders is found where it is.',
+          'When a phone asks, this computer moves a trip’s copies into a folder of their own in **Pictures/PhotoSense**, named by the month and the place, such as **2026-07 Glacier National Park**. A name already taken there gets a number, and nothing is replaced. The move is listed in **Recently moved**, where **Undo** puts the copies back; either way they still count as backed up, and are not sent again.',
         ],
       },
       {
@@ -394,7 +395,7 @@ export const GUIDE: GuideTopic[] = [
           '**Phones and tablets**, on the left, lists every phone paired with this computer, with when it last backed up. Choose one to see it.',
           '**Backup** shows a backup arriving, file by file, each with a tick once it matched its checksum, and otherwise when the last one was.',
           '**On this computer** says how many of its photos and videos are here; **Checked** that each matched its SHA-256 checksum; **Safe to delete on the phone** how many the phone could remove, and how much space that frees there.',
-          '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays.',
+          '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays. **Trip folders** says how many were made when the phone asked.',
           '**Pause backups** turns the phone away until **Resume backups**. **Activity** lists what happened.',
         ],
       },
@@ -590,10 +591,10 @@ export const GUIDE: GuideTopic[] = [
     id: 'library',
     only: PHONES,
     title: 'Library',
-    summary: 'Every photo and video, by month: searching, viewing one, sharing it, choosing several, and what can be done with them.',
+    summary: 'Every photo and video, by month: searching, trips, viewing one, sharing it, choosing several, and what can be done with them.',
     keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month',
       'year in review', 'recap', 'wrapped', 'stats', 'share card', 'brag', 'story', 'search', 'find', 'look for', 'favorite', 'heart', 'info', 'camera',
-      'share', 'location', 'gps', 'privacy', 'metadata', 'exif'],
+      'share', 'location', 'gps', 'privacy', 'metadata', 'exif', 'trips', 'travel', 'vacation', 'holiday', 'map', 'home', 'journey', 'trip folder'],
     sections: [
       {
         text: [
@@ -642,6 +643,17 @@ export const GUIDE: GuideTopic[] = [
         only: ANDROID,
         tips: [
           'What is in each photo is named by Google’s ML Kit on your phone, with the model Google Play services keeps; a phone without Google Play services finds photos by place and date only. The arrow, or Back, closes Search.',
+        ],
+      },
+      {
+        heading: 'Trips',
+        text: [
+          'The **Trips** tile under the search field opens **Trips**: the photos and videos you took away from home, grouped by place and date, the latest trip first.',
+          'A trip is at least 10 photos and videos taken more than 50 km (about 30 miles) from home, with no more than two days between them. A photo taken at home ends a trip. Each is named after the landmark or town where you took the most, or two towns when you spent time in both.',
+          'Home is the town where you took photos on the most days, and the note at the top of Trips names it. **Change** lets you choose another town among those in your photos, or go back to **Where most photos are taken**.',
+          '**List** shows each trip with its dates and how many photos and videos it has. **Map** shows each trip as a pin with its count, beside **Home**; tap a pin to open the trip. The map is drawn on your phone, and where your photos were taken never leaves it.',
+          'Tap a trip to see its cover, its dates and what you took each day. Tap a photo to view it.',
+          'Once you have paired a computer, **Make a folder on** your computer puts the trip’s copies there in a folder of their own, named by the month and the place, such as **Pictures/PhotoSense/2026-07 Glacier National Park**. Anything of the trip the computer does not have yet is sent first. Nothing changes on your phone. When it is done, PhotoSense says where the folder is, and the trip says **Folder created**.',
         ],
       },
       {
@@ -735,7 +747,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Year in review',
         text: [
           'In December, and through January, a card at the top of Library offers **Year in review**: your year in photos, made on the device. **Watch** opens it.',
-          'Five cards, one after another: how many photos and videos you took; the places they were taken in, with where you took the most; your busiest month, with a bar for each month; what you cleaned up, how much space it freed, your longest swipe streak and how many days you swiped; and the year in a line.',
+          'Five cards, one after another: how many photos and videos you took; your trips, with the one you took the most photos on; your busiest month, with a bar for each month; what you cleaned up, how much space it freed, your longest swipe streak and how many days you swiped; and the year in a line.',
           'Tap the right of the screen to go on and the left to go back. The cross, or Back, closes it.',
           '**Share** hands the card showing, as a picture, to your phone’s share sheet. No photos are on these cards.',
           'Space freed and items removed count from the update that brought Year in review; before it, items removed come from the free plan’s daily counts.',

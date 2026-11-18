@@ -141,6 +141,28 @@ export class Phone {
       this.sharedPhotos.push(JSON.parse(route.request().postData()!));
       return route.fulfill({ status: 204 });
     });
+    // Trips, which only a phone finds: a folder asked for has been made by the next time the page asks.
+    await page.route(url => /\/api\/trips(\/|$)/.test(url.pathname), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/trips').pop()!.replace(/^\//, '');
+      if (what === 'towns') return json(route, this.towns);
+      if (what === 'home') {
+        const asked = JSON.parse(route.request().postData()!);
+        this.asked.push(`trips/home ${asked.town?.town ?? 'worked out'}`);
+        return route.fulfill({ status: 204 });
+      }
+      if (what.endsWith('/folder')) {
+        const id = what.split('/')[0];
+        this.asked.push(`trips/folder ${id}`);
+        const trip = this.trips.trips.find(t => t.id === id)!;
+        this.trips = { ...this.trips, folder: { id, stage: 'running', problem: null, made: null } };
+        this.made = { ...this.trips, trips: this.trips.trips.map(t => (t.id === id ? { ...t, folderMade: true } : t)), folder: { id, stage: 'ready', problem: null, made: `Pictures/PhotoSense/${trip.folder}` } };
+        return route.fulfill({ status: 202 });
+      }
+      if (what) return json(route, this.tripDays[what] ?? { trip: this.trips.trips.find(t => t.id === what), days: [] });
+      const now = this.trips;
+      if (this.trips.folder?.stage === 'running' && this.made) { this.trips = this.made; this.made = undefined; }
+      return json(route, now);
+    });
     // Notifications, which only a phone sends: off until turned on, when the phone asks; what one tapped opens, once.
     await page.route(url => url.pathname.endsWith('/api/notices/opened'), async route => {
       const opens = this.opens;
@@ -186,6 +208,16 @@ export class Phone {
   readonly favorites = new Set<string>();
   /** The copies of photos handed to the share sheet, with what each left out. */
   readonly sharedPhotos: { path: string; removeLocation: boolean; removeCamera: boolean }[] = [];
+
+  /** Trips as the phone would find them: none, with no home, unless the test gives them. */
+  trips: { home: Record<string, unknown> | null; homeChosen: boolean; trips: { id: string; folder: string; [key: string]: unknown }[]; computer: string | null; tripsFolder: string | null;
+    folder: Record<string, unknown> | null; } = { home: null, homeChosen: false, trips: [], computer: null, tripsFolder: null, folder: null };
+  /** Each trip's days, by its id. */
+  tripDays: Record<string, unknown> = {};
+  /** The towns home can be chosen from. */
+  towns: Record<string, unknown>[] = [];
+  // Trips once the folder asked for is made.
+  private made?: Phone['trips'];
 
   /** Year in review as the phone would say it; none due unless the test gives one. */
   year: Record<string, unknown> = { year: null };

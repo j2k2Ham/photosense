@@ -142,6 +142,8 @@ interface LayerProps {
   readonly children: React.ReactNode;
   /** What stays at its foot while the rest scrolls, such as its main button. */
   readonly footer?: React.ReactNode;
+  /** Something is over it, such as the viewer or a sheet, which Escape puts away first: it ignores Escape meanwhile. */
+  readonly frozen?: boolean;
   /** Takes it away: its back button, Back, a swipe from the edge, or Escape. */
   onBack(): void;
 }
@@ -150,13 +152,14 @@ interface LayerProps {
  * A screen over every tab, as Settings and Subscription are: it slides in from the right, covers the tab bar, and goes
  * back to the screen it was opened from. Messages and sheets still show over it.
  */
-export function LayerScreen({ label, children, footer, onBack }: LayerProps) {
+export function LayerScreen({ label, children, footer, frozen = false, onBack }: LayerProps) {
   const { ios } = usePhone();
   const back = useRef(onBack);
-  useLayoutEffect(() => { back.current = onBack; });
+  const still = useRef(frozen);
+  useLayoutEffect(() => { back.current = onBack; still.current = frozen; });
   useBackLayer(true, () => back.current());
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') back.current(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !still.current) back.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);

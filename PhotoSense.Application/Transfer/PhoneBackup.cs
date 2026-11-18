@@ -23,6 +23,13 @@ public enum BackupStage
     Failed,
 }
 
+/// <summary>A trip folder being made on the computer, or the last one asked for.</summary>
+/// <param name="Folder">The folder's name, as the phone asked for it: "2026-07 Glacier National Park".</param>
+/// <param name="Stage">How it stands: running while what is missing is sent and the copies moved, ready once made, failed with the problem.</param>
+/// <param name="Problem">Why it was not made.</param>
+/// <param name="Made">Where the computer made it, as it says: "Pictures/PhotoSense/2026-07 Glacier National Park".</param>
+public sealed record TripFolderRun(string Folder, BackupStage Stage, string? Problem, string? Made);
+
 /// <summary>A picture or video in the strip of those backing up, by its id in the library, and whether it is on the computer yet.</summary>
 /// <param name="Id">Its id, as Organize and Library know it.</param>
 /// <param name="Done">It is on the computer, checked.</param>
@@ -125,6 +132,9 @@ public sealed class PhoneBackup
         public long Bytes;
         public int Next;
         public string? Problem;
+        // The trip folder this backup ends by making, and where the computer made it.
+        public string? TripFolder;
+        public string? Made;
     }
 
     /// <summary>Backs up the library at <paramref name="root"/> to the computer the phone was paired with.</summary>
@@ -265,16 +275,56 @@ public sealed class PhoneBackup
     /// <exception cref="InvalidOperationException">The phone has been paired with no computer.</exception>
     public async Task StartAsync(IReadOnlyCollection<string>? only, CancellationToken ct)
     {
-        var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException("Pair with a computer first: in Settings, choose Computer.");
+        var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException(PairFirst);
         lock (_lock)
         {
             if (_run is { Stage: BackupStage.Running }) return;
-            _run = new Run();
-            _stop = new CancellationTokenSource();
-            var stop = _stop.Token;
-            var run = _run;
-            Running = Task.Run(() => RunAsync(run, computer, only, stop), CancellationToken.None);
+            Start(new Run(), computer, only);
         }
+    }
+
+    /// <summary>
+    /// Makes a trip's folder on the computer: sends first what of the trip is not there yet, videos too, then has the
+    /// computer move the trip's copies into a folder of its own, beside the phones' folders. Nothing changes on the
+    /// phone. It goes on by itself; <see cref="TripFolder"/> says how it stands.
+    /// </summary>
+    /// <param name="folder">The folder's name: "2026-07 Glacier National Park".</param>
+    /// <param name="paths">The trip's pictures and videos, by their paths; what goes with each goes too.</param>
+    /// <param name="ct">Stops it before it starts.</param>
+    /// <exception cref="InvalidOperationException">The phone has been paired with no computer, or a backup is running.</exception>
+    public async Task MakeFolderAsync(string folder, IReadOnlyCollection<string> paths, CancellationToken ct)
+    {
+        var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException(PairFirst);
+        var wanted = paths.ToHashSet(PhotoPath.Comparer);
+        var ids = PhotoItem.Of(await _library.ListAsync(_root, ct)).Where(i => i.Files.Any(f => wanted.Contains(f.Path))).Select(i => i.Main.Id).ToList();
+        lock (_lock)
+        {
+            if (_run is { Stage: BackupStage.Running }) throw new InvalidOperationException($"A backup to {computer.Name} is running. Make the folder once it ends.");
+            Start(new Run { TripFolder = folder }, computer, ids);
+        }
+    }
+
+    /// <summary>The trip folder being made, or the last one asked for; null when none was asked for since PhotoSense started.</summary>
+    public TripFolderRun? TripFolder()
+    {
+        lock (_lock) return _run is { TripFolder: { } folder } run ? new TripFolderRun(folder, run.Stage, run.Problem, run.Made) : null;
+    }
+
+    /// <summary>The computer backups go to, or null when the phone has been paired with none.</summary>
+    public Task<BackupComputer?> ComputerAsync(CancellationToken ct) => _ledger.ComputerAsync(ct);
+
+    /// <summary>The trip folders the computer made when this phone asked, by their names.</summary>
+    public Task<IReadOnlySet<string>> FoldersMadeAsync(CancellationToken ct) => _ledger.FoldersMadeAsync(ct);
+
+    private const string PairFirst = "Pair with a computer first: in Settings, choose Computer.";
+
+    // Called holding the lock.
+    private void Start(Run run, BackupComputer computer, IReadOnlyCollection<string>? only)
+    {
+        _run = run;
+        _stop = new CancellationTokenSource();
+        var stop = _stop.Token;
+        Running = Task.Run(() => RunAsync(run, computer, only, stop), CancellationToken.None);
     }
 
     /// <summary>Pauses the backup going on; what is on the computer stays there, and the next backup carries on from it.</summary>
@@ -323,10 +373,16 @@ public sealed class PhoneBackup
             var first = await channel.ReceiveAsync(stop, "held", "paused");
             if (Wire.Text(first, "t") == "paused") throw new TransferException(Wire.Text(first, "why"));
             var folder = computer.Folder;
-            var held = (await Lists.ReceiveAsync(channel, "held", "sha256", first, last => folder = Wire.Text(last, "folder"), stop))
+            var trips = computer.Trips;
+            var held = (await Lists.ReceiveAsync(channel, "held", "sha256", first, last =>
+                {
+                    folder = Wire.Text(last, "folder");
+                    // A computer from before trip folders does not say where it makes them.
+                    trips = last["trips"] is JsonValue said ? said.GetValue<string>() : trips;
+                }, stop))
                 .Select(n => n?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
             await _ledger.KeepOnComputerAsync(held, all: true, stop);
-            computer = computer with { Folder = folder, LastChecked = _clock.GetUtcNow() };
+            computer = computer with { Folder = folder, Trips = trips, LastChecked = _clock.GetUtcNow() };
             await _ledger.SaveComputerAsync(computer, stop);
 
             var settings = await _ledger.SettingsAsync(stop);
@@ -365,6 +421,7 @@ public sealed class PhoneBackup
                 await _ledger.KeepOnComputerAsync([check], all: false, stop);
                 lock (_lock) run.Done.Add(id);
             }
+            if (run.TripFolder is { } trip) await TripFolderAsync(channel, run, trip, items.Where(i => only!.Contains(i.Main.Id)), stop);
             var safe = await SafeAsync(stop);
             await channel.SendAsync(new JsonObject { ["t"] = "bye", ["safe"] = safe.Removable.Count, ["safeBytes"] = safe.Removable.Bytes }, stop);
             await _ledger.SaveComputerAsync(computer with { LastBackup = _clock.GetUtcNow() }, CancellationToken.None);
@@ -380,6 +437,19 @@ public sealed class PhoneBackup
                 run.Problem = ex is TransferException ? ex.Message : $"The backup stopped: {ex.Message}";
             }
         }
+    }
+
+    // Has the computer move the trip's copies, every file of each, into the trip's folder.
+    private async Task TripFolderAsync(SecureChannel channel, Run run, string folder, IEnumerable<PhotoItem> trip, CancellationToken ct)
+    {
+        var checksums = new List<string>();
+        foreach (var file in trip.SelectMany(i => i.Files))
+            if (await ChecksumAsync(file, ct) is { } sha) checksums.Add(sha);
+        await Lists.SendAsync(channel, "trip", "sha256", checksums, new JsonObject { ["folder"] = folder }, ct);
+        var made = await channel.ReceiveAsync(ct, "trip-made");
+        if (made["problem"] is JsonValue problem) throw new TransferException(problem.GetValue<string>());
+        await _ledger.KeepFolderMadeAsync(folder, ct);
+        lock (_lock) run.Made = Wire.Text(made, "folder");
     }
 
     private async Task<string> SendFileAsync(SecureChannel channel, Run run, LibraryFile file, CancellationToken ct)

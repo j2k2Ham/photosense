@@ -54,20 +54,21 @@ export const freedSaid = (bytes: number) => (bytes >= 1e9 ? gigabytes(bytes) : a
 
 const count = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
-/** The year's photos, places and what was freed in a line: "7,512 photos, 12 places, 41.6 GB freed". */
-export const yearLine = (y: YearReviewDto) => `${count(y.photos, 'photo', 'photos')}, ${count(y.places, 'place', 'places')}, ${freedSaid(y.freed)} freed`;
+/** The year's photos, trips and what was freed in a line: "7,512 photos, 3 trips, 41.6 GB freed". */
+export const yearLine = (y: YearReviewDto) => `${count(y.photos, 'photo', 'photos')}, ${count(y.trips, 'trip', 'trips')}, ${freedSaid(y.freed)} freed`;
 
 /** Year in review's five cards, from the year's figures; `device` names the phone in "freed on your iPhone". */
 export function yearSlides(y: YearReviewDto, device: string): YearSlide[] {
   const year = y.year!;
-  const top = y.topPlaces[0];
+  // The trip with the most photos; the first of those with as many.
+  const top = y.topTrips.reduce<YearReviewDto['topTrips'][number] | undefined>((most, t) => (most && most.photos >= t.photos ? most : t), undefined);
   const busiest = y.busiestMonth > 0 ? y.months[y.busiestMonth - 1] : 0;
   return [
     { background: YEAR_COLOURS[0], kicker: 'Your year in photos', big: String(year), line: `${count(y.photos, 'photo', 'photos')} and ${count(y.videos, 'video', 'videos')}` },
     {
-      background: YEAR_COLOURS[1], kicker: 'Places', big: count(y.places, 'place', 'places'),
-      line: top ? `Most photos: ${top.town}, with ${top.photos.toLocaleString()}.` : 'None of this year’s photos say where they were taken.',
-      rows: y.topPlaces.map(p => [p.photos.toLocaleString(), p.town] as const),
+      background: YEAR_COLOURS[1], kicker: 'Places', big: y.trips === 0 ? 'No trips' : count(y.trips, 'trip', 'trips'),
+      line: top ? `Most photos: ${top.name}, with ${top.photos.toLocaleString()}.` : `None of ${year}’s photos were taken away from home.`,
+      rows: y.topTrips.map(t => [MONTHS[t.month - 1], t.name] as const),
     },
     y.busiestMonth > 0
       ? {
@@ -82,7 +83,7 @@ export function yearSlides(y: YearReviewDto, device: string): YearSlide[] {
     },
     {
       background: YEAR_COLOURS[4], kicker: 'PhotoSense', big: `That was ${year}`, line: `See you in ${year + 1}.`,
-      rows: [[count(y.photos, 'photo', 'photos'), ''], [count(y.places, 'place', 'places'), ''], [`${freedSaid(y.freed)} freed`, '']],
+      rows: [[count(y.photos, 'photo', 'photos'), ''], [count(y.trips, 'trip', 'trips'), ''], [`${freedSaid(y.freed)} freed`, '']],
     },
   ];
 }

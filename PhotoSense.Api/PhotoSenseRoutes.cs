@@ -11,7 +11,7 @@ public sealed class PhotoSenseRoutes
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
-        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer)
+        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -64,6 +64,11 @@ public sealed class PhotoSenseRoutes
             .Get("search", (r, _, ct) => viewer.SearchAsync(r, ct))
             .Get("viewer/details", (r, _, ct) => viewer.DetailsAsync(r, ct))
             .Post("viewer/favorite", (r, _, ct) => viewer.FavoriteAsync(r, ct))
+            .Get("trips", (r, _, ct) => trips.ListAsync(r, ct))
+            .Get("trips/towns", (r, _, ct) => trips.TownsAsync(r, ct))
+            .Post("trips/home", (r, _, ct) => trips.HomeAsync(r, ct))
+            .Get("trips/{id}", (r, v, ct) => trips.TripAsync(r, v["id"], ct))
+            .Post("trips/{id}/folder", (r, v, ct) => trips.FolderAsync(r, v["id"], ct))
             .Get("swipe", (r, _, ct) => swipe.StateAsync(r, ct))
             .Post("swipe/decide", (r, _, ct) => swipe.DecideAsync(r, ct))
             .Post("swipe/undo", (r, _, ct) => swipe.UndoAsync(r, ct))

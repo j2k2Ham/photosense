@@ -792,6 +792,46 @@ describe('search and the viewer', () => {
   });
 });
 
+describe('trips', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('asks for trips, a trip and the towns only while wanted, and every second while a folder is being made', async () => {
+    const api = await load();
+    api.useTrips(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useTrips(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/trips`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ folder: null }), every({ folder: { stage: 'ready' } }), every({ folder: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+    api.useTrip(undefined);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useTrip('2026 07');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/trips/2026%2007`);
+    api.useTowns(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useTowns(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/trips/towns`);
+  });
+
+  it("chooses home, asking trips again, makes a trip's folder, and says why it could not", async () => {
+    answering(undefined, 204);
+    const api = await load();
+    const butte = { town: 'Butte', region: 'Montana', country: 'US', latitude: 46, longitude: -112.5, days: 3 };
+    await api.chooseHome(butte);
+    expect(lastRequest()).toEqual({ url: `${API}/trips/home`, init: { method: 'POST', body: JSON.stringify({ town: butte }), headers: json } });
+    const asked = swr.mutate.mock.lastCall![0] as (key: unknown) => boolean;
+    expect([asked(`${API}/trips`), asked(`${API}/trips/abc`), asked(`${API}/year`), asked(undefined)]).toEqual([true, true, false, false]);
+    await api.chooseHome(null);
+    expect(lastRequest().init!.body).toBe('{"town":null}');
+    answering(undefined, 202);
+    await api.makeTripFolder('gla');
+    expect(lastRequest()).toEqual({ url: `${API}/trips/gla/folder`, init: { method: 'POST', body: '{}', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/trips`);
+    answering('Pair with a computer first: in Settings, choose Computer.', 409);
+    await expect(api.makeTripFolder('gla')).rejects.toThrow('Pair with a computer first');
+  });
+});
+
 describe('the plan', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };

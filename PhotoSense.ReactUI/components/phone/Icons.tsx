@@ -149,3 +149,9 @@ export const HeartIcon = ({ filled, ...p }: IconProps & { readonly filled?: bool
 
 /** Info: an i in a circle. */
 export const InfoIcon = (p: IconProps) => <Line size={22} {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.1" /></Line>;
+
+/** A trip: a pin on a map. */
+export const PinIcon = (p: IconProps) => <Line size={20} {...p}><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.4-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></Line>;
+
+/** Home, on the travel map. */
+export const HomeIcon = (p: IconProps) => <Line size={14} stroke={2.2} {...p}><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z" /></Line>;

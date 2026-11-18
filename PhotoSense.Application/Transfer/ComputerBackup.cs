@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Plans;
+using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -22,7 +23,9 @@ public sealed record ArrivingBackup(int Done, int Total, long Bytes, long TotalB
 /// first checks every file it holds for that phone (one no longer there, or changed and no longer matching its
 /// checksum, is forgotten, so that the phone sends it again), tells the phone the checksums of those it holds, and
 /// then takes the files the phone sends, each written under a name of PhotoSense's own until it is whole and its
-/// SHA-256 checksum is the phone's. Nothing is ever replaced: a file arriving under a taken name gets a number.
+/// SHA-256 checksum is the phone's. Nothing is ever replaced: a file arriving under a taken name gets a number. A phone
+/// can then ask for a trip's copies to be moved into a folder of their own beside the phones' folders, which is a change
+/// like any other here, with Undo.
 /// </summary>
 public sealed class ComputerBackup
 {
@@ -147,7 +150,7 @@ public sealed class ComputerBackup
         if (!_files.FolderExists(record.Folder)) _files.MakeFolder(record.Folder);
         record = record with { LastChecked = _clock.GetUtcNow() };
         await _store.SavePhoneAsync(record, ct);
-        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder) }, ct);
+        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(_root) }, ct);
 
         var offered = await Lists.ReceiveAsync(channel, "offer", "files", null, null, ct);
         var files = offered.OfType<JsonObject>().Select(f => (Id: Wire.Text(f, "id"), Name: PhoneReceiving.Plain(Wire.Text(f, "name")), Size: Size(f), Sha256: Sha(f))).ToList();
@@ -185,7 +188,15 @@ public sealed class ComputerBackup
                 Arrived(phone.Id, path, 0);
             }
             await channel.SendAsync(new JsonObject { ["t"] = "done" }, ct);
-            var bye = await channel.ReceiveAsync(ct, "bye");
+            var bye = await channel.ReceiveAsync(ct, "bye", "trip");
+            if (Wire.Text(bye, "t") == "trip")
+            {
+                var folder = string.Empty;
+                var checksums = (await Lists.ReceiveAsync(channel, "trip", "sha256", bye, last => folder = Wire.Text(last, "folder"), ct)).Select(n => n?.GetValue<string>()).OfType<string>().ToList();
+                (record, var made) = await TripFolderAsync(record, folder, checksums, ct);
+                await channel.SendAsync(made, ct);
+                bye = await channel.ReceiveAsync(ct, "bye");
+            }
             await _store.SavePhoneAsync(record with
             {
                 LastBackup = _clock.GetUtcNow(),
@@ -210,16 +221,52 @@ public sealed class ComputerBackup
     /// <summary>"1 item", "214 items".</summary>
     public static string Items(int count) => count == 1 ? "1 item" : $"{count:N0} items";
 
-    // Every file held for the phone that is still there as it was; one changed is checked again by its checksum.
+    // Moves the copies held with these checksums into the trip's folder, as one change; the answer for the phone.
+    private async Task<(BackupPhone Record, JsonObject Answer)> TripFolderAsync(BackupPhone record, string asked, IReadOnlyCollection<string> checksums, CancellationToken ct)
+    {
+        var name = PhoneReceiving.Plain(asked);
+        var folder = Path.Combine(_root, name);
+        var wanted = checksums.ToHashSet(StringComparer.Ordinal);
+        var going = (await _store.HeldAsync(record.Id, ct)).Where(h => wanted.Contains(h.Sha256) && !PhotoPath.Comparer.Equals(Path.GetDirectoryName(h.Path), folder)).ToList();
+        if (going.Count == 0 && !_files.FolderExists(folder)) _files.MakeFolder(folder);
+        if (going.Count > 0)
+        {
+            var taken = new HashSet<string>(PhotoPath.Comparer);
+            var batch = new OrganizeBatch { UtcTicks = _clock.GetUtcNow().UtcTicks, Label = name };
+            _changes.NeedFolder(batch.CreatedFolders, folder);
+            batch.Items.AddRange(going.Select(h => new OrganizeBatchItem
+            {
+                From = h.Path, To = _changes.FreePlace(Path.Combine(folder, Path.GetFileName(h.Path)), taken), SizeBytes = h.Size, ModifiedUtcTicks = h.ModifiedUtc.Ticks,
+            }));
+            var result = await _changes.CarryOutAsync(batch, null, ct);
+            if (!result.Done) return (record, new JsonObject { ["t"] = "trip-made", ["problem"] = $"{Named(folder)} could not be made. {result.Problem}" });
+            // The files have moved: where they are now is kept whatever happens.
+            foreach (var (file, item) in going.Zip(batch.Items)) await _store.HoldAsync(file with { Path = item.To }, CancellationToken.None);
+        }
+        record = record with { TripFolders = (record.TripFolders ?? []).Where(f => !PhotoPath.Comparer.Equals(f, folder)).Append(folder).ToList() };
+        await _store.SavePhoneAsync(record, CancellationToken.None);
+        await NoteAsync(record.Id, $"Made the trip folder {Named(folder)} with {Items(going.Count)}", CancellationToken.None);
+        return (record, new JsonObject { ["t"] = "trip-made", ["folder"] = Named(folder), ["moved"] = going.Count });
+    }
+
+    // Every file held for the phone that is still there as it was; one changed is checked again by its checksum, and one
+    // moved among the phone's folders (a trip folder's move undone, say) is found again there.
     private async Task<Dictionary<string, HeldFile>> CheckAsync(SecureChannel channel, BackupPhone phone, CancellationToken ct)
     {
+        var all = await _store.HeldAsync(phone.Id, ct);
         var held = new Dictionary<string, HeldFile>(StringComparer.Ordinal);
         var gone = new List<string>();
-        foreach (var file in await _store.HeldAsync(phone.Id, ct))
+        Dictionary<(long, long), List<string>>? loose = null;
+        foreach (var file in all)
         {
             ct.ThrowIfCancellationRequested();
             var now = _files.Describe(file.Path);
-            if (now is not null && now.Length == file.Size && now.ModifiedUtc == file.ModifiedUtc) held[file.Sha256] = file;
+            if (now is null && await FoundAgainAsync(channel, file, loose ??= Loose(phone, all), ct) is { } moved)
+            {
+                held[file.Sha256] = file with { Path = moved };
+                await _store.HoldAsync(held[file.Sha256], ct);
+            }
+            else if (now is not null && now.Length == file.Size && now.ModifiedUtc == file.ModifiedUtc) held[file.Sha256] = file;
             // Changed since: it is held only if its bytes are still the same. Reading a large file takes a while, which the phone is told of.
             else if (now is not null && await channel.MeanwhileAsync(stop => HashOfAsync(file.Path, stop), _clock, ct) == file.Sha256)
             {
@@ -234,6 +281,36 @@ public sealed class ComputerBackup
             await NoteAsync(phone.Id, $"{Items(gone.Count)} no longer in the folder as they were, so the phone sends them again", ct);
         }
         return held;
+    }
+
+    // The files in the phone's folders that nothing held is at, by their size and time.
+    private Dictionary<(long, long), List<string>> Loose(BackupPhone phone, IReadOnlyList<HeldFile> held)
+    {
+        var known = held.Select(h => h.Path).ToHashSet(PhotoPath.Comparer);
+        var loose = new Dictionary<(long, long), List<string>>();
+        foreach (var folder in (phone.TripFolders ?? []).Prepend(phone.Folder).Where(_files.FolderExists))
+            foreach (var path in _files.FilesIn(folder).Where(p => !known.Contains(p)))
+            {
+                var stored = _files.Describe(path)!;
+                var key = (stored.Length, stored.ModifiedUtc.Ticks);
+                if (!loose.TryGetValue(key, out var same)) loose[key] = same = [];
+                same.Add(path);
+            }
+        return loose;
+    }
+
+    // Where a file held but no longer where it was is now, among those of its size and time, by its checksum.
+    private async Task<string?> FoundAgainAsync(SecureChannel channel, HeldFile file, Dictionary<(long, long), List<string>> loose, CancellationToken ct)
+    {
+        if (!loose.TryGetValue((file.Size, file.ModifiedUtc.Ticks), out var same)) return null;
+        foreach (var path in same)
+            // Reading a large file takes a while, which the phone is told of.
+            if (await channel.MeanwhileAsync(stop => HashOfAsync(path, stop), _clock, ct) == file.Sha256)
+            {
+                same.Remove(path);
+                return path;
+            }
+        return null;
     }
 
     private async Task<string> ReceiveFileAsync(SecureChannel channel, string phoneId, string id, string arriving, CancellationToken ct)

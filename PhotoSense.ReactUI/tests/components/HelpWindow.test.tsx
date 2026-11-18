@@ -96,13 +96,16 @@ describe('the guide itself', () => {
     expect(ids('screenshot', 'computer')).toContain('categories');
     expect(ids('out of focus', 'computer')).toEqual(['categories']);
     expect(ids('whatsapp', 'computer')).toEqual(['categories']);
+    expect(ids('trip folders', 'computer')).toContain('phones');
 
     for (const platform of ['ios', 'android'] as const) {
       expect(ids('recover', platform)).toEqual(['phone-removed']);
       expect(ids('transfer', platform)).toEqual(['backup']);
       expect(ids('cancel subscription', platform)).toEqual(['phone-plan']);
       expect(ids('dupes', platform)).toEqual(['phone-cleanup']);
-      expect(ids('trip', platform)).toEqual(['phone-organize']);
+      expect(ids('trip', platform)).toEqual(['library', 'phone-organize']);
+      expect(ids('vacation', platform)).toEqual(['library']);
+      expect(ids('travel map', platform)).toEqual(['library']);
       expect(ids('camera roll', platform)).toEqual(['library']);
       expect(ids('dark mode', platform)).toEqual(['phone-settings']);
       expect(ids('qr code', platform)).toContain('backup');

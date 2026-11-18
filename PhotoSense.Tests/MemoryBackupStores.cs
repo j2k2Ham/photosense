@@ -75,6 +75,7 @@ internal sealed class MemoryBackupLedger : IBackupLedger
     private BackupSettings _settings = BackupSettings.Default;
     private readonly HashSet<string> _onComputer = [];
     private readonly Dictionary<string, (long Size, DateTime Modified, string Sha256)> _checksums = [];
+    private readonly HashSet<string> _foldersMade = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public Task<BackupComputer?> ComputerAsync(CancellationToken ct)
@@ -89,7 +90,11 @@ internal sealed class MemoryBackupLedger : IBackupLedger
         ct.ThrowIfCancellationRequested();
         lock (_onComputer)
         {
-            if (_computer is not null && _computer.ComputerId != computer.ComputerId) _onComputer.Clear();
+            if (_computer is not null && _computer.ComputerId != computer.ComputerId)
+            {
+                _onComputer.Clear();
+                _foldersMade.Clear();
+            }
             _computer = computer;
         }
         return Task.CompletedTask;
@@ -142,6 +147,21 @@ internal sealed class MemoryBackupLedger : IBackupLedger
     {
         ct.ThrowIfCancellationRequested();
         lock (_checksums) _checksums[PhotoPath.Key(path)] = (size, modifiedUtc, sha256);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FoldersMadeAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_onComputer) return Task.FromResult<IReadOnlySet<string>>(_foldersMade.ToHashSet(StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task KeepFolderMadeAsync(string folder, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_onComputer) _foldersMade.Add(folder);
         return Task.CompletedTask;
     }
 }

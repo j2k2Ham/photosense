@@ -14,7 +14,7 @@ vi.mock('../../../lib/shareCard', async importOriginal => ({ ...(await importOri
 
 const RESULT = { amount: '28.1 GB', device: 'iPhone', streak: 6, items: 5998 };
 const review = (more: Partial<YearReviewDto> = {}): YearReviewDto => ({
-  year: 2026, photos: 7512, videos: 316, places: 12, topPlaces: [{ town: 'Butte', photos: 512 }], months: [1, 2, 3, 4, 5, 6, 1402, 8, 9, 10, 11, 12], busiestMonth: 7,
+  year: 2026, photos: 7512, videos: 316, trips: 3, topTrips: [{ name: 'Glacier National Park', month: 7, photos: 512 }], months: [1, 2, 3, 4, 5, 6, 1402, 8, 9, 10, 11, 12], busiestMonth: 7,
   busiestPlace: { town: 'West Glacier', photos: 512 }, freed: 41_600_000_000, removed: 9846, longestStreak: 38, sessions: 142, ...more,
 });
 
@@ -74,7 +74,7 @@ describe('Year in review (41–44)', () => {
   it('is offered in Library with the year in a line, and Watch opens it', async () => {
     const onWatch = vi.fn();
     inFrame(<YearCard review={review()} onWatch={onWatch} />);
-    expect(screen.getByRole('region', { name: 'Year in review' })).toHaveTextContent('Year in reviewYour 2026 in photos7,512 photos, 12 places, 41.6 GB freed');
+    expect(screen.getByRole('region', { name: 'Year in review' })).toHaveTextContent('Year in reviewYour 2026 in photos7,512 photos, 3 trips, 41.6 GB freed');
     await userEvent.click(screen.getByRole('button', { name: 'Watch' }));
     expect(onWatch).toHaveBeenCalledOnce();
   });
@@ -88,7 +88,7 @@ describe('Year in review (41–44)', () => {
     expect([now(), at()]).toEqual(['2026', '1']);
     expect(within(stories).getByRole('button', { name: 'Previous card' })).toBeDisabled();
     await userEvent.click(within(stories).getByRole('button', { name: 'Next card' }));
-    expect(now()).toBe('12 places');
+    expect(now()).toBe('3 trips');
     await userEvent.click(within(stories).getByRole('button', { name: 'Next card' }));
     expect(now()).toBe('July');
     expect(within(stories).getByRole('img', { name: 'Photos by month' })).toBeInTheDocument();

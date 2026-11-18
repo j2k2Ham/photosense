@@ -211,4 +211,119 @@ public sealed class ComputerBackupTests : IDisposable
         await Assert.That(stopped!.Message).StartsWith("The disk would not create .A.JPG.");
         await Assert.That(Directory.GetFiles(Backups).Length).IsEqualTo(0);
     }
+
+    private string Trip => Folder("Home", "Pictures", "PhotoSense", "2026-07 Glacier National Park");
+
+    /// <summary>Writes a file into a folder, holds it for the phone, and gives its checksum.</summary>
+    private async Task<string> HeldFileAsync(string folder, string name, byte[] bytes, CancellationToken ct)
+    {
+        var path = Path.Combine(Directory.CreateDirectory(folder).FullName, name);
+        await System.IO.File.WriteAllBytesAsync(path, bytes, ct);
+        var info = new FileInfo(path);
+        await _store.HoldAsync(new HeldFile(_phone.Id, Sha(bytes), path, info.Length, info.LastWriteTimeUtc, TestClock.Day), ct);
+        return Sha(bytes);
+    }
+
+    /// <summary>A backup with nothing to send, then the trip folder asked for, in two parts; the computer's answer.</summary>
+    private async Task<JsonObject> TripAsync(string folder, IReadOnlyList<string> checksums, CancellationToken ct, ComputerBackup? backup = null)
+    {
+        var (serving, phone, _) = await ConnectedAsync(ct, backup);
+        await phone.SendAsync(new JsonObject { ["t"] = "backup" }, ct);
+        await HeldAsync(phone);
+        await phone.SendAsync(new JsonObject { ["t"] = "offer" }, ct);
+        await phone.ReceiveAsync(ct, "done");
+        await phone.SendAsync(new JsonObject { ["t"] = "trip", ["sha256"] = new JsonArray([.. checksums.Take(1).Select(c => (JsonNode)c)]), ["more"] = true }, ct);
+        await phone.SendAsync(new JsonObject { ["t"] = "trip", ["sha256"] = new JsonArray([.. checksums.Skip(1).Select(c => (JsonNode)c)]), ["folder"] = folder }, ct);
+        var made = await phone.ReceiveAsync(ct, "trip-made");
+        await phone.SendAsync(new JsonObject { ["t"] = "bye" }, ct);
+        await serving;
+        return made;
+    }
+
+    private async Task<string[]> NotesAsync(CancellationToken ct) => [.. (await _store.EventsAsync(_phone.Id, 20, ct)).Select(e => e.Text)];
+
+    [Test]
+    public async Task A_Trips_Copies_Move_Into_A_Folder_Of_Their_Own_Names_Taken_Numbered_And_Are_Held_There_After(CancellationToken ct)
+    {
+        await _store.SavePhoneAsync(new BackupPhone(_phone.Id, "Jamie's iPhone", "iPhone", Backups, false, TestClock.Day, null, null), ct);
+        var a = await HeldFileAsync(Backups, "IMG_A.JPG", [1, 1], ct);
+        var b = await HeldFileAsync(Backups, "IMG_B.JPG", [2, 2, 2], ct);
+        var c = await HeldFileAsync(Backups, "IMG_C.JPG", [3, 3, 3, 3], ct);
+        // The person's own file, of the same name, is there already: it stays, and the copy takes a number.
+        Directory.CreateDirectory(Trip);
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(Trip, "IMG_A.JPG"), [9], ct);
+
+        var made = await TripAsync("2026-07 Glacier National Park", [a, b, "not-held"], ct);
+        await Assert.That((Wire.Text(made, "folder"), (int)made["moved"]!)).IsEqualTo(("Pictures/PhotoSense/2026-07 Glacier National Park", 2));
+        await Assert.That(Directory.GetFiles(Trip).Select(f => Path.GetFileName(f)).Order()).IsEquivalentTo(["IMG_A (1).JPG", "IMG_A.JPG", "IMG_B.JPG"], CollectionOrdering.Matching);
+        await Assert.That(await System.IO.File.ReadAllBytesAsync(Path.Combine(Trip, "IMG_A.JPG"), ct)).IsEquivalentTo(new byte[] { 9 }, CollectionOrdering.Matching);
+        await Assert.That(Directory.GetFiles(Backups).Select(f => Path.GetFileName(f))).IsEquivalentTo(["IMG_C.JPG"], CollectionOrdering.Matching);
+        var held = (await _store.HeldAsync(_phone.Id, ct)).ToDictionary(h => h.Sha256, h => h.Path);
+        await Assert.That((held[a], held[b], held[c])).IsEqualTo((Path.Combine(Trip, "IMG_A (1).JPG"), Path.Combine(Trip, "IMG_B.JPG"), Path.Combine(Backups, "IMG_C.JPG")));
+        await Assert.That((await _store.PhonesAsync(ct)).Single().TripFolders).IsEquivalentTo([Trip], CollectionOrdering.Matching);
+        await Assert.That((await NotesAsync(ct))[0]).IsEqualTo("Made the trip folder Pictures/PhotoSense/2026-07 Glacier National Park with 2 items");
+
+        // Asked again: what is there already stays, and the folder is listed once.
+        var again = await TripAsync("2026-07 Glacier National Park", [a], ct);
+        await Assert.That((int)again["moved"]!).IsEqualTo(0);
+        await Assert.That((await _store.PhonesAsync(ct)).Single().TripFolders!.Count).IsEqualTo(1);
+        await Assert.That((await _store.HeldAsync(_phone.Id, ct)).Count).IsEqualTo(3);
+    }
+
+    [Test]
+    public async Task A_Copy_Moved_Among_The_Phones_Folders_Is_Found_Again_By_Its_Checksum_And_Not_Sent_Twice(CancellationToken ct)
+    {
+        await _store.SavePhoneAsync(new BackupPhone(_phone.Id, "Jamie's iPhone", "iPhone", Backups, false, TestClock.Day, null, null), ct);
+        var a = await HeldFileAsync(Backups, "IMG_A.JPG", [1, 1], ct);
+        var b = await HeldFileAsync(Backups, "IMG_B.JPG", [2, 2, 2], ct);
+        var c = await HeldFileAsync(Backups, "IMG_C.JPG", [3, 3, 3, 3], ct);
+        var d = await HeldFileAsync(Backups, "IMG_D.JPG", [5, 5, 5, 5, 5], ct);
+        await TripAsync("2026-07 Glacier National Park", [a, b], ct);
+        // Deleted, with nothing of its size anywhere: it is sent again.
+        System.IO.File.Delete(Path.Combine(Backups, "IMG_D.JPG"));
+
+        // The trip folder's move undone, as Recently moved would: the copies are back in the phone's folder, one numbered.
+        await System.IO.File.WriteAllBytesAsync(Path.Combine(Backups, "IMG_A.JPG"), [7, 7], ct);
+        System.IO.File.Move(Path.Combine(Trip, "IMG_A.JPG"), Path.Combine(Backups, "IMG_A (1).JPG"));
+        System.IO.File.Move(Path.Combine(Trip, "IMG_B.JPG"), Path.Combine(Backups, "IMG_B.JPG"));
+        // Another file of the same size and time as one gone is not taken for it.
+        var gone = Path.Combine(Backups, "IMG_C.JPG");
+        var stranger = Path.Combine(Backups, "OTHER.JPG");
+        await System.IO.File.WriteAllBytesAsync(stranger, [4, 4, 4, 4], ct);
+        System.IO.File.SetLastWriteTimeUtc(stranger, System.IO.File.GetLastWriteTimeUtc(gone));
+        System.IO.File.Delete(gone);
+        // A file of the same size and time as IMG_A's copy, with other bytes, is not taken for it either.
+        System.IO.File.SetLastWriteTimeUtc(Path.Combine(Backups, "IMG_A.JPG"), System.IO.File.GetLastWriteTimeUtc(Path.Combine(Backups, "IMG_A (1).JPG")));
+
+        var (serving, phone, _) = await ConnectedAsync(ct);
+        await phone.SendAsync(new JsonObject { ["t"] = "backup" }, ct);
+        var (stillHeld, _) = await HeldAsync(phone);
+        await phone.SendAsync(new JsonObject { ["t"] = "offer" }, ct);
+        await phone.ReceiveAsync(ct, "done");
+        await phone.SendAsync(new JsonObject { ["t"] = "bye" }, ct);
+        await serving;
+
+        await Assert.That(stillHeld.Order()).IsEquivalentTo(new[] { a, b }.Order(), CollectionOrdering.Matching);
+        var held = (await _store.HeldAsync(_phone.Id, ct)).ToDictionary(h => h.Sha256, h => h.Path);
+        await Assert.That((held[a], held[b], held.ContainsKey(c))).IsEqualTo((Path.Combine(Backups, "IMG_A (1).JPG"), Path.Combine(Backups, "IMG_B.JPG"), false));
+        await Assert.That(held.ContainsKey(d)).IsFalse();
+        await Assert.That((await NotesAsync(ct))[0]).IsEqualTo("2 items no longer in the folder as they were, so the phone sends them again");
+    }
+
+    [Test]
+    public async Task A_Trip_With_Nothing_Held_Makes_Its_Folder_Empty_And_A_Move_That_Fails_Is_Said_To_The_Phone(CancellationToken ct)
+    {
+        await _store.SavePhoneAsync(new BackupPhone(_phone.Id, "Jamie's iPhone", "iPhone", Backups, false, TestClock.Day, null, null), ct);
+        var empty = await TripAsync("2025-06 Anaconda and Butte", [], ct);
+        await Assert.That((Wire.Text(empty, "folder"), (int)empty["moved"]!)).IsEqualTo(("Pictures/PhotoSense/2025-06 Anaconda and Butte", 0));
+        await Assert.That(Directory.Exists(Folder("Home", "Pictures", "PhotoSense", "2025-06 Anaconda and Butte"))).IsTrue();
+
+        var a = await HeldFileAsync(Backups, "IMG_A.JPG", [1, 1], ct);
+        var disk = new FailingDisk().Fail("move", _ => true, "The disk is full.");
+        var failing = TestBackups.Computer(Folder("Home", "Pictures", "PhotoSense"), _store, home: Folder("Home"), files: disk);
+        var refused = await TripAsync("2026-07 Glacier National Park", [a], ct, failing);
+        await Assert.That(Wire.Text(refused, "problem")).StartsWith("Pictures/PhotoSense/2026-07 Glacier National Park could not be made. ");
+        await Assert.That((System.IO.File.Exists(Path.Combine(Backups, "IMG_A.JPG")), Directory.Exists(Trip))).IsEqualTo((true, false));
+        await Assert.That((await _store.HeldAsync(_phone.Id, ct)).Single().Path).IsEqualTo(Path.Combine(Backups, "IMG_A.JPG"));
+    }
 }

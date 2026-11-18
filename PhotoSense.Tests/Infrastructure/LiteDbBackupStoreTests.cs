@@ -110,8 +110,45 @@ public class LiteDbBackupStoreTests
             () => ledger.ComputerAsync(gone), () => ledger.SaveComputerAsync(new BackupComputer("c", "C", "f", null, null), gone), () => ledger.SettingsAsync(gone),
             () => ledger.SaveSettingsAsync(BackupSettings.Default, gone), () => ledger.OnComputerAsync(gone), () => ledger.KeepOnComputerAsync(["aa"], true, gone),
             () => ledger.ChecksumAsync("f", 1, DateTime.UnixEpoch, gone), () => ledger.KeepChecksumAsync("f", 1, DateTime.UnixEpoch, "aa", gone),
+            () => ledger.FoldersMadeAsync(gone), () => ledger.KeepFolderMadeAsync("2026-07 Glacier", gone),
+            () => db.TripHome().HomeAsync(gone), () => db.TripHome().SaveHomeAsync(null, gone),
         ];
         foreach (var ask in asked) await Assert.That(ask).Throws<OperationCanceledException>();
         await Assert.That((await store.PhonesAsync(ct)).Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task A_Phones_Trip_Folders_Are_Kept_On_The_Computer_And_On_The_Phone_Until_Another_Computer(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        await db.Backups().SavePhoneAsync(new BackupPhone("p", "P", null, "f", false, Day, null, null, TripFolders: ["/t/2026-07 Glacier", "/t/2025-06 Butte"]), ct);
+        await db.Backups().SavePhoneAsync(new BackupPhone("q", "Q", null, "g", false, Day.AddDays(1), null, null), ct);
+        var phones = await db.Backups().PhonesAsync(ct);
+        await Assert.That(phones[0].TripFolders).IsEquivalentTo(["/t/2026-07 Glacier", "/t/2025-06 Butte"], CollectionOrdering.Matching);
+        await Assert.That(phones[1].TripFolders).IsNull();
+
+        var ledger = db.Ledger();
+        await ledger.SaveComputerAsync(new BackupComputer("c1", "Studio iMac", "f", null, null, "Pictures/PhotoSense"), ct);
+        await Assert.That((await db.Ledger().ComputerAsync(ct))!.Trips).IsEqualTo("Pictures/PhotoSense");
+        await ledger.KeepFolderMadeAsync("2026-07 Glacier", ct);
+        await ledger.KeepFolderMadeAsync("2026-07 Glacier", ct);
+        await Assert.That(await db.Ledger().FoldersMadeAsync(ct)).IsEquivalentTo(["2026-07 Glacier"]);
+        // The same computer renamed keeps them; another has none of them.
+        await ledger.SaveComputerAsync(new BackupComputer("c1", "Office iMac", "f", null, null), ct);
+        await Assert.That((await ledger.FoldersMadeAsync(ct)).Count).IsEqualTo(1);
+        await ledger.SaveComputerAsync(new BackupComputer("c2", "Laptop", "f", null, null), ct);
+        await Assert.That((await ledger.FoldersMadeAsync(ct)).Count).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task The_Home_Chosen_For_Trips_Is_Kept_Until_PhotoSense_Is_Let_Work_It_Out_Again(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        await Assert.That(await db.TripHome().HomeAsync(ct)).IsNull();
+        var bozeman = new HomeTown("Bozeman", "Montana", "US", 45.6797, -111.0386);
+        await db.TripHome().SaveHomeAsync(bozeman, ct);
+        await Assert.That(await db.TripHome().HomeAsync(ct)).IsEqualTo(bozeman);
+        await db.TripHome().SaveHomeAsync(null, ct);
+        await Assert.That(await db.TripHome().HomeAsync(ct)).IsNull();
     }
 }

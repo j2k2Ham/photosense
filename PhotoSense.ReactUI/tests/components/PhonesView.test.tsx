@@ -63,7 +63,7 @@ describe('Phones, on the computer', () => {
   it('lists each phone, the first chosen, and shows the one chosen: what is on this computer, checked, safe to delete, and what happened', async () => {
     phones = [
       backupPhone({ lastChecked: at(13, 9), lastBackup: new Date().toISOString(), events: [{ at: at(13, 9, 41), text: '214 items backed up and checked' }, { at: at(10, 9), text: 'Paired with this computer' }] }),
-      backupPhone({ id: 'pad', name: "Alex's iPad", kind: 'iPad', held: 1, heldBytes: 1, safe: 0, safeBytes: 0 }),
+      backupPhone({ id: 'pad', name: "Alex's iPad", kind: 'iPad', held: 1, heldBytes: 1, safe: 0, safeBytes: 0, tripFolders: 2 }),
       backupPhone({ id: 'pixel', name: "Sam's Pixel 9", kind: null }),
     ];
     render(<PhonesView notify={vi.fn()} onPair={vi.fn()} />);
@@ -78,10 +78,13 @@ describe('Phones, on the computer', () => {
     expect(within(detail()).getByRole('region', { name: 'Checked' })).toHaveTextContent('All matchSHA-256 checksum of every file');
     expect(within(detail()).getByRole('region', { name: 'Safe to delete on the phone' })).toHaveTextContent('5,998 items28.1 GB after keep rules');
     expect(within(detail()).getByRole('region', { name: 'Files from this phone' })).toHaveTextContent("Pictures/PhotoSense/Alex's iPhone");
+    expect(within(detail()).getByRole('region', { name: 'Files from this phone' })).toHaveTextContent('Trip foldersMade when the phone asks. None so far.');
     expect(within(within(detail()).getByRole('region', { name: 'Activity' })).getAllByRole('listitem').map(li => li.textContent)).toEqual([
       'Nov 13214 items backed up and checked', 'Nov 10Paired with this computer',
     ]);
 
+    await userEvent.click(within(list).getByRole('button', { name: /^Alex's iPad/ }));
+    expect(within(detail("Alex's iPad")).getByRole('region', { name: 'Files from this phone' })).toHaveTextContent('Made when the phone asks. 2 so far.');
     await userEvent.click(within(list).getByRole('button', { name: /^Sam's Pixel 9/ }));
     expect(detail("Sam's Pixel 9")).toHaveTextContent('Phone · paired Nov 10, 2026');
     expect(detail("Sam's Pixel 9")).toHaveTextContent("No backup yetSam's Pixel 9 backs up when PhotoSense is open on it.");

@@ -11,6 +11,17 @@ public sealed class YearPlaceDto
     [JsonPropertyName("photos")] public int Photos { get; init; }
 }
 
+/// <summary>A trip of the year, as Year in review lists it.</summary>
+public sealed class YearTripDto
+{
+    /// <summary>What the trip is called.</summary>
+    [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
+    /// <summary>The month it started, 1 to 12.</summary>
+    [JsonPropertyName("month")] public int Month { get; init; }
+    /// <summary>Its pictures and videos.</summary>
+    [JsonPropertyName("photos")] public int Photos { get; init; }
+}
+
 /// <summary>Year in review: the year due now, or null when none is, and that year in photos.</summary>
 public sealed class YearReviewDto
 {
@@ -20,10 +31,10 @@ public sealed class YearReviewDto
     [JsonPropertyName("photos")] public int Photos { get; init; }
     /// <summary>Videos taken that year.</summary>
     [JsonPropertyName("videos")] public int Videos { get; init; }
-    /// <summary>How many towns they were taken in.</summary>
-    [JsonPropertyName("places")] public int Places { get; init; }
-    /// <summary>The three towns with the most, most first.</summary>
-    [JsonPropertyName("topPlaces")] public IReadOnlyList<YearPlaceDto> TopPlaces { get; init; } = [];
+    /// <summary>How many trips started that year.</summary>
+    [JsonPropertyName("trips")] public int Trips { get; init; }
+    /// <summary>The three trips with the most photos, in the order they were taken.</summary>
+    [JsonPropertyName("topTrips")] public IReadOnlyList<YearTripDto> TopTrips { get; init; } = [];
     /// <summary>How many were taken in each month, January first.</summary>
     [JsonPropertyName("months")] public IReadOnlyList<int> Months { get; init; } = [];
     /// <summary>The month with the most, 1 to 12; 0 when none was taken.</summary>

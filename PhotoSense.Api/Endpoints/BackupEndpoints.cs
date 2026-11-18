@@ -164,7 +164,7 @@ internal sealed class BackupEndpoints
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = _computer.Named(phone.Folder), Path = phone.Folder, Paused = phone.Paused, Paired = Time(phone.Paired)!,
             LastBackup = Time(phone.LastBackup), LastChecked = Time(phone.LastChecked), Held = held, HeldBytes = heldBytes, Safe = phone.Safe, SafeBytes = phone.SafeBytes,
-            Arriving = arriving, Events = [.. (await _computer.EventsAsync(phone.Id, ct)).Select(e => new BackupEventDto { At = Time(e.At)!, Text = e.Text })],
+            TripFolders = phone.TripFolders?.Count ?? 0, Arriving = arriving, Events = [.. (await _computer.EventsAsync(phone.Id, ct)).Select(e => new BackupEventDto { At = Time(e.At)!, Text = e.Text })],
         };
     }
 

@@ -721,7 +721,7 @@ describe('PhotoSense on a phone', () => {
 
   it('opens Year in review from its card in Library, and the share card from what compressing saved', async () => {
     width(false);
-    api.useYear.mockReturnValue({ data: { year: 2026, photos: 3, videos: 0, places: 0, topPlaces: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 0, removed: 0, longestStreak: 0, sessions: 0 } });
+    api.useYear.mockReturnValue({ data: { year: 2026, photos: 3, videos: 0, trips: 0, topTrips: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 0, removed: 0, longestStreak: 0, sessions: 0 } });
     let compressing: unknown = { stage: 'running', quality: 'balanced', total: 1, done: 0, current: 'IMG_1.MOV', progress: 0, results: [], saved: 0, originalsDeleted: null, problem: null };
     api.useCompression.mockImplementation(() => ({ data: compressing }));
     const { rerender } = render(<App start="library" />);

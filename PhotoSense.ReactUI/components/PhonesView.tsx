@@ -197,6 +197,10 @@ function Detail({ phone, now, busy, onPause, onChangeFolder }: DetailProps) {
             </div>
             <button type="button" onClick={onChangeFolder} className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">Change…</button>
           </div>
+          <div className="border-t border-line px-4 py-3">
+            <p className="text-[13.5px]">Trip folders</p>
+            <p className="text-[12.5px] text-t2">Made when the phone asks. {phone.tripFolders === 0 ? 'None so far.' : `${phone.tripFolders.toLocaleString()} so far.`}</p>
+          </div>
         </section>
         <section aria-label="Activity" className="rounded-[16px] border border-line bg-s1">
           <h3 className="border-b border-line px-4 py-3 text-[14px] font-semibold">Activity</h3>

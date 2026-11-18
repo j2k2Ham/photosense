@@ -11,7 +11,9 @@ namespace PhotoSense.Domain.Repositories;
 /// <param name="LastChecked">When the files kept for it were last checked against their checksums.</param>
 /// <param name="Safe">How many of the phone's pictures and videos it said could be deleted from it, as their copies are here, after its keep rules.</param>
 /// <param name="SafeBytes">How much those take on the phone.</param>
-public sealed record BackupPhone(string Id, string Name, string? Kind, string Folder, bool Paused, DateTimeOffset Paired, DateTimeOffset? LastBackup, DateTimeOffset? LastChecked, int Safe = 0, long SafeBytes = 0);
+/// <param name="TripFolders">The trip folders made on this computer when the phone asked, where its files may be too; null for none.</param>
+public sealed record BackupPhone(string Id, string Name, string? Kind, string Folder, bool Paused, DateTimeOffset Paired, DateTimeOffset? LastBackup, DateTimeOffset? LastChecked, int Safe = 0, long SafeBytes = 0,
+    IReadOnlyList<string>? TripFolders = null);
 
 /// <summary>A file this computer keeps for a phone, by its checksum.</summary>
 /// <param name="PhoneId">The phone it came from.</param>
@@ -59,7 +61,8 @@ public interface IBackupStore
 /// <param name="Folder">Where the computer puts this phone's backups, as it last said.</param>
 /// <param name="LastChecked">When the computer last checked the files it keeps for this phone, and said which they are.</param>
 /// <param name="LastBackup">When a backup last finished.</param>
-public sealed record BackupComputer(string ComputerId, string Name, string Folder, DateTimeOffset? LastChecked, DateTimeOffset? LastBackup);
+/// <param name="Trips">Where the computer makes trip folders, as it last said ("Pictures/PhotoSense"); null until it has said.</param>
+public sealed record BackupComputer(string ComputerId, string Name, string Folder, DateTimeOffset? LastChecked, DateTimeOffset? LastBackup, string? Trips = null);
 
 /// <summary>How a phone backs up by itself, and what Safe to delete keeps on it.</summary>
 /// <param name="Automatic">Backs up by itself (Pro).</param>
@@ -105,4 +108,10 @@ public interface IBackupLedger
 
     /// <summary>Keeps a file's checksum, for as long as its size and time stay the same.</summary>
     Task KeepChecksumAsync(string path, long size, DateTime modifiedUtc, string sha256, CancellationToken ct);
+
+    /// <summary>The trip folders the computer made when this phone asked, by their names; another computer starts with none.</summary>
+    Task<IReadOnlySet<string>> FoldersMadeAsync(CancellationToken ct);
+
+    /// <summary>Keeps that the computer made a trip folder.</summary>
+    Task KeepFolderMadeAsync(string folder, CancellationToken ct);
 }

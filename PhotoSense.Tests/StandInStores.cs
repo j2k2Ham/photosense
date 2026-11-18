@@ -246,6 +246,27 @@ internal sealed class MemoryNoticeStore : INoticeStore
     }
 }
 
+/// <summary>The home chosen for Trips, in memory.</summary>
+internal sealed class MemoryTripStore : ITripStore
+{
+    private HomeTown? _home;
+
+    /// <inheritdoc />
+    public Task<HomeTown?> HomeAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_home);
+    }
+
+    /// <inheritdoc />
+    public Task SaveHomeAsync(HomeTown? home, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _home = home;
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Every store a program keeps, replaced by a stand-in in memory, so that no test but the stores' own touches the database.</summary>
 internal static class StandInStores
 {
@@ -264,6 +285,7 @@ internal static class StandInStores
             .AddSingleton<IBackupLedger>(new MemoryBackupLedger())
             .AddSingleton<ISwipeStore>(new MemorySwipeStore())
             .AddSingleton<INoticeStore>(new MemoryNoticeStore())
+            .AddSingleton<ITripStore>(new MemoryTripStore())
             // The computer's door for phones waits on a free port of its own, and tells no network.
             .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

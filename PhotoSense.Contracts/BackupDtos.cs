@@ -165,6 +165,8 @@ public sealed class BackupPhoneDto
     [JsonPropertyName("safe")] public int Safe { get; init; }
     /// <summary>How much those take on it.</summary>
     [JsonPropertyName("safeBytes")] public long SafeBytes { get; init; }
+    /// <summary>How many trip folders were made here when it asked.</summary>
+    [JsonPropertyName("tripFolders")] public int TripFolders { get; init; }
     /// <summary>The backup arriving from it now, if any.</summary>
     [JsonPropertyName("arriving")] public ArrivingBackupDto? Arriving { get; init; }
     /// <summary>What happened, the latest first.</summary>

@@ -45,6 +45,7 @@ public static class PhotoSenseCoreServices
         s.AddSingleton<ISwipeStore>(sp => new LiteDbSwipeStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<INoticeStore>(sp => new LiteDbNoticeStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IBackupLedger>(sp => new LiteDbBackupLedger(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<ITripStore>(sp => new LiteDbTripStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IThumbnailStore>(sp =>
             new FileSystemThumbnailStore(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()));

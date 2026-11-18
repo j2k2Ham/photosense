@@ -5,13 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LIBRARY_PAGE, LibraryScreen } from '../../../components/phone/Library';
 import type { Album, Library, LibraryFilter } from '../../../lib/library';
 import type { PhoneFrame, Platform } from '../../../lib/phone';
-import type { LibraryBackupDto, OrganizeApplyDto, OrganizeFileDto, SafeReviewDto } from '../../../types';
+import type { LibraryBackupDto, OrganizeApplyDto, OrganizeFileDto, PhotoDto, SafeReviewDto } from '../../../types';
 import { organizeFile, organizePlace, plan, safeReview } from '../../fixtures';
 import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({
   usePhotoAccess: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), chooseMorePhotos: vi.fn(),
   usePhotoDetails: vi.fn(), setFavorite: vi.fn(), sharePhoto: vi.fn(), useSearch: vi.fn(), refreshSearch: vi.fn(),
+  useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
@@ -42,6 +43,7 @@ beforeEach(() => {
   api.setFavorite.mockResolvedValue({ camera: 'iPhone 15 Pro', favorite: true });
   api.sharePhoto.mockResolvedValue(undefined);
   api.useSearch.mockReturnValue({ data: undefined, error: undefined });
+  api.useTrips.mockReturnValue({ data: undefined });
 });
 
 interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[]; backup?: LibraryBackupDto; safe?: SafeReviewDto; onReview?: () => void; removeLocation?: boolean }
@@ -65,7 +67,7 @@ const toastAction = (notify: ReturnType<typeof vi.fn>) => (notify.mock.calls.at(
 describe("Library's Year in review card", () => {
   it('shows while the year is due, and not while choosing; Watch opens it', async () => {
     const onYear = vi.fn();
-    const year = { year: 2026, photos: 7512, videos: 316, places: 12, topPlaces: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 41_600_000_000, removed: 0, longestStreak: 0, sessions: 0 };
+    const year = { year: 2026, photos: 7512, videos: 316, trips: 3, topTrips: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 41_600_000_000, removed: 0, longestStreak: 0, sessions: 0 };
     const ui = (selecting: boolean, review = year) => (
       <LibraryScreen library={library()} selecting={selecting} onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()} year={review} onYear={onYear} />
     );
@@ -440,6 +442,26 @@ describe("Library's search", () => {
   it('has no search field while choosing', () => {
     show({ selecting: true });
     expect(screen.queryByRole('button', { name: 'Search photos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Trips/ })).not.toBeInTheDocument();
+    expect(api.useTrips).toHaveBeenLastCalledWith(false);
+  });
+
+  it("opens Trips from its tile, a trip's photo in the viewer, which Escape closes first, and Trips after", async () => {
+    const cover = { id: 'p1', fileName: 'IMG_9154.HEIC', sourcePath: '/Photo Library/IMG_9154.HEIC', isVideo: false } as PhotoDto;
+    const trip = { id: 'gla', name: 'Glacier National Park', folder: '2023-12 Glacier National Park', start: '2023-12-27', end: '2023-12-27', photos: 12, videos: 0, latitude: 48.7, longitude: -113.8, cover, folderMade: false };
+    api.useTrips.mockReturnValue({ data: { home: { town: 'Bozeman', region: 'Montana', country: 'US', latitude: 45.7, longitude: -111, days: 0 }, homeChosen: false, trips: [trip], computer: null, tripsFolder: null, folder: null } });
+    api.useTrip.mockReturnValue({ data: { trip, days: [{ date: '2023-12-27', photos: [cover] }] } });
+    show();
+    await userEvent.click(screen.getByRole('button', { name: 'Trips, 1 trip' }));
+    await userEvent.click(within(sheet('Trips')).getByRole('button', { name: /^Glacier National Park/ }));
+    await userEvent.click(within(sheet('Glacier National Park')).getByRole('button', { name: 'IMG_9154.HEIC' }));
+    expect(sheet('IMG_9154.HEIC')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'IMG_9154.HEIC' })).not.toBeInTheDocument();
+    expect(sheet('Glacier National Park')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

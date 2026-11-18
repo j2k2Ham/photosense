@@ -534,4 +534,126 @@ public sealed class BackupTests : IDisposable
         var neither = await new BackupApi(new TestApi()).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);
         await Assert.That(neither.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
+
+    private string TripFolder => Path.Combine(In("Home"), "Pictures", "PhotoSense", "2026-07 Glacier National Park");
+
+    /// <summary>
+    /// Ten pictures taken at Glacier National Park on one day, in the library and as the scan recorded them, and home,
+    /// Butte, photographed on three days; the trip's id.
+    /// </summary>
+    private async Task<string> TripAsync(CancellationToken ct)
+    {
+        for (var n = 0; n < 10; n++) _library.Add($"EEEEEEEE-{n}", (LibraryFileKind.Photo, $"GLACIER_{n}.JPG", MediaSamples.Picture($"TRIP-{n}")));
+        var files = _phone.GetRequiredService<IPhotoFileSystem>();
+        var repo = _phone.GetRequiredService<IPhotoRepository>();
+        var minute = 0;
+        foreach (var path in files.FilesIn(_root).Where(p => Path.GetFileName(p).StartsWith("GLACIER_", StringComparison.Ordinal)).Order())
+            await repo.AddOrUpdateAsync(new Photo
+            {
+                SourcePath = path, FileName = Path.GetFileName(path), FileSizeBytes = files.Describe(path)!.Length, TakenOn = new DateTime(2026, 7, 18, 9, minute++, 0),
+                Latitude = 48.6831, Longitude = -113.8003,
+            }, ct);
+        for (var day = 1; day <= 3; day++)
+            await repo.AddOrUpdateAsync(new Photo { SourcePath = $"/elsewhere/HOME_{day}.JPG", FileName = $"HOME_{day}.JPG", TakenOn = new DateTime(2026, 1, day, 12, 0, 0), Latitude = 46.0038, Longitude = -112.5348 }, ct);
+        return "20260718090000";
+    }
+
+    [Test]
+    public async Task A_Trips_Folder_Is_Made_On_The_Computer_Sending_First_What_Is_Not_There_And_Its_Copies_Are_Not_Sent_Again(CancellationToken ct)
+    {
+        Library();
+        var id = await TripAsync(ct);
+        await PairedAsync(ct);
+
+        var trips = await PhoneAsync("GET", "trips", ct);
+        await Assert.That((trips.GetProperty("home").GetProperty("town").GetString(), trips.GetProperty("homeChosen").GetBoolean(), trips.GetProperty("computer").GetString(), trips.GetProperty("folder").ValueKind))
+            .IsEqualTo(("Butte", false, "Studio iMac", JsonValueKind.Null));
+        // Where the computer makes trip folders is known once it has said.
+        await Assert.That(trips.GetProperty("tripsFolder").ValueKind).IsEqualTo(JsonValueKind.Null);
+        var trip = trips.GetProperty("trips").EnumerateArray().Single();
+        await Assert.That((trip.GetProperty("id").GetString(), trip.GetProperty("name").GetString(), trip.GetProperty("folder").GetString(), trip.GetProperty("start").GetString(), trip.GetProperty("photos").GetInt32(), trip.GetProperty("folderMade").GetBoolean()))
+            .IsEqualTo((id, "Glacier National Park", "2026-07 Glacier National Park", "2026-07-18", 10, false));
+        var days = (await PhoneAsync("GET", $"trips/{id}", ct)).GetProperty("days");
+        await Assert.That((days.GetArrayLength(), days[0].GetProperty("date").GetString(), days[0].GetProperty("photos").GetArrayLength())).IsEqualTo((1, "2026-07-18", 10));
+
+        await Assert.That((await AskAsync("POST", $"trips/{id}/folder", ct)).Status).IsEqualTo(HttpStatusCode.Accepted);
+        await Backup.Running;
+        var made = await PhoneAsync("GET", "trips", ct);
+        var folder = made.GetProperty("folder");
+        await Assert.That((folder.GetProperty("id").GetString(), folder.GetProperty("stage").GetString(), folder.GetProperty("made").GetString(), made.GetProperty("trips")[0].GetProperty("folderMade").GetBoolean()))
+            .IsEqualTo((id, "ready", "Pictures/PhotoSense/2026-07 Glacier National Park", true));
+        await Assert.That(made.GetProperty("tripsFolder").GetString()).IsEqualTo("Pictures/PhotoSense");
+        await Assert.That(Directory.GetFiles(TripFolder).Length).IsEqualTo(10);
+        await Assert.That(Directory.GetFiles(Folder).Length).IsEqualTo(0);
+        var onComputer = await NotedOnComputerAsync("10 items backed up and checked", ct);
+        await Assert.That(onComputer.GetProperty("tripFolders").GetInt32()).IsEqualTo(1);
+        await Assert.That(Names(onComputer)).Contains("Made the trip folder Pictures/PhotoSense/2026-07 Glacier National Park with 10 items");
+
+        // Home chosen elsewhere, the trip is no longer one: what was made is said of no trip.
+        var towns = await PhoneAsync("GET", "trips/towns", ct);
+        await Assert.That((towns[0].GetProperty("town").GetString(), towns[0].GetProperty("days").GetInt32(), towns.GetArrayLength())).IsEqualTo(("Butte", 3, 2));
+        await Assert.That((await AskAsync("POST", "trips/home", ct, new { town = towns[1] })).Status).IsEqualTo(HttpStatusCode.NoContent);
+        var moved = await PhoneAsync("GET", "trips", ct);
+        await Assert.That((moved.GetProperty("homeChosen").GetBoolean(), moved.GetProperty("trips").GetArrayLength(), moved.GetProperty("folder").ValueKind)).IsEqualTo((true, 0, JsonValueKind.Null));
+        await Assert.That((await AskAsync("POST", "trips/home", ct, new { })).Status).IsEqualTo(HttpStatusCode.NoContent);
+        await Assert.That((await PhoneAsync("GET", "trips", ct)).GetProperty("homeChosen").GetBoolean()).IsFalse();
+        await Assert.That(await AskAsync("POST", "trips/home", ct, new { town = new { town = "" } })).IsEqualTo((HttpStatusCode.BadRequest, "Say which town is home."));
+        await Assert.That((await AskAsync("POST", "trips/home", ct, "not a request")).Status).IsEqualTo(HttpStatusCode.BadRequest);
+
+        // The next backup sends the rest, and none of the trip's copies again.
+        var after = await BackedUpAsync(ct);
+        await Assert.That((after.GetProperty("total").GetInt32(), after.GetProperty("onComputer").GetInt32())).IsEqualTo((4, 13));
+        await Assert.That((Directory.GetFiles(TripFolder).Length, Directory.GetFiles(Folder).Length)).IsEqualTo((10, 4));
+        // A backup of its own is no trip folder.
+        await Assert.That((await PhoneAsync("GET", "trips", ct)).GetProperty("folder").ValueKind).IsEqualTo(JsonValueKind.Null);
+    }
+
+    [Test]
+    public async Task A_Trip_Folder_Needs_A_Computer_Waits_For_A_Backup_Running_And_Says_Why_The_Computer_Refused(CancellationToken ct)
+    {
+        Library();
+        var id = await TripAsync(ct);
+        await Assert.That(await AskAsync("POST", $"trips/{id}/folder", ct)).IsEqualTo((HttpStatusCode.Conflict, "Pair with a computer first: in Settings, choose Computer."));
+        await Assert.That((await PhoneAsync("GET", "trips", ct)).GetProperty("computer").ValueKind).IsEqualTo(JsonValueKind.Null);
+        foreach (var (method, path) in new[] { ("GET", "trips/nope"), ("POST", "trips/nope/folder") })
+            await Assert.That(await AskAsync(method, path, ct)).IsEqualTo((HttpStatusCode.NotFound, "That trip is no longer there. Its photos may have changed since."));
+
+        var computer = await ScriptedComputerAsync(ct);
+        await Assert.That((await AskAsync("POST", $"trips/{id}/folder", ct)).Status).IsEqualTo(HttpStatusCode.Accepted);
+        var channel = await computer.WaitAsync(ct);
+        await channel.ReceiveAsync(ct, "backup");
+        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "held", ["sha256"] = new System.Text.Json.Nodes.JsonArray(), ["more"] = false, ["folder"] = "Pictures/PhotoSense" }, ct);
+        var offer = await channel.ReceiveAsync(ct, "offer");
+        // Only the trip's pictures are offered.
+        await Assert.That(((System.Text.Json.Nodes.JsonArray)offer["files"]!).Count).IsEqualTo(10);
+        await Assert.That(await AskAsync("POST", $"trips/{id}/folder", ct)).IsEqualTo((HttpStatusCode.Conflict, "A backup to Studio iMac is running. Make the folder once it ends."));
+        await Assert.That((await PhoneAsync("GET", "trips", ct)).GetProperty("folder").GetProperty("stage").GetString()).IsEqualTo("running");
+        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "done" }, ct);
+        var asked = await channel.ReceiveAsync(ct, "trip");
+        await Assert.That(Wire.Text(asked, "folder")).IsEqualTo("2026-07 Glacier National Park");
+        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "trip-made", ["problem"] = "Pictures/PhotoSense/2026-07 Glacier National Park could not be made. The disk is full." }, ct);
+        await Backup.Running;
+
+        var failed = (await PhoneAsync("GET", "trips", ct)).GetProperty("folder");
+        await Assert.That((failed.GetProperty("stage").GetString(), failed.GetProperty("problem").GetString(), failed.GetProperty("made").ValueKind))
+            .IsEqualTo(("failed", "Pictures/PhotoSense/2026-07 Glacier National Park could not be made. The disk is full.", JsonValueKind.Null));
+        var after = await PhoneAsync("GET", "trips", ct);
+        // A computer from before trip folders does not say where it makes them.
+        await Assert.That((after.GetProperty("trips")[0].GetProperty("folderMade").GetBoolean(), after.GetProperty("tripsFolder").ValueKind)).IsEqualTo((false, JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task Only_A_Phone_Has_Trips_And_Only_The_Page_May_Ask(CancellationToken ct)
+    {
+        var computer = await new TestApi().SendAsync(Http.Get("trips").FromClient(), ct, "trips");
+        await Assert.That((computer.StatusCode, computer.Text())).IsEqualTo((HttpStatusCode.NotFound, "Only a phone has Trips."));
+        foreach (var (method, path) in new[] { ("GET", "trips"), ("GET", "trips/towns"), ("POST", "trips/home"), ("GET", "trips/x"), ("POST", "trips/x/folder") })
+        {
+            var stranger = await _router.AnswerAsync(method, new Uri("app://photosense/api/" + path), [], null, ct);
+            await Assert.That(stranger.Status).IsEqualTo((int)HttpStatusCode.Unauthorized);
+        }
+        // No photo says where it was taken: there is no home, and no trip.
+        var none = await PhoneAsync("GET", "trips", ct);
+        await Assert.That((none.GetProperty("home").ValueKind, none.GetProperty("homeChosen").GetBoolean(), none.GetProperty("trips").GetArrayLength())).IsEqualTo((JsonValueKind.Null, false, 0));
+    }
 }

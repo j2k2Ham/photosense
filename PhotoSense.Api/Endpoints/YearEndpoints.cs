@@ -35,7 +35,7 @@ internal sealed class YearEndpoints
         var r = await _year.ReviewAsync(due, ct);
         return await Answers.JsonAsync(req, new YearReviewDto
         {
-            Year = r.Year, Photos = r.Photos, Videos = r.Videos, Places = r.Places, TopPlaces = [.. r.TopPlaces.Select(Dto)], Months = r.Months, BusiestMonth = r.BusiestMonth,
+            Year = r.Year, Photos = r.Photos, Videos = r.Videos, Trips = r.Trips, TopTrips = [.. r.TopTrips.Select(t => new YearTripDto { Name = t.Name, Month = t.Month, Photos = t.Photos })], Months = r.Months, BusiestMonth = r.BusiestMonth,
             BusiestPlace = r.BusiestPlace is { } busiest ? Dto(busiest) : null, Freed = r.Freed, Removed = r.Removed, LongestStreak = r.LongestStreak, Sessions = r.Sessions,
         }, ct);
     }

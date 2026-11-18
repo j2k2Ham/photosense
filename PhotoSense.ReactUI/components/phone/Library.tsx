@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, usePhotoAccess } from '../../lib/apiClient';
+import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, usePhotoAccess, useTrips } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
 import { formatDuration, leaf } from '../../lib/format';
 import {
@@ -18,7 +18,9 @@ import { MonthHeader, PhotoGrid, SelectionBar } from './PhotoGrid';
 import { RootHeader, Screen } from './Screens';
 import { SearchField, SearchScreen } from './Search';
 import { Viewer } from './Viewer';
+import { TripsScreen, TripsTile } from './Trips';
 import { YearCard } from './YearInReview';
+import type { DistanceUnit } from '../../lib/distance';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet, Sheet } from './Sheet';
 import { largest, limitLine } from '../../lib/plan';
@@ -57,13 +59,15 @@ interface Props {
   onYear?(): void;
   /** Whether Share photo starts with Remove location on, as Settings has it. */
   readonly removeLocation?: boolean;
+  /** How distances are said, as Settings has it. */
+  readonly unit?: DistanceUnit;
 }
 
 /**
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter, with the search field
  * above them (26). Tapping one opens it; Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true, unit = 'miles' }: Props) {
   const { platform, ios, tablet, words } = usePhone();
   const backedUp = useMemo<BackedUp | undefined>(() => (backup?.computer ? { on: new Set(backup.onComputer), waiting: new Set(backup.waiting) } : undefined), [backup]);
   const [bannerHidden, setBannerHidden] = useState(false);
@@ -77,6 +81,8 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   const gate = usePlanGate();
   const [viewing, setViewing] = useState<string>();
   const [searching, setSearching] = useState(false);
+  const [tripping, setTripping] = useState(false);
+  const trips = useTrips(!selecting).data;
   const [busy, setBusy] = useState(false);
 
   const counts = useMemo(() => (root ? filterCounts(files, root, platform, backedUp) : undefined), [files, root, platform, backedUp]);
@@ -174,6 +180,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
     <Screen label="Library">
       <RootHeader title={title} subtitle={subtitle} textAction={textAction} onStop={selecting && !ios ? stopSelecting : undefined} noGear={selecting} />
       {!selecting && <SearchField onOpen={() => setSearching(true)} />}
+      {!selecting && <TripsTile trips={trips} onOpen={() => setTripping(true)} />}
       {access === 'selected' && (
         <div role="note" className="mx-4 mb-3 flex items-center gap-3 rounded-cell bg-acc-soft px-4 py-3.5 text-on-acc-soft">
           <p className="min-w-0 flex-1 text-[14.5px] leading-[1.4]">PhotoSense can see only the {all.toLocaleString()} photos you chose. Copies among the rest are not found.</p>
@@ -222,6 +229,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
       {searching && <SearchScreen files={files} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setSearching(false)} />}
+      {tripping && <TripsScreen files={files} unit={unit} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setTripping(false)} />}
       {viewed && (
         <Viewer file={viewed} places={places} root={root!} removeLocation={removeLocation} notify={notify} onClose={() => setViewing(undefined)}
           onSend={() => { onSend([viewed.id]); setViewing(undefined); }} onPut={() => act('put', [viewed])} onDelete={() => act('delete', [viewed])} />

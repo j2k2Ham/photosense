@@ -14,7 +14,7 @@ using PhotoSense.Tests.Endpoints;
 namespace PhotoSense.Tests.Application;
 
 /// <summary>
-/// Year in review: the year's photos and videos, the towns they were taken in, the busiest month, and what was cleaned up,
+/// Year in review: the year's photos and videos, its trips, the busiest month, and what was cleaned up,
 /// offered in December and January; and the record of what each day cleaned up that it reads.
 /// </summary>
 public class YearInReviewTests
@@ -32,7 +32,7 @@ public class YearInReviewTests
         _places.Setup(p => p.Locate(It.IsAny<double>(), It.Is<double>(x => x < 0))).Returns(new PlaceMatch("West Glacier", "Montana", "US", 48.5, -114));
     }
 
-    private YearInReview Review => new(_repo, _places.Object, _plans, _swipes, _clock);
+    private YearInReview Review => new(_repo, _places.Object, _plans, _swipes, new Trips(_repo, _places.Object, new MemoryTripStore()), _clock);
 
     private async Task AddAsync(string name, DateTime taken, double? longitude = null, string? livePhoto = null)
     {
@@ -54,7 +54,7 @@ public class YearInReviewTests
     }
 
     [Test]
-    public async Task The_Years_Photos_Videos_Towns_And_Busiest_Month_Are_Counted_A_Live_Photo_Once(CancellationToken ct)
+    public async Task The_Years_Photos_Videos_And_Busiest_Month_Are_Counted_A_Live_Photo_Once(CancellationToken ct)
     {
         await AddAsync("IMG_1.HEIC", new DateTime(2026, 7, 4), longitude: -1);
         await AddAsync("IMG_2.HEIC", new DateTime(2026, 7, 5), longitude: -1);
@@ -65,14 +65,29 @@ public class YearInReviewTests
         await AddAsync("IMG_6.HEIC", new DateTime(2025, 7, 1), longitude: 1);
 
         var year = await Review.ReviewAsync(2026, ct);
-        await Assert.That((year.Year, year.Photos, year.Videos, year.Places, year.BusiestMonth)).IsEqualTo((2026, 4, 1, 2, 7));
+        // Two photos away are too few for a trip.
+        await Assert.That((year.Year, year.Photos, year.Videos, year.Trips, year.TopTrips.Count, year.BusiestMonth)).IsEqualTo((2026, 4, 1, 0, 0, 7));
         await Assert.That(year.Months).IsEquivalentTo([0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 0, 0], CollectionOrdering.Matching);
-        await Assert.That(year.TopPlaces).IsEquivalentTo([new YearPlace("Butte", 2), new YearPlace("West Glacier", 2)], CollectionOrdering.Matching);
         await Assert.That(year.BusiestPlace).IsEqualTo(new YearPlace("West Glacier", 2));
 
         // A year with nothing taken.
         var empty = await Review.ReviewAsync(2024, ct);
-        await Assert.That((empty.Photos, empty.Videos, empty.Places, empty.BusiestMonth, empty.BusiestPlace)).IsEqualTo((0, 0, 0, 0, (YearPlace?)null));
+        await Assert.That((empty.Photos, empty.Videos, empty.Trips, empty.BusiestMonth, empty.BusiestPlace)).IsEqualTo((0, 0, 0, 0, (YearPlace?)null));
+    }
+
+    [Test]
+    public async Task The_Years_Trips_Are_Counted_And_The_Three_Largest_Listed_In_The_Order_They_Were_Taken(CancellationToken ct)
+    {
+        // Home is Butte, photographed on the most days; each trip is a day at West Glacier, far from it.
+        for (var day = 1; day <= 6; day++) await AddAsync($"HOME_{day}.HEIC", new DateTime(2026, 1, day, 12, 0, 0), longitude: 1);
+        foreach (var (month, photos) in new[] { (3, 10), (7, 12), (8, 15), (10, 11) })
+            for (var n = 0; n < photos; n++) await AddAsync($"TRIP_{month}_{n}.HEIC", new DateTime(2026, month, 4, 9, n, 0), longitude: -1);
+        for (var n = 0; n < 10; n++) await AddAsync($"OLD_{n}.HEIC", new DateTime(2025, 5, 4, 9, n, 0), longitude: -1);
+
+        var year = await Review.ReviewAsync(2026, ct);
+        await Assert.That(year.Trips).IsEqualTo(4);
+        await Assert.That(year.TopTrips).IsEquivalentTo(
+            [new YearTrip("West Glacier, Montana", 7, 12), new YearTrip("West Glacier, Montana", 8, 15), new YearTrip("West Glacier, Montana", 10, 11)], CollectionOrdering.Matching);
     }
 
     [Test]
@@ -83,7 +98,7 @@ public class YearInReviewTests
         _places.Setup(p => p.Locate(It.IsAny<double>(), 2)).Returns((PlaceMatch?)null);
         await _repo.AddOrUpdateAsync(new Photo { SourcePath = "/photos/IMG_9.HEIC", FileName = "IMG_9.HEIC", FileModifiedUtc = new DateTime(2026, 5, 2) }, ct);
         var year = await Review.ReviewAsync(2026, ct);
-        await Assert.That((year.Photos, year.Places, year.BusiestMonth, year.BusiestPlace)).IsEqualTo((2, 0, 5, (YearPlace?)null));
+        await Assert.That((year.Photos, year.Trips, year.BusiestMonth, year.BusiestPlace)).IsEqualTo((2, 0, 5, (YearPlace?)null));
     }
 
     [Test]
@@ -159,7 +174,8 @@ public sealed class YearOnAPhoneTests : IDisposable
         var places = new Mock<IPlaceNameResolver>();
         places.Setup(p => p.Locate(It.IsAny<double>(), It.IsAny<double>())).Returns(new PlaceMatch("Butte", "Montana", "US", 46, -112.5));
         _phone = new TestApi(s => s
-            .AddSingleton(sp => new YearInReview(sp.GetRequiredService<IPhotoRepository>(), places.Object, sp.GetRequiredService<IPlanStore>(), sp.GetRequiredService<ISwipeStore>(), _clock))
+            .AddSingleton(sp => new YearInReview(sp.GetRequiredService<IPhotoRepository>(), places.Object, sp.GetRequiredService<IPlanStore>(), sp.GetRequiredService<ISwipeStore>(),
+                new Trips(sp.GetRequiredService<IPhotoRepository>(), places.Object, sp.GetRequiredService<ITripStore>()), _clock))
             .AddSingleton<IShareSheet>(_share));
     }
 
@@ -188,15 +204,26 @@ public sealed class YearOnAPhoneTests : IDisposable
     }
 
     [Test]
-    public async Task A_Busiest_Place_And_The_Top_Towns_Are_Sent_With_The_Year(CancellationToken ct)
+    public async Task A_Busiest_Place_And_The_Trips_Are_Sent_With_The_Year(CancellationToken ct)
     {
         var photo = TestPhotos.Make("IMG_1.HEIC", taken: new DateTime(2026, 7, 4));
         photo.Latitude = 46.0038;
         photo.Longitude = -112.5348;
-        await _phone.Services.GetRequiredService<IPhotoRepository>().AddOrUpdateAsync(photo, ct);
+        var repo = _phone.Services.GetRequiredService<IPhotoRepository>();
+        await repo.AddOrUpdateAsync(photo, ct);
+        // Ten taken some 280 km north of home make a trip.
+        for (var n = 0; n < 10; n++)
+        {
+            var away = TestPhotos.Make($"AWAY_{n}.HEIC", taken: new DateTime(2026, 8, 1, 9, n, 0));
+            away.Latitude = 48.5;
+            away.Longitude = -112.5;
+            await repo.AddOrUpdateAsync(away, ct);
+        }
         var year = JsonDocument.Parse((await AskAsync(Http.Get("year"), "year", ct)).Text).RootElement;
         await Assert.That(year.GetProperty("busiestPlace").GetProperty("town").GetString()).IsEqualTo("Butte");
-        await Assert.That(year.GetProperty("topPlaces")[0].GetProperty("photos").GetInt32()).IsEqualTo(1);
+        var trip = year.GetProperty("topTrips")[0];
+        await Assert.That((year.GetProperty("trips").GetInt32(), trip.GetProperty("name").GetString(), trip.GetProperty("month").GetInt32(), trip.GetProperty("photos").GetInt32()))
+            .IsEqualTo((1, "Butte, Montana", 8, 10));
     }
 
     [Test]

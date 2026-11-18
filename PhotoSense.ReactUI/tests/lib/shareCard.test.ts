@@ -3,7 +3,7 @@ import { cardPills, cardPng, CARD_SIZE, drawResultCard, drawYearSlide, freedSaid
 import type { YearReviewDto } from '../../types';
 
 const review = (more: Partial<YearReviewDto> = {}): YearReviewDto => ({
-  year: 2026, photos: 7512, videos: 316, places: 12, topPlaces: [{ town: 'Butte', photos: 512 }, { town: 'Anaconda', photos: 90 }],
+  year: 2026, photos: 7512, videos: 316, trips: 3, topTrips: [{ name: 'Big Sky, Montana', month: 3, photos: 214 }, { name: 'Glacier National Park', month: 7, photos: 512 }, { name: 'Yellowstone', month: 8, photos: 512 }],
   months: [10, 20, 30, 40, 50, 60, 1402, 70, 80, 90, 100, 110], busiestMonth: 7, busiestPlace: { town: 'West Glacier', photos: 512 },
   freed: 41_600_000_000, removed: 9846, longestStreak: 38, sessions: 142, ...more,
 });
@@ -57,22 +57,25 @@ describe("Year in review's cards", () => {
     const slides = yearSlides(review(), 'iPhone');
     expect(slides.map(s => [s.kicker, s.big, s.line])).toEqual([
       ['Your year in photos', '2026', '7,512 photos and 316 videos'],
-      ['Places', '12 places', 'Most photos: Butte, with 512.'],
+      ['Places', '3 trips', 'Most photos: Glacier National Park, with 512.'],
       ['Busiest month', 'July', '1,402 photos. 512 of them are from West Glacier.'],
       ['Clean up', '41.6 GB', 'freed on your iPhone this year'],
       ['PhotoSense', 'That was 2026', 'See you in 2027.'],
     ]);
-    expect(slides[1].rows).toEqual([['512', 'Butte'], ['90', 'Anaconda']]);
+    // Listed in the order taken; of two with as many, the first has most.
+    expect(slides[1].rows).toEqual([['March', 'Big Sky, Montana'], ['July', 'Glacier National Park'], ['August', 'Yellowstone']]);
     expect(slides[3].rows).toEqual([['9,846', 'items removed'], ['38 days', 'longest swipe streak'], ['142', 'swipe sessions']]);
-    expect(slides[4].rows!.map(r => r[0])).toEqual(['7,512 photos', '12 places', '41.6 GB freed']);
-    expect(yearLine(review())).toBe('7,512 photos, 12 places, 41.6 GB freed');
+    expect(slides[4].rows!.map(r => r[0])).toEqual(['7,512 photos', '3 trips', '41.6 GB freed']);
+    expect(yearLine(review())).toBe('7,512 photos, 3 trips, 41.6 GB freed');
   });
 
-  it('say so when nothing had a place, nothing was taken, or one of each', () => {
-    const slides = yearSlides(review({ photos: 1, videos: 1, places: 1, topPlaces: [], busiestMonth: 3, months: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], busiestPlace: { town: 'Butte', photos: 1 }, freed: 2048, longestStreak: 1 }), 'phone');
+  it('say so when there was no trip, nothing was taken, or one of each', () => {
+    const slides = yearSlides(review({ photos: 1, videos: 1, trips: 0, topTrips: [], busiestMonth: 3, months: [0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], busiestPlace: { town: 'Butte', photos: 1 }, freed: 2048, longestStreak: 1 }), 'phone');
     expect(slides[0].line).toBe('1 photo and 1 video');
-    expect(slides[1].big).toBe('1 place');
-    expect(slides[1].line).toBe('None of this year’s photos say where they were taken.');
+    expect(slides[1].big).toBe('No trips');
+    expect(slides[1].line).toBe('None of 2026’s photos were taken away from home.');
+    expect(yearSlides(review({ trips: 1, topTrips: [{ name: 'Yellowstone', month: 8, photos: 1 }] }), 'phone')[1]).toMatchObject({ big: '1 trip', line: 'Most photos: Yellowstone, with 1.' });
+    expect(yearLine(review({ trips: 1 }))).toBe('7,512 photos, 1 trip, 41.6 GB freed');
     expect(slides[2].line).toBe('1 photo. 1 of them is from Butte.');
     expect(slides[3].big).toBe('2 KB');
     expect(slides[3].rows![1][0]).toBe('1 day');
@@ -90,7 +93,7 @@ describe("Year in review's cards", () => {
     expect(month.filled.filter(f => f === '#A8EEF7')).toHaveLength(1);
     const end = pen();
     drawYearSlide(end.p, { ...slides[4], line: undefined, months: { counts: Array(12).fill(0), busiest: 1 } });
-    expect(end.written).toEqual(['PhotoSense', 'PhotoSense', 'That was 2026', '7,512 photos', '', '12 places', '', '41.6 GB freed', '', 'No photos are on these cards.']);
+    expect(end.written).toEqual(['PhotoSense', 'PhotoSense', 'That was 2026', '7,512 photos', '', '3 trips', '', '41.6 GB freed', '', 'No photos are on these cards.']);
   });
 });
 
