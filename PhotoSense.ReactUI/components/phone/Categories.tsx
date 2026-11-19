@@ -42,8 +42,20 @@ function useDeleting(notify: Notify) {
   return { busy, run, limit: limitLine(gate.plan) };
 }
 
-/** A category screen's foot: its Delete button, and the free plan's removals left today under it. */
+/**
+ * A category screen's foot: its Delete button, and the free plan's removals left today under it; on a tablet a bar
+ * across the pane, the line on its left and the button on its right.
+ */
 function DeleteFoot({ disabled, limit, onClick, children }: { readonly disabled: boolean; readonly limit?: string; onClick(): void; readonly children: React.ReactNode }) {
+  const { tablet } = usePhone();
+  if (tablet) {
+    return (
+      <div className="sticky bottom-0 z-10 mt-auto flex items-center gap-4 border-t border-sep bg-bg px-4 py-3">
+        <p className="min-w-0 flex-1 text-[13px] leading-[1.4] text-t2">{limit}</p>
+        <PhoneButton disabled={disabled} className="!w-auto shrink-0" onClick={onClick}>{children}</PhoneButton>
+      </div>
+    );
+  }
   return (
     <StickyFooter>
       <PhoneButton disabled={disabled} onClick={onClick}>{children}</PhoneButton>
@@ -79,11 +91,12 @@ interface GridProps {
   readonly category: 'screenshots' | 'blurry' | 'messaging';
   readonly title: string;
   notify: Notify;
-  onBack(): void;
+  /** Goes back to Clean up; none on a tablet, where the kind shows beside it. */
+  onBack?(): void;
 }
 
 /**
- * 19: a category's pictures in a grid of four, all chosen at first: the size chosen, from how many, and where they were
+ * 19: a category's pictures in a grid of four (six on a tablet), all chosen at first: the size chosen, from how many, and where they were
  * found; tap one to keep it. Select all or Deselect all in the header, and Delete N items at the foot.
  */
 export function CategoryGrid({ category, title, notify, onBack }: GridProps) {
@@ -106,7 +119,7 @@ export function CategoryGrid({ category, title, notify, onBack }: GridProps) {
           <Total photos={chosen} of={`selected from ${counted(category, all.length)}`}
             note={`Found on this ${deviceWord(platform, tablet)}. Nothing was uploaded. Tap a photo to keep it.`} />
           {all.length === 0 && <p className="px-4 py-6 text-[15px] text-t2">Nothing left to review.</p>}
-          <ul aria-label={title} className="grid grid-cols-4 gap-[2px] pb-4">
+          <ul aria-label={title} className={`grid gap-[2px] pb-4 ${tablet ? 'grid-cols-6' : 'grid-cols-4'}`}>
             {all.map(p => {
               const on = !kept.has(p.id);
               return (
@@ -131,7 +144,7 @@ export function CategoryGrid({ category, title, notify, onBack }: GridProps) {
 }
 
 /** 20: each burst on a card of its own, the shot kept framed; tap another to keep it instead. Delete N extra shots at the foot. */
-export function BurstsScreen({ notify, onBack }: { notify: Notify; onBack(): void }) {
+export function BurstsScreen({ notify, onBack }: { notify: Notify; onBack?(): void }) {
   const bursts = useBursts(true).data;
   const [keepers, setKeepers] = useState<ReadonlyMap<string, string>>(new Map());
   const { busy, run, limit } = useDeleting(notify);
@@ -183,7 +196,7 @@ export function BurstsScreen({ notify, onBack }: { notify: Notify; onBack(): voi
 }
 
 /** 21: the videos over 200 MB, largest first, with Compress all and about what each copy would take. Tap one to compress it. */
-export function LargeVideosScreen({ notify, onBack }: { notify: Notify; onBack(): void }) {
+export function LargeVideosScreen({ notify, onBack }: { notify: Notify; onBack?(): void }) {
   const videos = useCompressVideos(true).data;
   const compression = useCompression(true).data;
   const [chosen, setChosen] = useState<CompressibleVideoDto>();
@@ -339,7 +352,7 @@ const QUICK = [['duplicates', 'Duplicates'], ['screenshots', 'Screenshots'], ['b
  * 24: how full the phone is, what the quickest kinds to check would free (duplicates' copies, screenshots and blurry
  * shots, each photo counted once), each to tick or untick, and Delete N items.
  */
-export function FreeUpSpace({ notify, onBack }: { notify: Notify; onBack(): void }) {
+export function FreeUpSpace({ notify, onBack }: { notify: Notify; onBack?(): void }) {
   const { ios, platform, tablet } = usePhone();
   const report = useCategories(true).data;
   const lists = { duplicates: useCategoryPhotos('duplicates').data, screenshots: useCategoryPhotos('screenshots').data, blurry: useCategoryPhotos('blurry').data };

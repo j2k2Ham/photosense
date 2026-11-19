@@ -24,14 +24,13 @@ interface GridProps {
 }
 
 /**
- * Pictures and videos as square tiles, edge to edge with 2 px between: three across on a phone; on an iPad six, or
- * eight with its sidebar hidden; eight on an Android tablet. While choosing, each has a circle, filled when chosen.
+ * Pictures and videos as square tiles, edge to edge with 2 px between: three across on a phone; on a tablet eight, its
+ * corners rounded, inside the margins. While choosing, each has a circle, filled when chosen.
  */
 export function PhotoGrid({ items, selecting, selected, onTap }: GridProps) {
-  const { ios, tablet, sidebarHidden } = usePhone();
-  const columns = !tablet ? 'grid-cols-3' : ios && !sidebarHidden ? 'grid-cols-6' : 'grid-cols-8';
+  const { ios, tablet } = usePhone();
   return (
-    <ul className={`grid gap-[2px] ${columns}`}>
+    <ul className={`grid gap-[2px] ${tablet ? 'mx-4 grid-cols-8 overflow-hidden rounded-[14px]' : 'grid-cols-3'}`}>
       {items.map(item => {
         const on = !!selected?.has(item.id);
         // Android draws a chosen tile smaller, its corners round; an iPhone only fills its circle.

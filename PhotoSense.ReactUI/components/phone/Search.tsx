@@ -10,9 +10,9 @@ import { ArrowBackIcon, ClockIcon, CloseIcon, SearchIcon, VideoIcon } from './Ic
 import { usePlanGate } from './ProSheet';
 
 /** Library's search field: it opens Search. */
-export function SearchField({ onOpen }: { onOpen(): void }) {
+export function SearchField({ onOpen, side }: { onOpen(): void; /** Beside a tablet's title, 340 pixels wide, rather than across a phone. */ readonly side?: boolean }) {
   return (
-    <div className="px-4 pb-3">
+    <div className={side ? 'w-[340px] max-w-full' : 'px-4 pb-3'}>
       <button type="button" onClick={onOpen}
         className="flex h-[var(--srch-h)] w-full items-center gap-2.5 rounded-full bg-srch-bg px-3.5 text-left text-[length:var(--fs-body)] text-t2">
         <SearchIcon />Search photos

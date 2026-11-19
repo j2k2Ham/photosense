@@ -512,11 +512,11 @@ describe('the picture full screen', () => {
 });
 
 describe('Clean up on a tablet', () => {
-  it('shows the list and the first group\'s review side by side, the gear with the review, and the next group once one is done', async () => {
+  it('shows the list and the first group\'s review side by side, Settings left to the rail, and the next group once one is done', async () => {
     show({ platform: 'android', tablet: true });
     expect(screen.getAllByRole('heading', { level: 1, name: 'Duplicates' })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'IMG_4299.JPG' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     // The list goes back to Clean up's first screen; the review beside it is not pushed, and has no way back.
     expect(screen.getAllByRole('button', { name: 'Back' })).toHaveLength(1);
     expect(row('IMG_4299.JPG')).toHaveAttribute('aria-current', 'true');

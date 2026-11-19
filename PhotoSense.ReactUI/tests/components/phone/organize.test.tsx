@@ -351,7 +351,8 @@ describe('moving', () => {
   it('on a tablet shows the first suggestion beside the list, and what was done once it moves', async () => {
     api.undoChange.mockResolvedValueOnce({ restored: 1, skipped: 2, problems: ['Moved since.'] }).mockRejectedValueOnce('no answer');
     const { notify } = show({ tablet: true });
-    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1);
+    // Settings is at the foot of the sidebar.
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     expect(row('Anaconda')).toHaveAttribute('aria-current', 'true');
     await userEvent.click(row('Uptown Butte'));
     await userEvent.click(await screen.findByRole('button', { name: 'Move 1 file' }));

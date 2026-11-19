@@ -7,7 +7,7 @@ import type { ToastAction, ToastKind } from '../Toaster';
 import { CalendarIcon, CheckIcon, ImageIcon, PinIcon, VideoIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { CollectionTile } from './CollectionTile';
-import { LayerScreen, PushedHeader } from './Screens';
+import { LayerScreen, PushedHeader, useInPlace } from './Screens';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 
@@ -98,6 +98,7 @@ const Done = ({ text, onUndo }: { readonly text: string; onUndo?(): void }) => (
  */
 export function FixesScreen({ notify, onClose }: { notify: Notify; onClose(): void }) {
   const { platform, tablet } = usePhone();
+  const inPlace = useInPlace();
   const ios = platform === 'ios';
   const gate = usePlanGate();
   const fixes = useFixes(true);
@@ -133,7 +134,7 @@ export function FixesScreen({ notify, onClose }: { notify: Notify; onClose(): vo
   const names = data?.names;
   return (
     <LayerScreen label="Fix dates and places" onBack={onClose}>
-      <PushedHeader title="Fix dates and places" onBack={onClose} />
+      <PushedHeader title="Fix dates and places" onBack={inPlace ? undefined : onClose} />
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4 px-4 pb-8">
         {fixes.error !== undefined && <p role="alert" className="py-10 text-center text-[15px] text-t2">What needs fixing could not be found: {said(fixes.error)}</p>}
         {fixes.error === undefined && !data && <p className="py-10 text-center text-[15px] text-t2">Looking at dates and places…</p>}

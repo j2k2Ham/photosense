@@ -88,16 +88,49 @@ export function SwipePanel({ state, library, onOpen }: PanelProps) {
 }
 
 /** A layer over everything, tabs and all, that Back, a swipe from the edge and Escape take away. */
-function Cover({ label, onClose, children }: { readonly label: string; onClose(): void; readonly children: React.ReactNode }) {
+function Cover({ label, onClose, beside, children }: { readonly label: string; onClose(): void; /** On a tablet, a panel beside the column (T3). */ readonly beside?: React.ReactNode; readonly children: React.ReactNode }) {
   const close = useRef(onClose);
   useEffect(() => { close.current = onClose; });
   useBackLayer(true, () => close.current());
   return (
     <section role="dialog" aria-modal aria-label={label}
       className="fixed inset-0 z-40 flex animate-fade-in flex-col bg-bg px-4 pb-[calc(var(--safe-b)+12px)] pt-[calc(var(--safe-t)+8px)] font-ui text-t1">
-      {/* A column as wide as a phone's, centred on a tablet, as the design's card column is. */}
-      <div className="mx-auto flex min-h-0 w-full max-w-[480px] flex-1 flex-col">{children}</div>
+      {/* A column as wide as a phone's, centred on a tablet, as the design's card column is, with its panel beside it. */}
+      <div className="mx-auto flex min-h-0 w-full flex-1 justify-center gap-6">
+        <div className="flex min-h-0 w-full max-w-[480px] flex-1 flex-col">{children}</div>
+        {beside}
+      </div>
     </section>
+  );
+}
+
+/**
+ * T3: beside a tablet's swiping, what is marked to delete and what it frees, the latest 15 marked, the week's streak, and
+ * the free plan's removals left today.
+ */
+function MarkedPanel({ state, library, limit }: { readonly state: SwipeStateDto; readonly library: Library; readonly limit: { readonly text: string; readonly over: boolean } | null }) {
+  const going = markedAll(state);
+  const latest = going.slice(-15).reverse();
+  return (
+    <aside aria-label="Marked to delete" className="mt-[calc(var(--ib)+12px)] flex w-[320px] shrink-0 flex-col gap-3 self-start rounded-[20px] bg-cell p-4">
+      <div>
+        <p className="text-[13px] font-semibold text-t2">Marked to delete</p>
+        <p className="font-title text-[30px] font-bold tabular-nums">{formatBytes(bytesOf(going))}</p>
+        <p className="text-[13px] text-t2">{going.length === 1 ? '1 item' : `${going.length.toLocaleString()} items`} so far · confirmed at the end</p>
+      </div>
+      {latest.length > 0 && (
+        <ul aria-label="Latest marked" className="grid grid-cols-5 gap-[2px] overflow-hidden rounded-[12px]">
+          {latest.map(c => (
+            <li key={c.id} className="aspect-square bg-fill"><Thumb file={fileOf(library, c.id)} id={c.id} className="h-full w-full" /></li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-center gap-2.5 border-t border-sep pt-3">
+        <Week state={state} size={20} />
+        <span className="text-[13.5px] font-semibold">{streakLine(state.streak)}</span>
+      </div>
+      {limit && <p className={`text-[13px] leading-[1.45] ${limit.over ? 'text-amber' : 'text-t2'}`}>{limit.text}</p>}
+    </aside>
   );
 }
 
@@ -121,7 +154,7 @@ interface SessionProps {
  * foot says what is marked so far and what the free plan has left today.
  */
 export function SwipeSession({ state, library, computer, notify, onClose, onDone }: SessionProps) {
-  const { words } = usePhone();
+  const { words, tablet } = usePhone();
   const gate = usePlanGate();
   const [drag, setDrag] = useState<{ x: number; y: number; from?: { x: number; y: number } }>({ x: 0, y: 0 });
   const [busy, setBusy] = useState(false);
@@ -167,7 +200,7 @@ export function SwipeSession({ state, library, computer, notify, onClose, onDone
   const leaning = Math.max(-1, Math.min(1, drag.x / 90));
 
   return (
-    <Cover label="Swipe to clean" onClose={onClose}>
+    <Cover label="Swipe to clean" onClose={onClose} beside={tablet && <MarkedPanel state={state} library={library} limit={limit} />}>
       <div className="flex items-center gap-3 pb-3">
         <button type="button" aria-label="Close" onClick={onClose} className={roundButton}><CloseIcon size={18} /></button>
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
@@ -222,8 +255,9 @@ export function SwipeSession({ state, library, computer, notify, onClose, onDone
         </button>
       </div>
       <div className="flex flex-col items-center pt-3 text-center text-[13px] leading-[1.45]">
-        <p className="text-t2">{runningLine(state)}</p>
-        {limit && <p className={limit.over ? 'text-amber' : 'text-t2'}>{limit.text}</p>}
+        {/* On a tablet the panel beside says these. */}
+        {!tablet && <p className="text-t2">{runningLine(state)}</p>}
+        {!tablet && limit && <p className={limit.over ? 'text-amber' : 'text-t2'}>{limit.text}</p>}
         <p className="sr-only">{`Deleted photos wait in ${words.bin}. Nothing is deleted until you confirm at the end.`}</p>
       </div>
     </Cover>

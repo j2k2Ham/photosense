@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { usePhone } from '../../lib/phone';
 import { HeaderTextButton, IconButton } from './Controls';
@@ -12,9 +12,22 @@ function useHeaderTop() {
   return sidebarHidden ? 'pt-[calc(var(--safe-t)+62px)]' : 'pt-[var(--safe-t)]';
 }
 
-/** The gear that opens Settings, at the top right of every tab's first screen. */
+/**
+ * Whether a screen is drawn on a tablet beside its sidebar or rail, in place of a tab, rather than over every tab: the
+ * sidebar then takes it away, and it has no back button of its own.
+ */
+export const PlaceContext = createContext(false);
+
+/** Whether this screen is drawn in place of a tab on a tablet. */
+export const useInPlace = () => useContext(PlaceContext);
+
+/**
+ * The gear that opens Settings, at the top right of every tab's first screen; not on a tablet whose sidebar or rail
+ * shows, as Settings is at its foot.
+ */
 export function GearButton() {
-  const { openSettings, ios } = usePhone();
+  const { openSettings, ios, tablet, sidebarHidden } = usePhone();
+  if (tablet && !sidebarHidden) return null;
   return <IconButton label="Settings" onClick={openSettings}><GearIcon size={ios ? 21 : 22} /></IconButton>;
 }
 
@@ -29,22 +42,27 @@ interface RootHeaderProps {
   readonly buttons?: React.ReactNode;
   /** Leaves out the gear: on a tablet the detail beside the list carries it. */
   readonly noGear?: boolean;
+  /** What stands at the right of the title on a tablet, such as Library's search field. */
+  readonly side?: React.ReactNode;
 }
 
 /**
  * The header of a tab's first screen. On an iPhone a row of round glass buttons over a large title; on Android a bar
  * with the title on the left and its buttons on the right; either way the subtitle under it.
  */
-export function RootHeader({ title, subtitle, textAction, onStop, buttons, noGear }: RootHeaderProps) {
+export function RootHeader({ title, subtitle, textAction, onStop, buttons, noGear, side }: RootHeaderProps) {
   const { ios } = usePhone();
   const top = useHeaderTop();
   const text = textAction && <HeaderTextButton onClick={textAction.run}>{textAction.label}</HeaderTextButton>;
   if (ios) {
+    const named = <>
+      <h1 className="font-title text-[length:var(--h1)] font-bold leading-[1.15] tracking-[.01em]">{title}</h1>
+      {subtitle && <p className="text-[length:var(--fs-sub)] text-t2">{subtitle}</p>}
+    </>;
     return (
       <header className={`flex flex-col gap-0.5 px-4 pb-3 ${top}`}>
         <div className="flex h-[50px] items-center justify-end gap-2">{text}{buttons}{!noGear && <GearButton />}</div>
-        <h1 className="font-title text-[length:var(--h1)] font-bold leading-[1.15] tracking-[.01em]">{title}</h1>
-        {subtitle && <p className="text-[length:var(--fs-sub)] text-t2">{subtitle}</p>}
+        {side ? <div className="flex items-center gap-4"><div className="flex min-w-0 flex-1 flex-col gap-0.5">{named}</div>{side}</div> : named}
       </header>
     );
   }
@@ -54,6 +72,7 @@ export function RootHeader({ title, subtitle, textAction, onStop, buttons, noGea
         {onStop && <span className="-ml-3"><IconButton label="Stop selecting" onClick={onStop}><CloseIcon /></IconButton></span>}
         <h1 className="min-w-0 flex-1 truncate font-title text-[length:var(--h1)] font-normal">{title}</h1>
         {text}{buttons}{!noGear && <GearButton />}
+        {side && <span className="pr-3">{side}</span>}
       </div>
       {subtitle && <p className="px-4 pb-3 text-[length:var(--fs-sub)] text-t2">{subtitle}</p>}
     </header>
@@ -126,12 +145,16 @@ export function PushedScreen({ children, label }: { readonly children: React.Rea
   return <section aria-label={label} className="flex min-h-0 min-w-0 flex-1 animate-push-in flex-col overflow-y-auto">{children}</section>;
 }
 
-/** A tablet's list beside its detail: the list a fixed width with a line on its right, the detail filling the rest. */
-export function SplitView({ list, detail }: { readonly list: React.ReactNode; readonly detail: React.ReactNode }) {
+/**
+ * A tablet's list beside its detail: the list a fixed width with a line on its right, the detail filling the rest. The
+ * growth screens' lists are 380 pixels on both platforms; the first ones' are 360 on an iPad and 400 on Android.
+ */
+export function SplitView({ list, detail, narrow }: { readonly list: React.ReactNode; readonly detail: React.ReactNode; /** The growth screens' 380-pixel list. */ readonly narrow?: boolean }) {
   const { ios } = usePhone();
+  const width = narrow ? 'w-[380px]' : ios ? 'w-[360px]' : 'w-[400px]';
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <div className={`flex min-h-0 shrink-0 flex-col overflow-y-auto border-r border-sep ${ios ? 'w-[360px]' : 'w-[400px]'}`}>{list}</div>
+      <div className={`flex min-h-0 shrink-0 flex-col overflow-y-auto border-r border-sep ${width}`}>{list}</div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">{detail}</div>
     </div>
   );
@@ -150,19 +173,30 @@ interface LayerProps {
 
 /**
  * A screen over every tab, as Settings and Subscription are: it slides in from the right, covers the tab bar, and goes
- * back to the screen it was opened from. Messages and sheets still show over it.
+ * back to the screen it was opened from. Messages and sheets still show over it. On a tablet, in place of a tab, it is
+ * drawn there instead, and its sidebar or rail takes it away.
  */
 export function LayerScreen({ label, children, footer, frozen = false, onBack }: LayerProps) {
   const { ios } = usePhone();
+  const inPlace = useInPlace();
   const back = useRef(onBack);
-  const still = useRef(frozen);
-  useLayoutEffect(() => { back.current = onBack; still.current = frozen; });
-  useBackLayer(true, () => back.current());
+  const still = useRef(frozen || inPlace);
+  useLayoutEffect(() => { back.current = onBack; still.current = frozen || inPlace; });
+  useBackLayer(!inPlace, () => back.current());
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !still.current) back.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+  if (inPlace) {
+    return (
+      <section aria-label={label} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* What it opens, such as a picker, goes over everything again. */}
+        <PlaceContext.Provider value={false}><div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div></PlaceContext.Provider>
+        {footer && <div className="flex shrink-0 flex-col gap-2 border-t border-sep px-4 pb-4 pt-3">{footer}</div>}
+      </section>
+    );
+  }
   return (
     <section role="dialog" aria-modal aria-label={label} className={`fixed inset-x-0 z-40 flex animate-push-in flex-col bg-bg font-ui text-t1 ${ios ? 'inset-y-0' : 'bottom-[var(--safe-b)] top-[var(--safe-t)]'}`}>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</div>

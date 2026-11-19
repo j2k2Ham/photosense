@@ -134,9 +134,9 @@ describe('a sheet', () => {
     expect(closed).toHaveBeenCalledTimes(3);
   });
 
-  it('is a card in the middle of a tablet, and Android\'s is a little taller', () => {
+  it('is a form sheet 540 pixels wide in the middle of a tablet, and Android\'s is a little taller', () => {
     const { again } = inFrame(<Sheet title="Name taken" done="Close" onClose={vi.fn()}>x</Sheet>, frame('ios', { tablet: true, form: 'tablet' }));
-    expect(screen.getByRole('dialog', { name: 'Name taken' })).toHaveClass('w-[560px]');
+    expect(screen.getByRole('dialog', { name: 'Name taken' })).toHaveClass('w-[540px]');
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
     again(<Sheet title="Name taken" onClose={vi.fn()}>x</Sheet>, frame('android'));
     expect(screen.getByRole('dialog', { name: 'Name taken' })).toHaveClass('max-h-[calc(100%-24px)]');
@@ -231,13 +231,13 @@ describe('the photo grid', () => {
     expect(container.querySelectorAll('img')[1]).toHaveClass('rounded-[14px]');
   });
 
-  it('shows six across on an iPad, eight with its sidebar hidden, and eight on an Android tablet', () => {
+  it('shows eight across on a tablet, its corners rounded inside the margins, and three on a phone', () => {
     const { container, again } = inFrame(<PhotoGrid items={items} onTap={vi.fn()} />, frame('ios', { tablet: true }));
-    expect(container.querySelector('ul')).toHaveClass('grid-cols-6');
-    again(<PhotoGrid items={items} onTap={vi.fn()} />, frame('ios', { tablet: true, sidebarHidden: true }));
-    expect(container.querySelector('ul')).toHaveClass('grid-cols-8');
+    expect(container.querySelector('ul')).toHaveClass('grid-cols-8', 'rounded-[14px]', 'mx-4');
     again(<PhotoGrid items={items} onTap={vi.fn()} />, frame('android', { tablet: true }));
     expect(container.querySelector('ul')).toHaveClass('grid-cols-8');
+    again(<PhotoGrid items={items} onTap={vi.fn()} />, frame('android'));
+    expect(container.querySelector('ul')).toHaveClass('grid-cols-3');
   });
 });
 

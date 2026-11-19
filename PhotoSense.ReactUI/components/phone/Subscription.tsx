@@ -7,7 +7,7 @@ import type { ToastKind } from '../Toaster';
 import { ListGroup, PhoneButton, PhoneSwitch } from './Controls';
 import { CheckIcon, TickIcon } from './Icons';
 import { boughtSaid, PlanCard } from './ProSheet';
-import { LayerScreen, PushedHeader } from './Screens';
+import { LayerScreen, PushedHeader, useInPlace } from './Screens';
 
 interface Props {
   readonly plan: PlanDto;
@@ -29,6 +29,7 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
  */
 export function SubscriptionScreen({ plan, remind, onRemind, notify, onTerms, onPrivacy, onBack }: Props) {
   const { words } = usePhone();
+  const inPlace = useInPlace();
   const store = plan.store ?? words.store;
   const plans = offeredPlans(plan.offers, true);
   const current: PlanKind | undefined = plan.tier === 'family' ? 'family' : plan.tier === 'pro' ? plan.kind ?? undefined : undefined;
@@ -54,6 +55,14 @@ export function SubscriptionScreen({ plan, remind, onRemind, notify, onTerms, on
 
   let body: React.ReactNode;
   let footer: React.ReactNode;
+  const links = (
+    <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-[14px] font-semibold text-acc">
+      <button type="button" disabled={busy} onClick={() => void restore()} className="py-1 disabled:opacity-40">Restore purchases</button>
+      <button type="button" onClick={onTerms} className="py-1">Terms</button>
+      <button type="button" onClick={onPrivacy} className="py-1">Privacy policy</button>
+    </div>
+  );
+  const covers = <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">One purchase covers PhotoSense on your phone, tablet and computer when you sign in with the same {words.account}.</p>;
   if (plan.tier === 'free') {
     body = <FreePlan plan={plan} plans={plans} chosen={selected?.kind} onChoose={setChosen} />;
     footer = selected && (
@@ -86,17 +95,34 @@ export function SubscriptionScreen({ plan, remind, onRemind, notify, onTerms, on
     );
   }
 
+  // T5: beside Settings on a tablet, the free plan's comparison and its plans side by side, the button under the plans.
+  if (inPlace && plan.tier === 'free') {
+    return (
+      <LayerScreen label="Subscription" onBack={onBack}>
+        <PushedHeader title="Subscription" />
+        <div className="flex flex-col gap-6 px-4 pb-6 pt-2">
+          <FreeSummary plan={plan} />
+          <div className="grid grid-cols-2 items-start gap-4">
+            <Comparison plan={plan} />
+            <div className="flex flex-col gap-3">
+              <PlanList header="Choose a plan" plans={plans} chosen={selected?.kind} onChoose={setChosen} />
+              {footer}
+              {links}
+            </div>
+          </div>
+          {covers}
+        </div>
+      </LayerScreen>
+    );
+  }
+
   return (
     <LayerScreen label="Subscription" onBack={onBack} footer={footer}>
-      <PushedHeader title="Subscription" onBack={onBack} />
+      <PushedHeader title="Subscription" onBack={inPlace ? undefined : onBack} />
       <div className="flex flex-col gap-6 px-4 pb-6 pt-2">
         {body}
-        <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-[14px] font-semibold text-acc">
-          <button type="button" disabled={busy} onClick={() => void restore()} className="py-1 disabled:opacity-40">Restore purchases</button>
-          <button type="button" onClick={onTerms} className="py-1">Terms</button>
-          <button type="button" onClick={onPrivacy} className="py-1">Privacy policy</button>
-        </div>
-        <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">One purchase covers PhotoSense on your phone, tablet and computer when you sign in with the same {words.account}.</p>
+        {links}
+        {covers}
       </div>
     </LayerScreen>
   );
@@ -124,9 +150,19 @@ function PlanList({ header, plans, chosen, current, onChoose }: PlansProps & { r
 }
 
 function FreePlan({ plan, plans, chosen, onChoose }: PlansProps & { readonly plan: PlanDto }) {
-  const left = plan.leftToday ?? 0;
   return (
     <>
+      <FreeSummary plan={plan} />
+      <Comparison plan={plan} />
+      <PlanList header="Choose a plan" plans={plans} chosen={chosen} onChoose={onChoose} />
+    </>
+  );
+}
+
+// The free plan's removals left today, in figures and as a bar.
+function FreeSummary({ plan }: { readonly plan: PlanDto }) {
+  const left = plan.leftToday ?? 0;
+  return (
       <div className="flex flex-col gap-1">
         <p className="text-[14px] font-semibold text-t2">PhotoSense Free</p>
         <p className="font-title text-[34px] font-bold leading-tight tabular-nums">{left.toLocaleString()} of {plan.removalsPerDay.toLocaleString()}</p>
@@ -136,6 +172,12 @@ function FreePlan({ plan, plans, chosen, onChoose }: PlansProps & { readonly pla
           <div className="h-full rounded-full bg-acc" style={{ width: `${(left / plan.removalsPerDay) * 100}%` }} />
         </div>
       </div>
+  );
+}
+
+// Free beside Pro, what each has.
+function Comparison({ plan }: { readonly plan: PlanDto }) {
+  return (
       <table className="w-full overflow-hidden rounded-cell bg-cell text-[15px]">
         <thead>
           <tr className="text-[13px] font-semibold text-t2">
@@ -154,8 +196,6 @@ function FreePlan({ plan, plans, chosen, onChoose }: PlansProps & { readonly pla
           ))}
         </tbody>
       </table>
-      <PlanList header="Choose a plan" plans={plans} chosen={chosen} onChoose={onChoose} />
-    </>
   );
 }
 

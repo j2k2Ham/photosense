@@ -547,7 +547,7 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'Getting started',
     summary: 'The first launch, the four tabs, Settings, finding your way back, and the home screen widgets.',
-    keywords: ['overview', 'introduction', 'welcome', 'first time', 'begin', 'setup', 'tabs', 'back', 'tablet', 'sidebar', 'widget', 'home screen',
+    keywords: ['overview', 'introduction', 'welcome', 'first time', 'begin', 'setup', 'tabs', 'back', 'tablet', 'sidebar', 'rail', 'collections', 'side by side', 'widget', 'home screen',
       'shortcut', 'quick action', 'long press', 'press and hold'],
     sections: [
       {
@@ -571,7 +571,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Finding your way',
         tips: [
           'The tabs, **Library**, **Clean up**, **Organize** and **Backup**, are at the foot of the screen. Each keeps where you were in it; tap the tab you are on to go back to its first screen.',
-          'The gear at the top right of each tab opens **Settings**.',
+          'The gear at the top right of each tab opens **Settings**. On a tablet, **Settings** is at the foot of the sidebar or the rail instead.',
           'Messages appear at the bottom of the screen. One that offers **Undo** stays a little longer; an error stays until you press OK, and is listed under **Errors** in Settings.',
         ],
       },
@@ -579,14 +579,16 @@ export const GUIDE: GuideTopic[] = [
         only: IOS,
         tips: [
           'Swipe from the left edge, or tap the back arrow, to go back from a screen opened over another.',
-          'On an iPad the tabs are in a sidebar on the left. **Hide sidebar** gives the screen its whole width, with the tabs at the top; **Show sidebar** brings it back. In **Clean up** and **Organize**, the list and what you open from it sit side by side.',
+          'On an iPad the tabs are in a sidebar on the left, with **Trips**, **Needs fixing** and **Hidden** under **Collections**, and **Settings** at its foot; each opens beside the sidebar, in place of the tab. **Hide sidebar** gives the screen its whole width, with the tabs at the top and the gear back on each tab; **Show sidebar** brings it back.',
+          'On an iPad the list and what you open from it sit side by side: in **Clean up**, the kinds Find lists beside the one chosen, the largest first; in **Organize**, the suggestions beside the one chosen; in **Trips**, the trips beside a map, the one chosen in a card with **Open trip**; in **Settings**, the list beside **Subscription**. **Library** shows what is on your computer, **Trips** and **Year in review** in a row above the photos, eight across. While you swipe, a panel beside the photo says what is marked and what it frees, and your streak. Sheets open in the middle of the screen.',
         ],
       },
       {
         only: ANDROID,
         tips: [
           'The phone’s Back gesture or button goes back from a screen opened over another, and puts away a sheet.',
-          'On a tablet the tabs are down the left side. In **Clean up** and **Organize**, the list and what you open from it sit side by side.',
+          'On a tablet the tabs are down the left side, with **Trips**, **Needs fixing** and **Hidden** under a line, and **Settings** at the foot; each opens beside them, in place of the tab.',
+          'On a tablet the list and what you open from it sit side by side: in **Clean up**, the kinds Find lists beside the one chosen, the largest first; in **Organize**, the suggestions beside the one chosen; in **Trips**, the trips beside a map, the one chosen in a card with **Open trip**; in **Settings**, the list beside **Subscription**. **Library** shows what is on your computer, **Trips** and **Year in review** in a row above the photos, eight across. While you swipe, a panel beside the photo says what is marked and what it frees, and your streak. Sheets open in the middle of the screen.',
         ],
       },
       {

@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PlaceContext } from '../../../components/phone/Screens';
 import { SubscriptionScreen } from '../../../components/phone/Subscription';
 import type { PlanDto } from '../../../types';
 import { plan } from '../../fixtures';
@@ -186,5 +187,27 @@ describe('every state', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Back' }));
     await userEvent.keyboard('{Escape}');
     expect(calls.onBack).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('beside Settings on a tablet (T5)', () => {
+  const beside = (given: PlanDto) => inFrame(<PlaceContext.Provider value><SubscriptionScreen plan={given} remind {...calls} /></PlaceContext.Provider>, frame('ios', { tablet: true }));
+
+  it('on the free plan sets Free beside Pro and the plans side by side, the button and the links under the plans, with no way back', async () => {
+    beside(plan());
+    const p = screen.getByRole('region', { name: 'Subscription' });
+    expect(within(p).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    const side = within(p).getByRole('radiogroup', { name: 'Choose a plan' }).closest('.grid')!;
+    expect(side.firstElementChild!.tagName).toBe('TABLE');
+    await userEvent.click(within(p).getByRole('radio', { name: /^Monthly/ }));
+    expect(within(p).getByRole('button', { name: 'Subscribe for $2.99 a month' })).toBeInTheDocument();
+    expect(within(p).getByRole('button', { name: 'Restore purchases' })).toBeInTheDocument();
+  });
+
+  it('on Pro is the phone\'s page, its foot at the pane\'s foot, with no way back', () => {
+    beside(YEARLY);
+    const p = screen.getByRole('region', { name: 'Subscription' });
+    expect(within(p).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    expect(within(p).getByRole('button', { name: 'Manage in App Store' }).parentElement).toHaveClass('border-t');
   });
 });

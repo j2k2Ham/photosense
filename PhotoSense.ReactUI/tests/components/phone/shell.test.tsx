@@ -4,9 +4,9 @@ import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PhoneApp } from '../../../components/phone/PhoneApp';
 import { PhoneShell } from '../../../components/phone/PhoneShell';
-import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from '../../../components/phone/Screens';
+import { LayerScreen, PlaceContext, PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from '../../../components/phone/Screens';
 import { DeletePermanently, SettingsSheet } from '../../../components/phone/SettingsSheet';
-import type { Platform, TabId } from '../../../lib/phone';
+import type { Place, Platform, TabId } from '../../../lib/phone';
 import type { AppSettings } from '../../../lib/settings';
 import { frame, inFrame, width } from './frame';
 import { group, groupsPage, photo } from './groups';
@@ -22,6 +22,7 @@ const api = vi.hoisted(() => ({ openedNotice: vi.fn(async (): Promise<{ opens: s
   useSwipe: vi.fn<() => { data?: SwipeStateDto }>(() => ({})), decideSwipe: vi.fn(),
   useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }, { category: 'screenshots', count: 0, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
   useCategoryPhotos: vi.fn(() => ({ data: [] })),
+  useTrips: vi.fn((): { data?: unknown } => ({})), useFixes: vi.fn((): { data?: unknown } => ({})),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
@@ -83,15 +84,23 @@ describe('a screen\'s header', () => {
     expect(screen.getByText('Preview. Nothing moves until you tap Move.')).toHaveClass('px-4', 'pb-3');
   });
 
-  it('of a tablet\'s detail: no back, the title on the left, and the gear', () => {
+  it('of a tablet\'s detail: no back, the title on the left, and the gear only with an iPad\'s sidebar hidden, Settings being at its foot', () => {
     const { again } = inFrame(<PushedHeader title="IMG_4299.JPG" gear />, frame('ios', { tablet: true }));
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'IMG_4299.JPG' })).toHaveClass('text-[22px]', 'font-bold');
-    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
-    again(<PushedHeader title="IMG_4299.JPG" onBack={vi.fn()} gear />, frame('ios', { tablet: true }));
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    again(<PushedHeader title="IMG_4299.JPG" onBack={vi.fn()} gear />, frame('ios', { tablet: true, sidebarHidden: true }));
     expect(screen.getAllByRole('button')).toHaveLength(2);
     again(<PushedHeader title="Anaconda" gear />, frame('android', { tablet: true }));
-    expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+  });
+
+  it('of a tablet\'s first screen: what stands beside the title, such as the search field', () => {
+    const { again } = inFrame(<RootHeader title="Library" subtitle="16 photos and videos" side={<p>the search field</p>} />, frame('ios', { tablet: true }));
+    expect(screen.getByText('the search field').parentElement).toHaveClass('flex', 'items-center');
+    expect(screen.getByText('16 photos and videos')).toBeInTheDocument();
+    again(<RootHeader title="Library" side={<p>the search field</p>} />, frame('android', { tablet: true }));
+    expect(screen.getByText('the search field').parentElement).toHaveClass('pr-3');
   });
 });
 
@@ -115,6 +124,19 @@ describe('a screen', () => {
     again(<SplitView list={<p>the list</p>} detail={<p>the detail</p>} />, frame('android', { tablet: true }));
     expect(screen.getByText('the list').parentElement).toHaveClass('w-[400px]', 'border-sep');
     expect(screen.getByText('the detail')).toBeInTheDocument();
+    // The growth screens' lists are 380 pixels on both.
+    again(<SplitView narrow list={<p>the list</p>} detail={<p>the detail</p>} />, frame('android', { tablet: true }));
+    expect(screen.getByText('the list').parentElement).toHaveClass('w-[380px]');
+  });
+
+  it('in place of a tab on a tablet, is drawn there with its foot, and neither Back nor Escape takes it away', async () => {
+    const back = vi.fn();
+    inFrame(<PlaceContext.Provider value><LayerScreen label="Trips" onBack={back} footer={<p>the foot</p>}>x</LayerScreen></PlaceContext.Provider>, frame('ios', { tablet: true }));
+    const shown = screen.getByRole('region', { name: 'Trips' });
+    expect(shown).not.toHaveClass('fixed');
+    expect(screen.getByText('the foot').parentElement).toHaveClass('border-t');
+    await userEvent.keyboard('{Escape}');
+    expect(back).not.toHaveBeenCalled();
   });
 });
 
@@ -122,8 +144,9 @@ describe('the shell', () => {
   const screens = { library: <p>library screen</p>, cleanup: <p>cleanup screen</p>, organize: <p>organize screen</p>, backup: <p>backup screen</p> };
   function Shell({ platform = 'ios', start = 'library', foot = 'tabs' as const }: { platform?: Platform; start?: TabId; foot?: 'tabs' | 'selection' | 'none' }) {
     const [tab, setTab] = React.useState<TabId>(start);
-    return <PhoneShell platform={platform} tab={tab} foot={foot} counts={{ cleanup: '264' }} screens={screens} toasts={[]} onTab={setTab} onSettings={vi.fn()} removeToast={vi.fn()}
-      notice={<p>the notice</p>} sheet={<p>the sheet</p>} />;
+    const [place, setPlace] = React.useState<Place>();
+    return <PhoneShell platform={platform} tab={tab} foot={foot} counts={{ cleanup: '264', trips: '6' }} screens={screens} toasts={[]} onTab={t => { setPlace(undefined); setTab(t); }} onSettings={vi.fn()} removeToast={vi.fn()}
+      place={place} onPlace={setPlace} placeScreen={<p>the settings</p>} notice={<p>the notice</p>} sheet={<p>the sheet</p>} />;
   }
 
   it('on an iPhone: the tabs in a floating glass bar, each tab kept as it was once turned to', async () => {
@@ -159,10 +182,25 @@ describe('the shell', () => {
     const side = screen.getByRole('navigation', { name: 'Tabs' });
     expect(within(side).getByText('PhotoSense')).toBeInTheDocument();
     expect(within(side).getByRole('button', { name: 'Clean up 264' })).toHaveAttribute('aria-current', 'page');
-    expect(within(side).getByText('Runs on this iPad. Nothing is uploaded.')).toBeInTheDocument();
-    await userEvent.click(within(side).getByRole('button', { name: 'Library' }));
-    expect(within(side).getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
+    expect(within(side).getByRole('heading', { name: 'Collections' })).toBeInTheDocument();
+    // A collection or Settings shows in place of the tab, lit in the sidebar; the tab showing is not.
+    await userEvent.click(within(side).getByRole('button', { name: 'Trips 6' }));
+    expect(within(side).getByRole('button', { name: 'Trips 6' })).toHaveAttribute('aria-current', 'page');
+    expect(within(side).getByRole('button', { name: 'Clean up 264' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByText('cleanup screen').parentElement).toHaveClass('hidden');
+    // Library draws the collections, so it is drawn out of sight.
+    expect(screen.getByText('library screen').parentElement).toHaveClass('hidden');
+    await userEvent.click(within(side).getByRole('button', { name: 'Settings' }));
+    expect(screen.getByText('the settings')).toBeInTheDocument();
+    await userEvent.click(within(side).getByRole('button', { name: 'Needs fixing' }));
+    expect(screen.queryByText('the settings')).not.toBeInTheDocument();
+    // Hidden, the sidebar leaves no tab lit while a collection shows.
     await userEvent.click(within(side).getByRole('button', { name: 'Hide sidebar' }));
+    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getAllByRole('button').filter(b => b.getAttribute('aria-current'))).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Show sidebar' }));
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library' }));
+    expect(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }));
     const floating = screen.getByRole('navigation', { name: 'Tabs' });
     expect(floating).toHaveClass('-translate-x-1/2');
     await userEvent.click(within(floating).getByRole('button', { name: 'Backup' }));
@@ -178,7 +216,36 @@ describe('the shell', () => {
     expect(rail).toHaveClass('w-24', 'bg-rail');
     await userEvent.click(within(rail).getByRole('button', { name: 'Organize' }));
     expect(within(rail).getByRole('button', { name: 'Organize' })).toHaveAttribute('aria-current', 'page');
+    // Library's collections under a line, and Settings at the foot.
+    await userEvent.click(within(rail).getByRole('button', { name: 'Hidden' }));
+    expect(within(rail).getByRole('button', { name: 'Hidden' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(rail).getByRole('button', { name: 'Settings' }));
+    expect(within(rail).getByRole('button', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('the settings')).toBeInTheDocument();
+    await userEvent.click(within(rail).getByRole('button', { name: 'Organize' }));
+    expect(screen.queryByText('the settings')).not.toBeInTheDocument();
     expect(container.querySelectorAll('[aria-hidden="true"].fixed')[1]).toHaveClass('bg-bg');
+  });
+});
+
+describe('Settings on a tablet (T5)', () => {
+  it('stands beside the sidebar with Subscription beside it, the plan lit, and stays while a row opens what it leads to', async () => {
+    const onClose = vi.fn(), onRecent = vi.fn();
+    const none = () => undefined;
+    inFrame(
+      <PlaceContext.Provider value>
+        <SettingsSheet theme="auto" unit="miles" errorCount={0} plan={plan()} beside={<p>the subscription</p>} onClose={onClose} onRecent={onRecent}
+          onTheme={none} onUnit={none} onPhotoAccess={none} onScanAgain={none} onDeletePermanently={none} onErrors={none} onHelp={none} onAbout={none} onPrivacy={none}
+          onSubscription={none} onPair={none} onLowStorage={none} />
+      </PlaceContext.Provider>, frame('ios', { tablet: true }));
+    expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    expect(screen.getByText('the subscription')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /\. Subscription$/ })).toHaveAttribute('aria-current', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Recently moved' }));
+    expect(onRecent).toHaveBeenCalledOnce();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 
@@ -370,6 +437,38 @@ describe('PhotoSense on a phone', () => {
   async function openDuplicates() {
     await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Duplicates/ }));
   }
+
+  it('on a tablet shows Settings, with Subscription beside it, and a collection in place of the tab; Back, a tab or a notification moves on', async () => {
+    width(true);
+    api.usePlan.mockReturnValue({ data: plan() });
+    const glacier = { id: 'gla', name: 'Glacier National Park', folder: '2026-07 Glacier National Park', start: '2026-07-18', end: '2026-07-21', photos: 12, videos: 0, latitude: 48.7, longitude: -113.8, cover: photo('c1'), folderMade: false, suggested: 'Glacier National Park' };
+    api.useTrips.mockReturnValue({ data: { home: { town: 'Bozeman', region: 'Montana', country: 'US', latitude: 45.7, longitude: -111, days: 9 }, homeChosen: false, trips: [glacier], computer: null, tripsFolder: null, folder: null } });
+    api.useFixes.mockReturnValue({ data: { total: 374 } });
+    render(<App start="library" />);
+    const side = screen.getByRole('navigation', { name: 'Tabs' });
+    expect(within(side).getByRole('button', { name: 'Needs fixing 374' })).toBeInTheDocument();
+    await userEvent.click(within(side).getByRole('button', { name: 'Settings' }));
+    expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Subscription' })).toBeInTheDocument();
+    // The plan is beside it already.
+    await userEvent.click(screen.getByRole('button', { name: /\. Subscription$/ }));
+    expect(screen.queryByRole('dialog', { name: 'Subscription' })).not.toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Settings' })).not.toBeInTheDocument());
+    await userEvent.click(within(side).getByRole('button', { name: 'Trips 1' }));
+    expect(await screen.findByRole('region', { name: 'Glacier National Park' })).toBeInTheDocument();
+    await userEvent.click(within(side).getByRole('button', { name: /^Organize/ }));
+    expect(screen.queryByRole('region', { name: 'Glacier National Park' })).not.toBeInTheDocument();
+    api.openedNotice.mockResolvedValueOnce({ opens: 'subscription' });
+    await act(async () => { window.dispatchEvent(new Event('photosense-notice')); });
+    expect(await screen.findByRole('region', { name: 'Settings' })).toBeInTheDocument();
+    // With the sidebar hidden, the gear opens Settings in its place.
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Library/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Hide sidebar' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument();
+    for (const f of [api.usePlan, api.useTrips, api.useFixes]) f.mockReturnValue({});
+  });
 
   it('opens Swipe to clean from Clean up over everything, and its summary when the set is through, or when it is closed with something marked', async () => {
     width(false);
@@ -825,7 +924,7 @@ describe('PhotoSense on a phone', () => {
     api.useBackup.mockReturnValue({});
   });
 
-  it("pushes a category opened from Find over Clean up's first screen, which Back, or on a tablet the tab, takes back", async () => {
+  it("pushes a category opened from Find over Clean up's first screen, which Back takes back; a tablet shows it beside the list", async () => {
     width(false);
     const { unmount } = render(<App start="cleanup" />);
     const screenshots = () => userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Screenshots/ }));
@@ -838,8 +937,8 @@ describe('PhotoSense on a phone', () => {
     width(true);
     render(<App start="cleanup" />);
     await screenshots();
-    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Clean up/ }));
     expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Screenshots' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Screenshots' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Screenshots/ })).toHaveAttribute('aria-current', 'true');
   });
 });

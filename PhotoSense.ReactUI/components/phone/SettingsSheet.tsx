@@ -8,7 +8,7 @@ import type { ThemeChoice } from '../../lib/theme';
 import type { PhotoAccessDto, PlanDto, RemovedFilesDto } from '../../types';
 import { ListGroup, ListRow, PhoneSwitch, Segmented } from './Controls';
 import { ChevronIcon } from './Icons';
-import { LayerScreen, PushedHeader } from './Screens';
+import { LayerScreen, PushedHeader, RootHeader, SplitView, useInPlace } from './Screens';
 import { ConfirmSheet } from './Sheet';
 
 const UNITS = DISTANCE_UNITS.map(u => ({ id: u.value, label: u.name }));
@@ -58,6 +58,8 @@ interface Props {
   onAbout(): void;
   onPrivacy(): void;
   onClose(): void;
+  /** On a tablet, what shows beside the list: the Subscription page. */
+  readonly beside?: React.ReactNode;
 }
 
 /**
@@ -68,16 +70,15 @@ interface Props {
  */
 export function SettingsSheet(p: Props) {
   const { ios } = usePhone();
-  // What a row leads to opens over the screen once Settings has gone.
-  const then = (go: () => void) => () => { p.onClose(); go(); };
+  const inPlace = useInPlace();
+  // What a row leads to opens over the screen once Settings has gone; on a tablet Settings stays beside it.
+  const then = (go: () => void) => () => { if (!inPlace) p.onClose(); go(); };
   const access = p.access === undefined ? undefined
     : p.access === 'everything' ? (ios ? 'Full access' : 'All photos and videos') : p.access === 'selected' ? 'Some chosen' : 'None';
   const empty = p.removed !== undefined && p.removed.files === 0;
-  return (
-    <LayerScreen label="Settings" onBack={p.onClose}>
-      <PushedHeader title="Settings" onBack={p.onClose} />
+  const rows = (
       <div className="flex flex-col gap-5 px-4 pb-6 pt-2">
-        {p.plan && <PlanSummary plan={p.plan} onOpen={p.onSubscription} />}
+        {p.plan && <PlanSummary plan={p.plan} on={inPlace} onOpen={p.onSubscription} />}
         {p.computer !== undefined && (
           <ListGroup header="Computer">
             {p.computer
@@ -123,15 +124,32 @@ export function SettingsSheet(p: Props) {
         </ListGroup>
         <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">Your photos stay on your own devices. PhotoSense has no ads and does not track what is in your photos.</p>
       </div>
+  );
+  // T5: on a tablet, beside the sidebar or rail, the list with the Subscription page beside it.
+  if (inPlace) {
+    return (
+      <section aria-label="Settings" className="flex min-h-0 min-w-0 flex-1">
+        <SplitView narrow list={<><RootHeader title="Settings" noGear />{rows}</>} detail={p.beside} />
+      </section>
+    );
+  }
+  return (
+    <LayerScreen label="Settings" onBack={p.onClose}>
+      <PushedHeader title="Settings" onBack={p.onClose} />
+      {rows}
     </LayerScreen>
   );
 }
 
-/** The plan at the top of Settings: what it is and what it comes to, with Get Pro on the free plan. It opens Subscription. */
-function PlanSummary({ plan, onOpen }: { readonly plan: PlanDto; onOpen(): void }) {
+/**
+ * The plan at the top of Settings: what it is and what it comes to, with Get Pro on the free plan. It opens Subscription,
+ * which on a tablet shows beside the list, the plan lit.
+ */
+function PlanSummary({ plan, on, onOpen }: { readonly plan: PlanDto; readonly on: boolean; onOpen(): void }) {
   const title = planTitle(plan);
   return (
-    <button type="button" onClick={onOpen} aria-label={`${title}. Subscription`} className="flex items-center gap-3.5 rounded-cell bg-cell p-4 text-left">
+    <button type="button" onClick={onOpen} aria-label={`${title}. Subscription`} aria-current={on ? 'true' : undefined}
+      className={`flex items-center gap-3.5 rounded-cell p-4 text-left ${on ? 'bg-sel' : 'bg-cell'}`}>
       <img src={appIconUrl} alt="" className="h-12 w-12 shrink-0 rounded-[12px]" />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-[17px] font-semibold">{title}</span>

@@ -9,6 +9,12 @@ export type Form = 'phone' | 'tablet';
 /** The four tabs, in their order. */
 export type TabId = 'library' | 'cleanup' | 'organize' | 'backup';
 
+/** Library's collections, which a tablet lists in its sidebar or rail beside the tabs. */
+export type Collection = 'trips' | 'fixes' | 'hidden';
+
+/** What a tablet shows beside its sidebar or rail in place of a tab: one of Library's collections, or Settings. */
+export type Place = Collection | 'settings';
+
 /** What stands at a phone's foot: the tab bar, the bar of what can be done with a selection, or nothing (a pushed screen). */
 export type Foot = 'tabs' | 'selection' | 'none';
 
@@ -78,6 +84,10 @@ export interface PhoneFrame {
   readonly foot: Foot;
   /** Opens Settings, from the gear of any screen. */
   openSettings(): void;
+  /** What a tablet shows in place of a tab, if anything. */
+  readonly place?: Place;
+  /** Where on a tablet a collection is drawn in place of the tab, once there is one to show. */
+  readonly placeSlot: HTMLElement | null;
 }
 
 /** What the person is holding, as the page names it: "phone", "iPad", or an Android "tablet". */

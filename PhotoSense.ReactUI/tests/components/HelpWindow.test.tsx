@@ -105,13 +105,14 @@ describe('the guide itself', () => {
       expect(ids('transfer', platform)).toEqual(['backup']);
       expect(ids('cancel subscription', platform)).toEqual(['phone-plan']);
       expect(ids('dupes', platform)).toEqual(['phone-cleanup']);
-      expect(ids('trip', platform)).toEqual(['library', 'phone-organize']);
+      expect(ids('trip', platform)).toEqual(['phone-start', 'library', 'phone-organize']);
       expect(ids('vacation', platform)).toEqual(['library']);
       expect(ids('travel map', platform)).toEqual(['library']);
       expect(ids('camera roll', platform)).toEqual(['library']);
       expect(ids('dark mode', platform)).toEqual(['phone-settings']);
       expect(ids('qr code', platform)).toContain('backup');
       expect(ids('sidebar', platform)).toEqual(['phone-start']);
+      expect(ids('collections', platform)).toEqual(['phone-start']);
       expect(ids('screenshot', platform)).toContain('phone-cleanup');
       expect(ids('wrong date', platform)).toEqual(['library']);
       expect(ids('missing location', platform)).toEqual(['library']);

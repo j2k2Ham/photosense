@@ -327,3 +327,33 @@ describe('the swipe summary', () => {
     expect(unknown.onClose).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('swiping on a tablet (T3)', () => {
+  it('shows beside the column what is marked and what it frees, the latest marked, the streak, and the free plan\'s line, amber once more are marked than are left', () => {
+    const state = (set: ReturnType<typeof swipeCard>[]) => swipeState({ set: [...set, swipeCard('c')], streak: 2 });
+    const ui = (s: SwipeStateDto) => <SwipeSession state={s} library={LIBRARY} computer="Studio iMac" notify={vi.fn()} onClose={vi.fn()} onDone={vi.fn()} />;
+    const { again } = inFrame(ui(state([swipeCard('a', { delete: true }), swipeCard('b', { delete: true })])), frame('ios', { tablet: true }), gate({ plan: plan({ leftToday: 1, tier: 'free' }) }));
+    const panel = () => screen.getByRole('complementary', { name: 'Marked to delete' });
+    expect(panel()).toHaveTextContent('2 items so far · confirmed at the end');
+    expect(panel()).toHaveTextContent('2-day streak');
+    // The latest marked first: the video by its play mark, the picture by its preview.
+    const latest = within(within(panel()).getByRole('list', { name: 'Latest marked' })).getAllByRole('listitem');
+    expect(latest).toHaveLength(2);
+    expect(latest[0].querySelector('img')).toBeNull();
+    expect(latest[1].querySelector('img')).toHaveAttribute('src', expect.stringContaining('/organize/files/a/thumbnail'));
+    expect(within(panel()).getByText(/^Free plan: 1 removal left today/)).toHaveClass('text-amber');
+    // The panel says these, so the column does not.
+    expect(screen.getAllByText(/^Free plan:/)).toHaveLength(1);
+    again(ui(state([swipeCard('a', { delete: true })])));
+    expect(panel()).toHaveTextContent('1 item so far');
+    expect(within(panel()).getByText(/^Free plan:/)).toHaveClass('text-t2');
+    again(ui(state([])), frame('ios', { tablet: true }));
+    expect(within(panel()).queryByRole('list', { name: 'Latest marked' })).not.toBeInTheDocument();
+  });
+
+  it('says nothing of a limit on Pro', () => {
+    inFrame(<SwipeSession state={swipeState({ set: [swipeCard('a')] })} library={LIBRARY} notify={vi.fn()} onClose={vi.fn()} onDone={vi.fn()} />, frame('android', { tablet: true }),
+      gate({ plan: plan({ leftToday: null, tier: 'pro' }) }));
+    expect(screen.queryByText(/^Free plan:/)).not.toBeInTheDocument();
+  });
+});

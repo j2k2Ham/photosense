@@ -529,3 +529,38 @@ describe('Library, once the phone backs up to a computer', () => {
   });
 });
 
+
+describe('Library on a tablet (T1)', () => {
+  const year = { year: 2026, photos: 7512, videos: 316, trips: 3, topTrips: [], months: Array(12).fill(0), busiestMonth: 0, busiestPlace: null, freed: 41_600_000_000, removed: 0, longestStreak: 0, sessions: 0 };
+  const onComputer: LibraryBackupDto = { computer: 'Studio iMac', onComputer: ['f1'], waiting: [], lastChecked: null };
+
+  it('puts the search field beside the title, and what is on the computer, Trips and Year in review in a row; the collections are in the sidebar', async () => {
+    const onCollection = vi.fn();
+    inFrame(<LibraryScreen library={library()} selecting={false} onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()}
+      backup={onComputer} safe={safeReview()} year={year} onYear={vi.fn()} onCollection={onCollection} />, frame('ios', { tablet: true, form: 'tablet' }), planGate);
+    expect(screen.getByRole('region', { name: 'On Studio iMac' })).toHaveClass('flex-[1.4]');
+    expect(screen.getByRole('region', { name: 'On Studio iMac' })).toHaveTextContent('Remove them from this iPad');
+    expect(screen.getByRole('region', { name: 'Year in review' })).toHaveClass('flex-col');
+    expect(screen.queryByRole('button', { name: /^Needs fixing/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Trips, Finding trips…' }));
+    expect(onCollection).toHaveBeenCalledWith('trips');
+    await userEvent.click(screen.getByRole('button', { name: 'Search photos' }));
+    expect(screen.getByRole('dialog', { name: 'Search' })).toBeInTheDocument();
+  });
+
+  it('draws the collection open where the shell keeps room for it beside the sidebar, with no way back of its own', () => {
+    const slot = document.body.appendChild(document.createElement('div'));
+    const ui = (collection?: 'fixes' | 'hidden') => (
+      <LibraryScreen library={library()} selecting={false} onSelecting={vi.fn()} filter="all" onFilter={vi.fn()} notify={vi.fn()} onSend={vi.fn()} collection={collection} onCollection={vi.fn()} />
+    );
+    const { again } = inFrame(ui('fixes'), frame('ios', { tablet: true, form: 'tablet', placeSlot: slot }), planGate);
+    expect(within(slot).getByRole('region', { name: 'Fix dates and places' })).toBeInTheDocument();
+    expect(within(slot).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    again(ui('hidden'));
+    expect(within(slot).getByRole('region', { name: 'Hidden' })).toBeInTheDocument();
+    expect(within(slot).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    again(ui());
+    expect(slot).toBeEmptyDOMElement();
+    slot.remove();
+  });
+});

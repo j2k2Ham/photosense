@@ -8,7 +8,7 @@ import { PlanProvider, type PlanGate } from '../../../components/phone/ProSheet'
 export function frame(platform: Platform = 'ios', more: Partial<PhoneFrame> = {}): PhoneFrame {
   return {
     platform, form: 'phone', ios: platform === 'ios', tablet: false, words: WORDS[platform], sidebarHidden: false, foot: 'tabs',
-    openSettings: vi.fn(), ...more,
+    openSettings: vi.fn(), placeSlot: null, ...more,
   };
 }
 

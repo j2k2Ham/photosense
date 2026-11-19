@@ -151,11 +151,13 @@ interface RowProps {
   readonly chevron?: boolean;
   readonly danger?: boolean;
   readonly disabled?: boolean;
+  /** The row's detail shows beside the list, on a tablet: it is lit. */
+  readonly current?: boolean;
   onClick?(): void;
 }
 
 /** One row of a list: pressed when it does something, with a chevron when it leads somewhere. */
-export function ListRow({ children, detail, chevron, danger, disabled, onClick }: RowProps) {
+export function ListRow({ children, detail, chevron, danger, disabled, current, onClick }: RowProps) {
   const inside = (
     <>
       <span className={`min-w-0 flex-1 ${danger ? 'text-danger-t' : ''}`}>{children}</span>
@@ -167,9 +169,9 @@ export function ListRow({ children, detail, chevron, danger, disabled, onClick }
   );
   const shape = 'flex min-h-[52px] w-full items-center gap-3 px-4 py-[11px] text-left text-[16px]';
   return (
-    <li>
+    <li className={current ? 'bg-sel' : undefined}>
       {onClick
-        ? <button type="button" disabled={disabled} onClick={onClick} className={`${shape} disabled:opacity-40`}>{inside}</button>
+        ? <button type="button" disabled={disabled} aria-current={current ? 'true' : undefined} onClick={onClick} className={`${shape} disabled:opacity-40`}>{inside}</button>
         : <div className={shape}>{inside}</div>}
     </li>
   );

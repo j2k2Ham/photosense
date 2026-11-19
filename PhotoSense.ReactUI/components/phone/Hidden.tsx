@@ -12,7 +12,7 @@ import { PhoneButton, StickyFooter } from './Controls';
 import { LockIcon, VideoIcon } from './Icons';
 import { PhotoGrid } from './PhotoGrid';
 import { usePlanGate } from './ProSheet';
-import { LayerScreen, PushedHeader } from './Screens';
+import { LayerScreen, PushedHeader, useInPlace } from './Screens';
 import { ConfirmSheet, Sheet } from './Sheet';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
@@ -47,6 +47,7 @@ function Closed({ title, line }: { readonly title: string; readonly line: string
  */
 export function HiddenScreen({ files, notify, onClose }: { readonly files: readonly OrganizeFileDto[]; notify: Notify; onClose(): void }) {
   const { platform, tablet, words } = usePhone();
+  const inPlace = useInPlace();
   const gate = usePlanGate();
   const vault = useVault(true);
   const data = vault.data;
@@ -69,7 +70,7 @@ export function HiddenScreen({ files, notify, onClose }: { readonly files: reado
   const addPhotos = () => (free ? gate.offer('vault', () => setPicking(true)) : setPicking(true));
 
   const stage = data?.stage;
-  const header = <PushedHeader title="Hidden" onBack={onClose}
+  const header = <PushedHeader title="Hidden" onBack={inPlace ? undefined : onClose}
     trailing={stage === 'open' ? <button type="button" onClick={() => void act(lockVault)} className="h-9 rounded-full bg-fill px-4 text-[14.5px] font-semibold">Lock</button> : undefined} />;
   const footer = stage === 'off'
     ? (

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useEffectEvent, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
-import { useForm, WORDS, type Platform, type TabId } from '../../lib/phone';
-import { backUpIfDue, eraseRemoved, openedNotice, openPhotoSettings, startBackup, useBackup, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useYear } from '../../lib/apiClient';
+import { useForm, WORDS, type Place, type Platform, type TabId } from '../../lib/phone';
+import { backUpIfDue, eraseRemoved, openedNotice, openPhotoSettings, startBackup, useBackup, useFixes, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useTrips, useYear } from '../../lib/apiClient';
 import { formatBytes } from '../../lib/format';
 import { deviceWord } from '../../lib/phone';
 import type { ResultCard } from '../../lib/shareCard';
@@ -82,12 +82,17 @@ export function PhoneApp(props: Props) {
   const [sheet, setSheet] = useState<'settings' | 'subscription' | 'erase' | 'recent' | 'safe' | 'pair'>();
   // What Safe to delete last deleted, for Space freed.
   const [freed, setFreed] = useState<{ removed: SafeRemovalDto; partial: boolean }>();
-  const openSettings = useCallback(() => setSheet('settings'), []);
+  const form = useForm();
+  const tablet = form === 'tablet';
+  // One of Library's collections, or on a tablet Settings, shown beside the sidebar or rail in place of a tab; a phone
+  // shows a collection over every tab, and Settings as a screen of its own.
+  const [place, setPlace] = useState<Place>();
+  useBackLayer(tablet && place !== undefined, () => setPlace(undefined));
+  const openSettings = useCallback(() => (tablet ? setPlace('settings') : setSheet('settings')), [tablet]);
   const closeSheet = () => setSheet(undefined);
   // On a phone a review is pushed over the list, and Back, or a swipe from the edge, takes it back; a tablet shows both.
-  const form = useForm();
   const cleanUp = useCleanUp(form === 'tablet');
-  const reviewing = !!cleanUp.group && tab === 'cleanup' && form === 'phone';
+  const reviewing = !!cleanUp.group && tab === 'cleanup' && !tablet && !place;
   const endReview = () => cleanUp.review(undefined);
   // A list opened from Find is pushed over Clean up's first screen, and goes back to it.
   const listing = (cleanUp.listing || !!cleanUp.opened) && tab === 'cleanup';
@@ -122,17 +127,21 @@ export function PhoneApp(props: Props) {
       notify(said(e), 'error');
     }
   }
-  // Tapping the tab showing goes back to its first screen.
+  // Tapping the tab showing goes back to its first screen; a tab tapped puts away what showed in place of one.
   const onTab = (next: TabId) => {
-    if (next === tab && next === 'cleanup') { endReview(); cleanUp.closeList(); cleanUp.close(); }
-    if (next === tab && next === 'organize') endPreview();
+    if (next === tab && next === 'cleanup' && !place) { endReview(); cleanUp.closeList(); cleanUp.close(); }
+    if (next === tab && next === 'organize' && !place) endPreview();
+    setPlace(undefined);
     props.onTab(next);
   };
+  // How many trips there are, and photos to fix, beside them in an iPad's sidebar.
+  const trips = useTrips(ready && tablet).data?.trips.length;
+  const fixes = useFixes(ready && tablet).data?.total;
   const removable = cleanUp.data?.removableCount ?? 0;
   // What Settings says of the photos, of what waits to be erased (in the library, once it is known, and wherever else the
   // service knows of), and of what Undo can still put back.
   const access = usePhotoAccess().data?.access;
-  const removed = useRemoved(sheet === 'settings' || sheet === 'erase' ? [library.root].filter(root => root !== undefined) : null).data;
+  const removed = useRemoved(sheet === 'settings' || sheet === 'erase' || place === 'settings' ? [library.root].filter(root => root !== undefined) : null).data;
   const batches = useOrganizeBatches().data;
   const [busy, setBusy] = useState(false);
   const bin = WORDS[platform].bin;
@@ -153,15 +162,17 @@ export function PhoneApp(props: Props) {
   // A notification, a widget or the app icon's menu tapped opens what it is about: Free up space, the subscription,
   // a backup started (Backup's pairing when there is no computer yet), today's swipe set, or Search.
   const opened = useEffectEvent(() => void openedNotice().then(o => {
-    if (o.opens === 'free-up-space') { props.onTab('cleanup'); cleanUp.open('free'); }
-    else if (o.opens === 'subscription') setSheet('subscription');
+    if (o.opens === 'free-up-space') { setPlace(undefined); props.onTab('cleanup'); cleanUp.open('free'); }
+    else if (o.opens === 'subscription') { if (tablet) setPlace('settings'); else setSheet('subscription'); }
     else if (o.opens === 'backup') {
       props.onTab('backup');
       if (paired) void startBackup().catch(e => notify(said(e), 'error'));
     } else if (o.opens === 'swipe') {
+      setPlace(undefined);
       props.onTab('cleanup');
       if (swipe && swipe.set.some(c => c.delete === null)) setSwiping('cards');
     } else if (o.opens === 'search') {
+      setPlace(undefined);
       props.onTab('library');
       setSearchAsked(n => n + 1);
     }
@@ -199,14 +210,33 @@ export function PhoneApp(props: Props) {
     setBusy(false);
   }
 
+  const subscription = gate.plan && (
+    <SubscriptionScreen plan={gate.plan} remind={notices.state?.trialReminder ?? false} onRemind={trialReminder => void notices.change({ trialReminder })} notify={notify}
+      onTerms={() => props.onAbout('terms')} onPrivacy={() => props.onAbout('privacy')} onBack={() => setSheet('settings')} />
+  );
+  const settings = (
+    <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
+      plan={gate.plan} onSubscription={() => { if (!tablet) setSheet('subscription'); }} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
+      removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
+      computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
+      onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
+      onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
+      onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} beside={tablet ? subscription : undefined} />
+  );
+
   return (
     <PlanProvider value={gate}>
-    <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : tab === 'library' && selecting ? 'selection' : 'tabs'} counts={{ library: libraryCount, cleanup: removable > 0 ? removable.toLocaleString() : undefined, organize: organize.toMove > 0 ? organize.toMove.toLocaleString() : undefined }} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
+    <PhoneShell platform={platform} tab={tab} foot={pushed ? 'none' : tab === 'library' && selecting ? 'selection' : 'tabs'} toasts={toasts} onTab={onTab} onSettings={openSettings} removeToast={removeToast}
+      counts={{
+        library: libraryCount, cleanup: removable > 0 ? removable.toLocaleString() : undefined, organize: organize.toMove > 0 ? organize.toMove.toLocaleString() : undefined,
+        trips: trips ? trips.toLocaleString() : undefined, fixes: fixes ? fixes.toLocaleString() : undefined,
+      }}
+      place={place} onPlace={setPlace} placeScreen={settings}
       notice={notice} cover={cover}
       screens={{
         library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
           backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} year={year} onYear={() => setWatching(true)}
-          removeLocation={props.settings.removeLocationWhenSharing} searchAsked={searchAsked} />,
+          removeLocation={props.settings.removeLocationWhenSharing} searchAsked={searchAsked} collection={place === 'settings' ? undefined : place} onCollection={setPlace} />,
         cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} swipe={swipe} library={library} onSwipe={setSwiping}
           lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
@@ -214,19 +244,8 @@ export function PhoneApp(props: Props) {
         backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')} />,
       }}
       sheet={<>
-        {sheet === 'settings' && (
-          <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
-            plan={gate.plan} onSubscription={() => setSheet('subscription')} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
-            removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
-            computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
-            onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
-            onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
-            onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} />
-        )}
-        {sheet === 'subscription' && gate.plan && (
-          <SubscriptionScreen plan={gate.plan} remind={notices.state?.trialReminder ?? false} onRemind={trialReminder => void notices.change({ trialReminder })} notify={notify}
-            onTerms={() => props.onAbout('terms')} onPrivacy={() => props.onAbout('privacy')} onBack={() => setSheet('settings')} />
-        )}
+        {sheet === 'settings' && settings}
+        {sheet === 'subscription' && subscription}
         {sheet === 'erase' && removed && <DeletePermanently removed={removed} askTwice={props.settings.eraseAskTwice} busy={busy} onErase={askOnce => void erase(askOnce)} onCancel={closeSheet} />}
         {sheet === 'recent' && <RecentSheet batches={batches ?? []} root={library.root} busy={busy} onUndo={b => void undo(b.id)} onClose={closeSheet} />}
         {sheet === 'safe' && (

@@ -122,6 +122,11 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
   const report = useCategories(true).data;
   const similar = similarRow(useGroups('similar', '', 1, false).data);
   const found = freeable(report);
+  const rows = findRows(report, similar, platform === 'android');
+  // T2: on a tablet a kind shows beside the first screen, the largest at first; the duplicates and similar shots keep
+  // their list and review, which take the whole screen.
+  const shown = tablet ? cleanUp.opened ?? rows.find(r => r.id !== 'duplicates' && r.id !== 'similar')?.id as typeof cleanUp.opened : cleanUp.opened;
+  const kind = shown && kindScreen(shown, notify, tablet ? undefined : cleanUp.close);
   const home = (
     <>
       <RootHeader title="Clean up" subtitle={found > 0 ? `${formatBytes(found)} can be freed` : 'Daily swipes, duplicates and similar shots'} />
@@ -131,7 +136,7 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
         )}
         <FreeRow />
         <SwipePanel state={swipe} library={library} onOpen={onSwipe} />
-        <Find unmeasured={report?.unmeasured ?? 0} rows={findRows(report, similar, platform === 'android')}
+        <Find unmeasured={report?.unmeasured ?? 0} rows={rows} current={tablet ? shown : undefined}
           onOpen={id => (id === 'duplicates' || id === 'similar' ? cleanUp.openList(id) : cleanUp.open(id))} />
         {lowStorage !== undefined && (
           <ListGroup header="Alerts">
@@ -184,14 +189,12 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
 
   return (
     <>
-      {cleanUp.opened ? (
-        <PushedScreen label={cleanUp.opened === 'free' ? 'Free up space' : FIND_LABELS[cleanUp.opened]}>
-          {cleanUp.opened === 'free' ? <FreeUpSpace notify={notify} onBack={cleanUp.close} />
-            : cleanUp.opened === 'bursts' ? <BurstsScreen notify={notify} onBack={cleanUp.close} />
-              : cleanUp.opened === 'largeVideos' ? <LargeVideosScreen notify={notify} onBack={cleanUp.close} />
-                : <CategoryGrid category={cleanUp.opened} title={FIND_LABELS[cleanUp.opened]} notify={notify} onBack={cleanUp.close} />}
-        </PushedScreen>
-      ) : !cleanUp.listing ? <Screen label="Clean up">{home}</Screen>
+      {tablet && !cleanUp.listing ? (
+        <Screen label="Clean up" fixed>
+          <SplitView narrow list={home} detail={kind && <section aria-label={labelOf(shown!)} className="flex min-h-full flex-col">{kind}</section>} />
+        </Screen>
+      ) : cleanUp.opened ? <PushedScreen label={labelOf(cleanUp.opened)}>{kind}</PushedScreen>
+      : !cleanUp.listing ? <Screen label="Clean up">{home}</Screen>
         : tablet ? (
           <Screen label="Clean up" fixed>
             <SplitView list={list} detail={review ?? (
@@ -218,6 +221,17 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
   );
 }
 
+/** What a kind of Clean up, or Free up space, is called. */
+const labelOf = (what: Exclude<FindId, 'duplicates' | 'similar'> | 'free') => (what === 'free' ? 'Free up space' : FIND_LABELS[what]);
+
+/** The screen of a kind of Clean up, or Free up space: with a way back on a phone, beside the list on a tablet. */
+function kindScreen(what: Exclude<FindId, 'duplicates' | 'similar'> | 'free', notify: Notify, onBack?: () => void) {
+  if (what === 'free') return <FreeUpSpace notify={notify} onBack={onBack} />;
+  if (what === 'bursts') return <BurstsScreen notify={notify} onBack={onBack} />;
+  if (what === 'largeVideos') return <LargeVideosScreen notify={notify} onBack={onBack} />;
+  return <CategoryGrid key={what} category={what} title={FIND_LABELS[what]} notify={notify} onBack={onBack} />;
+}
+
 /** On the free plan, how many removals are left today, with Get Pro; nothing on Pro, or before the plan is known. */
 function FreeRow() {
   const gate = usePlanGate();
@@ -242,14 +256,14 @@ const FIND_ICONS: Record<FindId, typeof CleanUpIcon> = {
  * Find: every category of Clean up and the similar shots, largest first, each with what there is to delete and what it
  * takes. On an iPhone each has a coloured tile; Android shows the icon alone.
  */
-function Find({ rows, unmeasured, onOpen }: { readonly rows: readonly FindRow[]; readonly unmeasured: number; onOpen(id: FindId): void }) {
+function Find({ rows, unmeasured, current, onOpen }: { readonly rows: readonly FindRow[]; readonly unmeasured: number; /** The kind beside the list, on a tablet. */ readonly current?: FindId | 'free'; onOpen(id: FindId): void }) {
   const { ios } = usePhone();
   return (
     <ListGroup header="Find">
       {rows.map(row => {
         const Icon = FIND_ICONS[row.id];
         return (
-          <ListRow key={row.id} chevron onClick={() => onOpen(row.id)}>
+          <ListRow key={row.id} chevron current={row.id === current} onClick={() => onOpen(row.id)}>
             <span className="flex items-center gap-3">
               {ios
                 ? <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-white" style={{ background: `oklch(0.62 0.13 ${FIND_HUES[row.id]})` }}><Icon size={19} /></span>

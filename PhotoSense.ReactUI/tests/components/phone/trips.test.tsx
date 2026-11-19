@@ -2,7 +2,7 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { TripsScreen, TripsTile } from '../../../components/phone/Trips';
+import { TripsCard, TripsScreen, TripsTile } from '../../../components/phone/Trips';
 import type { Platform } from '../../../lib/phone';
 import type { PhotoDto, TownDto, TripDetailDto, TripDto, TripsDto } from '../../../types';
 import { organizeFile, photo } from '../../fixtures';
@@ -141,7 +141,9 @@ describe('Trips (29–31)', () => {
 describe('Make a folder on the computer', () => {
   async function opened(platform: Platform = 'ios', tablet = false) {
     const shown = show(platform, { tablet });
-    await userEvent.click(within(shown.layer()).getByRole('button', { name: /^Glacier National Park/ }));
+    // On a tablet a trip is chosen in the list, then opened from its card over the map.
+    await userEvent.click(within(within(shown.layer()).getByRole('list', { name: 'Trips' })).getByRole('button', { name: /^Glacier National Park/ }));
+    if (tablet) await userEvent.click(within(shown.layer()).getByRole('button', { name: 'Open trip' }));
     return shown;
   }
 
@@ -255,5 +257,55 @@ describe('Renaming a trip', () => {
     sheet = screen.getByRole('dialog', { name: 'Rename trip' });
     await userEvent.click(within(sheet).getByRole('button', { name: 'Use PhotoSense’s name: Glacier National Park' }));
     expect(api.renameTrip).toHaveBeenLastCalledWith('gla', null);
+  });
+});
+
+describe('Library\'s Trips card on a tablet', () => {
+  it('shows the latest trip\'s cover with how many there are and the latest\'s name, or that it is still finding them, and opens Trips', async () => {
+    const onOpen = vi.fn();
+    const { again } = inFrame(<TripsCard trips={undefined} onOpen={onOpen} />);
+    expect(screen.getByRole('button', { name: 'Trips, Finding trips…' }).querySelector('img')).toBeNull();
+    again(<TripsCard trips={trips()} onOpen={onOpen} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Trips, 2 trips · Yellowstone last' }));
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Trips on a tablet (T4)', () => {
+  it('lists the trips beside the map, the latest chosen in a card over it; another is chosen in the list or on the map, and opens beside the list', async () => {
+    const { layer } = show('ios', { tablet: true });
+    const list = within(layer()).getByRole('list', { name: 'Trips' });
+    expect(within(list).getAllByRole('button')[0]).toHaveAttribute('aria-current', 'true');
+    expect(within(layer()).getByRole('region', { name: 'Yellowstone' })).toHaveTextContent('Aug 9 – 12, 2026 · 388 photos');
+    expect(layer()).toHaveTextContent('Grouped by place and date from photos taken away from home in Bozeman, Montana.');
+    const map = within(layer()).getByRole('group', { name: 'Map' });
+    expect(map).toHaveClass('absolute');
+    expect(layer()).not.toHaveTextContent('Each pin is a trip');
+    await userEvent.click(within(map).getByRole('button', { name: /^Glacier National Park/ }));
+    expect(within(map).getByRole('button', { name: /^Glacier National Park/ })).toHaveAttribute('aria-pressed', 'true');
+    const card = within(layer()).getByRole('region', { name: 'Glacier National Park' });
+    await userEvent.click(within(card).getByRole('button', { name: 'Make a folder on Studio iMac' }));
+    expect(api.makeTripFolder).toHaveBeenCalledWith('gla');
+    await userEvent.click(within(card).getByRole('button', { name: 'Open trip' }));
+    expect(within(layer()).getByRole('heading', { level: 2, name: 'Glacier National Park' })).toBeInTheDocument();
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Rename' }));
+    expect(screen.getByRole('dialog', { name: 'Rename trip' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Back' }));
+    expect(within(layer()).getByRole('group', { name: 'Map' })).toBeInTheDocument();
+    await userEvent.click(within(list).getAllByRole('button')[0]);
+    expect(within(layer()).getByRole('region', { name: 'Yellowstone' })).toBeInTheDocument();
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Change' }));
+    expect(screen.getByRole('dialog', { name: 'Home' })).toBeInTheDocument();
+  });
+
+  it('with no computer, the card only opens the trip; with no place in any photo, says why there are no trips', () => {
+    answer = { data: trips({ computer: null }) };
+    const { layer, again } = show('android', { tablet: true });
+    expect(within(within(layer()).getByRole('region', { name: 'Yellowstone' })).getAllByRole('button').map(b => b.textContent)).toEqual(['Open trip']);
+    answer = { data: trips({ home: null, trips: [] }) };
+    again();
+    expect(layer()).toHaveTextContent('None of your photos say where they were taken, so there are no trips yet.');
+    expect(within(layer()).queryByRole('group', { name: 'Map' })).not.toBeInTheDocument();
   });
 });

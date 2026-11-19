@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { expect, message, test } from '../fixtures/app';
 import { noFix, Phone, RECOVERY_KEY, SAFE } from '../fixtures/phone';
-import { phoneSettings, phoneTab, question } from '../fixtures/screens';
+import { leaveSettings, phoneCollection, phoneSettings, phoneTab, question } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
 const backupScreen = (page: import('@playwright/test').Page) => page.getByRole('region', { name: 'Backup', exact: true });
@@ -133,7 +133,7 @@ test.describe('on a phone', () => {
     await expect(page.getByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.').first()).toBeVisible();
   });
 
-  test('Find opens a kind of its own, whose files go in one confirmation, and the storage bar opens Free up space @phone', async ({ page, photos, service }) => {
+  test('Find opens a kind of its own, whose files go in one confirmation, and the storage bar opens Free up space @phone', async ({ page, photos, service, isMobile }) => {
     photos.png('Screenshots/Screenshot 2024-01-02 at 09.15.00.png', { seed: 5 });
     photos.png('Screenshots/Screenshot 2024-01-03 at 18.40.00.png', { seed: 6 });
     photos.picture('IMG_0001.JPG', { seed: 1 });
@@ -152,14 +152,15 @@ test.describe('on a phone', () => {
     // The program answering is a computer's, which removes into _PhotoSense_Removed where a phone uses its own bin.
     expect(photos.exists('Screenshots/Screenshot 2024-01-02 at 09.15.00.png')).toBe(false);
     await expect(page.getByText('Nothing left to review.')).toBeVisible();
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    // Pushed over Clean up on a phone; beside its list on a tablet.
+    if (isMobile) await page.getByRole('button', { name: 'Back', exact: true }).click();
 
     await page.getByRole('button', { name: 'Storage 88% full. Free up space' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Free up space' })).toBeVisible();
     // An iPad at a computer's width.
     await expect(page.getByText(/^(iPhone|iPad) storage is 88% full$/)).toBeVisible();
     await expect(page.getByRole('list', { name: 'What to delete' }).getByRole('checkbox')).toHaveCount(3);
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
+    if (isMobile) await page.getByRole('button', { name: 'Back', exact: true }).click();
     await expect(find).toBeVisible();
   });
 
@@ -276,7 +277,7 @@ test.describe('on a phone', () => {
     await expect(stories).toBeHidden();
   });
 
-  test('Trips lists the trips away from home, shows them on the map, opens one by day, makes its folder on the computer, and Change asks for home @phone', async ({ page, photos }) => {
+  test('Trips lists the trips away from home, shows them on the map, opens one by day, makes its folder on the computer, and Change asks for home @phone', async ({ isMobile, page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2026, 6, 18, 9, 41) });
     photos.picture('IMG_0002.JPG', { seed: 2, taken: new Date(2026, 6, 19, 10, 5) });
     const phone = new Phone();
@@ -299,16 +300,18 @@ test.describe('on a phone', () => {
     const library = page.getByRole('region', { name: 'Library' });
     await expect(library.getByRole('button', { name: 'IMG_0001.JPG' })).toBeVisible({ timeout: 60_000 });
 
-    await library.getByRole('button', { name: 'Trips, 2 trips' }).click();
-    const trips = page.getByRole('dialog', { name: 'Trips' });
+    const trips = await phoneCollection(page, 'Trips', isMobile);
     await expect(trips).toContainText('Grouped by place and date from photos taken away from home in Bozeman, Montana.');
     await expect(trips.getByRole('list', { name: 'Trips' }).getByRole('button')).toHaveText([/^Glacier National ParkJul 18 – 19, 2026 · 12 photos/, /^Big Sky, MontanaMar 1 – 4, 2026 · 214 photos/]);
-    await trips.getByRole('radio', { name: 'Map' }).click();
+    // A phone switches to the map; a tablet shows it beside the list, the trip chosen there opened from its card.
+    if (isMobile) await trips.getByRole('radio', { name: 'Map' }).click();
     const map = trips.getByRole('group', { name: 'Map' });
     await expect(map.getByRole('img', { name: 'Home, Bozeman, Montana' })).toBeVisible();
     await map.getByRole('button', { name: 'Glacier National Park, 12 photos' }).click();
+    if (!isMobile) await trips.getByRole('region', { name: 'Glacier National Park' }).getByRole('button', { name: 'Open trip' }).click();
 
-    const trip = page.getByRole('dialog', { name: 'Glacier National Park' });
+    const layer = (name: string) => (isMobile ? page.getByRole('dialog', { name }) : page.getByRole('region', { name, exact: true }));
+    const trip = layer('Glacier National Park');
     await expect(trip.getByRole('region', { name: 'Day 2 · Jul 19' })).toBeVisible();
     // An iPad at a computer's width.
     await expect(trip).toContainText(/Puts this trip’s copies in Pictures\/PhotoSense\/2026-07 Glacier National Park\. Nothing changes on this (iPhone|iPad)\./);
@@ -330,19 +333,20 @@ test.describe('on a phone', () => {
     await naming.getByRole('button', { name: 'Save' }).click();
     await expect(naming).toBeHidden();
     expect(phone.asked).toContain(`trips/name ${glacier.id} Glacier with Sam`);
-    await expect(page.getByRole('dialog', { name: 'Glacier with Sam' }).getByRole('heading', { name: 'Glacier with Sam', level: 2 })).toBeVisible();
+    await expect(layer('Glacier with Sam').getByRole('heading', { name: 'Glacier with Sam', level: 2 })).toBeVisible();
 
-    await page.getByRole('dialog', { name: 'Glacier with Sam' }).getByRole('button', { name: 'Back' }).click();
+    await layer('Glacier with Sam').getByRole('button', { name: 'Back' }).click();
     await trips.getByRole('button', { name: 'Change' }).click();
     const sheet = page.getByRole('dialog', { name: 'Home' });
     await sheet.getByRole('button', { name: /^Butte, Montana/ }).click();
     await expect(sheet).toBeHidden();
     expect(phone.asked).toContain('trips/home Butte');
-    await trips.getByRole('button', { name: 'Back' }).click();
+    if (isMobile) await trips.getByRole('button', { name: 'Back' }).click();
+    else await phoneTab(page, 'Library');
     await expect(trips).toBeHidden();
   });
 
-  test('Fix dates and places gives wrong dates the day chosen and places from the nearest photo, with Undo, and has the computer name the copies by date @phone', async ({ page }) => {
+  test('Fix dates and places gives wrong dates the day chosen and places from the nearest photo, with Undo, and has the computer name the copies by date @phone', async ({ page, isMobile }) => {
     const phone = new Phone();
     phone.fixes = {
       total: 374, dates: noFix({ count: 32, date: '2000-01-01' }), places: noFix({ count: 342, place: 'Glacier National Park', placeCount: 214 }),
@@ -355,8 +359,7 @@ test.describe('on a phone', () => {
     }));
     await page.goto('/');
     await phoneTab(page, 'Library');
-    await page.getByRole('region', { name: 'Library' }).getByRole('button', { name: 'Needs fixing, 374 items' }).click();
-    const fixes = page.getByRole('dialog', { name: 'Fix dates and places' });
+    const fixes = await phoneCollection(page, 'Needs fixing', isMobile);
     const dates = fixes.getByRole('region', { name: 'Camera clock not set' });
     await expect(dates).toContainText('32 items dated Jan 1, 2000');
     await dates.getByLabel('The date they were taken').fill('2026-03-02');
@@ -378,11 +381,12 @@ test.describe('on a phone', () => {
     await files.getByRole('button', { name: 'Rename 6,941 files' }).click();
     await expect(files).toContainText('6,941 files renamed');
     expect(phone.asked).toContain('fixes/names {"kind":"date"}');
-    await fixes.getByRole('button', { name: 'Back' }).click();
+    if (isMobile) await fixes.getByRole('button', { name: 'Back' }).click();
+    else await phoneTab(page, 'Library');
     await expect(fixes).toBeHidden();
   });
 
-  test('The hidden vault turns on with a recovery key to write down, hides the photos chosen, and puts one back @phone', async ({ page, photos }) => {
+  test('The hidden vault turns on with a recovery key to write down, hides the photos chosen, and puts one back @phone', async ({ page, photos, isMobile }) => {
     photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2023, 11, 27, 23, 34) });
     photos.picture('IMG_0002.JPG', { seed: 2, taken: new Date(2023, 10, 2, 8, 0) });
     const phone = new Phone();
@@ -402,8 +406,7 @@ test.describe('on a phone', () => {
     await phoneTab(page, 'Library');
     const library = page.getByRole('region', { name: 'Library' });
     await expect(library.getByRole('button', { name: 'IMG_0001.JPG' })).toBeVisible({ timeout: 60_000 });
-    await library.getByRole('button', { name: 'Hidden, Turn on' }).click();
-    const hidden = page.getByRole('dialog', { name: 'Hidden' });
+    const hidden = await phoneCollection(page, 'Hidden', isMobile);
     await expect(hidden).toContainText('Keep private photos behind Face ID.');
     await hidden.getByRole('button', { name: 'Turn on Hidden' }).click();
     const key = page.getByRole('dialog', { name: 'Recovery key' });
@@ -431,6 +434,27 @@ test.describe('on a phone', () => {
     expect(phone.asked.filter(a => a.startsWith('vault/')).map(a => a.split(' ')[0])).toEqual(['vault/on', 'vault/hide', 'vault/unhide', 'vault/lock']);
   });
 
+  test('On a tablet, the sidebar lists the collections and Settings, each shown beside it, Settings with Subscription beside it, and Back puts them away @phone', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'A phone shows them over its tabs.');
+    await new Phone().attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const tabs = page.getByRole('navigation', { name: 'Tabs' });
+    const library = page.getByRole('region', { name: 'Library' });
+    await expect(library.getByRole('button', { name: 'Search photos' })).toBeVisible();
+    await expect(library.getByRole('button', { name: /^Trips, / })).toBeVisible();
+    await tabs.getByRole('button', { name: /^Needs fixing/ }).click();
+    await expect(page.getByRole('region', { name: 'Fix dates and places' })).toBeVisible();
+    await expect(tabs.getByRole('button', { name: /^Needs fixing/ })).toHaveAttribute('aria-current', 'page');
+    await tabs.getByRole('button', { name: 'Settings' }).click();
+    const settings = page.getByRole('region', { name: 'Settings', exact: true });
+    await expect(settings.getByRole('region', { name: 'Subscription' })).toBeVisible();
+    await expect(settings.getByRole('button', { name: /\. Subscription$/ })).toHaveAttribute('aria-current', 'true');
+    await page.goBack();
+    await expect(settings).toBeHidden();
+    await expect(library).toBeVisible();
+  });
+
   test('The app icon menu and the widgets open Search, today’s swipe set, or Backup with a backup started @phone', async ({ page }) => {
     const phone = new Phone();
     await phone.attach(page);
@@ -451,7 +475,7 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Clean up' })).toBeVisible();
   });
 
-  test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {
+  test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos, isMobile }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
     const phone = new Phone();
@@ -465,7 +489,8 @@ test.describe('on a phone', () => {
     // Dragged far enough to the left, the photo is marked to delete; nothing is deleted yet.
     const swiping = page.getByRole('dialog', { name: 'Swipe to clean' });
     await expect(swiping).toContainText('1 of 2');
-    await expect(swiping).toContainText('Swipe left to delete, right to keep');
+    // Under the buttons on a phone; on a tablet, the panel beside them says what is marked.
+    await expect(swiping).toContainText(isMobile ? 'Swipe left to delete, right to keep' : '0 items so far · confirmed at the end');
     const card = swiping.getByRole('img', { name: /^IMG_000/ });
     // Hovered first, which waits for the card to have settled where it is drawn.
     await card.hover();
@@ -475,7 +500,7 @@ test.describe('on a phone', () => {
     await page.mouse.move(box.x + box.width / 2 - 160, box.y + box.height / 2, { steps: 8 });
     await page.mouse.up();
     await expect(swiping).toContainText('2 of 2');
-    await expect(swiping).toContainText(/to free from 1 item/);
+    await expect(swiping).toContainText(isMobile ? /to free from 1 item/ : '1 item so far · confirmed at the end');
     await swiping.getByRole('button', { name: 'Undo' }).click();
     await expect(swiping).toContainText('1 of 2');
     await swiping.getByRole('button', { name: 'Delete' }).click();
@@ -603,7 +628,7 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('dialog', { name: 'About PhotoSense' }).getByRole('article')).toContainText(/Version [\d.]+ for iPhone and iPad/);
   });
 
-  test('Organize suggests an album for each place, moves what is in none yet, numbering a name already taken there, and Undo puts it back @phone', async ({ page, photos }) => {
+  test('Organize suggests an album for each place, moves what is in none yet, numbering a name already taken there, and Undo puts it back @phone', async ({ page, photos, isMobile }) => {
     photos.picture('IMG_0001.JPG', { seed: 1, at: PLACES.butte, taken: new Date(2023, 6, 4, 10, 0) });
     photos.picture('IMG_0002.JPG', { seed: 2, at: PLACES.butte, taken: new Date(2022, 6, 4, 10, 0) });
     // Already in an album: left out of the suggestions, and its name taken where the first is going.
@@ -641,7 +666,7 @@ test.describe('on a phone', () => {
     await expect(page.getByText(/^Within 5 mi · /)).toBeVisible();
     const settings = await phoneSettings(page);
     await settings.getByRole('radiogroup', { name: 'Distances' }).getByRole('radio', { name: 'Kilometers' }).click();
-    await settings.getByRole('button', { name: 'Back' }).click();
+    await leaveSettings(page, settings, isMobile, 'Organize');
     await expect(page.getByText(/^Within 5 km · /)).toBeVisible();
   });
 

@@ -9,18 +9,18 @@ import {
 } from '../../lib/library';
 import { checkedAt, gigabytes } from '../../lib/backup';
 import { checkFolderName, resolveNames } from '../../lib/organize';
-import { deviceWord, usePhone } from '../../lib/phone';
+import { deviceWord, usePhone, type Collection } from '../../lib/phone';
 import type { LibraryBackupDto, OrganizeDestination, OrganizeFileDto, OrganizePlaceDto, SafeReviewDto, YearReviewDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton } from './Controls';
 import { CheckIcon, CloseIcon, FolderIcon, LaptopIcon } from './Icons';
 import { MonthHeader, PhotoGrid, SelectionBar } from './PhotoGrid';
-import { RootHeader, Screen } from './Screens';
+import { PlaceContext, RootHeader, Screen } from './Screens';
 import { SearchField, SearchScreen } from './Search';
 import { Viewer } from './Viewer';
 import { FixesScreen, FixesTile } from './Fixes';
 import { HiddenScreen, HiddenTile } from './Hidden';
-import { TripsScreen, TripsTile } from './Trips';
+import { TripsCard, TripsScreen, TripsTile } from './Trips';
 import { YearCard } from './YearInReview';
 import { usePlanGate } from './ProSheet';
 import { ConfirmSheet, Sheet } from './Sheet';
@@ -62,14 +62,18 @@ interface Props {
   readonly removeLocation?: boolean;
   /** Raised each time Search is asked for from outside, as from the app icon's menu: Search opens. */
   readonly searchAsked?: number;
+  /** The collection open, if any: over every tab on a phone, in place of the tab on a tablet. */
+  readonly collection?: Collection;
+  /** Opens a collection, or, with none, closes the one open; without it, Library keeps which is open itself. */
+  onCollection?(collection?: Collection): void;
 }
 
 /**
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter, with the search field
  * above them (26). Tapping one opens it; Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true, searchAsked = 0 }: Props) {
-  const { platform, ios, tablet, words } = usePhone();
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true, searchAsked = 0, collection: given, onCollection }: Props) {
+  const { platform, ios, tablet, words, placeSlot } = usePhone();
   const backedUp = useMemo<BackedUp | undefined>(() => (backup?.computer ? { on: new Set(backup.onComputer), waiting: new Set(backup.waiting) } : undefined), [backup]);
   const [bannerHidden, setBannerHidden] = useState(false);
   const access = usePhotoAccess().data?.access;
@@ -88,9 +92,6 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
     setSearchSeen(searchAsked);
     setSearching(true);
   }
-  const [tripping, setTripping] = useState(false);
-  const [fixing, setFixing] = useState(false);
-  const [hiding, setHiding] = useState(false);
   const trips = useTrips(!selecting).data;
   const fixes = useFixes(!selecting).data;
   const vault = useVault(!selecting).data;
@@ -187,15 +188,49 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
     ? setActing({ files: going, sheet })
     : gate.remove(going.length, 'items', allowed => setActing({ files: largest(going, allowed), sheet })));
 
+  const [own, setOwn] = useState<Collection>();
+  const collection = onCollection ? given : own;
+  const openCollection = onCollection ?? setOwn;
+  const close = () => openCollection(undefined);
+  // A collection: over every tab on a phone; on a tablet where the shell keeps room for it beside the sidebar or rail.
+  const collections = <>
+    {collection === 'fixes' && <FixesScreen notify={notify} onClose={close} />}
+    {collection === 'hidden' && <HiddenScreen files={files} notify={notify} onClose={close} />}
+    {collection === 'trips' && <TripsScreen files={files} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={close} />}
+  </>;
+  const banner = backup?.computer && safe && safe.checked.count > 0 && !bannerHidden && !selecting && (
+    <section aria-label={`On ${backup.computer}`} className={`flex gap-3 rounded-[20px] bg-cell p-4 ${tablet ? 'min-w-0 flex-[1.4]' : 'mx-4 mb-3'}`}>
+      <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-acc-soft text-on-acc-soft"><LaptopIcon /></span>
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div>
+          <p className="text-[15px] font-semibold">{items(safe.checked.count)} {safe.checked.count === 1 ? 'is' : 'are'} on {backup.computer}</p>
+          <p className="text-[13.5px] leading-[1.4] text-t2">Remove them from this {deviceWord(platform, tablet)} to free up to {gigabytes(safe.checked.bytes)}.</p>
+        </div>
+        <button type="button" onClick={onReview} className="h-9 self-start rounded-full bg-acc px-4 text-[14.5px] font-semibold text-on-acc">Review</button>
+      </div>
+      <button type="button" aria-label="Hide" onClick={() => setBannerHidden(true)} className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-t2"><CloseIcon size={16} /></button>
+    </section>
+  );
+  const yearCard = year?.year != null && !selecting && onYear && <YearCard review={year} onWatch={onYear} inRow={tablet} />;
+
   return (
     <Screen label="Library">
-      <RootHeader title={title} subtitle={subtitle} textAction={textAction} onStop={selecting && !ios ? stopSelecting : undefined} noGear={selecting} />
-      {!selecting && <SearchField onOpen={() => setSearching(true)} />}
-      {!selecting && (
-        <div className="grid grid-cols-3 gap-3 px-4 pb-3 md:max-w-[480px]">
-          <TripsTile trips={trips} onOpen={() => setTripping(true)} />
-          <FixesTile fixes={fixes} onOpen={() => setFixing(true)} />
-          <HiddenTile vault={vault} free={gate.plan?.tier === 'free'} onOpen={() => setHiding(true)} />
+      <RootHeader title={title} subtitle={subtitle} textAction={textAction} onStop={selecting && !ios ? stopSelecting : undefined} noGear={selecting}
+        side={tablet && !selecting ? <SearchField side onOpen={() => setSearching(true)} /> : undefined} />
+      {!selecting && !tablet && <SearchField onOpen={() => setSearching(true)} />}
+      {!selecting && !tablet && (
+        <div className="grid grid-cols-3 gap-3 px-4 pb-3">
+          <TripsTile trips={trips} onOpen={() => openCollection('trips')} />
+          <FixesTile fixes={fixes} onOpen={() => openCollection('fixes')} />
+          <HiddenTile vault={vault} free={gate.plan?.tier === 'free'} onOpen={() => openCollection('hidden')} />
+        </div>
+      )}
+      {/* T1's row on a tablet: what is on the computer, Trips, and Year in review while it is due. */}
+      {!selecting && tablet && (
+        <div className="flex gap-3 px-4 pb-4">
+          {banner}
+          <TripsCard trips={trips} onOpen={() => openCollection('trips')} />
+          {yearCard}
         </div>
       )}
       {access === 'selected' && (
@@ -204,20 +239,8 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
           <button type="button" onClick={() => void chooseMore()} className="h-9 shrink-0 rounded-full bg-acc px-4 text-[14.5px] font-semibold text-on-acc">Choose more</button>
         </div>
       )}
-      {backup?.computer && safe && safe.checked.count > 0 && !bannerHidden && !selecting && (
-        <section aria-label={`On ${backup.computer}`} className="mx-4 mb-3 flex gap-3 rounded-[20px] bg-cell p-4">
-          <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-acc-soft text-on-acc-soft"><LaptopIcon /></span>
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <div>
-              <p className="text-[15px] font-semibold">{items(safe.checked.count)} {safe.checked.count === 1 ? 'is' : 'are'} on {backup.computer}</p>
-              <p className="text-[13.5px] leading-[1.4] text-t2">Remove them from this {deviceWord(platform, tablet)} to free up to {gigabytes(safe.checked.bytes)}.</p>
-            </div>
-            <button type="button" onClick={onReview} className="h-9 self-start rounded-full bg-acc px-4 text-[14.5px] font-semibold text-on-acc">Review</button>
-          </div>
-          <button type="button" aria-label="Hide" onClick={() => setBannerHidden(true)} className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-t2"><CloseIcon size={16} /></button>
-        </section>
-      )}
-      {year?.year != null && !selecting && onYear && <YearCard review={year} onWatch={onYear} />}
+      {!tablet && banner}
+      {!tablet && yearCard}
       <div role="group" aria-label="Show" className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-1">
         {libraryFilters(backup?.computer).map(({ id, label }) => (
           <Chip key={id} label={label} count={counts?.[id].toLocaleString()} on={filter === id} onClick={() => { onFilter(id); setShown(LIBRARY_PAGE); }} />
@@ -244,11 +267,10 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
 
       {selecting && <SelectionBar count={chosen.length} onSend={() => { onSend(chosen.map(f => f.id)); stopSelecting(); }} onPut={() => act('put', chosen)} onDelete={() => act('delete', chosen)} />}
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
+      {placeSlot && createPortal(<PlaceContext.Provider value>{collections}</PlaceContext.Provider>, placeSlot)}
       {createPortal(<>
       {searching && <SearchScreen files={files} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setSearching(false)} />}
-      {fixing && <FixesScreen notify={notify} onClose={() => setFixing(false)} />}
-      {hiding && <HiddenScreen files={files} notify={notify} onClose={() => setHiding(false)} />}
-      {tripping && <TripsScreen files={files} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setTripping(false)} />}
+      {!tablet && collections}
       {viewed && (
         <Viewer file={viewed} places={places} root={root!} removeLocation={removeLocation} notify={notify} onClose={() => setViewing(undefined)}
           onSend={() => { onSend([viewed.id]); setViewing(undefined); }} onPut={() => act('put', [viewed])} onDelete={() => act('delete', [viewed])} />

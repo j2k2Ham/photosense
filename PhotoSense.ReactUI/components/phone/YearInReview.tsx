@@ -11,9 +11,9 @@ import { CloseIcon, ShareIcon } from './Icons';
 type Notify = (message: string, kind: ToastKind) => void;
 
 /** 41: the card in Library that opens Year in review, in December and January. */
-export function YearCard({ review, onWatch }: { readonly review: YearReviewDto; onWatch(): void }) {
+export function YearCard({ review, onWatch, inRow }: { readonly review: YearReviewDto; onWatch(): void; /** In a tablet's row of cards, Watch under the words. */ readonly inRow?: boolean }) {
   return (
-    <section aria-label="Year in review" className="mx-4 mb-3 flex items-center gap-3 rounded-[20px] px-4 py-4" style={{ background: 'oklch(0.28 0.05 205)', color: CARD_COLOURS.text }}>
+    <section aria-label="Year in review" className={`flex gap-3 rounded-[20px] px-4 py-4 ${inRow ? 'min-w-0 flex-1 flex-col items-start' : 'mx-4 mb-3 items-center'}`} style={{ background: 'oklch(0.28 0.05 205)', color: CARD_COLOURS.text }}>
       <div className="min-w-0 flex-1">
         <p className="text-[12.5px] font-semibold" style={{ color: CARD_COLOURS.line }}>Year in review</p>
         <p className="text-[18px] font-bold">Your {review.year} in photos</p>
