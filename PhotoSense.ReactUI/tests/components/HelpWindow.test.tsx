@@ -44,7 +44,7 @@ describe('the guide itself', () => {
   });
 
   it("has a topic for each part of PhotoSense on an iPhone or iPad and on Android, with no button to a computer's screens", () => {
-    const titles = ['Getting started', 'Library', 'Clean up', 'Organize', 'Backing up to your computer', 'Removed photos and deleting permanently', 'The free plan and Pro', 'Settings', 'If something looks wrong'];
+    const titles = ['Getting started', 'Library', 'Clean up', 'Organize', 'Backing up to your computer', 'Cloud storage and your own locations', 'Removed photos and deleting permanently', 'The free plan and Pro', 'Settings', 'If something looks wrong'];
     for (const platform of ['ios', 'android'] as const) {
       const phone = guideFor(platform);
       expect(phone.map(t => t.title)).toEqual(titles);
@@ -134,7 +134,14 @@ describe('the guide itself', () => {
       expect(ids('favorite', platform)).toContain('library');
       expect(ids('gps', platform)).toContain('library');
       expect(ids('location when sharing', platform)).toContain('phone-settings');
+      expect(ids('google drive', platform)).toEqual(['locations', 'phone-settings']);
+      expect(ids('nas', platform)).toContain('locations');
+      expect(ids('backblaze', platform)).toEqual(['locations']);
+      expect(ids('webdav', platform)).toEqual(['locations']);
     }
+    // Where keys are kept, in each phone's words.
+    expect(ids('keychain', 'ios')).toContain('locations');
+    expect(ids('keystore', 'android')).toContain('locations');
     // What is in a photo is named by each phone's own recognition.
     expect(ids('ml kit', 'android')).toContain('library');
     expect(ids('ml kit', 'ios')).toEqual([]);
@@ -228,7 +235,7 @@ describe('the help window', () => {
   it("on a phone shows the phone's own topics, in its words, with no button to a computer's screens", async () => {
     open('android');
     expect(topics().map(t => t.firstElementChild!.textContent)).toEqual(guideFor('android').map(t => t.title));
-    expect(page()).toHaveTextContent('1 of 9');
+    expect(page()).toHaveTextContent('1 of 10');
     expect(page()).toHaveTextContent('The first launch');
     await userEvent.click(topic('Removed photos and deleting permanently'));
     expect(page()).toHaveTextContent('Pictures/PhotoSense Removed');

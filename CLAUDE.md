@@ -25,8 +25,8 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 | Folder | What is in it |
 |---|---|
 | `PhotoSense.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions`, and the rules that need nothing else: what counts as the same picture (`Matching/`), file names (`NameRules`, `PhotoNaming`), which files a scan takes in. No packages |
-| `PhotoSense.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`), the hidden vault (`Vault/`); registered by `AddPhotoSenseApplication` |
-| `PhotoSense.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`); registered by `AddPhotoSenseCore`, with the phones' composition (`AddPhotoSensePhone`, `AddPhotoSenseAndroid`) |
+| `PhotoSense.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`), the hidden vault (`Vault/`), backing up to cloud storage and servers (`Locations/`); registered by `AddPhotoSenseApplication` |
+| `PhotoSense.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`), the cloud services and servers a phone backs up to (`Locations/`); registered by `AddPhotoSenseCore`, with the phones' composition (`AddPhotoSensePhone`, `AddPhotoSenseAndroid`) |
 | `PhotoSense.Desktop` | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` |
 | `PhotoSense.Api` | The endpoints apart from any host, the route table `PhotoSenseRoutes`, `InProcessApi` for the phones |
 | `PhotoSense.Server` | The service as one ASP.NET Core program, serving the page too when built in; `PhotoSenseServer.Build` is its one public entry |

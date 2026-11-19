@@ -455,6 +455,57 @@ test.describe('on a phone', () => {
     await expect(library).toBeVisible();
   });
 
+  test('Settings turns on a cloud service by signing in, connects a server the person names and renames, and Backup backs up to them @phone', async ({ page, isMobile }) => {
+    const phone = new Phone();
+    await phone.attach(page);
+    await page.goto('/');
+    const settings = await phoneSettings(page);
+
+    // A cloud service: its switch signs in, as the system's sheet would, and it is on.
+    const drive = settings.getByRole('switch', { name: 'Google Drive' });
+    await expect(drive).not.toBeChecked();
+    await settings.locator('label').filter({ has: page.getByRole('switch', { name: 'Google Drive' }) }).click();
+    await expect(message(page, 'Google Drive is on.')).toBeVisible();
+    await expect(drive).toBeChecked();
+    await expect(settings.getByRole('button', { name: /^Google Drive.*alex\.m@example\.com/ })).toBeVisible();
+
+    // A server: named by the person, checked, and on.
+    await settings.getByRole('button', { name: /^Connect to server/ }).click();
+    const connect = page.getByRole('dialog', { name: 'Connect to server' });
+    await connect.getByRole('radio', { name: 'WebDAV' }).click();
+    await connect.getByRole('textbox', { name: 'Name', exact: true }).fill('Home NAS');
+    await connect.getByRole('textbox', { name: 'Server URL' }).fill('https://nas.local/dav');
+    await connect.getByRole('textbox', { name: 'User name' }).fill('alex');
+    await connect.getByLabel('Password').fill('not-a-real-password');
+    await connect.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(message(page, 'Home NAS is connected and on.')).toBeVisible();
+    expect(phone.asked.find(a => a.startsWith('locations/connect'))).toContain('"kind":"webDav","name":"Home NAS"');
+    await expect(settings.getByRole('switch', { name: 'Home NAS' })).toBeChecked();
+
+    // Renamed whenever the person likes, from its own page.
+    await settings.getByRole('button', { name: /^Home NAS/ }).click();
+    await page.getByRole('dialog', { name: 'Home NAS' }).getByRole('button', { name: 'Rename' }).click();
+    const naming = page.getByRole('dialog', { name: 'Rename location' });
+    await naming.getByLabel('Name').fill('Attic NAS');
+    await naming.getByRole('button', { name: 'Save' }).click();
+    await expect(message(page, 'Renamed Attic NAS.')).toBeVisible();
+    const attic = page.getByRole('dialog', { name: 'Attic NAS' });
+    await expect(attic.getByText('Files at Attic NAS are not deleted.', { exact: false })).toBeVisible();
+    await attic.getByRole('button', { name: 'Back' }).click();
+    await expect(settings.getByRole('switch', { name: 'Attic NAS' })).toBeChecked();
+
+    // Backup lists the two, and backs up to both, each copy checked.
+    await leaveSettings(page, settings, isMobile, 'Backup');
+    if (isMobile) await phoneTab(page, 'Backup');
+    const card = page.getByRole('region', { name: 'Locations' });
+    await expect(card).toContainText('Google Drive');
+    await expect(card).toContainText('Attic NAS');
+    await card.locator('xpath=..').getByRole('button', { name: 'Back up now' }).click();
+    await expect(message(page, 'Backing up to 2 locations. Every copy is checked.')).toBeVisible();
+    expect(phone.asked.some(a => a.startsWith('locations/backup'))).toBe(true);
+    await expect(card).toContainText('2 files · backed up today');
+  });
+
   test('The app icon menu and the widgets open Search, today’s swipe set, or Backup with a backup started @phone', async ({ page }) => {
     const phone = new Phone();
     await phone.attach(page);
@@ -568,7 +619,7 @@ test.describe('on a phone', () => {
     await settings.getByRole('button', { name: 'Help' }).click();
     const help = page.getByRole('dialog', { name: 'Help' });
     const topics = help.getByRole('navigation', { name: 'Topics' }).getByRole('button');
-    await expect(topics).toHaveCount(9);
+    await expect(topics).toHaveCount(10);
     await expect(help.getByRole('article')).toHaveAccessibleName('Getting started');
     await expect(help.getByRole('article')).toContainText('The first launch');
     // An iPhone's words: albums, PhotoSense Removed and Recently Deleted; nothing of a computer's screens.

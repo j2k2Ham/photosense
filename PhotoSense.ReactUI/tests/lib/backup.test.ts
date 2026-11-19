@@ -54,6 +54,7 @@ describe('the backup card', () => {
     expect(automaticNote('android', 'Studio iMac', true)).toBe('Backups run on Wi-Fi about once an hour while this phone is charging, with PhotoSense closed too, and whenever it is open.');
     expect(automaticNote('android', 'Studio iMac', false)).toBe('Backups run on Wi-Fi about once an hour, with PhotoSense closed too, and whenever it is open.');
     expect(automaticNote('ios', 'Studio iMac', true)).toBe('A backup runs whenever PhotoSense is open and Studio iMac is on the same Wi-Fi.');
+    expect(automaticNote('ios', null, true)).toBe('A backup runs whenever PhotoSense is open and on Wi-Fi.');
   });
 
   it('says that everything is there, and since when', () => {

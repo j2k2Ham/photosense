@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackupScreen, SafeToDelete, SpaceFreed } from '../../../components/phone/Backup';
-import { BACKUP_SETTINGS, backupState, plan, safeReview } from '../../fixtures';
+import { BACKUP_SETTINGS, backupState, location, locations, plan, safeReview } from '../../fixtures';
 import { frame, gate, inFrame } from './frame';
 import type { PlanGate } from '../../../components/phone/ProSheet';
 
@@ -221,5 +221,22 @@ describe('Space freed', () => {
     expect(screen.queryByText('Before')).not.toBeInTheDocument();
     again(<SpaceFreed removed={{ ...removed, left: 1, bytes: 200e9 }} partial computer="Studio iMac" folder="Pictures/PhotoSense" onPro={vi.fn()} onDone={vi.fn()} />);
     expect(screen.getByRole('dialog')).toHaveTextContent('Now0 of 128 GB');
+  });
+});
+
+describe('Backup with locations', () => {
+  it('with no computer but another location on, lists the locations and offers automatic backup, the folder left to the computer', () => {
+    const drive = location({ on: true, connected: true, account: 'alex.m@gmail.com' });
+    inFrame(<BackupScreen state={backupState({ stage: 'unpaired', computer: null, folder: null })} notify={vi.fn()} onChoose={vi.fn()} onPair={vi.fn()}
+      locations={locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' }), drive] })} onSettings={vi.fn()} />);
+    expect(within(screen.getByRole('region', { name: 'Locations' })).getByText('Google Drive')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Automatic backup' })).toHaveTextContent('A backup runs whenever PhotoSense is open and on Wi-Fi.');
+    expect(screen.queryByRole('button', { name: /^Folder/ })).not.toBeInTheDocument();
+  });
+
+  it('with no computer and nothing else on, offers no automatic backup', () => {
+    inFrame(<BackupScreen state={backupState({ stage: 'unpaired', computer: null, folder: null })} notify={vi.fn()} onChoose={vi.fn()} onPair={vi.fn()}
+      locations={locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' })] })} onSettings={vi.fn()} />);
+    expect(screen.queryByRole('region', { name: 'Automatic backup' })).not.toBeInTheDocument();
   });
 });

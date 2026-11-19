@@ -10,7 +10,7 @@ import type { Place, Platform, TabId } from '../../../lib/phone';
 import type { AppSettings } from '../../../lib/settings';
 import { frame, inFrame, width } from './frame';
 import { group, groupsPage, photo } from './groups';
-import { backupState, plan, safeReview, swipeCard, swipeState } from '../../fixtures';
+import { backupState, location, locations, plan, safeReview, swipeCard, swipeState } from '../../fixtures';
 import type { PlanDto, SwipeStateDto } from '../../../types';
 
 // The phone has said PhotoSense may see everything; what comes before that is tested with the first run. Clean up,
@@ -23,6 +23,8 @@ const api = vi.hoisted(() => ({ openedNotice: vi.fn(async (): Promise<{ opens: s
   useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }, { category: 'screenshots', count: 0, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
   useCategoryPhotos: vi.fn(() => ({ data: [] })),
   useTrips: vi.fn((): { data?: unknown } => ({})), useFixes: vi.fn((): { data?: unknown } => ({})),
+  useLocations: vi.fn((): { data?: unknown } => ({})), locationsIfDue: vi.fn(async () => undefined), sendToLocation: vi.fn(async () => undefined),
+  useLocationDetails: vi.fn(() => ({})),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 beforeEach(() => {
@@ -505,7 +507,7 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(within(tabs).getByRole('button', { name: 'Organize' }));
     expect(screen.getByText('Sort Phone into folders by place and date')).toBeInTheDocument();
     await userEvent.click(within(tabs).getByRole('button', { name: 'Backup' }));
-    expect(screen.getByText('Copies photos and videos to your computer over Wi-Fi')).toBeInTheDocument();
+    expect(screen.getByText('Copies photos and videos to your computer, cloud storage and your own locations')).toBeInTheDocument();
     await userEvent.click(within(tabs).getByRole('button', { name: 'Library' }));
     expect(screen.getByRole('heading', { name: 'Library' })).toBeInTheDocument();
 
@@ -541,6 +543,64 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(screen.getByRole('button', { name: 'IMG_2.JPG' }));
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
     expect(notify).toHaveBeenLastCalledWith('Pair with a computer first: in Settings, choose Computer.', 'error');
+    api.useBackup.mockReturnValue({});
+  });
+
+  it('with other locations on, Send asks where to: one of them is sent to and every copy checked, then what was sent offers to delete it', async () => {
+    width(false);
+    api.useBackup.mockReturnValue({ data: backupState() });
+    const archive = location({ id: 's1', kind: 'amazonS3', name: 'Archive', on: true, connected: true, settings: { bucket: 'photos' } });
+    let listed = locations({ locations: [...locations().locations, archive] });
+    api.useLocations.mockImplementation(() => ({ data: listed }));
+    api.startBackup.mockClear();
+    api.locationsIfDue.mockClear();
+    const { rerender } = render(<App start="library" />);
+    await waitFor(() => expect(api.locationsIfDue).toHaveBeenCalledOnce());
+    const send = async (name: string) => {
+      await userEvent.click(screen.getByRole('button', { name: 'Select' }));
+      await userEvent.click(screen.getByRole('button', { name }));
+      await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Send' }));
+      return screen.getByRole('dialog', { name: 'Send to' });
+    };
+    // Put away, nothing is sent.
+    await userEvent.click(within(await send('IMG_1.JPG')).getByRole('button', { name: 'Done' }));
+    expect(api.sendToLocation).not.toHaveBeenCalled();
+    let sheet = await send('IMG_1.JPG');
+    await userEvent.click(within(sheet).getByRole('radio', { name: /Archive/ }));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send 1 item to Archive' }));
+    expect(api.sendToLocation).toHaveBeenCalledWith('s1', ['IMG_1']);
+    expect(notify).toHaveBeenLastCalledWith('Sending 1 item to Archive. Every copy is checked.', 'ok');
+    // Once sent, what was sent, and Done puts it away.
+    listed = { ...listed, activity: { task: 'send', stage: 'ready', locations: [], sent: { locationId: 's1', items: 1, matched: 1, bytes: 5 } } };
+    rerender(<App start="library" />);
+    const sent = await screen.findByRole('dialog', { name: 'Sent' });
+    expect(sent).toHaveTextContent('1 item sent to Archive');
+    await userEvent.click(within(sent).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Sent' })).not.toBeInTheDocument();
+    // The computer chosen, it backs up there as before; the one chosen last is offered first.
+    sheet = await send('IMG_2.JPG');
+    expect(within(sheet).getByRole('radio', { name: /Archive/ })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(sheet).getByRole('radio', { name: /Studio iMac/ }));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send 1 item to Studio iMac' }));
+    expect(api.startBackup).toHaveBeenCalledWith(['IMG_2']);
+    // Refused, it says why.
+    api.sendToLocation.mockRejectedValueOnce(new Error('Turn Archive on first.'));
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Library' }));
+    sheet = await send('IMG_2.JPG');
+    await userEvent.click(within(sheet).getByRole('radio', { name: /Archive/ }));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send 1 item to Archive' }));
+    expect(notify).toHaveBeenLastCalledWith('Turn Archive on first.', 'error');
+    // The Backup tab lists the locations, and Settings their switches.
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: 'Backup' }));
+    expect(within(screen.getByRole('region', { name: 'Locations' })).getByText('Archive')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Choose locations' }));
+    expect(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('switch', { name: 'Archive' })).toBeChecked();
+    // A computer not paired yet is paired from its switch.
+    listed = locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' }), archive] });
+    rerender(<App start="library" />);
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('switch', { name: 'Computer' }));
+    expect(await screen.findByRole('region', { name: 'Connect your computer' })).toBeInTheDocument();
+    api.useLocations.mockReturnValue({});
     api.useBackup.mockReturnValue({});
   });
 

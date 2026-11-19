@@ -4,10 +4,13 @@ import type { PlanDto, PlanKind, PlanOfferDto } from '../types';
 export const PLAN_KINDS: readonly PlanKind[] = ['yearly', 'monthly', 'lifetime', 'family'];
 
 /** What opened the Pro sheet, which says why it is there. */
-export type ProReason = 'limit' | 'auto' | 'compress' | 'search' | 'fix' | 'vault' | 'none';
+export type ProReason = 'limit' | 'auto' | 'compress' | 'search' | 'fix' | 'vault' | 'location' | 'server' | 'none';
 
 /** What Pro adds, as the Pro sheet lists it. */
 export const PRO_FEATURES: readonly string[] = ['Unlimited removals every day', 'Automatic backup to your computer', 'Video compression'];
+
+/** What Pro adds, as the Pro sheet lists it when it opens for a second location or Connect to server. */
+export const LOCATION_FEATURES: readonly string[] = ['Back up to as many locations as you like', 'Your own servers: S3, Azure, WebDAV and SFTP', 'Automatic backup', 'Unlimited removals every day'];
 
 /** What a trial includes, as the Subscription page lists it. */
 export const TRIAL_FEATURES: readonly string[] = [
@@ -85,6 +88,8 @@ export interface ProAsk {
   /** For the limit: how many were chosen, and what they are called ("items", "duplicates"). */
   readonly count?: number;
   readonly label?: string;
+  /** For a second location: the one that is on. */
+  readonly current?: string;
 }
 
 /** The line at the top of the Pro sheet that says why it opened; none when it was opened for its own sake. */
@@ -104,6 +109,8 @@ export function contextLine(ask: ProAsk, plan: Pick<PlanDto, 'leftToday' | 'remo
     case 'search': return 'Searching for what is in photos is part of Pro. Searching by date and place stays free.';
     case 'fix': return 'Fixing dates, places and file names is part of Pro.';
     case 'vault': return 'The hidden vault is part of Pro.';
+    case 'location': return `The free plan backs up to one location, and ${ask.current} is on. Pro adds as many as you like.`;
+    case 'server': return 'Connecting your own server, like Amazon S3, Azure or a home NAS, is part of Pro.';
     default: return undefined;
   }
 }

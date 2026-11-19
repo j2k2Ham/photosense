@@ -29,7 +29,7 @@ public sealed class WidgetsTests : IDisposable
     {
         _phone = new ServiceCollection()
             .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(),
-                _computers, _device, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), _widgets, "Jamie's iPhone", In("Photo Library"), new TcpTransferListener(0))
+                _computers, _device, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), _widgets, new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", In("Photo Library"), new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()

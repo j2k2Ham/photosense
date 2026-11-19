@@ -1137,6 +1137,101 @@ export const GUIDE: GuideTopic[] = [
     ],
   },
   {
+    id: 'locations',
+    only: PHONES,
+    title: 'Cloud storage and your own locations',
+    summary: 'Backing up to Google Drive, OneDrive, Dropbox, Box or a server of your own, beside or instead of your computer.',
+    keywords: ['cloud', 'google drive', 'onedrive', 'dropbox', 'box', 'server', 'nas', 's3', 'amazon', 'azure', 'backblaze', 'wasabi', 'webdav', 'nextcloud', 'sftp', 'ssh', 'location', 'locations', 'sign in', 'rename', 'send to', 'check all backups'],
+    sections: [
+      {
+        text: [
+          'Each place that keeps a copy of your photos and videos is a **location**: your computer, Google Drive, OneDrive, Dropbox, Box, and any server you connect. They are set up in **Settings**, under **Locations**, and PhotoSense backs up to every one that is on.',
+          'PhotoSense never sees your password: signing in happens on the service’s own page, and PhotoSense may reach only its own folder there. Your photos go only to the locations you turn on, never to PhotoSense.',
+        ],
+      },
+      {
+        heading: 'Turning on cloud storage',
+        steps: [
+          'In **Settings**, under **Locations**, turn on **Google Drive**, **OneDrive**, **Dropbox** or **Box**.',
+          'The service’s sign-in page opens. Sign in and allow PhotoSense; you come back here, and the location is on.',
+          'Backups go to **My Drive/PhotoSense** on Google Drive, **Apps/PhotoSense** on OneDrive and Dropbox, and a folder named **PhotoSense** on Box.',
+        ],
+        tips: [
+          'Turning a location off keeps you signed in, and turning it on again backs up there at once. Nothing there is deleted.',
+        ],
+      },
+      {
+        heading: 'Connect to server (Pro)',
+        steps: [
+          'In **Settings**, under **Locations**, tap **Connect to server…**.',
+          'Choose the kind: **Amazon S3**, **S3-compatible** (Backblaze B2, Wasabi, Cloudflare R2, MinIO and the like), **Azure Blob**, **WebDAV** (Nextcloud, ownCloud and most NAS drives) or **SFTP** (any computer you reach over SSH).',
+          'Give it a **Name** of your own, and fill in how to reach it: the bucket or container, the address, and the keys or password.',
+          'Tap **Connect**. PhotoSense lists the folder, writes a test file, reads it back, compares its checksum and deletes it. Only then is the location added and turned on; if something is wrong, **Could not connect** says what to change.',
+        ],
+        tips: [
+          'Use a key that reaches only the bucket or folder PhotoSense uses, as the screen suggests.',
+          'SMB shares are not offered: reach a NAS by WebDAV or SFTP instead.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'Keys and passwords are kept in the Keychain on this device and are sent only to their location.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'Keys and passwords are kept in the Android Keystore on this device and are sent only to their location.',
+        ],
+      },
+      {
+        heading: 'A location’s own page',
+        tips: [
+          'Tap a location in **Settings** for its page: how it stands, its storage where the service says, its folder, how many copies are checked, the last backup and the last check.',
+          'A server you connected shows its type and how it is reached, its keys masked. **Rename** changes its name at any time; **Edit** changes how it is reached, and is checked again before it is saved.',
+          '**Turn off** stops backing up there. **Disconnect** signs out of a cloud service; **Remove location** removes a server. None of them deletes anything there, but photos backed up only there stop counting as safe to delete.',
+        ],
+      },
+      {
+        heading: 'Backing up and checking',
+        tips: [
+          '**Backup** lists the locations that are on, with how far each has got. **Back up now** backs up to them all; **Pause** stops, and what is there stays there.',
+          'A copy counts as backed up only when it is checked: by the checksum the location keeps of it, or, where it keeps none (WebDAV and SFTP), by reading it back once. **Check all backups** checks every copy again.',
+          'Under **Safe to delete** in Settings, **Checked on** sets whether a photo counts as backed up once its copy is checked on **Any location** or on **2 locations**.',
+        ],
+      },
+      {
+        heading: 'Sending to a location',
+        steps: [
+          'In Library, choose some photos and tap **Send**.',
+          'With other locations on, **Send to** asks where: your computer, or a location. The one chosen last is offered first.',
+          'Tap **Send**. Once every copy is checked, **Sent** says how many arrived and offers to delete them from this device; the copies at the location stay. Any that did not match stay here.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'Deleted photos go to **Recently Deleted** for 30 days, after iOS asks you. If iCloud Photos is on, deleting them here also deletes them from iCloud and your other Apple devices.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'Deleted photos go to the phone’s bin for 30 days, after Android asks you.',
+        ],
+      },
+      {
+        heading: 'The free plan and Pro',
+        tips: [
+          'The free plan backs up to one location at a time. Turning on a second offers Pro, or **Use … instead**, which turns the first off and the new one on.',
+          'Pro backs up to as many locations as you like, and adds **Connect to server**. If Pro ends, the location used last stays on and nothing is deleted anywhere.',
+          'Deleting after a send counts toward the day’s free removals.',
+        ],
+      },
+    ],
+  },
+  {
     id: 'phone-removed',
     only: PHONES,
     title: 'Removed photos and deleting permanently',
@@ -1236,6 +1331,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'Your plan, at the top, opens **Subscription**.',
           '**Computer**: the computer this device is paired with, and its **Backup folder**; or **Connect your computer**.',
+          '**Locations**: your computer, Google Drive, OneDrive, Dropbox and Box, each with a switch, and **Connect to server…** to add a server of your own. Tap one for its own page. **Safe to delete**: **Checked on** any location, or on 2.',
           '**Theme**: **Auto** follows the phone’s own light or dark setting; **Dark** or **Light** keeps one. **Distances**: miles or kilometers, for Organize.',
           '**Clean up**: **Low-storage alerts**, a notification when less than a tenth of the storage is free, at most once a week.',
           '**Photo access** says what PhotoSense may see, and opens the phone’s own settings for PhotoSense to change it. **Scan again** reads your library again.',

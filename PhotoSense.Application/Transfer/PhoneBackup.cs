@@ -135,6 +135,7 @@ public sealed class PhoneBackup
     private readonly TimeProvider _clock;
     private readonly object _lock = new();
     private readonly IVaultFiles _vault;
+    private readonly ILocationStore _locations;
     private Run? _run;
     private CancellationTokenSource? _stop;
 
@@ -173,10 +174,12 @@ public sealed class PhoneBackup
     /// <param name="root">The library's folder.</param>
     /// <param name="clock">How long the computer may stay silent, and when things happen.</param>
     /// <param name="vault">The hidden vault's files, which a backup sends as they are kept, sealed.</param>
+    /// <param name="locations">The other places the phone backs up to, whose checked copies count toward Safe to delete too, and whether the computer is on.</param>
     public PhoneBackup(IBackupLedger ledger, IComputerFinder finder, IPairingStore pairs, OrganizeLibrary library, IPhotoFileSystem files, Subscription plan, DailyRemovals removals,
-        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault)
+        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault, ILocationStore locations)
     {
         _vault = vault;
+        _locations = locations;
         _ledger = ledger;
         _finder = finder;
         _pairs = pairs;
@@ -231,7 +234,8 @@ public sealed class PhoneBackup
         var computer = await _ledger.ComputerAsync(ct);
         var settings = await _ledger.SettingsAsync(ct);
         var (items, on) = await ItemsAsync(ct);
-        var safe = items.Where(i => On(i, on)).ToList();
+        var backedUp = await BackedUpAsync(items, on, ct);
+        var safe = items.Where(backedUp).ToList();
         var favorites = await _favorites.FavoritesAsync(ct);
         var since = _clock.GetLocalNow().DateTime - Recently;
         bool Favorite(PhotoItem i) => i.Files.Any(f => favorites.Contains(f.Path));
@@ -249,9 +253,10 @@ public sealed class PhoneBackup
     {
         var settings = await _ledger.SettingsAsync(ct);
         var (items, on) = await ItemsAsync(ct);
+        var backedUp = await BackedUpAsync(items, on, ct);
         var favorites = await _favorites.FavoritesAsync(ct);
         var since = _clock.GetLocalNow().DateTime - Recently;
-        return [.. items.Where(i => On(i, on))
+        return [.. items.Where(backedUp)
             .Where(i => !(settings.KeepFavorites && i.Files.Any(f => favorites.Contains(f.Path))) && !(settings.KeepRecent && i.Main.Date >= since))
             .OrderByDescending(i => i.Bytes)
             .Select(i => new RemovableItem([.. i.Files.Select(f => f.Path)], i.Bytes))];
@@ -431,7 +436,7 @@ public sealed class PhoneBackup
     {
         var settings = await _ledger.SettingsAsync(ct);
         lock (_lock) if (_run is { Stage: BackupStage.Running }) return false;
-        if (!settings.Automatic || (settings.OnlyWhileCharging && !_device.Charging) || await _ledger.ComputerAsync(ct) is null) return false;
+        if (!settings.Automatic || (settings.OnlyWhileCharging && !_device.Charging) || await _ledger.ComputerAsync(ct) is null || !await ComputerOnAsync(ct)) return false;
         if (!(await _plan.CurrentAsync(ct)).Pro) return false;
         var (items, on) = await ItemsAsync(ct);
         if (!items.Any(i => Waits(i, on, settings))) return false;
@@ -677,6 +682,24 @@ public sealed class PhoneBackup
     }
 
     private static bool On(PhotoItem item, HashSet<string> on) => item.Files.All(f => on.Contains(f.Id));
+
+    // The computer is on unless the person turned it off among the locations.
+    private async Task<bool> ComputerOnAsync(CancellationToken ct)
+        => (await _locations.ListAsync(ct)).FirstOrDefault(l => l.Kind == LocationKind.Computer)?.On != false;
+
+    // Whether a picture or video counts as backed up: every file of it checked on as many locations that are on as the
+    // person chose (any one, or two), the computer among them while it is on.
+    private async Task<Func<PhotoItem, bool>> BackedUpAsync(List<PhotoItem> items, HashSet<string> onComputer, CancellationToken ct)
+    {
+        var computerOn = await ComputerOnAsync(ct);
+        var need = await _locations.CountAtAsync(ct);
+        var others = new List<IReadOnlyDictionary<string, LocationCopy>>();
+        foreach (var location in (await _locations.ListAsync(ct)).Where(l => l.On && l.Kind != LocationKind.Computer)) others.Add(await _locations.CopiesAsync(location.Id, ct));
+        var sums = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var file in items.SelectMany(i => i.Files)) sums[file.Id] = await ChecksumAsync(file, ct);
+        bool Held(IReadOnlyDictionary<string, LocationCopy> copies, LibraryFile f) => sums.GetValueOrDefault(f.Id) is { } sha && copies.ContainsKey(sha);
+        return i => (computerOn && On(i, onComputer) ? 1 : 0) + others.Count(copies => i.Files.All(f => Held(copies, f))) >= need;
+    }
 
     private static bool Waits(PhotoItem item, HashSet<string> on, BackupSettings settings) => !On(item, on) && (settings.IncludeVideos || !item.Main.IsVideo);
 

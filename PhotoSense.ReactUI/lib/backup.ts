@@ -53,10 +53,9 @@ export function backupButton(s: BackupStateDto): 'Back up now' | 'Pause' | 'Resu
 }
 
 /** What Automatic backup's note says of when backups run by themselves: Android's WorkManager wakes the app on Wi-Fi; an iPhone backs up while PhotoSense is open. */
-export function automaticNote(platform: Platform, computer: string, onlyWhileCharging: boolean): string {
-  return platform === 'android'
-    ? `Backups run on Wi-Fi about once an hour${onlyWhileCharging ? ' while this phone is charging' : ''}, with PhotoSense closed too, and whenever it is open.`
-    : `A backup runs whenever PhotoSense is open and ${computer} is on the same Wi-Fi.`;
+export function automaticNote(platform: Platform, computer: string | null, onlyWhileCharging: boolean): string {
+  if (platform === 'android') return `Backups run on Wi-Fi about once an hour${onlyWhileCharging ? ' while this phone is charging' : ''}, with PhotoSense closed too, and whenever it is open.`;
+  return computer ? `A backup runs whenever PhotoSense is open and ${computer} is on the same Wi-Fi.` : 'A backup runs whenever PhotoSense is open and on Wi-Fi.';
 }
 
 /** How far a backup has got, out of a hundred. */

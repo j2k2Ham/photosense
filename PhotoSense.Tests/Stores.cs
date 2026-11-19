@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure;
 
 namespace PhotoSense.Tests;
@@ -50,6 +51,9 @@ internal static class Stores
 
     /// <summary>The home chosen for Trips, kept in <paramref name="db"/>.</summary>
     public static ITripStore TripHome(this LiteDatabase db) => On(db).GetRequiredService<ITripStore>();
+
+    /// <summary>A phone's backup locations and what each holds, on this database.</summary>
+    public static ILocationStore Locations(this LiteDatabase db) => On(db).GetRequiredService<ILocationStore>();
     /// <summary>What has been read from each file for Organize.</summary>
     public static IMediaDetailsStore MediaDetails(this LiteDatabase db) => On(db).GetRequiredService<IMediaDetailsStore>();
 }

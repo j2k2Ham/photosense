@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useEffectEvent, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Place, type Platform, type TabId } from '../../lib/phone';
-import { backUpIfDue, eraseRemoved, openedNotice, openPhotoSettings, startBackup, useBackup, useFixes, useLibraryBackup, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useTrips, useYear } from '../../lib/apiClient';
+import { backUpIfDue, eraseRemoved, locationsIfDue, openedNotice, openPhotoSettings, sendToLocation, startBackup, useBackup, useFixes, useLibraryBackup, useLocations, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useTrips, useYear } from '../../lib/apiClient';
+import { LocationsGroup, SendToSheet, SentSheet } from './Locations';
+import type { LocationDto } from '../../types';
 import { formatBytes } from '../../lib/format';
 import { deviceWord } from '../../lib/phone';
 import type { ResultCard } from '../../lib/shareCard';
@@ -112,14 +114,43 @@ export function PhoneApp(props: Props) {
   const paired = !!backup?.computer;
   const libraryBackup = useLibraryBackup(ready && paired).data;
   const safe = useSafeReview((ready && paired) || sheet === 'safe').data;
-  useEffect(() => { if (ready) void backUpIfDue().catch(() => undefined); }, [ready]);
+  useEffect(() => {
+    if (!ready) return;
+    void backUpIfDue().catch(() => undefined);
+    void locationsIfDue().catch(() => undefined);
+  }, [ready]);
+  // The places backups go other than the computer; sending to one, and what a send did once it is done.
+  const locations = useLocations(ready).data;
+  const [sending, setSending] = useState<string[]>();
+  const [sentTo, setSentTo] = useState<string>();
+  // The location chosen last, offered first next time.
+  const [chosenLast, setChosenLast] = useState<string>();
+  const sent = locations?.activity?.task === 'send' && locations.activity.stage === 'ready' ? locations.activity.sent : null;
+  const sentLocation = sent && sent.locationId === sentTo ? locations!.locations.find(l => l.id === sentTo) : undefined;
   // Swipe to clean: today's set, asked once the tabs show; swiping and its summary cover everything while they show.
   const swipe = useSwipe(ready).data;
   const [swiping, setSwiping] = useState<'cards' | 'summary'>();
   const stopSwiping = () => setSwiping(swipe && marked(swipe).length > 0 ? 'summary' : undefined);
   useBackLayer(sheet === 'pair', () => setSheet(undefined));
+  // Send now goes to the computer, or, with other locations on, to the one chosen.
+  const sendable = locations?.locations.filter(l => l.on) ?? [];
   async function send(ids: string[]) {
+    if (sendable.some(l => l.kind !== 'computer')) {
+      setSending(ids);
+      return;
+    }
+    await sendTo(undefined, ids);
+  }
+  async function sendTo(location: LocationDto | undefined, ids: string[]) {
+    setSending(undefined);
+    if (location) setChosenLast(location.id);
     try {
+      if (location && location.kind !== 'computer') {
+        await sendToLocation(location.id, ids);
+        setSentTo(location.id);
+        notify(`Sending ${itemsSaid(ids.length)} to ${location.name}. Every copy is checked.`, 'ok');
+        return;
+      }
       await startBackup(ids);
       props.onTab('backup');
       notify(`Sending ${itemsSaid(ids.length)} to ${backup?.computer}.`, 'ok');
@@ -221,7 +252,8 @@ export function PhoneApp(props: Props) {
       computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
       onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
       onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
-      onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} beside={tablet ? subscription : undefined} />
+      onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} beside={tablet ? subscription : undefined}
+      locations={<LocationsGroup notify={notify} onPair={() => setSheet('pair')} />} />
   );
 
   return (
@@ -241,7 +273,8 @@ export function PhoneApp(props: Props) {
           lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
-        backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')} />,
+        backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')}
+          locations={locations} onSettings={openSettings} />,
       }}
       sheet={<>
         {sheet === 'settings' && settings}
@@ -262,6 +295,8 @@ export function PhoneApp(props: Props) {
         {swiping === 'summary' && swipe && <SwipeSummary state={swipe} library={library} notify={notify} onClose={() => setSwiping(undefined)} onShare={setSharing} />}
         {watching && year?.year != null && <YearStories review={year} notify={notify} onClose={() => setWatching(false)} />}
         {sharing && <ShareSheet card={sharing} notify={notify} onClose={() => setSharing(undefined)} />}
+        {sending && <SendToSheet locations={sendable} count={sending.length} chosen={chosenLast} onSend={l => void sendTo(l, sending)} onClose={() => setSending(undefined)} />}
+        {sent && sentLocation && <SentSheet sent={sent} location={sentLocation.name} cloudPhotos={safe?.cloudPhotos ?? false} notify={notify} onDone={() => setSentTo(undefined)} />}
         {proSheet}
       </>} />
     </PlanProvider>

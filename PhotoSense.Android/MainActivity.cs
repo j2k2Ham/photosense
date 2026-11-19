@@ -137,6 +137,15 @@ public sealed class MainActivity : Activity
     }
 
     /// <summary>Off the screen: the hidden vault locks, and the home screen widgets are told how things stand.</summary>
+    /// <inheritdoc />
+    protected override void OnResume()
+    {
+        base.OnResume();
+        // Back from the browser without signing in: the sign-in ends.
+        WebSignIn.Resumed();
+    }
+
+    /// <inheritdoc />
     protected override void OnStop()
     {
         PhoneApp.Services.GetRequiredService<HiddenVault>().Lock();

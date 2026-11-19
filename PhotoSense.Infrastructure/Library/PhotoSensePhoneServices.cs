@@ -6,6 +6,8 @@ using PhotoSense.Application.Plans;
 using PhotoSense.Application.Removal;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Application.Vault;
+using PhotoSense.Application.Locations;
+using PhotoSense.Infrastructure.Locations;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Metadata;
@@ -46,15 +48,22 @@ public static class PhotoSensePhoneServices
     /// <param name="vaultKeys">Where the hidden vault's recovery key is kept: the Keychain, or the Android Keystore.</param>
     /// <param name="unlocker">The phone's own question before the hidden vault opens.</param>
     /// <param name="widgets">The phone's home screen widgets.</param>
+    /// <param name="locationSecrets">Where the backup locations' keys, passwords and tokens are kept: the Keychain, or the Android Keystore.</param>
+    /// <param name="signIn">The system's sheet the person signs in to a cloud service on.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
+    /// <param name="cloudApps">PhotoSense's registrations with the cloud services; none until it is registered with them.</param>
+    /// <param name="network">Sends the locations' requests; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets, string name, string root = LibraryRoot, ITransferListener? listener = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets,
+        ILocationSecrets locationSecrets, IWebSignIn signIn, string name, string root = LibraryRoot, ITransferListener? listener = null, CloudAppOptions? cloudApps = null,
+        HttpMessageHandler? network = null)
     {
         var photos = new PhotoLibraryFileSystem(library, root);
         s.AddSingleton(photos);
+        s.AddLocations(locationSecrets, signIn, cloudApps, network);
         return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, widgets, name, listener);
     }
 
@@ -75,19 +84,37 @@ public static class PhotoSensePhoneServices
     /// <param name="vaultKeys">Where the hidden vault's recovery key is kept: the Keychain, or the Android Keystore.</param>
     /// <param name="unlocker">The phone's own question before the hidden vault opens.</param>
     /// <param name="widgets">The phone's home screen widgets.</param>
+    /// <param name="locationSecrets">Where the backup locations' keys, passwords and tokens are kept: the Keychain, or the Android Keystore.</param>
+    /// <param name="signIn">The system's sheet the person signs in to a cloud service on.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the storage is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
+    /// <param name="cloudApps">PhotoSense's registrations with the cloud services; none until it is registered with them.</param>
+    /// <param name="network">Sends the locations' requests; the phone's own network by default.</param>
     /// <param name="vaultFolder">Where the hidden vault's files are kept; a folder inside <paramref name="dataFolder"/> by default. Android's own backup of the app stops for good once it grows past 25 MB, so the app keeps them where that backup does not go.</param>
     public static IServiceCollection AddPhotoSenseAndroid(this IServiceCollection s, IMediaStore store, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets, string name, string root = StorageRoot, ITransferListener? listener = null,
-        string? vaultFolder = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets,
+        ILocationSecrets locationSecrets, IWebSignIn signIn, string name, string root = StorageRoot, ITransferListener? listener = null, CloudAppOptions? cloudApps = null,
+        HttpMessageHandler? network = null, string? vaultFolder = null)
     {
         var photos = new MediaFileSystem(store, root);
         s.AddSingleton(photos);
+        s.AddLocations(locationSecrets, signIn, cloudApps, network);
         return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, widgets, name, listener,
             vaultFolder);
+    }
+
+    // Signing in to the cloud services and reaching each location's folder, over one client for every request.
+    private static void AddLocations(this IServiceCollection s, ILocationSecrets secrets, IWebSignIn signIn, CloudAppOptions? apps, HttpMessageHandler? network)
+    {
+        // A large video may take a while to send: a request is stopped by its token, not by a short time limit.
+        var http = new HttpClient(network ?? new HttpClientHandler(), disposeHandler: true) { Timeout = TimeSpan.FromHours(1) };
+        s.AddSingleton(secrets);
+        s.AddSingleton(signIn);
+        s.AddSingleton(sp => new CloudAccounts(apps ?? new CloudAppOptions(), http, sp.GetRequiredService<TimeProvider>()));
+        s.AddSingleton<ICloudAccounts>(sp => sp.GetRequiredService<CloudAccounts>());
+        s.AddSingleton<IRemoteFolders>(sp => new RemoteFolders(sp.GetRequiredService<CloudAccounts>(), http, sp.GetRequiredService<TimeProvider>()));
     }
 
     private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,
@@ -115,7 +142,13 @@ public static class PhotoSensePhoneServices
         // Backing up to that computer, and what is then safe to delete from the phone.
         s.AddSingleton(device);
         s.AddSingleton(sp => new PhoneBackup(sp.GetRequiredService<IBackupLedger>(), computers, sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos,
-            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>(), vault));
+            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>(), vault,
+            sp.GetRequiredService<ILocationStore>()));
+        // The other places it backs up to: cloud services and those Connect to server adds.
+        s.AddSingleton(sp => new BackupLocations(sp.GetRequiredService<ILocationStore>(), sp.GetRequiredService<ILocationSecrets>(), sp.GetRequiredService<IRemoteFolders>(),
+            sp.GetRequiredService<ICloudAccounts>(), sp.GetRequiredService<IWebSignIn>(), sp.GetRequiredService<PhoneBackup>(), sp.GetRequiredService<IBackupLedger>(),
+            sp.GetRequiredService<OrganizeLibrary>(), photos, photos, sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, Path.TrimEndingDirectorySeparator(root),
+            sp.GetRequiredService<TimeProvider>()));
         // Swipe to clean: a set a day, what is marked deleted together at the end.
         s.AddSingleton(sp => new SwipeToClean(sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos, sp.GetRequiredService<PhoneBackup>(),
             sp.GetRequiredService<DailyRemovals>(), Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));

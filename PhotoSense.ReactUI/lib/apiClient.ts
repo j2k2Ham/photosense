@@ -3,7 +3,7 @@ import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
   CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
-  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto,
+  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto, LocationsDto, LocationDetailsDto, ServerConnectionDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -14,10 +14,15 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth e
 // The server acts on photos only for requests carrying this header, which other web sites cannot send.
 const authHeaders: Record<string, string> = { 'x-photosense-client': 'web', ...(API_KEY ? { 'x-api-key': API_KEY } : {}) };
 
+/** A refusal from the service, with its status: 402 when what was asked for is part of Pro. */
+export type ApiError = Error & { readonly status: number };
+
 // The server answers failures with either plain text or { error }.
-async function failure(res: Response): Promise<Error> {
+async function failure(res: Response): Promise<ApiError> {
   const text = await res.text();
-  try { return new Error(JSON.parse(text).error ?? text); } catch { return new Error(text || `Request failed (${res.status})`); }
+  let said: string;
+  try { said = JSON.parse(text).error ?? text; } catch { said = text || `Request failed (${res.status})`; }
+  return Object.assign(new Error(said), { status: res.status });
 }
 
 // Android's web view hands the app no request's body, so there the page hands each body over beside its request,
@@ -774,3 +779,74 @@ export async function renameCopies(id: string, style: FileNaming): Promise<numbe
   return result.changed;
 }
 
+
+const locationsUrl = `${API_BASE}/locations`;
+
+/** On a phone: every place it backs up to, the Safe to delete rule, and what they are doing, asked every second while they are busy. */
+export function useLocations(on: boolean) {
+  return useSWR<LocationsDto>(on ? locationsUrl : null, json, { refreshInterval: latest => (latest?.activity?.stage === 'running' ? 1000 : 0) });
+}
+
+/** On a phone: one location in full, asked of it now. */
+export function useLocationDetails(id: string | undefined) {
+  return useSWR<LocationDetailsDto>(id ? `${locationsUrl}/${encodeURIComponent(id)}` : null, json);
+}
+
+// A change to the locations, after which they are asked again.
+async function changeLocations(path: string, body: unknown = {}): Promise<void> {
+  try { await post(`${locationsUrl}/${path}`, JSON.stringify(body)); } finally { await mutate(locationsUrl); }
+}
+
+/** Turns a location on, signing in to a cloud service first if need be; refused with 402 on the free plan with another on. */
+export const turnOnLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/on`);
+
+/** Turns a location off. Nothing there is deleted. */
+export const turnOffLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/off`);
+
+/** On the free plan, turns this location on in place of the one that is on. */
+export const locationInstead = (id: string) => changeLocations(`${encodeURIComponent(id)}/instead`);
+
+/** Signs out of a cloud service. Nothing there is deleted. */
+export const disconnectLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/disconnect`);
+
+/** Removes a location Connect to server added. Nothing there is deleted. */
+export const removeLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/remove`);
+
+/** Names a location Connect to server added. */
+export const renameLocation = (id: string, name: string) => changeLocations(`${encodeURIComponent(id)}/name`, { name });
+
+/** On how many locations a copy must be checked before a photo counts as backed up: 1 or 2. */
+export const setCountAt = (countAt: number) => changeLocations('count', { countAt });
+
+/** Backs up to every location that is on. */
+export const backUpToLocations = () => changeLocations('backup');
+
+/** Check all backups. */
+export const checkLocations = () => changeLocations('check');
+
+/** Pauses what the locations are doing. */
+export const pauseLocations = () => changeLocations('pause');
+
+/** Backs up to the locations other than the computer when one is due. */
+export const locationsIfDue = () => changeLocations('auto');
+
+/** Send to: sends Library's pictures and videos chosen to one location. */
+export const sendToLocation = (id: string, ids: string[]) => changeLocations(`${encodeURIComponent(id)}/send`, { ids });
+
+/** Connect to server (Pro): checks the location, then adds or changes it; its id. */
+export async function connectServer(connection: ServerConnectionDto): Promise<string> {
+  try {
+    return (await json<{ id: string }>(`${locationsUrl}/connect`, { method: 'POST', body: JSON.stringify(connection) })).id;
+  } finally {
+    await mutate(locationsUrl);
+  }
+}
+
+/** Deletes from the phone what was sent and matched, the largest first and no more than `atMost`, after the phone's own question. */
+export async function deleteSent(atMost?: number): Promise<SafeRemovalDto> {
+  try {
+    return await json<SafeRemovalDto>(`${locationsUrl}/sent/delete`, { method: 'POST', body: JSON.stringify({ atMost }) });
+  } finally {
+    await Promise.all([mutate(locationsUrl), mutate(planUrl)]);
+  }
+}

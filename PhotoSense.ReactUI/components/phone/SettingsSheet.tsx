@@ -60,6 +60,8 @@ interface Props {
   onClose(): void;
   /** On a tablet, what shows beside the list: the Subscription page. */
   readonly beside?: React.ReactNode;
+  /** The places backups go, with their switches, after the computer. */
+  readonly locations?: React.ReactNode;
 }
 
 /**
@@ -89,6 +91,7 @@ export function SettingsSheet(p: Props) {
               : <ListRow chevron onClick={then(p.onPair)}>Connect your computer</ListRow>}
           </ListGroup>
         )}
+        {p.locations}
         <ListGroup header="Appearance">
           <ListRow detail={<Segmented<ThemeChoice> label="Theme" options={THEMES} value={p.theme} onChange={p.onTheme} className="w-[220px]" />}>Theme</ListRow>
           <ListRow detail={<Segmented<DistanceUnit> label="Distances" options={UNITS} value={p.unit} onChange={p.onUnit} className="w-[220px]" />}>Distances</ListRow>

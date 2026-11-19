@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import { appIconUrl, buyPlan, usePlan } from '../../lib/apiClient';
-import { contextLine, offeredPlans, overLimit, PRO_FEATURES, theStore, type OfferedPlan, type ProAsk, type ProReason } from '../../lib/plan';
+import { contextLine, LOCATION_FEATURES, offeredPlans, overLimit, PRO_FEATURES, theStore, type OfferedPlan, type ProAsk, type ProReason } from '../../lib/plan';
 import { usePhone } from '../../lib/phone';
 import type { PlanDto, PlanKind } from '../../types';
 import type { ToastKind } from '../Toaster';
@@ -18,8 +18,21 @@ export interface PlanGate {
    * `largest` says the L that go are the largest, as the partial button then says.
    */
   remove(count: number, label: string, run: (allowed: number) => void, largest?: boolean): void;
-  /** Opens the Pro sheet, for its own sake or for a Pro feature, carrying on with `then` once Pro is bought. */
-  offer(reason: ProReason, then?: () => void): void;
+  /**
+   * Opens the Pro sheet, for its own sake or for a Pro feature, carrying on with `then` once Pro is bought. For a second
+   * location, `instead` names the one on and offers to use the new one in its place.
+   */
+  offer(reason: ProReason, then?: () => void, instead?: Instead): void;
+}
+
+/** A second location on the free plan: the one that is on, and the new one to use in its place. */
+export interface Instead {
+  /** The location that is on. */
+  readonly current: string;
+  /** The new one's name, for "Use Dropbox instead". */
+  readonly wanted: string;
+  /** Turns the new one on in place of the one that is on. */
+  run(): void;
 }
 
 const PlanContext = createContext<PlanGate | null>(null);
@@ -40,6 +53,8 @@ interface Asked extends ProAsk {
   /** Removes the ones the free plan has left today. */
   readonly partial?: (allowed: number) => void;
   readonly largest?: boolean;
+  /** Uses the new location in place of the one that is on. */
+  readonly instead?: Instead;
 }
 
 /** The gate the phone layout gives its screens, and the Pro sheet it opens, to be drawn over everything. */
@@ -52,12 +67,13 @@ export function usePlanSheet(notify: (message: string, kind: ToastKind) => void)
       if (!overLimit(plan, count)) run(count);
       else setAsked({ reason: 'limit', count, label, then: () => run(count), partial: run, largest });
     },
-    offer(reason, then) { setAsked({ reason, then }); },
+    offer(reason, then, instead) { setAsked({ reason, then, instead, current: instead?.current }); },
   };
   const sheet = asked && plan && (
     <ProSheet plan={plan} ask={asked} notify={notify} onClose={() => setAsked(undefined)}
       onBought={() => { setAsked(undefined); asked.then?.(); }}
-      onPartial={asked.partial && plan.leftToday ? () => { setAsked(undefined); asked.partial!(plan.leftToday!); } : undefined} />
+      onPartial={asked.partial && plan.leftToday ? () => { setAsked(undefined); asked.partial!(plan.leftToday!); } : undefined}
+      onInstead={asked.instead && (() => { setAsked(undefined); asked.instead!.run(); })} />
   );
   return { gate, sheet };
 }
@@ -70,6 +86,8 @@ interface Props {
   onBought(): void;
   /** Removes as many as the free plan has left today; absent when none are left, or the sheet is not about removing. */
   readonly onPartial?: () => void;
+  /** Uses the new location in place of the one that is on; absent when the sheet is not about a second location. */
+  readonly onInstead?: () => void;
   onClose(): void;
 }
 
@@ -85,7 +103,7 @@ export function boughtSaid(kind: PlanKind) {
  * The Pro sheet: why it opened, what Pro adds, the plans at the store's prices, the button that buys the one chosen,
  * and, when it opened because too many were chosen, the button that removes the ones the free plan has left today.
  */
-export function ProSheet({ plan, ask, notify, onBought, onPartial, onClose }: Props) {
+export function ProSheet({ plan, ask, notify, onBought, onPartial, onInstead, onClose }: Props) {
   const { words } = usePhone();
   const plans = offeredPlans(plan.offers, false);
   const [chosen, setChosen] = useState<PlanKind>('yearly');
@@ -125,7 +143,7 @@ export function ProSheet({ plan, ask, notify, onBought, onPartial, onClose }: Pr
           </div>
         </div>
         <ul className="flex flex-col gap-2.5">
-          {PRO_FEATURES.map(f => <li key={f} className="flex items-center gap-2.5 text-[15px]"><span className="text-acc"><CheckIcon /></span>{f}</li>)}
+          {(ask.reason === 'location' || ask.reason === 'server' ? LOCATION_FEATURES : PRO_FEATURES).map(f => <li key={f} className="flex items-center gap-2.5 text-[15px]"><span className="text-acc"><CheckIcon /></span>{f}</li>)}
         </ul>
         {plans.length > 0 ? (
           <div role="radiogroup" aria-label="Plans" className="flex flex-col gap-2">
@@ -140,6 +158,7 @@ export function ProSheet({ plan, ask, notify, onBought, onPartial, onClose }: Pr
         {onPartial && (
           <PhoneButton kind="text" disabled={busy} onClick={onPartial}>{ask.largest ? `Remove the ${left.toLocaleString()} largest now` : `Delete ${left.toLocaleString()} now`}</PhoneButton>
         )}
+        {onInstead && <PhoneButton kind="text" disabled={busy} onClick={onInstead}>Use {ask.instead!.wanted} instead</PhoneButton>}
         <PhoneButton kind="text" disabled={busy} onClick={onClose}>Not now</PhoneButton>
         {selected && <p className="px-2 pb-1 text-center text-[12.5px] leading-[1.4] text-t2">{selected.fine}</p>}
       </div>

@@ -29,7 +29,7 @@ public sealed class PhotosOnAndroidTests : IDisposable
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddPhotoSenseAndroid(_store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice { Kind = "Android phone" }, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), "Pixel 8", _root, new TcpTransferListener(0))
+            .AddPhotoSenseAndroid(_store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice { Kind = "Android phone" }, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Pixel 8", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("android", "1.2.0.57", () => "Third-party notices for PhotoSense for Android"))
             .AddStandInStores()

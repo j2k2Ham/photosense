@@ -895,3 +895,81 @@ export interface RenamingDto {
   count: number;
   rows: { now: string; after: string }[];
 }
+
+/** What sort of place a location is. */
+export type LocationKind = 'computer' | 'googleDrive' | 'oneDrive' | 'dropbox' | 'box' | 'amazonS3' | 's3Compatible' | 'azureBlob' | 'webDav' | 'sftp';
+
+/** A place the phone backs up to, as the page lists it (`LocationDto`). */
+export interface LocationDto {
+  /** "computer", "google-drive", or an id of its own for one added. */
+  id: string;
+  kind: LocationKind;
+  /** The service's name, or the name the person gave one they added. */
+  name: string;
+  on: boolean;
+  /** Signed in to, paired or added: it can be turned on. */
+  connected: boolean;
+  /** It can be signed in to from this version of PhotoSense. */
+  available: boolean;
+  account: string | null;
+  /** How it is reached, less its secrets. */
+  settings: Record<string, string>;
+  /** Files it holds, checked. */
+  copies: number;
+  lastBackup: string | null;
+  lastChecked: string | null;
+  problem: string | null;
+}
+
+/** How far one location has got in what the locations are doing. */
+export interface LocationProgressDto {
+  id: string;
+  done: number;
+  total: number;
+  bytes: number;
+  totalBytes: number;
+  problem: string | null;
+}
+
+/** What sending to a location did. */
+export interface SendResultDto {
+  locationId: string;
+  items: number;
+  /** Those every file of which matches the copy there. */
+  matched: number;
+  bytes: number;
+}
+
+/** What the locations are doing, or last did. */
+export interface LocationActivityDto {
+  task: 'backup' | 'check' | 'send';
+  stage: 'running' | 'ready' | 'paused' | 'failed';
+  locations: LocationProgressDto[];
+  sent: SendResultDto | null;
+}
+
+/** The locations, the Safe to delete rule, and what they are doing (`GET /api/locations`). */
+export interface LocationsDto {
+  locations: LocationDto[];
+  /** On how many locations a copy must be checked: 1 or 2. */
+  countAt: number;
+  pro: boolean;
+  activity: LocationActivityDto | null;
+}
+
+/** A location in full (`GET /api/locations/{id}`). */
+export interface LocationDetailsDto {
+  location: LocationDto;
+  where: string | null;
+  space: { total: number; used: number } | null;
+  problem: string | null;
+}
+
+/** A location as Connect to server adds or changes it. */
+export interface ServerConnectionDto {
+  id: string | null;
+  kind: LocationKind;
+  name: string;
+  settings: Record<string, string>;
+  secrets: Record<string, string>;
+}

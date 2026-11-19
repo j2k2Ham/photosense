@@ -11,7 +11,7 @@ public sealed class PhotoSenseRoutes
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
-        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips, FixEndpoints fixes, VaultEndpoints vault)
+        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips, FixEndpoints fixes, VaultEndpoints vault, LocationEndpoints locations)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -83,6 +83,23 @@ public sealed class PhotoSenseRoutes
             .Post("vault/delete", (r, _, ct) => vault.DeleteAsync(r, ct))
             .Get("vault/{id}/thumbnail", (r, v, ct) => vault.ThumbnailAsync(r, v["id"], ct))
             .Get("vault/{id}/image", (r, v, ct) => vault.ImageAsync(r, v["id"], ct))
+            // The literal addresses before those a location's id could match.
+            .Get("locations", (r, _, ct) => locations.ListAsync(r, ct))
+            .Post("locations/backup", (r, _, ct) => locations.BackupAsync(r, ct))
+            .Post("locations/auto", (r, _, ct) => locations.AutomaticAsync(r, ct))
+            .Post("locations/check", (r, _, ct) => locations.CheckAsync(r, ct))
+            .Post("locations/pause", (r, _, ct) => locations.PauseAsync(r, ct))
+            .Post("locations/count", (r, _, ct) => locations.CountAtAsync(r, ct))
+            .Post("locations/connect", (r, _, ct) => locations.ConnectAsync(r, ct))
+            .Post("locations/sent/delete", (r, _, ct) => locations.DeleteSentAsync(r, ct))
+            .Get("locations/{id}", (r, v, ct) => locations.DetailsAsync(r, v["id"], ct))
+            .Post("locations/{id}/on", (r, v, ct) => locations.TurnOnAsync(r, v["id"], ct))
+            .Post("locations/{id}/off", (r, v, ct) => locations.TurnOffAsync(r, v["id"], ct))
+            .Post("locations/{id}/instead", (r, v, ct) => locations.InsteadAsync(r, v["id"], ct))
+            .Post("locations/{id}/disconnect", (r, v, ct) => locations.DisconnectAsync(r, v["id"], ct))
+            .Post("locations/{id}/remove", (r, v, ct) => locations.RemoveAsync(r, v["id"], ct))
+            .Post("locations/{id}/name", (r, v, ct) => locations.RenameAsync(r, v["id"], ct))
+            .Post("locations/{id}/send", (r, v, ct) => locations.SendAsync(r, v["id"], ct))
             .Get("trips", (r, _, ct) => trips.ListAsync(r, ct))
             .Get("trips/towns", (r, _, ct) => trips.TownsAsync(r, ct))
             .Post("trips/home", (r, _, ct) => trips.HomeAsync(r, ct))

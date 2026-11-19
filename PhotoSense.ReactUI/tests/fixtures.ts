@@ -1,4 +1,4 @@
-import type { BackupPhoneDto, BackupSettingsDto, BackupStateDto, SafeReviewDto, DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto, PlanDto, PlanOfferDto, SwipeCardDto, SwipeStateDto } from '../types';
+import type { BackupPhoneDto, BackupSettingsDto, BackupStateDto, SafeReviewDto, DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, MatchKind, OrganizeFileDto, OrganizePlaceDto, PhotoDto, PlanDto, PlanOfferDto, SwipeCardDto, SwipeStateDto, LocationDto, LocationsDto } from '../types';
 
 /** A picture as the server describes it; tests override only what they are about. */
 export function photo(overrides: Partial<PhotoDto> = {}): PhotoDto {
@@ -110,3 +110,18 @@ export function swipeState(overrides: Partial<SwipeStateDto> = {}): SwipeStateDt
   const week = ['2026-11-11', '2026-11-12', '2026-11-13', '2026-11-14', '2026-11-15', '2026-11-16', '2026-11-17'].map(date => ({ date, swiped: false }));
   return { date: '2026-11-17', set: [], earlier: [], week, streak: 0, freed: null, unswiped: 0, ...overrides };
 }
+
+/** A place a phone backs up to, as the service lists it: Google Drive, not signed in to, unless the test says otherwise. */
+export const location = (more: Partial<LocationDto> = {}): LocationDto => ({
+  id: 'google-drive', kind: 'googleDrive', name: 'Google Drive', on: false, connected: false, available: true, account: null, settings: {}, copies: 0,
+  lastBackup: null, lastChecked: null, problem: null, ...more,
+});
+
+/** The locations as the service lists them: the computer paired and on, and the four cloud services, unless the test says otherwise. */
+export const locations = (more: Partial<LocationsDto> = {}): LocationsDto => ({
+  locations: [
+    location({ id: 'computer', kind: 'computer', name: 'Studio iMac', on: true, connected: true, settings: { folder: 'Pictures/PhotoSense' }, copies: 6941, lastBackup: '2026-11-19T08:00:00Z' }),
+    location(), location({ id: 'onedrive', kind: 'oneDrive', name: 'OneDrive' }), location({ id: 'dropbox', kind: 'dropbox', name: 'Dropbox' }), location({ id: 'box', kind: 'box', name: 'Box' }),
+  ],
+  countAt: 1, pro: false, activity: null, ...more,
+});

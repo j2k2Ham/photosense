@@ -1,3 +1,4 @@
+using PhotoSense.Application.Locations;
 using Android.Content;
 using Android.Runtime;
 using AndroidX.Concurrent.Futures;
@@ -63,6 +64,10 @@ public sealed class BackupWorker : ListenableWorker
                 var backup = PhoneApp.Services.GetRequiredService<PhoneBackup>();
                 using var pausing = stop.Register(backup.Pause);
                 if (await backup.AutomaticAsync(stop)) await backup.Running;
+                // Then the other locations: cloud storage and those Connect to server added.
+                var locations = PhoneApp.Services.GetRequiredService<BackupLocations>();
+                using var pausingLocations = stop.Register(locations.Pause);
+                if (await locations.AutomaticAsync(stop)) await locations.Running;
                 // Woken anyway: a low-storage alert goes if one is due.
                 await PhoneApp.Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(stop);
                 // And the home screen widgets are told how things stand.

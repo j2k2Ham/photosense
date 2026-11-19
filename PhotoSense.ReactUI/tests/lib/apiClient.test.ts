@@ -1031,3 +1031,63 @@ describe('on Android', () => {
     }
   });
 });
+
+describe("a phone's locations", () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('are asked for only while wanted, every second while they are busy, and one in full by its id', async () => {
+    const api = await load();
+    api.useLocations(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useLocations(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/locations`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ activity: null }), every({ activity: { stage: 'ready' } }), every({ activity: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+    api.useLocationDetails(undefined);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useLocationDetails('s3 1');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/locations/s3%201`);
+  });
+
+  it('are turned on and off, changed, backed up to, checked and sent to, each asked for again after, even when refused', async () => {
+    const api = await load();
+    answering(undefined, 204);
+    const asks: [() => Promise<unknown>, string, string][] = [
+      [() => api.turnOnLocation('google-drive'), 'google-drive/on', '{}'], [() => api.turnOffLocation('google-drive'), 'google-drive/off', '{}'],
+      [() => api.locationInstead('box'), 'box/instead', '{}'], [() => api.disconnectLocation('box'), 'box/disconnect', '{}'],
+      [() => api.removeLocation('s 1'), 's%201/remove', '{}'], [() => api.renameLocation('s1', 'NAS'), 's1/name', '{"name":"NAS"}'],
+      [() => api.setCountAt(2), 'count', '{"countAt":2}'], [api.backUpToLocations, 'backup', '{}'], [api.checkLocations, 'check', '{}'],
+      [api.pauseLocations, 'pause', '{}'], [api.locationsIfDue, 'auto', '{}'], [() => api.sendToLocation('s1', ['a']), 's1/send', '{"ids":["a"]}'],
+    ];
+    for (const [ask, path, body] of asks) {
+      swr.mutate.mockClear();
+      await ask();
+      expect(lastRequest()).toEqual({ url: `${API}/locations/${path}`, init: { method: 'POST', body, headers: json } });
+      expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
+    }
+    // Refused for Pro: the page is told which.
+    answering({ error: 'The free plan backs up to one location, and Studio iMac is on.' }, 402);
+    swr.mutate.mockClear();
+    await expect(api.turnOnLocation('box')).rejects.toMatchObject({ message: 'The free plan backs up to one location, and Studio iMac is on.', status: 402 });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
+  });
+
+  it('are added by Connect to server, and what was sent is deleted from the phone, the plan asked for again', async () => {
+    const api = await load();
+    answering({ id: 'new' });
+    const connection = { id: null, kind: 'webDav' as const, name: 'NAS', settings: { url: 'https://nas' }, secrets: { pass: 'p' } };
+    await expect(api.connectServer(connection)).resolves.toBe('new');
+    expect(lastRequest()).toEqual({ url: `${API}/locations/connect`, init: { method: 'POST', body: JSON.stringify(connection), headers: json } });
+    answering({ error: 'NAS let PhotoSense list its folder but not write to it.' }, 502);
+    swr.mutate.mockClear();
+    await expect(api.connectServer(connection)).rejects.toMatchObject({ status: 502 });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
+
+    answering({ removed: 2, bytes: 9, left: 0, storageTotal: 1, storageFreeBefore: 0 });
+    await expect(api.deleteSent(2)).resolves.toMatchObject({ removed: 2 });
+    expect(lastRequest()).toEqual({ url: `${API}/locations/sent/delete`, init: { method: 'POST', body: '{"atMost":2}', headers: json } });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/plan`);
+    await api.deleteSent();
+    expect(lastRequest().init?.body).toBe('{}');
+  });
+});

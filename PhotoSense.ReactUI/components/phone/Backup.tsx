@@ -5,11 +5,12 @@ import { items } from '../../lib/library';
 import { limitLine } from '../../lib/plan';
 import { deviceWord, usePhone } from '../../lib/phone';
 import type { ResultCard } from '../../lib/shareCard';
-import type { BackupSettingsDto, BackupStateDto, SafeRemovalDto, SafeReviewDto } from '../../types';
+import type { BackupSettingsDto, BackupStateDto, LocationsDto, SafeRemovalDto, SafeReviewDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, PhoneSwitch } from './Controls';
 import { CheckIcon, DoneIcon, LaptopIcon, ShareIcon, TickIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
+import { LocationsCard } from './Locations';
 import { LayerScreen, PushedHeader, RootHeader, Screen } from './Screens';
 import { ShareRow } from './Share';
 
@@ -38,6 +39,10 @@ interface BackupProps {
   onChoose(): void;
   /** Pairing with a computer, when the phone has none yet. */
   onPair(): void;
+  /** The places backups go other than the computer, once the phone has said. */
+  readonly locations?: LocationsDto;
+  /** Opens Settings, where the locations are turned on and off. */
+  onSettings?(): void;
 }
 
 /**
@@ -45,7 +50,7 @@ interface BackupProps {
  * pictures, and the button that backs up, pauses or carries on; then automatic backup, which is part of Pro, and Send
  * now, which sends what the person chooses.
  */
-export function BackupScreen({ state, notify, onChoose, onPair }: BackupProps) {
+export function BackupScreen({ state, notify, onChoose, onPair, locations, onSettings }: BackupProps) {
   const { platform, tablet } = usePhone();
   const gate = usePlanGate();
   const [busy, setBusy] = useState(false);
@@ -65,7 +70,7 @@ export function BackupScreen({ state, notify, onChoose, onPair }: BackupProps) {
   const now = new Date();
   return (
     <Screen label="Backup">
-      <RootHeader title="Backup" subtitle="Copies photos and videos to your computer over Wi-Fi" />
+      <RootHeader title="Backup" subtitle="Copies photos and videos to your computer, cloud storage and your own locations" />
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6 px-4 pb-4 pt-1">
         {!state ? <p role="status" className="py-10 text-center text-[15px] text-t2">Looking at what is backed up…</p>
           : state.stage === 'unpaired' ? (
@@ -112,17 +117,19 @@ export function BackupScreen({ state, notify, onChoose, onPair }: BackupProps) {
             </section>
           )}
 
-        {state && state.stage !== 'unpaired' && (
+        {locations && onSettings && <LocationsCard data={locations} notify={notify} onSettings={onSettings} />}
+
+        {state && (state.stage !== 'unpaired' || locations?.locations.some(l => l.on)) && (
           <section aria-label="Automatic backup" className="flex flex-col gap-2">
             <Header beside={!pro && <ProBadge />}>Automatic backup</Header>
             <ListGroup>
               <PhoneSwitch inList label="Back up automatically" on={state.settings.automatic} onChange={automatic} />
               <PhoneSwitch inList label="Only while charging" on={state.settings.onlyWhileCharging} onChange={on => save({ onlyWhileCharging: on })} />
               <PhoneSwitch inList label="Include videos" detail="A Live Photo's video always goes with it." on={state.settings.includeVideos} onChange={on => save({ includeVideos: on })} />
-              <ListRow detail={state.folder} onClick={() => notify(`To change the folder, open Phones in PhotoSense on ${state.computer}.`, 'info')}>Folder</ListRow>
+              {state.computer && <ListRow detail={state.folder} onClick={() => notify(`To change the folder, open Phones in PhotoSense on ${state.computer}.`, 'info')}>Folder</ListRow>}
             </ListGroup>
             <p className="px-1 text-[13px] leading-[1.45] text-t2">
-              {automaticNote(platform, state.computer!, state.settings.onlyWhileCharging)}
+              {automaticNote(platform, state.computer, state.settings.onlyWhileCharging)}
             </p>
           </section>
         )}

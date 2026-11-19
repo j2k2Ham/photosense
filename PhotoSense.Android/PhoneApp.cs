@@ -38,7 +38,8 @@ public static class PhoneApp
             .AddPhotoSenseAndroid(new AndroidMediaStore(context), new AndroidAccess(), new AndroidImageAnalyzer(), DataFolder(context), context.CacheDir!.AbsolutePath,
                 new NsdAdvertiser(context), new PlayBillingStore(TimeProvider.System),
                 new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), new AndroidNotifier(context), new AndroidShareSheet(context),
-                new KeystoreVaultKeys(context), new DeviceUnlocker(), new AndroidWidgets(context), $"{Build.Manufacturer} {Build.Model}".Trim(),
+                new KeystoreVaultKeys(context), new DeviceUnlocker(), new AndroidWidgets(context), new KeystoreLocationSecrets(context), new WebSignIn(),
+                $"{Build.Manufacturer} {Build.Model}".Trim(),
                 vaultFolder: Path.Combine(context.NoBackupFilesDir!.AbsolutePath, "Hidden"))
             .AddPhotoSenseApi()
             .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "android"))

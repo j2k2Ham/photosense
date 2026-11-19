@@ -3,6 +3,7 @@ using PhotoSense.Infrastructure.Transfer;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests;
@@ -344,6 +345,7 @@ internal static class StandInStores
             .AddSingleton<INoticeStore>(new MemoryNoticeStore())
             .AddSingleton<ITripStore>(new MemoryTripStore())
             .AddSingleton<IDetailsFixStore>(new MemoryDetailsFixStore())
+            .AddSingleton<ILocationStore>(new MemoryLocationStore())
             // The computer's door for phones waits on a free port of its own, and tells no network.
             .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

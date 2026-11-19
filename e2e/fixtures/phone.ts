@@ -244,7 +244,54 @@ export class Phone {
       if (this.compressed) { this.compression = this.compressed; this.compressed = undefined; }
       return json(route, now);
     });
+    // Where the phone backs up, which only a phone has: signing in to a cloud service succeeds at once, a server
+    // connects as it is asked to, and a backup started has finished by the next time the page asks.
+    await page.route(url => /\/api\/locations(\/|$)/.test(url.pathname), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/locations').pop()!.replace(/^\//, '');
+      const body = route.request().postData();
+      const asked = body ? JSON.parse(body) : {};
+      const l = this.locations;
+      if (route.request().method() === 'POST') this.asked.push(`locations/${what} ${body ?? ''}`.trim());
+      const change = (id: string, to: Partial<StandInLocation>) => { l.locations = l.locations.map(x => (x.id === id ? { ...x, ...to } : x)); };
+      if (!what) {
+        const now = { ...l };
+        if (l.activity?.stage === 'running') l.activity = null;
+        return json(route, now);
+      }
+      if (what === 'connect') {
+        const id = asked.id ?? `s${l.locations.length}`;
+        const added: StandInLocation = { ...standIn(id, asked.kind, asked.name), on: true, connected: true, settings: asked.settings };
+        l.locations = asked.id ? l.locations.map(x => (x.id === id ? added : x)) : [...l.locations, added];
+        return json(route, { id });
+      }
+      if (what === 'backup') {
+        l.activity = { task: 'backup', stage: 'running', locations: l.locations.filter(x => x.on).map(x => ({ id: x.id, done: 1, total: 2, bytes: 3e9, totalBytes: 6e9, problem: null })), sent: null };
+        l.locations = l.locations.map(x => (x.on ? { ...x, copies: 2, lastBackup: new Date().toISOString() } : x));
+        return route.fulfill({ status: 202 });
+      }
+      if (what === 'count') { l.countAt = asked.countAt; return route.fulfill({ status: 204 }); }
+      if (['auto', 'check', 'pause'].includes(what)) return route.fulfill({ status: what === 'pause' ? 204 : 202 });
+      const [id, action] = what.split('/');
+      const location = l.locations.find(x => x.id === id);
+      if (!location) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'There is no such location.' }) });
+      if (!action) return json(route, { location, where: location.settings.folder ?? 'Apps/PhotoSense', space: { total: 2e12, used: 5e11 }, problem: null });
+      if (action === 'on') change(id, { on: true, connected: true, account: location.kind === 'computer' ? null : 'alex.m@example.com' });
+      if (action === 'off') change(id, { on: false });
+      if (action === 'name') change(id, { name: asked.name });
+      if (action === 'disconnect') change(id, { on: false, connected: false, account: null });
+      if (action === 'remove') l.locations = l.locations.filter(x => x.id !== id);
+      return route.fulfill({ status: 204 });
+    });
   }
+
+  /** Where the phone backs up, as it would say: the computer paired and on, the four cloud services off, on Pro, unless the test says otherwise. */
+  locations: { locations: StandInLocation[]; countAt: number; pro: boolean; activity: Record<string, unknown> | null } = {
+    locations: [
+      { ...standIn('computer', 'computer', 'DESKTOP-1'), on: true, connected: true, settings: { folder: "Pictures/PhotoSense/Jamie's iPhone" } },
+      standIn('googleDrive', 'googleDrive', 'Google Drive'), standIn('oneDrive', 'oneDrive', 'OneDrive'), standIn('dropbox', 'dropbox', 'Dropbox'), standIn('box', 'box', 'Box'),
+    ],
+    countAt: 1, pro: true, activity: null,
+  };
 
   /** What a search finds, as the phone would answer it: nothing unless the test says otherwise. */
   found: (q: string) => Record<string, unknown> = () => ({ parts: [], photos: [], total: 0, videos: 0, proNeeded: false });
@@ -307,6 +354,17 @@ export interface FixGroup { count: number; photos: unknown[]; date: string | nul
 
 /** A kind of fix with nothing to fix. */
 export const noFix = (more: Partial<FixGroup> = {}): FixGroup => ({ count: 0, photos: [], date: null, place: null, placeCount: 0, undo: 0, ...more });
+
+/** A place the phone backs up to, as the phone says it. */
+export interface StandInLocation {
+  id: string; kind: string; name: string; on: boolean; connected: boolean; available: boolean; account: string | null; settings: Record<string, string>;
+  copies: number; lastBackup: string | null; lastChecked: string | null; problem: string | null;
+}
+
+/** A location off and not connected yet, which can be signed in to. */
+const standIn = (id: string, kind: string, name: string): StandInLocation => ({
+  id, kind, name, on: false, connected: false, available: true, account: null, settings: {}, copies: 0, lastBackup: null, lastChecked: null, problem: null,
+});
 
 /** The recovery key the stand-in vault gives when it is turned on. */
 export const RECOVERY_KEY = 'K7QP-2M9X-AB12-CD34-EF56-GH78-JK90-MN12';
