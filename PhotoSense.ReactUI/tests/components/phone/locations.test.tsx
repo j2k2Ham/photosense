@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,12 +59,12 @@ describe("Settings' Locations", () => {
   });
 
   it('lists the computer and the cloud services each with a switch, and one not available yet cannot be turned on', () => {
-    group({ locations: [...locations().locations.slice(0, 4), location({ id: 'box', kind: 'box', name: 'Box', available: false })] });
+    group({ locations: [...locations().locations.slice(0, 3), location({ id: 'dropbox', kind: 'dropbox', name: 'Dropbox', available: false })] });
     const list = within(screen.getByRole('region', { name: 'Locations' }));
-    expect(list.getAllByRole('switch').map(s => s.getAttribute('aria-label'))).toEqual(['Studio iMac', 'Google Drive', 'OneDrive', 'Dropbox', 'Box']);
-    expect(list.getByRole('switch', { name: 'Box' })).toBeDisabled();
+    expect(list.getAllByRole('switch').map(s => s.getAttribute('aria-label'))).toEqual(['Studio iMac', 'Google Drive', 'OneDrive', 'Dropbox']);
+    expect(list.getByRole('switch', { name: 'Dropbox' })).toBeDisabled();
     expect(list.getByText('Not available in this version yet')).toBeInTheDocument();
-    expect(screen.getByText(/The free plan backs up to one location\./)).toBeInTheDocument();
+    expect(screen.getByText(/The free plan backs up to your computer and one other location\./)).toBeInTheDocument();
     expect(list.getByRole('button', { name: /^Connect to server…\s*PRO$/ })).toBeInTheDocument();
   });
 
@@ -99,10 +99,13 @@ describe("Settings' Locations", () => {
     expect(screen.queryByRole('dialog', { name: 'Archive' })).not.toBeInTheDocument();
   });
 
-  it('pairs a computer first, and says why a sign-in did not happen', async () => {
+  it('pairs a computer first, from its switch or its row, and says why a sign-in did not happen', async () => {
     const { notify, onPair, row } = group({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' }), location()] });
     await userEvent.click(row('Computer'));
     expect(onPair).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByRole('button', { name: /^Computer\s*Not paired yet\. Tap to connect your computer\.$/ }));
+    expect(onPair).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     api.turnOnLocation.mockRejectedValueOnce(refused('Signing in was closed. Nothing changed.', 409));
     await userEvent.click(row('Google Drive'));
     expect(notify).toHaveBeenLastCalledWith('Signing in was closed. Nothing changed.', 'info');
@@ -111,17 +114,50 @@ describe("Settings' Locations", () => {
     expect(notify).toHaveBeenLastCalledWith('Google Drive signed PhotoSense out.', 'error');
   });
 
-  it('on the free plan with another on, opens the Pro sheet offering this one instead', async () => {
-    const { notify, offered, row } = group();
-    api.turnOnLocation.mockRejectedValueOnce(refused('The free plan backs up to one location, and Studio iMac is on.', 402));
-    await userEvent.click(row('Box'));
+  it('on the free plan with another on besides the computer, opens the Pro sheet offering this one instead', async () => {
+    const [computer, , ...rest] = locations().locations;
+    const { notify, offered, row } = group({ locations: [computer, location({ on: true, connected: true }), ...rest] });
+    api.turnOnLocation.mockRejectedValueOnce(refused('The free plan backs up to your computer and one other location, and Google Drive is on.', 402));
+    await userEvent.click(row('Dropbox'));
     const [reason, then, instead] = (offered.offer as ReturnType<typeof vi.fn>).mock.lastCall!;
-    expect([reason, instead.current, instead.wanted]).toEqual(['location', 'Studio iMac', 'Box']);
+    expect([reason, instead.current, instead.wanted]).toEqual(['location', 'Google Drive', 'Dropbox']);
     instead.run();
-    await vi.waitFor(() => expect(notify).toHaveBeenLastCalledWith('Box is on in place of Studio iMac.', 'ok'));
-    expect(api.locationInstead).toHaveBeenCalledWith('box');
+    await vi.waitFor(() => expect(notify).toHaveBeenLastCalledWith('Dropbox is on in place of Google Drive.', 'ok'));
+    expect(api.locationInstead).toHaveBeenCalledWith('dropbox');
     then();
-    await vi.waitFor(() => expect(notify).toHaveBeenLastCalledWith('Box is on.', 'ok'));
+    await vi.waitFor(() => expect(notify).toHaveBeenLastCalledWith('Dropbox is on.', 'ok'));
+  });
+
+  it('once backups have gone to the one that is on besides the computer, the free plan keeps it: it is not turned off, and another is offered only with Pro', async () => {
+    const [computer, , ...rest] = locations().locations;
+    const { notify, offered, row } = group({ locations: [computer, location({ on: true, connected: true }), ...rest], held: 'google-drive' });
+    const held = 'Google Drive is the only location besides your computer the free plan can use, as your backups are there. Pro backs up to as many locations as you like.';
+    await userEvent.click(row('Google Drive'));
+    expect(notify).toHaveBeenLastCalledWith(held, 'info');
+    expect(api.turnOffLocation).not.toHaveBeenCalled();
+    // The computer goes off as ever.
+    await userEvent.click(row('Studio iMac'));
+    expect(api.turnOffLocation).toHaveBeenCalledWith('computer');
+    api.turnOnLocation.mockRejectedValueOnce(refused('The free plan backs up to your computer and one other location, and your backups are on Google Drive.', 402));
+    await userEvent.click(row('Dropbox'));
+    const [reason, , instead] = (offered.offer as ReturnType<typeof vi.fn>).mock.lastCall!;
+    expect([reason, instead.current, instead.run]).toEqual(['location', 'Google Drive', undefined]);
+
+    // Its own page says the same of Turn off, Disconnect and Remove location, asking nothing.
+    await userEvent.click(screen.getByRole('button', { name: /^Google Drive/ }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Google Drive' })).getByRole('button', { name: 'Turn off' }));
+    expect(notify).toHaveBeenLastCalledWith(held, 'info');
+    cleanup();
+    const archive = { ...S3, account: null };
+    const drive = location({ on: true, connected: true });
+    for (const [l, button] of [[archive, 'Remove location'], [drive, 'Disconnect']] as const) {
+      const shown = group({ locations: [...locations().locations.slice(0, 1).map(c => ({ ...c, on: false })), l], held: l.id });
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(`^${l.name}`) }));
+      await userEvent.click(within(screen.getByRole('dialog', { name: l.name })).getByRole('button', { name: button }));
+      expect(shown.notify).toHaveBeenLastCalledWith(`${l.name} is the only location besides your computer the free plan can use, as your backups are there. Pro backs up to as many locations as you like.`, 'info');
+      expect(screen.queryByRole('dialog', { name: new RegExp(`^(Remove|Disconnect) `) })).not.toBeInTheDocument();
+      cleanup();
+    }
   });
 
   it('opens Connect to server on Pro, or the Pro sheet first on the free plan', async () => {
@@ -160,7 +196,7 @@ describe('a location in full', () => {
     const { notify, layer } = show();
     expect(layer()).toHaveTextContent('OnAmazon S3 · photos');
     expect(within(layer()).getByRole('progressbar', { name: 'Archive storage' })).toHaveAttribute('aria-valuenow', String(641.8e9));
-    expect(layer()).toHaveTextContent('597.72 GB of 1862.65 GB used');
+    expect(layer()).toHaveTextContent('597.72 GB of 1.82 TB used');
     expect(within(layer()).getByText('photos/PhotoSense')).toBeInTheDocument();
     expect(layer()).toHaveTextContent('Checked copies 1 file');
     expect(layer()).toHaveTextContent('Access key ID AKIA…7Q2F');

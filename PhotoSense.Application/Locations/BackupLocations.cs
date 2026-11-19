@@ -60,9 +60,10 @@ public sealed record LocationView(string Id, LocationKind Kind, string Name, boo
 /// <summary>The locations, how many a copy must be checked on to count as backed up, and what they are doing.</summary>
 /// <param name="Locations">The computer, the cloud services, then those added, by name.</param>
 /// <param name="CountAt">On how many locations a copy must be checked: 1 or 2.</param>
-/// <param name="Pro">The plan lets more than one location be on, and Connect to server add more.</param>
+/// <param name="Pro">The plan lets more than one location besides the computer be on, and Connect to server add more.</param>
 /// <param name="Activity">What they are doing, or last did since PhotoSense started.</param>
-public sealed record LocationsState(IReadOnlyList<LocationView> Locations, int CountAt, bool Pro, LocationActivity? Activity);
+/// <param name="Held">On the free plan, the location besides the computer backups have gone to, which it is held to from then on; null on Pro or before the first backup.</param>
+public sealed record LocationsState(IReadOnlyList<LocationView> Locations, int CountAt, bool Pro, LocationActivity? Activity, string? Held);
 
 /// <summary>A location as Connect to server adds it, or changes one added.</summary>
 /// <param name="Id">The location changed; null to add one.</param>
@@ -79,18 +80,29 @@ public sealed record ServerConnection(string? Id, LocationKind Kind, string Name
 /// <param name="Problem">Why it could not be reached just now.</param>
 public sealed record LocationDetails(LocationView Location, string? Where, RemoteSpace? Space, string? Problem);
 
-/// <summary>The free plan backs up to one location, and another is on.</summary>
-/// <param name="current">The location that is on.</param>
+/// <summary>The free plan backs up to the computer and one other location, and another is on.</summary>
+/// <param name="current">The location besides the computer that is on.</param>
 /// <param name="wanted">The one the person wanted on.</param>
-public sealed class LocationLimitException(string current, string wanted)
-    : InvalidOperationException($"The free plan backs up to one location, and {current} is on. Pro adds as many as you like.")
+/// <param name="held">Backups have gone to the one that is on, so the free plan is held to it: only Pro adds another.</param>
+public sealed class LocationLimitException(string current, string wanted, bool held)
+    : InvalidOperationException(held
+        ? $"The free plan backs up to your computer and one other location, and your backups are on {current}. Pro adds as many as you like."
+        : $"The free plan backs up to your computer and one other location, and {current} is on. Pro adds as many as you like.")
 {
-    /// <summary>The location that is on.</summary>
+    /// <summary>Backups have gone to the one that is on, so it cannot be swapped for another on the free plan.</summary>
+    public bool Held { get; } = held;
+
+    /// <summary>The location besides the computer that is on.</summary>
     public string Current { get; } = current;
 
     /// <summary>The id of the one the person wanted on.</summary>
     public string Wanted { get; } = wanted;
 }
+
+/// <summary>On the free plan, the location besides the computer backups have gone to cannot be turned off, signed out of or removed: it is the only other one the plan can use.</summary>
+/// <param name="name">The location.</param>
+public sealed class OnlyLocationException(string name)
+    : InvalidOperationException($"{name} is the only location besides your computer the free plan can use, as your backups are there. Pro backs up to as many locations as you like.");
 
 /// <summary>Something asked for is part of Pro, which the plan is not.</summary>
 /// <param name="message">What is part of Pro, as the Pro sheet says it.</param>
@@ -98,7 +110,7 @@ public sealed class ProNeededException(string message) : InvalidOperationExcepti
 
 /// <summary>
 /// The places a phone backs up to: the computer it was paired with, the cloud services the person signs in to, and those
-/// Connect to server adds. Backups go to every one that is on (one on the free plan); each copy counts only once the
+/// Connect to server adds. Backups go to every one that is on (on the free plan, the computer and one other); each copy counts only once the
 /// location's own checksum of it matches PhotoSense's, or, where it keeps none, PhotoSense has read it back. Nothing is
 /// ever replaced there, nor deleted there by PhotoSense: a test file only, as Connect to server checks it can write.
 /// </summary>
@@ -184,14 +196,15 @@ public sealed class BackupLocations
     /// <summary>What the locations are doing now, for whoever waits for it to end.</summary>
     public Task Running { get; private set; } = Task.CompletedTask;
 
-    /// <summary>The locations, how many a copy must be checked on, and what they are doing. On the free plan only the one used last stays on.</summary>
+    /// <summary>The locations, how many a copy must be checked on, and what they are doing. On the free plan only the one besides the computer used last stays on.</summary>
     public async Task<LocationsState> StateAsync(CancellationToken ct)
     {
         var pro = (await _plan.CurrentAsync(ct)).Pro;
         if (!pro) await KeepOneOnAsync(ct);
         var views = new List<LocationView>();
-        foreach (var location in await ListAsync(ct)) views.Add(await ViewAsync(location, ct));
-        return new LocationsState(views, await _store.CountAtAsync(ct), pro, Activity());
+        var list = await ListAsync(ct);
+        foreach (var location in list) views.Add(await ViewAsync(location, ct));
+        return new LocationsState(views, await _store.CountAtAsync(ct), pro, Activity(), pro ? null : Held(list)?.Id);
     }
 
     /// <summary>One location in full: where its folder is and how much it holds, asked of it now.</summary>
@@ -214,7 +227,7 @@ public sealed class BackupLocations
 
     /// <summary>
     /// Turns a location on: the computer once paired; a cloud service, signing in first if it has not been; one added.
-    /// On the free plan, with another on, nothing changes and <see cref="LocationLimitException"/> says which.
+    /// On the free plan, with another on besides the computer, nothing changes and <see cref="LocationLimitException"/> says which; the computer is always allowed.
     /// </summary>
     /// <exception cref="InvalidOperationException">The computer has not been paired, or the service cannot be signed in to from this version.</exception>
     /// <exception cref="OperationCanceledException">The person closed the sign-in.</exception>
@@ -229,16 +242,20 @@ public sealed class BackupLocations
     }
 
     /// <summary>Turns a location off: backups stop going there, and its copies stop counting toward Safe to delete. Nothing there is deleted.</summary>
+    /// <exception cref="OnlyLocationException">On the free plan, backups have gone there.</exception>
     public async Task TurnOffAsync(string id, CancellationToken ct)
     {
         var location = await FindAsync(id, ct);
+        await KeepHeldAsync(location, ct);
         await _store.SaveAsync(location with { On = false }, ct);
     }
 
-    /// <summary>On the free plan, turns this location on in place of the one that is on.</summary>
+    /// <summary>On the free plan, turns this location on in place of the one besides the computer that is on; the computer stays as it is.</summary>
+    /// <exception cref="LocationLimitException">Backups have gone to the one that is on, so only Pro adds another.</exception>
     public async Task UseInsteadAsync(string id, CancellationToken ct)
     {
-        foreach (var other in (await ListAsync(ct)).Where(l => l.On && l.Id != id)) await _store.SaveAsync(other with { On = false }, ct);
+        if (!(await _plan.CurrentAsync(ct)).Pro && Held(await ListAsync(ct)) is { } held && held.Id != id) throw new LocationLimitException(held.Name, id, held: true);
+        foreach (var other in Others(await ListAsync(ct)).Where(l => l.On && l.Id != id)) await _store.SaveAsync(other with { On = false }, ct);
         await TurnOnAsync(id, ct);
     }
 
@@ -248,6 +265,7 @@ public sealed class BackupLocations
     {
         var location = await FindAsync(id, ct);
         if (!LocationKinds.IsCloud(location.Kind)) throw new InvalidOperationException("Only a cloud service is signed out of.");
+        await KeepHeldAsync(location, ct);
         await _secrets.DeleteAsync(id, ct);
         await _store.RemoveAsync(id, ct);
     }
@@ -258,6 +276,7 @@ public sealed class BackupLocations
     {
         var location = await FindAsync(id, ct);
         if (!LocationKinds.IsServer(location.Kind)) throw new InvalidOperationException("Only a location added by Connect to server is removed.");
+        await KeepHeldAsync(location, ct);
         await _secrets.DeleteAsync(id, ct);
         await _store.RemoveAsync(id, ct);
     }
@@ -424,17 +443,32 @@ public sealed class BackupLocations
             location.LastBackup, location.LastChecked, location.Problem);
     }
 
-    // On the free plan, at most one location stays on: the one used last.
+    // On the free plan, at most one location besides the computer stays on: the one used last.
     private async Task KeepOneOnAsync(CancellationToken ct)
     {
-        var on = (await ListAsync(ct)).Where(l => l.On).OrderByDescending(l => l.LastUsed ?? DateTimeOffset.MinValue).ToList();
+        var on = Others(await ListAsync(ct)).Where(l => l.On).OrderByDescending(l => l.LastUsed ?? DateTimeOffset.MinValue).ToList();
         foreach (var off in on.Skip(1)) await _store.SaveAsync(off with { On = false }, ct);
     }
 
+    // The free plan always backs up to the computer, within the day's limit, and to one location besides (Jamie, 2026-11-19).
     private async Task LimitAsync(BackupLocation wanted, CancellationToken ct)
     {
+        if (wanted.Kind == LocationKind.Computer || (await _plan.CurrentAsync(ct)).Pro) return;
+        var list = await ListAsync(ct);
+        if (Others(list).FirstOrDefault(l => l.On && l.Id != wanted.Id) is { } other) throw new LocationLimitException(other.Name, wanted.Id, held: Held(list)?.Id == other.Id);
+    }
+
+    // Every location but the computer, which the free plan does not count.
+    private static IEnumerable<BackupLocation> Others(IEnumerable<BackupLocation> list) => list.Where(l => l.Kind != LocationKind.Computer);
+
+    // On the free plan, the location besides the computer that is on and has had a backup: the plan stays with it from then on (Jamie, 2026-11-19).
+    private static BackupLocation? Held(IReadOnlyList<BackupLocation> list) => Others(list).FirstOrDefault(l => l.On && l.LastBackup is not null);
+
+    // Refuses, on the free plan, to turn off, sign out of or remove the location backups have gone to.
+    private async Task KeepHeldAsync(BackupLocation location, CancellationToken ct)
+    {
         if ((await _plan.CurrentAsync(ct)).Pro) return;
-        if ((await ListAsync(ct)).FirstOrDefault(l => l.On && l.Id != wanted.Id) is { } other) throw new LocationLimitException(other.Name, wanted.Id);
+        if (Held(await ListAsync(ct))?.Id == location.Id) throw new OnlyLocationException(location.Name);
     }
 
     // Signs in to a cloud service in the system's sheet; its tokens are kept as its secrets, and it is kept, off until turned on.

@@ -4,7 +4,7 @@ using PhotoSense.Domain.Services;
 namespace PhotoSense.Application.Locations;
 
 /// <summary>
-/// Reads a file through, working out as it goes every checksum a location may keep of it: SHA-256, MD5, SHA-1 and
+/// Reads a file through, working out as it goes every checksum a location may keep of it: SHA-256, MD5 and
 /// Dropbox's own. A file is read once, whether it is being put somewhere or read back.
 /// </summary>
 public sealed class HashingStream : Stream
@@ -15,7 +15,6 @@ public sealed class HashingStream : Stream
     private readonly Stream _inner;
     private readonly IncrementalHash _sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     private readonly IncrementalHash _md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
-    private readonly IncrementalHash _sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
     private readonly IncrementalHash _block = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     private readonly IncrementalHash _blocks = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
     private int _inBlock;
@@ -36,7 +35,6 @@ public sealed class HashingStream : Stream
             {
                 [ChecksumKind.Sha256] = Convert.ToHexStringLower(_sha256.GetHashAndReset()),
                 [ChecksumKind.Md5] = Convert.ToHexStringLower(_md5.GetHashAndReset()),
-                [ChecksumKind.Sha1] = Convert.ToHexStringLower(_sha1.GetHashAndReset()),
                 [ChecksumKind.DropboxContent] = Convert.ToHexStringLower(_blocks.GetHashAndReset()),
             };
         }
@@ -61,7 +59,6 @@ public sealed class HashingStream : Stream
     {
         _sha256.AppendData(bytes);
         _md5.AppendData(bytes);
-        _sha1.AppendData(bytes);
         _read += bytes.Length;
         while (bytes.Length > 0)
         {
@@ -126,7 +123,7 @@ public sealed class HashingStream : Stream
     {
         // A stream has no finalizer, so this is only ever called to dispose.
         _inner.Dispose();
-        foreach (var hash in new[] { _sha256, _md5, _sha1, _block, _blocks }) hash.Dispose();
+        foreach (var hash in new[] { _sha256, _md5, _block, _blocks }) hash.Dispose();
         base.Dispose(disposing);
     }
 }

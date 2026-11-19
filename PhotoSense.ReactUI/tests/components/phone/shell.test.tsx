@@ -238,7 +238,7 @@ describe('Settings on a tablet (T5)', () => {
       <PlaceContext.Provider value>
         <SettingsSheet theme="auto" unit="miles" errorCount={0} plan={plan()} beside={<p>the subscription</p>} onClose={onClose} onRecent={onRecent}
           onTheme={none} onUnit={none} onPhotoAccess={none} onScanAgain={none} onDeletePermanently={none} onErrors={none} onHelp={none} onAbout={none} onPrivacy={none}
-          onSubscription={none} onPair={none} onLowStorage={none} />
+          onSubscription={none} onLowStorage={none} />
       </PlaceContext.Provider>, frame('ios', { tablet: true }));
     expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
@@ -256,7 +256,7 @@ describe('Settings', () => {
   function show(platform: Platform = 'ios', more = {}) {
     const calls = {
       onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
-      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(), onLowStorage: vi.fn(),
+      onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onLowStorage: vi.fn(),
     };
     const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} access="everything" removed={removed(37)} moves={1} {...calls} {...more} />, frame(platform));
     return { calls, view };
@@ -303,16 +303,8 @@ describe('Settings', () => {
     expect(screen.queryByText('Get Pro')).not.toBeInTheDocument();
   });
 
-  it('names the computer backups go to, and where they go; with none, connects one; until the phone has said, has no Computer at all', async () => {
-    const { calls, view } = show('ios', { computer: { name: 'Studio iMac', folder: 'Pictures/PhotoSense' } });
-    const computer = screen.getByRole('region', { name: 'Computer' });
-    expect(within(computer).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Studio iMac Paired', 'Backup folder Pictures/PhotoSense']);
-    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} computer={{ name: 'Studio iMac', folder: null }} {...noCalls()} />);
-    expect(screen.getByText('Backup folder').closest('li')).toHaveTextContent(/^Backup folder$/);
-    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} computer={null} {...calls} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
-    expect([calls.onClose.mock.calls.length, calls.onPair.mock.calls.length]).toEqual([1, 1]);
-    view.again(<SettingsSheet theme="dark" unit="km" errorCount={0} {...noCalls()} />);
+  it('has no Computer group of its own: the computer is one of the locations', () => {
+    show('ios');
     expect(screen.queryByRole('region', { name: 'Computer' })).not.toBeInTheDocument();
   });
 
@@ -372,7 +364,7 @@ describe('Settings', () => {
 function noCalls() {
   return {
     onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onDeletePermanently: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
-    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onPair: vi.fn(), onLowStorage: vi.fn(),
+    onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onLowStorage: vi.fn(),
   };
 }
 
@@ -643,19 +635,19 @@ describe('PhotoSense on a phone', () => {
     for (const f of [api.useBackup, api.useLibraryBackup, api.useSafeReview, api.usePlan]) f.mockReturnValue({});
   });
 
-  it('names the computer in Settings once the phone has one, and pairs one from there when it has none', async () => {
+  it('names the computer under Locations in Settings once the phone has one, and pairs one from its row when it has none', async () => {
     width(false);
-    api.useBackup.mockReturnValue({ data: backupState() });
+    api.useLocations.mockReturnValue({ data: locations() });
     const { unmount } = render(<App />);
     await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
-    expect(within(screen.getByRole('region', { name: 'Computer' })).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Studio iMac Paired', "Backup folder Pictures/PhotoSense/Alex's iPhone"]);
+    expect(within(screen.getByRole('region', { name: 'Locations' })).getByRole('button', { name: /^Studio iMac/ })).toHaveTextContent('Studio iMacPaired · Pictures/PhotoSense');
     unmount();
-    api.useBackup.mockReturnValue({ data: backupState({ stage: 'unpaired', computer: null }) });
+    api.useLocations.mockReturnValue({ data: locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' })] }) });
     render(<App />);
     await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
-    await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Computer\s*Not paired yet\. Tap to connect your computer\.$/ }));
     expect(screen.getByRole('region', { name: 'Connect your computer' })).toBeInTheDocument();
-    api.useBackup.mockReturnValue({});
+    api.useLocations.mockReturnValue({});
   });
 
   it('pairs a computer from Backup when it has none, and Not now puts pairing away', async () => {
@@ -850,6 +842,31 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(screen.getByRole('button', { name: 'IMG_2.JPG' }));
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Add to album' }));
     expect(within(screen.getByRole('dialog', { name: 'Add 1 to an album' })).getByRole('button', { name: 'Lake' })).toBeInTheDocument();
+  });
+
+  it('on a tablet, Backup chooses photos beside its list, asks where to send them, and shows what was sent there too', async () => {
+    width(true);
+    api.useBackup.mockReturnValue({ data: backupState() });
+    const archive = location({ id: 's1', kind: 'amazonS3', name: 'Archive', on: true, connected: true, settings: { bucket: 'photos' } });
+    let listed = locations({ locations: [...locations().locations, archive] });
+    api.useLocations.mockImplementation(() => ({ data: listed }));
+    const { rerender } = render(<App start="backup" />);
+    await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
+    const picker = screen.getByRole('region', { name: 'Choose photos' });
+    await userEvent.click(within(picker).getByRole('button', { name: /IMG_1\.JPG/ }));
+    await userEvent.click(within(picker).getByRole('button', { name: /IMG_1\.JPG/ }));
+    await userEvent.click(within(picker).getByRole('button', { name: /IMG_1\.JPG/ }));
+    await userEvent.click(within(picker).getByRole('button', { name: 'Send to…' }));
+    const sheet = screen.getByRole('dialog', { name: 'Send to' });
+    await userEvent.click(within(sheet).getByRole('radio', { name: /Archive/ }));
+    await userEvent.click(within(sheet).getByRole('button', { name: 'Send 1 item to Archive' }));
+    expect(api.sendToLocation).toHaveBeenCalledWith('s1', ['IMG_1']);
+    listed = { ...listed, activity: { task: 'send', stage: 'ready', locations: [], sent: { locationId: 's1', items: 1, matched: 1, bytes: 5 } } };
+    rerender(<App start="backup" />);
+    expect(await screen.findByRole('region', { name: 'Sent' })).toHaveTextContent('1 item sent to Archive');
+    expect(screen.queryByRole('dialog', { name: 'Sent' })).not.toBeInTheDocument();
+    api.useLocations.mockReturnValue({});
+    api.useBackup.mockReturnValue({});
   });
 
   it('counts the library beside its tab on an iPad, and while choosing in Library puts the selection bar in place of the tabs', async () => {

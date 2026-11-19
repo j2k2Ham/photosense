@@ -32,8 +32,6 @@ interface Props {
   readonly moves?: number;
   /** The plan, once the service has said. */
   readonly plan?: PlanDto;
-  /** The computer the phone backs up to, and where its backups go there; null when it has none; absent until the phone has said. */
-  readonly computer?: { readonly name: string; readonly folder: string | null } | null;
   /** Whether low-storage alerts are on, once the phone has said. */
   readonly lowStorage?: boolean;
   /** Turns low-storage alerts on or off; on asks the phone first. */
@@ -42,8 +40,6 @@ interface Props {
   readonly removeLocation?: boolean;
   /** Changes whether Share photo starts with Remove location on; without it, Privacy is not shown. */
   onRemoveLocation?(on: boolean): void;
-  /** Pairs with a computer. */
-  onPair(): void;
   /** Opens the Subscription page. */
   onSubscription(): void;
   onTheme(theme: ThemeChoice): void;
@@ -60,13 +56,13 @@ interface Props {
   onClose(): void;
   /** On a tablet, what shows beside the list: the Subscription page. */
   readonly beside?: React.ReactNode;
-  /** The places backups go, with their switches, after the computer. */
+  /** The places backups go, the computer among them, with their switches. */
   readonly locations?: React.ReactNode;
 }
 
 /**
- * Settings, from the gear, over every tab: the plan, which opens Subscription; the computer backups go to, or pairing
- * one; the theme and the unit of distance; the
+ * Settings, from the gear, over every tab: the plan, which opens Subscription; the locations backups go to, the
+ * computer among them; the theme and the unit of distance; the
  * photos PhotoSense may see and scanning again; what waits in PhotoSense Removed and Delete permanently; what was moved
  * and what went wrong; sharing without the place; and help, about and privacy.
  */
@@ -81,16 +77,6 @@ export function SettingsSheet(p: Props) {
   const rows = (
       <div className="flex flex-col gap-5 px-4 pb-6 pt-2">
         {p.plan && <PlanSummary plan={p.plan} on={inPlace} onOpen={p.onSubscription} />}
-        {p.computer !== undefined && (
-          <ListGroup header="Computer">
-            {p.computer
-              ? <>
-                <ListRow detail={<span className="flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 rounded-full bg-keep" />Paired</span>}>{p.computer.name}</ListRow>
-                <ListRow detail={p.computer.folder ?? undefined}>Backup folder</ListRow>
-              </>
-              : <ListRow chevron onClick={then(p.onPair)}>Connect your computer</ListRow>}
-          </ListGroup>
-        )}
         {p.locations}
         <ListGroup header="Appearance">
           <ListRow detail={<Segmented<ThemeChoice> label="Theme" options={THEMES} value={p.theme} onChange={p.onTheme} className="w-[220px]" />}>Theme</ListRow>

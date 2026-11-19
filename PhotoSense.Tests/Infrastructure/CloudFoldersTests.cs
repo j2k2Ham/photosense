@@ -8,7 +8,7 @@ using PhotoSense.Infrastructure.Locations;
 namespace PhotoSense.Tests.Infrastructure;
 
 /// <summary>
-/// PhotoSense's folder in Google Drive, OneDrive, Dropbox and Box, each against the service's own answers: made the first
+/// PhotoSense's folder in Google Drive, OneDrive and Dropbox, each against the service's own answers: made the first
 /// time, listed a page at a time, a file put in one request or in pieces and never over a name, the service's checksum
 /// said, read back, deleted, and how full it is; the tokens renewed before they run out; and every refusal in plain words.
 /// </summary>
@@ -18,8 +18,6 @@ public class CloudFoldersTests
     private const string Graph = "https://graph.microsoft.com/v1.0/me/drive/special/approot";
     private const string DropboxApi = "https://api.dropboxapi.com/2";
     private const string DropboxContent = "https://content.dropboxapi.com/2";
-    private const string BoxApi = "https://api.box.com/2.0";
-    private const string BoxUpload = "https://upload.box.com/api/2.0";
 
     private static readonly TestClock Clock = new();
 
@@ -29,7 +27,7 @@ public class CloudFoldersTests
         [CloudAccounts.Expires] = Clock.GetUtcNow().AddHours(1).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
     };
 
-    private static readonly CloudAppOptions Apps = new() { GoogleClientId = "g.apps.googleusercontent.com", MicrosoftClientId = "m", DropboxClientId = "d", BoxClientId = "b", BoxClientSecret = "s" };
+    private static readonly CloudAppOptions Apps = new() { GoogleClientId = "g.apps.googleusercontent.com", MicrosoftClientId = "m", DropboxClientId = "d" };
 
     private sealed record Made<T>(T Folder, FakeNetwork Network, List<IReadOnlyDictionary<string, string>> Renewed);
 
@@ -301,115 +299,22 @@ public class CloudFoldersTests
         await Assert.That(await MessageAsync(() => folder.ChecksumAsync("IMG_1.JPG", ct))).StartsWith("A file named IMG_1.JPG is already there");
     }
 
-    // ——— Box ———
-
-    private static Made<BoxFolder> BoxWith(bool hasFolder, List<TimeSpan>? waited = null)
-    {
-        var made = Make((h, a, s, r) => new BoxFolder(h, a, s, r, (wait, _) => { waited?.Add(wait); return Task.CompletedTask; }));
-        made.Network.On(HttpMethod.Get, $"{BoxApi}/folders/0/items", h => h.Url.Contains("offset=0")
-                ? FakeNetwork.Json(hasFolder
-                    ? """{"total_count":3,"entries":[{"type":"file","name":"PhotoSense","id":"1"},{"type":"folder","name":"Other","id":"2"}]}"""
-                    : """{"total_count":1,"entries":[{"type":"folder","name":"Other","id":"2"}]}""")
-                : FakeNetwork.Json("""{"total_count":3,"entries":[{"type":"folder","name":"PhotoSense","id":"F"}]}"""))
-            .On(HttpMethod.Post, $"{BoxApi}/folders", _ => FakeNetwork.Json("""{"id":"F"}"""))
-            .On(HttpMethod.Get, $"{BoxApi}/folders/F/items", h => h.Url.Contains("offset=0")
-                ? FakeNetwork.Json("""{"total_count":5,"entries":[{"type":"folder","name":"Old","id":"9"},{"type":"file","name":"IMG_1.JPG","size":5,"id":"X","sha1":"AB"}]}""")
-                : FakeNetwork.Json("""{"total_count":5,"entries":[]}"""));
-        return made;
-    }
-
-    [Test]
-    public async Task Box_Makes_Its_Folder_Once_And_Lists_It_A_Page_At_A_Time_Files_Only(CancellationToken ct)
-    {
-        var (folder, network, _) = BoxWith(hasFolder: false);
-        await Assert.That(folder.Where).IsEqualTo("PhotoSense");
-        await Assert.That(await folder.ListAsync(ct)).IsEquivalentTo([new RemoteFile("IMG_1.JPG", 5)]);
-        await Assert.That(network.Asked.Single(h => h.Method == HttpMethod.Post).Body).IsEqualTo("""{"name":"PhotoSense","parent":{"id":"0"}}""");
-        await folder.ListAsync(ct);
-        await Assert.That(network.Asked.Count(h => h.Method == HttpMethod.Post)).IsEqualTo(1);
-        // Found on a later page of the account's top folder.
-        var (found, foundNetwork, _) = BoxWith(hasFolder: true);
-        await found.ListAsync(ct);
-        await Assert.That(foundNetwork.Asked.Any(h => h.Method == HttpMethod.Post)).IsFalse();
-    }
-
-    [Test]
-    public async Task Box_Puts_A_File_Of_Up_To_50_MB_In_One_Request_Says_Its_SHA1_Reads_It_Back_Deletes_It_And_Says_How_Full_It_Is(CancellationToken ct)
-    {
-        var (folder, network, _) = BoxWith(hasFolder: true);
-        network.On(HttpMethod.Post, $"{BoxUpload}/files/content", _ => FakeNetwork.Json("""{"entries":[{"sha1":"EF"}]}"""))
-            .On(HttpMethod.Get, $"{BoxApi}/files/X/content", _ => FakeNetwork.Bytes([7]))
-            .On(HttpMethod.Delete, $"{BoxApi}/files/X", _ => FakeNetwork.Status(HttpStatusCode.NoContent))
-            .On(HttpMethod.Get, $"{BoxApi}/users/me", _ => FakeNetwork.Json("""{"space_amount":10,"space_used":4}"""));
-        await Assert.That(await folder.PutAsync("IMG_2.JPG", new MemoryStream([1]), 1, ct)).IsEqualTo(new RemoteChecksum(ChecksumKind.Sha1, "ef"));
-        var form = network.Asked.Single(h => h.Url.EndsWith("/files/content", StringComparison.Ordinal)).Body;
-        await Assert.That(form.IndexOf("name=attributes", StringComparison.Ordinal)).IsLessThan(form.IndexOf("name=file", StringComparison.Ordinal));
-        await Assert.That(form).Contains("""{"name":"IMG_2.JPG","parent":{"id":"F"}}""");
-        await Assert.That(await folder.ChecksumAsync("IMG_1.JPG", ct)).IsEqualTo(new RemoteChecksum(ChecksumKind.Sha1, "ab"));
-        await Assert.ThrowsAsync<FileNotFoundException>(() => folder.ChecksumAsync("gone.JPG", ct));
-        await Assert.That(await AllAsync(await folder.OpenReadAsync("IMG_1.JPG", ct), ct)).IsEquivalentTo(new byte[] { 7 });
-        await folder.DeleteAsync("IMG_1.JPG", ct);
-        await folder.DeleteAsync("gone.JPG", ct);
-        await Assert.That(network.Asked.Count(h => h.Method == HttpMethod.Delete)).IsEqualTo(1);
-        await Assert.That(await folder.SpaceAsync(ct)).IsEqualTo(new RemoteSpace(10, 4));
-        network.On(HttpMethod.Get, $"{BoxApi}/folders/F/items", _ => FakeNetwork.Json("""{"total_count":1,"entries":[{"type":"file","name":"plain.JPG","id":"P"}]}"""));
-        await Assert.That(await folder.ChecksumAsync("plain.JPG", ct)).IsNull();
-    }
-
-    /// <summary>A Box account that takes a large file in an upload session, asking to be asked again as it puts it together.</summary>
-    private static void BoxSessions(FakeNetwork network, int asksAgain, string? retryAfter)
-    {
-        network.On(HttpMethod.Post, $"{BoxUpload}/files/upload_sessions", h => h.Url.EndsWith("/commit", StringComparison.Ordinal)
-                ? asksAgain-- > 0 ? Accepted(retryAfter) : FakeNetwork.Json("""{"entries":[{"sha1":"AA"}]}""", HttpStatusCode.Created)
-                : FakeNetwork.Json("""{"id":"S","part_size":31457280}""", HttpStatusCode.Created))
-            .On(HttpMethod.Put, $"{BoxUpload}/files/upload_sessions/S", h => FakeNetwork.Json($$$"""{"part":{"part_id":"{{{h.Headers["Content-Range"].Split(' ', '-')[1]}}}"}}"""));
-    }
-
-    private static HttpResponseMessage Accepted(string? retryAfter)
-    {
-        var answer = FakeNetwork.Status(HttpStatusCode.Accepted);
-        if (retryAfter is not null) answer.Headers.TryAddWithoutValidation("Retry-After", retryAfter);
-        return answer;
-    }
-
-    [Test]
-    public async Task Box_Puts_A_Larger_File_In_An_Upload_Session_Each_Piece_And_The_Whole_Checked_By_SHA1(CancellationToken ct)
-    {
-        var waited = new List<TimeSpan>();
-        var (folder, network, _) = BoxWith(hasFolder: true, waited);
-        BoxSessions(network, asksAgain: 2, retryAfter: null);
-        var bytes = RandomNumberGenerator.GetBytes((int)BoxFolder.OneRequest + 10);
-        await Assert.That(await folder.PutAsync("clip.MOV", new MemoryStream(bytes), bytes.Length, ct)).IsEqualTo(new RemoteChecksum(ChecksumKind.Sha1, "aa"));
-        var started = network.Asked.First(h => h.Url == $"{BoxUpload}/files/upload_sessions");
-        await Assert.That(started.Body).IsEqualTo($$"""{"folder_id":"F","file_size":{{bytes.Length}},"file_name":"clip.MOV"}""");
-        var parts = network.Asked.Where(h => h.Method == HttpMethod.Put).ToList();
-        await Assert.That(parts).Count().IsEqualTo(2);
-        await Assert.That(parts[0].Headers["Digest"]).IsEqualTo($"sha={Convert.ToBase64String(SHA1.HashData(bytes.AsSpan(0, 31457280)))}");
-        await Assert.That(parts.SelectMany(p => p.Bytes).SequenceEqual(bytes)).IsTrue();
-        var commit = network.Asked.Last();
-        await Assert.That(commit.Headers["Digest"]).IsEqualTo($"sha={Convert.ToBase64String(SHA1.HashData(bytes))}");
-        await Assert.That(commit.Body).IsEqualTo("""{"parts":[{"part_id":"0"},{"part_id":"31457280"}]}""");
-        // Asked to ask again, without saying when: a second each time.
-        await Assert.That(waited).IsEquivalentTo([TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1)]);
-    }
-
     // ——— Reaching each kind ———
 
     private static BackupLocation At(LocationKind kind, Dictionary<string, string>? settings = null)
         => new("id", kind, "x", true, null, settings ?? [], null, null, null, null);
 
     [Test]
-    public async Task Each_Kind_Of_Location_Is_Reached_As_It_Was_Connected(CancellationToken ct)
+    public async Task Each_Kind_Of_Location_Is_Reached_As_It_Was_Connected()
     {
         var network = new FakeNetwork();
         var http = new HttpClient(network);
-        var folders = new RemoteFolders(new CloudAccounts(Apps, http, Clock), http, TimeProvider.System);
+        var folders = new RemoteFolders(new CloudAccounts(Apps, http, Clock), http);
         Task Renewed(IReadOnlyDictionary<string, string> s, CancellationToken token) => Task.CompletedTask;
         IRemoteFolder Open(LocationKind kind, Dictionary<string, string>? settings = null, Dictionary<string, string>? secrets = null) => folders.Open(At(kind, settings), secrets ?? Fresh, Renewed);
         await Assert.That(Open(LocationKind.GoogleDrive)).IsTypeOf<DriveFolder>();
         await Assert.That(Open(LocationKind.OneDrive)).IsTypeOf<OneDriveFolder>();
         await Assert.That(Open(LocationKind.Dropbox)).IsTypeOf<DropboxFolder>();
-        await Assert.That(Open(LocationKind.Box)).IsTypeOf<BoxFolder>();
         await Assert.That(Open(LocationKind.AmazonS3, new() { ["bucket"] = "photos", ["region"] = "us-west-2 (Oregon)", ["prefix"] = "/Mine/" }).Where).IsEqualTo("photos/Mine");
         await Assert.That(Open(LocationKind.AmazonS3, new() { ["bucket"] = "photos" }).Where).IsEqualTo("photos/PhotoSense");
         await Assert.That(Open(LocationKind.S3Compatible, new() { ["bucket"] = "b", ["endpoint"] = "https://s3.example.com" }).Where).IsEqualTo("b/PhotoSense");
@@ -424,12 +329,5 @@ public class CloudFoldersTests
         using (var keyed = (SftpFolder)Open(LocationKind.Sftp, new() { ["host"] = "nas", ["user"] = "a", ["auth"] = "SSH key", ["folder"] = "/srv/photos" }, new() { ["pass"] = rsa.ExportRSAPrivateKeyPem() }))
             await Assert.That(keyed.Where).IsEqualTo("/srv/photos");
         await Assert.That(() => Open(LocationKind.Computer)).Throws<ArgumentException>();
-
-        // Box, reached this way, waits as long as it asks before asking again.
-        var box = (BoxFolder)Open(LocationKind.Box);
-        network.On(HttpMethod.Get, $"{BoxApi}/folders/0/items", _ => FakeNetwork.Json("""{"total_count":1,"entries":[{"type":"folder","name":"PhotoSense","id":"F"}]}"""));
-        BoxSessions(network, asksAgain: 1, retryAfter: "0");
-        var bytes = new byte[BoxFolder.OneRequest + 1];
-        await Assert.That(await box.PutAsync("clip.MOV", new MemoryStream(bytes), bytes.Length, ct)).IsEqualTo(new RemoteChecksum(ChecksumKind.Sha1, "aa"));
     }
 }

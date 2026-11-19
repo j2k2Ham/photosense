@@ -3,19 +3,19 @@ import type { LocationDto, LocationKind, LocationProgressDto } from '../types';
 
 /** What each kind of location is called. */
 export const KIND_NAMES: Record<LocationKind, string> = {
-  computer: 'Computer', googleDrive: 'Google Drive', oneDrive: 'OneDrive', dropbox: 'Dropbox', box: 'Box',
+  computer: 'Computer', googleDrive: 'Google Drive', oneDrive: 'OneDrive', dropbox: 'Dropbox',
   amazonS3: 'Amazon S3', s3Compatible: 'S3-compatible', azureBlob: 'Azure Blob Storage', webDav: 'WebDAV', sftp: 'SFTP',
 };
 
 /** A cloud service: signed in to, and always listed. */
-export const isCloud = (kind: LocationKind) => kind === 'googleDrive' || kind === 'oneDrive' || kind === 'dropbox' || kind === 'box';
+export const isCloud = (kind: LocationKind) => kind === 'googleDrive' || kind === 'oneDrive' || kind === 'dropbox';
 
 /** A location Connect to server added, which the person names. */
 export const isServer = (kind: LocationKind) => !isCloud(kind) && kind !== 'computer';
 
 /** A cloud service's tile: its first letter on its own colour, as the design draws it. */
 export const CLOUD_TILES: Partial<Record<LocationKind, { readonly letter: string; readonly hue: number }>> = {
-  googleDrive: { letter: 'G', hue: 150 }, oneDrive: { letter: 'O', hue: 245 }, dropbox: { letter: 'D', hue: 280 }, box: { letter: 'B', hue: 35 },
+  googleDrive: { letter: 'G', hue: 150 }, oneDrive: { letter: 'O', hue: 245 }, dropbox: { letter: 'D', hue: 280 },
 };
 
 /** Where each cloud service keeps PhotoSense's copies, and what PhotoSense may reach there, as signing in says. */
@@ -23,8 +23,13 @@ export const CLOUD_FOLDERS: Partial<Record<LocationKind, { readonly folder: stri
   googleDrive: { folder: 'My Drive/PhotoSense', scope: 'a PhotoSense folder in My Drive' },
   oneDrive: { folder: 'Apps/PhotoSense', scope: 'its own folder, Apps/PhotoSense' },
   dropbox: { folder: 'Apps/PhotoSense', scope: 'its own folder, Apps/PhotoSense' },
-  box: { folder: 'PhotoSense', scope: 'a folder named PhotoSense' },
 };
+
+/** How much a location holds, as its storage line says it: in terabytes from one, as cloud storage is sold, else as PhotoSense writes an amount. */
+export const storageAmount = (bytes: number) => (bytes >= 1024 ** 4 ? `${(bytes / 1024 ** 4).toFixed(2)} TB` : formatBytes(bytes));
+
+/** What the free plan says of the location backups have gone to, besides the computer, when asked to turn it off, sign out of it or remove it. */
+export const heldLine = (name: string) => `${name} is the only location besides your computer the free plan can use, as your backups are there. Pro backs up to as many locations as you like.`;
 
 /** Amazon's regions offered, as the design lists them. */
 export const REGIONS = ['us-east-1 (N. Virginia)', 'us-west-2 (Oregon)', 'eu-west-1 (Ireland)', 'eu-central-1 (Frankfurt)', 'ap-southeast-2 (Sydney)'];
@@ -115,7 +120,7 @@ export function hostOf(location: Pick<LocationDto, 'settings'>): string | undefi
 /** What a location's row says under its name: the account, where it is, or why it cannot be turned on. */
 export function statusLine(location: LocationDto): string {
   if (location.problem) return location.problem;
-  if (location.kind === 'computer') return location.connected ? `Paired · ${location.settings.folder}` : 'Not paired yet';
+  if (location.kind === 'computer') return location.connected ? `Paired · ${location.settings.folder}` : 'Not paired yet. Tap to connect your computer.';
   if (isCloud(location.kind)) {
     if (!location.available) return 'Not available in this version yet';
     return location.connected ? location.account ?? 'Signed in' : 'Not connected';

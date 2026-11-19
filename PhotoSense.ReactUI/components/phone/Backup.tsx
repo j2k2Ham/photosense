@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
 import { organizeThumbnailUrl, pauseBackup, removeSafe, saveBackupSettings, startBackup } from '../../lib/apiClient';
 import { automaticNote, backupButton, backupLine, backupPercent, backupTitle, checkedAt, gigabytes, ofStorage, storageBar, whenSaid } from '../../lib/backup';
+import { progressLine } from '../../lib/locations';
 import { items } from '../../lib/library';
 import { limitLine } from '../../lib/plan';
 import { deviceWord, usePhone } from '../../lib/phone';
 import type { ResultCard } from '../../lib/shareCard';
-import type { BackupSettingsDto, BackupStateDto, LocationsDto, SafeRemovalDto, SafeReviewDto } from '../../types';
+import type { BackupSettingsDto, BackupStateDto, LocationsDto, OrganizeFileDto, SafeRemovalDto, SafeReviewDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, PhoneSwitch } from './Controls';
 import { CheckIcon, DoneIcon, LaptopIcon, ShareIcon, TickIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
-import { LocationsCard } from './Locations';
-import { LayerScreen, PushedHeader, RootHeader, Screen } from './Screens';
+import { ConnectServerScreen, LocationsButtons, LocationsCard, LocationScreen, LocationsGroup, SendPicker } from './Locations';
+import { LayerScreen, PlaceContext, PushedHeader, RootHeader, Screen, SplitView } from './Screens';
 import { ShareRow } from './Share';
 
 type Notify = (message: string, kind: ToastKind) => void;
@@ -43,17 +44,27 @@ interface BackupProps {
   readonly locations?: LocationsDto;
   /** Opens Settings, where the locations are turned on and off. */
   onSettings?(): void;
+  /** On a tablet: Library's pictures and videos, which Send now chooses among beside the list. */
+  readonly files?: readonly OrganizeFileDto[];
+  /** On a tablet: sends what Send now chose, asking where when other locations are on. */
+  onSend?(ids: string[]): void;
+  /** On a tablet: what a send to a location did, shown beside the list (T9). */
+  readonly sent?: React.ReactNode;
 }
+
+/** What a tablet's Backup shows beside its list: a location's page, Connect to server (adding, or changing one), or Send now's photos. */
+type Pane = { readonly kind: 'location'; readonly id: string } | { readonly kind: 'connect'; readonly editing?: LocationsDto['locations'][number] } | { readonly kind: 'pick' };
 
 /**
  * Backup (16, 17): the computer the phone backs up to, what waits or how far a backup has got with the last few
  * pictures, and the button that backs up, pauses or carries on; then automatic backup, which is part of Pro, and Send
  * now, which sends what the person chooses.
  */
-export function BackupScreen({ state, notify, onChoose, onPair, locations, onSettings }: BackupProps) {
+export function BackupScreen({ state, notify, onChoose, onPair, locations, onSettings, files, onSend, sent }: BackupProps) {
   const { platform, tablet } = usePhone();
   const gate = usePlanGate();
   const [busy, setBusy] = useState(false);
+  const [pane, setPane] = useState<Pane>();
   const device = deviceWord(platform, tablet);
   const pro = gate.plan !== undefined && gate.plan.tier !== 'free';
 
@@ -68,10 +79,29 @@ export function BackupScreen({ state, notify, onChoose, onPair, locations, onSet
   const button = state && backupButton(state);
   const press = () => void act(() => (button === 'Pause' ? pauseBackup() : startBackup()));
   const now = new Date();
-  return (
-    <Screen label="Backup">
-      <RootHeader title="Backup" subtitle="Copies photos and videos to your computer, cloud storage and your own locations" />
-      <div className="mx-auto flex w-full max-w-[560px] flex-col gap-6 px-4 pb-4 pt-1">
+  // On a tablet (T6–T9) the locations are listed here, each one's page beside them: the one chosen, or else the first
+  // on other than the computer, the first on, or the first there is.
+  const split = tablet && locations !== undefined;
+  const shown = locations?.locations.find(l => l.id === (pane?.kind === 'location' ? pane.id : undefined))
+    ?? locations?.locations.find(l => l.on && l.kind !== 'computer') ?? locations?.locations.find(l => l.on) ?? locations?.locations[0];
+  const progress = shown && locations?.activity?.stage === 'running' ? locations.activity.locations.find(p => p.id === shown.id) : undefined;
+  const detail = split && (
+    <PlaceContext.Provider value>
+      {sent ?? (pane?.kind === 'pick' ? <SendPicker files={files ?? []} onClose={() => setPane(undefined)} onSend={ids => { setPane(undefined); onSend?.(ids); }} />
+        : pane?.kind === 'connect' ? <ConnectServerScreen key={pane.editing?.id ?? 'new'} editing={pane.editing} notify={notify} onClose={() => setPane(undefined)} />
+          : shown && (
+            <LocationScreen key={shown.id} location={shown} held={shown.id === locations.held} notify={notify} onClose={() => setPane(undefined)} onEdit={() => setPane({ kind: 'connect', editing: shown })}
+              actions={shown.on && shown.kind !== 'computer' && (
+                <div className="flex flex-col gap-2">
+                  {progress && <p role="status" className={`px-1 text-[13.5px] ${progress.problem ? 'text-danger-t' : 'text-t2'}`}>{progressLine(progress)}</p>}
+                  <LocationsButtons data={locations} notify={notify} />
+                </div>
+              )} />
+          ))}
+    </PlaceContext.Provider>
+  );
+  const column = (
+      <div className={`flex w-full flex-col gap-6 px-4 pb-4 pt-1 ${split ? '' : 'mx-auto max-w-[560px]'}`}>
         {!state ? <p role="status" className="py-10 text-center text-[15px] text-t2">Looking at what is backed up…</p>
           : state.stage === 'unpaired' ? (
             <section aria-label="No computer yet" className="flex flex-col gap-3 rounded-[24px] bg-cell p-4">
@@ -117,7 +147,9 @@ export function BackupScreen({ state, notify, onChoose, onPair, locations, onSet
             </section>
           )}
 
-        {locations && onSettings && <LocationsCard data={locations} notify={notify} onSettings={onSettings} />}
+        {split ? <LocationsGroup notify={notify} onPair={onPair} chosen={pane?.kind === 'location' || !pane ? shown?.id : undefined}
+          onChoose={what => setPane(what === 'connect' ? { kind: 'connect' } : { kind: 'location', id: what })} />
+          : locations && onSettings && <LocationsCard data={locations} notify={notify} onSettings={onSettings} />}
 
         {state && (state.stage !== 'unpaired' || locations?.locations.some(l => l.on)) && (
           <section aria-label="Automatic backup" className="flex flex-col gap-2">
@@ -135,11 +167,13 @@ export function BackupScreen({ state, notify, onChoose, onPair, locations, onSet
         )}
 
         <ListGroup header="Send now">
-          <ListRow chevron onClick={onChoose}>Choose photos to send</ListRow>
+          <ListRow chevron current={pane?.kind === 'pick'} onClick={split ? () => setPane({ kind: 'pick' }) : onChoose}>Choose photos to send</ListRow>
         </ListGroup>
       </div>
-    </Screen>
   );
+  const header = <RootHeader title="Backup" subtitle="Copies photos and videos to your computer, cloud storage and your own locations" />;
+  if (split) return <Screen label="Backup" fixed><SplitView narrow list={<>{header}{column}</>} detail={detail} /></Screen>;
+  return <Screen label="Backup">{header}{column}</Screen>;
 }
 
 interface SafeProps {

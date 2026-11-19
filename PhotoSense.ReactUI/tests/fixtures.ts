@@ -117,11 +117,11 @@ export const location = (more: Partial<LocationDto> = {}): LocationDto => ({
   lastBackup: null, lastChecked: null, problem: null, ...more,
 });
 
-/** The locations as the service lists them: the computer paired and on, and the four cloud services, unless the test says otherwise. */
+/** The locations as the service lists them: the computer paired and on, and the three cloud services, unless the test says otherwise. */
 export const locations = (more: Partial<LocationsDto> = {}): LocationsDto => ({
   locations: [
     location({ id: 'computer', kind: 'computer', name: 'Studio iMac', on: true, connected: true, settings: { folder: 'Pictures/PhotoSense' }, copies: 6941, lastBackup: '2026-11-19T08:00:00Z' }),
-    location(), location({ id: 'onedrive', kind: 'oneDrive', name: 'OneDrive' }), location({ id: 'dropbox', kind: 'dropbox', name: 'Dropbox' }), location({ id: 'box', kind: 'box', name: 'Box' }),
+    location(), location({ id: 'onedrive', kind: 'oneDrive', name: 'OneDrive' }), location({ id: 'dropbox', kind: 'dropbox', name: 'Dropbox' }),
   ],
-  countAt: 1, pro: false, activity: null, ...more,
+  countAt: 1, pro: false, activity: null, held: null, ...more,
 });

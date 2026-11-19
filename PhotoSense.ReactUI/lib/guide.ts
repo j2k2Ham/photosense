@@ -580,7 +580,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'Swipe from the left edge, or tap the back arrow, to go back from a screen opened over another.',
           'On an iPad the tabs are in a sidebar on the left, with **Trips**, **Needs fixing** and **Hidden** under **Collections**, and **Settings** at its foot; each opens beside the sidebar, in place of the tab. **Hide sidebar** gives the screen its whole width, with the tabs at the top and the gear back on each tab; **Show sidebar** brings it back.',
-          'On an iPad the list and what you open from it sit side by side: in **Clean up**, the kinds Find lists beside the one chosen, the largest first; in **Organize**, the suggestions beside the one chosen; in **Trips**, the trips beside a map, the one chosen in a card with **Open trip**; in **Settings**, the list beside **Subscription**. **Library** shows what is on your computer, **Trips** and **Year in review** in a row above the photos, eight across. While you swipe, a panel beside the photo says what is marked and what it frees, and your streak. Sheets open in the middle of the screen.',
+          'On an iPad the list and what you open from it sit side by side: in **Clean up**, the kinds Find lists beside the one chosen, the largest first; in **Organize**, the suggestions beside the one chosen; in **Trips**, the trips beside a map, the one chosen in a card with **Open trip**; in **Settings**, the list beside **Subscription**; in **Backup**, every location with its switch beside the page of the one chosen, where **Connect to server**, the photos **Choose photos to send** offers and what was sent show too. **Library** shows what is on your computer, **Trips** and **Year in review** in a row above the photos, eight across. While you swipe, a panel beside the photo says what is marked and what it frees, and your streak. Sheets open in the middle of the screen.',
         ],
       },
       {
@@ -588,7 +588,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'The phone’s Back gesture or button goes back from a screen opened over another, and puts away a sheet.',
           'On a tablet the tabs are down the left side, with **Trips**, **Needs fixing** and **Hidden** under a line, and **Settings** at the foot; each opens beside them, in place of the tab.',
-          'On a tablet the list and what you open from it sit side by side: in **Clean up**, the kinds Find lists beside the one chosen, the largest first; in **Organize**, the suggestions beside the one chosen; in **Trips**, the trips beside a map, the one chosen in a card with **Open trip**; in **Settings**, the list beside **Subscription**. **Library** shows what is on your computer, **Trips** and **Year in review** in a row above the photos, eight across. While you swipe, a panel beside the photo says what is marked and what it frees, and your streak. Sheets open in the middle of the screen.',
+          'On a tablet the list and what you open from it sit side by side: in **Clean up**, the kinds Find lists beside the one chosen, the largest first; in **Organize**, the suggestions beside the one chosen; in **Trips**, the trips beside a map, the one chosen in a card with **Open trip**; in **Settings**, the list beside **Subscription**; in **Backup**, every location with its switch beside the page of the one chosen, where **Connect to server**, the photos **Choose photos to send** offers and what was sent show too. **Library** shows what is on your computer, **Trips** and **Year in review** in a row above the photos, eight across. While you swipe, a panel beside the photo says what is marked and what it frees, and your streak. Sheets open in the middle of the screen.',
         ],
       },
       {
@@ -1067,7 +1067,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Connecting your computer',
         steps: [
           'On the computer, open **Phones** and choose **Pair a phone**. It shows a QR code and a six-digit code.',
-          'Here, choose **Connect your computer**: in **Backup**, or under **Computer** in **Settings**.',
+          'Here, choose **Connect your computer** in **Backup**, or in **Settings**, under **Locations**, tap **Computer**.',
           '**Scan the code** and point the camera at the QR code: the two are paired at once.',
           'Or choose **Enter the code instead**, type the six digits and tap **Pair**. Both then show a number: tap **It’s the same number** only if the computer shows the same one.',
           'Once paired, PhotoSense says where on the computer your backups go: **Pictures/PhotoSense**, in a folder named after this device. The folder is changed on the computer, in **Phones**.',
@@ -1140,21 +1140,21 @@ export const GUIDE: GuideTopic[] = [
     id: 'locations',
     only: PHONES,
     title: 'Cloud storage and your own locations',
-    summary: 'Backing up to Google Drive, OneDrive, Dropbox, Box or a server of your own, beside or instead of your computer.',
-    keywords: ['cloud', 'google drive', 'onedrive', 'dropbox', 'box', 'server', 'nas', 's3', 'amazon', 'azure', 'backblaze', 'wasabi', 'webdav', 'nextcloud', 'sftp', 'ssh', 'location', 'locations', 'sign in', 'rename', 'send to', 'check all backups'],
+    summary: 'Backing up to Google Drive, OneDrive, Dropbox or a server of your own, beside or instead of your computer.',
+    keywords: ['cloud', 'google drive', 'onedrive', 'dropbox', 'server', 'nas', 's3', 'amazon', 'azure', 'backblaze', 'wasabi', 'webdav', 'nextcloud', 'sftp', 'ssh', 'location', 'locations', 'sign in', 'rename', 'send to', 'check all backups'],
     sections: [
       {
         text: [
-          'Each place that keeps a copy of your photos and videos is a **location**: your computer, Google Drive, OneDrive, Dropbox, Box, and any server you connect. They are set up in **Settings**, under **Locations**, and PhotoSense backs up to every one that is on.',
+          'Each place that keeps a copy of your photos and videos is a **location**: your computer, Google Drive, OneDrive, Dropbox, and any server you connect. They are set up in **Settings**, under **Locations**, and PhotoSense backs up to every one that is on.',
           'PhotoSense never sees your password: signing in happens on the service’s own page, and PhotoSense may reach only its own folder there. Your photos go only to the locations you turn on, never to PhotoSense.',
         ],
       },
       {
         heading: 'Turning on cloud storage',
         steps: [
-          'In **Settings**, under **Locations**, turn on **Google Drive**, **OneDrive**, **Dropbox** or **Box**.',
+          'In **Settings**, under **Locations**, turn on **Google Drive**, **OneDrive** or **Dropbox**.',
           'The service’s sign-in page opens. Sign in and allow PhotoSense; you come back here, and the location is on.',
-          'Backups go to **My Drive/PhotoSense** on Google Drive, **Apps/PhotoSense** on OneDrive and Dropbox, and a folder named **PhotoSense** on Box.',
+          'Backups go to **My Drive/PhotoSense** on Google Drive, and **Apps/PhotoSense** on OneDrive and Dropbox.',
         ],
         tips: [
           'Turning a location off keeps you signed in, and turning it on again backs up there at once. Nothing there is deleted.',
@@ -1224,8 +1224,9 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'The free plan and Pro',
         tips: [
-          'The free plan backs up to one location at a time. Turning on a second offers Pro, or **Use … instead**, which turns the first off and the new one on.',
-          'Pro backs up to as many locations as you like, and adds **Connect to server**. If Pro ends, the location used last stays on and nothing is deleted anywhere.',
+          'The free plan always backs up to your computer, within the day’s free removals, and to one other location besides. Until a backup has gone to that one, turning on another offers Pro, or **Use … instead**, which turns the first off and the new one on.',
+          'Once a backup has gone to it, that other location is the free plan’s for good: it cannot be turned off, signed out of or removed, and another location comes only with Pro. Your computer can still be turned off and on.',
+          'Pro backs up to as many locations as you like, and adds **Connect to server**. If Pro ends, your computer stays as it was, of the others the one used last stays on, and nothing is deleted anywhere.',
           'Deleting after a send counts toward the day’s free removals.',
         ],
       },
@@ -1330,8 +1331,7 @@ export const GUIDE: GuideTopic[] = [
       {
         tips: [
           'Your plan, at the top, opens **Subscription**.',
-          '**Computer**: the computer this device is paired with, and its **Backup folder**; or **Connect your computer**.',
-          '**Locations**: your computer, Google Drive, OneDrive, Dropbox and Box, each with a switch, and **Connect to server…** to add a server of your own. Tap one for its own page. **Safe to delete**: **Checked on** any location, or on 2.',
+          '**Locations**: your computer (paired, with its backup folder, or **Not paired yet**: tap it to connect one), Google Drive, OneDrive and Dropbox, each with a switch, and **Connect to server…** to add a server of your own. Tap one for its own page. **Safe to delete**: **Checked on** any location, or on 2.',
           '**Theme**: **Auto** follows the phone’s own light or dark setting; **Dark** or **Light** keeps one. **Distances**: miles or kilometers, for Organize.',
           '**Clean up**: **Low-storage alerts**, a notification when less than a tenth of the storage is free, at most once a week.',
           '**Photo access** says what PhotoSense may see, and opens the phone’s own settings for PhotoSense to change it. **Scan again** reads your library again.',

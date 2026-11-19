@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { detailRows, hostOf, isCloud, isServer, masked, progressLine, SERVER_KINDS, startingSettings, statusLine } from '../../lib/locations';
+import { detailRows, heldLine, hostOf, isCloud, isServer, masked, progressLine, SERVER_KINDS, startingSettings, statusLine, storageAmount } from '../../lib/locations';
 import { location } from '../fixtures';
 
 describe('what a location is', () => {
   it('is the computer, a cloud service, or one Connect to server added', () => {
-    expect([isCloud('box'), isCloud('sftp'), isCloud('computer')]).toEqual([true, false, false]);
-    expect([isServer('sftp'), isServer('box'), isServer('computer')]).toEqual([true, false, false]);
+    expect([isCloud('dropbox'), isCloud('sftp'), isCloud('computer')]).toEqual([true, false, false]);
+    expect([isServer('sftp'), isServer('dropbox'), isServer('computer')]).toEqual([true, false, false]);
   });
 
   it('says under its name how it stands: why it stopped, paired or not, signed in or not, or the kind and host', () => {
     expect(statusLine(location({ problem: 'Down.' }))).toBe('Down.');
     expect(statusLine(location({ kind: 'computer', connected: true, settings: { folder: 'Pictures/PhotoSense' } }))).toBe('Paired · Pictures/PhotoSense');
-    expect(statusLine(location({ kind: 'computer' }))).toBe('Not paired yet');
+    expect(statusLine(location({ kind: 'computer' }))).toBe('Not paired yet. Tap to connect your computer.');
     expect(statusLine(location({ available: false }))).toBe('Not available in this version yet');
     expect(statusLine(location({ connected: true, account: 'alex.m@gmail.com' }))).toBe('alex.m@gmail.com');
     expect(statusLine(location({ connected: true }))).toBe('Signed in');
@@ -25,6 +25,14 @@ describe('what a location is', () => {
     expect(hostOf({ settings: { host: 'nas' } })).toBe('nas');
     expect(hostOf({ settings: { account: 'mystorage' } })).toBe('mystorage');
     expect(hostOf({ settings: {} })).toBeUndefined();
+  });
+
+  it('writes what a location holds in terabytes from one, as cloud storage is sold', () => {
+    expect([storageAmount(2 * 1024 ** 4), storageAmount(500 * 1024 ** 3)]).toEqual(['2.00 TB', '500.00 GB']);
+  });
+
+  it('says why the free plan keeps the location backups went to', () => {
+    expect(heldLine('Dropbox')).toBe('Dropbox is the only location besides your computer the free plan can use, as your backups are there. Pro backs up to as many locations as you like.');
   });
 
   it('shows a key masked, and how far a backup to it has got or why it stopped', () => {

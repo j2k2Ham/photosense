@@ -21,20 +21,13 @@ public sealed class CloudAppOptions
     /// <summary>The app key Dropbox gave PhotoSense's app folder app.</summary>
     public string DropboxClientId { get; init; } = "";
 
-    /// <summary>The client id Box gave PhotoSense.</summary>
-    public string BoxClientId { get; init; } = "";
-
-    /// <summary>The client secret Box gave PhotoSense, which Box asks for even with PKCE.</summary>
-    public string BoxClientSecret { get; init; } = "";
-
     /// <summary>The scheme the services other than Google send the person back to the app by.</summary>
     public string Scheme { get; init; } = "com.j2k2ham.photosense.auth";
 }
 
 /// <summary>
-/// Signing in to Google Drive, OneDrive, Dropbox and Box with OAuth 2 and PKCE, each asking only for the narrowest
-/// access it offers: Google Drive the files PhotoSense makes, OneDrive and Dropbox their app folders, Box a folder of
-/// its own. The person signs in in the system's browser; PhotoSense sees only the tokens the service gives it, which it
+/// Signing in to Google Drive, OneDrive and Dropbox with OAuth 2 and PKCE, each asking only for the narrowest access it
+/// offers: Google Drive the files PhotoSense makes, OneDrive and Dropbox their app folders. The person signs in in the system's browser; PhotoSense sees only the tokens the service gives it, which it
 /// renews here as they run out.
 /// </summary>
 public sealed class CloudAccounts : ICloudAccounts
@@ -63,7 +56,6 @@ public sealed class CloudAccounts : ICloudAccounts
         LocationKind.GoogleDrive => _apps.GoogleClientId.Length > 0,
         LocationKind.OneDrive => _apps.MicrosoftClientId.Length > 0,
         LocationKind.Dropbox => _apps.DropboxClientId.Length > 0,
-        LocationKind.Box => _apps.BoxClientId.Length > 0 && _apps.BoxClientSecret.Length > 0,
         _ => false,
     };
 
@@ -99,7 +91,6 @@ public sealed class CloudAccounts : ICloudAccounts
         {
             ["grant_type"] = "authorization_code", ["code"] = code, ["redirect_uri"] = Redirect(kind), ["client_id"] = ClientId(kind), ["code_verifier"] = begun.Verifier,
         };
-        if (kind == LocationKind.Box) form["client_secret"] = _apps.BoxClientSecret;
         var secrets = await TokensAsync(kind, form, null, ct);
         return new CloudAccount(await AccountAsync(kind, secrets[Access], ct), secrets);
     }
@@ -109,7 +100,6 @@ public sealed class CloudAccounts : ICloudAccounts
     public Task<IReadOnlyDictionary<string, string>> RenewAsync(LocationKind kind, IReadOnlyDictionary<string, string> secrets, CancellationToken ct)
     {
         var form = new Dictionary<string, string> { ["grant_type"] = "refresh_token", ["refresh_token"] = secrets.GetValueOrDefault(Refresh, ""), ["client_id"] = ClientId(kind) };
-        if (kind == LocationKind.Box) form["client_secret"] = _apps.BoxClientSecret;
         return TokensAsync(kind, form, secrets.GetValueOrDefault(Refresh), ct);
     }
 
@@ -152,8 +142,7 @@ public sealed class CloudAccounts : ICloudAccounts
         {
             LocationKind.GoogleDrive => new HttpRequestMessage(HttpMethod.Get, "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)"),
             LocationKind.OneDrive => new HttpRequestMessage(HttpMethod.Get, "https://graph.microsoft.com/v1.0/me?$select=mail,userPrincipalName"),
-            LocationKind.Dropbox => new HttpRequestMessage(HttpMethod.Post, "https://api.dropboxapi.com/2/users/get_current_account"),
-            _ => new HttpRequestMessage(HttpMethod.Get, "https://api.box.com/2.0/users/me?fields=login"),
+            _ => new HttpRequestMessage(HttpMethod.Post, "https://api.dropboxapi.com/2/users/get_current_account"),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
         try
@@ -164,8 +153,7 @@ public sealed class CloudAccounts : ICloudAccounts
             {
                 LocationKind.GoogleDrive => body?["user"]?["emailAddress"],
                 LocationKind.OneDrive => body?["mail"] ?? body?["userPrincipalName"],
-                LocationKind.Dropbox => body?["email"],
-                _ => body?["login"],
+                _ => body?["email"],
             };
             return said is JsonValue name ? name.GetValue<string>() : LocationKinds.NameOf(kind);
         }
@@ -180,8 +168,7 @@ public sealed class CloudAccounts : ICloudAccounts
     {
         LocationKind.GoogleDrive => _apps.GoogleClientId,
         LocationKind.OneDrive => _apps.MicrosoftClientId,
-        LocationKind.Dropbox => _apps.DropboxClientId,
-        _ => _apps.BoxClientId,
+        _ => _apps.DropboxClientId,
     };
 
     // Google sends an installed app back by its client id reversed; the others by PhotoSense's own scheme.
@@ -196,9 +183,8 @@ public sealed class CloudAccounts : ICloudAccounts
         LocationKind.GoogleDrive => ("https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", "https://www.googleapis.com/auth/drive.file"),
         LocationKind.OneDrive => ("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", "https://login.microsoftonline.com/common/oauth2/v2.0/token",
             "Files.ReadWrite.AppFolder offline_access User.Read"),
-        // Dropbox's app folder, and Box's folder, are set when the app is registered.
+        // Dropbox's app folder is set when the app is registered.
         LocationKind.Dropbox => ("https://www.dropbox.com/oauth2/authorize", "https://api.dropboxapi.com/oauth2/token", null),
-        LocationKind.Box => ("https://account.box.com/api/oauth2/authorize", "https://api.box.com/oauth2/token", null),
         _ => throw new ArgumentException($"{LocationKinds.NameOf(kind)} is not signed in to.", nameof(kind)),
     };
 

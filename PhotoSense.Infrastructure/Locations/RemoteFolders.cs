@@ -13,17 +13,14 @@ public sealed class RemoteFolders : IRemoteFolders
 {
     private readonly CloudAccounts _accounts;
     private readonly HttpClient _http;
-    private readonly TimeProvider _clock;
 
     /// <summary>Reaches the locations.</summary>
     /// <param name="accounts">Renews the cloud services' tokens.</param>
     /// <param name="http">Sends the requests of the cloud services and WebDAV.</param>
-    /// <param name="clock">How long Box asks to be waited for.</param>
-    public RemoteFolders(CloudAccounts accounts, HttpClient http, TimeProvider clock)
+    public RemoteFolders(CloudAccounts accounts, HttpClient http)
     {
         _accounts = accounts;
         _http = http;
-        _clock = clock;
     }
 
     /// <inheritdoc />
@@ -38,7 +35,6 @@ public sealed class RemoteFolders : IRemoteFolders
             LocationKind.GoogleDrive => new DriveFolder(_http, _accounts, secrets, renewed),
             LocationKind.OneDrive => new OneDriveFolder(_http, _accounts, secrets, renewed),
             LocationKind.Dropbox => new DropboxFolder(_http, _accounts, secrets, renewed),
-            LocationKind.Box => new BoxFolder(_http, _accounts, secrets, renewed, (wait, ct) => Task.Delay(wait, _clock, ct)),
             // The region as the page offers it: "us-west-2 (Oregon)".
             LocationKind.AmazonS3 => new S3Folder(new AmazonS3Client(new BasicAWSCredentials(Setting("akid"), Secret("secret")),
                 new AmazonS3Config { RegionEndpoint = RegionEndpoint.GetBySystemName(Setting("region", "us-east-1").Split(' ')[0]) }), Setting("bucket"), prefix, true, Setting("cls")),

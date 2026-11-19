@@ -285,12 +285,12 @@ export class Phone {
   }
 
   /** Where the phone backs up, as it would say: the computer paired and on, the four cloud services off, on Pro, unless the test says otherwise. */
-  locations: { locations: StandInLocation[]; countAt: number; pro: boolean; activity: Record<string, unknown> | null } = {
+  locations: { locations: StandInLocation[]; countAt: number; pro: boolean; activity: Record<string, unknown> | null; held: string | null } = {
     locations: [
       { ...standIn('computer', 'computer', 'DESKTOP-1'), on: true, connected: true, settings: { folder: "Pictures/PhotoSense/Jamie's iPhone" } },
-      standIn('googleDrive', 'googleDrive', 'Google Drive'), standIn('oneDrive', 'oneDrive', 'OneDrive'), standIn('dropbox', 'dropbox', 'Dropbox'), standIn('box', 'box', 'Box'),
+      standIn('googleDrive', 'googleDrive', 'Google Drive'), standIn('oneDrive', 'oneDrive', 'OneDrive'), standIn('dropbox', 'dropbox', 'Dropbox'),
     ],
-    countAt: 1, pro: true, activity: null,
+    countAt: 1, pro: true, activity: null, held: null,
   };
 
   /** What a search finds, as the phone would answer it: nothing unless the test says otherwise. */

@@ -3,16 +3,25 @@ import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BackupScreen, SafeToDelete, SpaceFreed } from '../../../components/phone/Backup';
+import { SentSheet } from '../../../components/phone/Locations';
+import type { LocationsDto } from '../../../types';
 import { BACKUP_SETTINGS, backupState, location, locations, plan, safeReview } from '../../fixtures';
 import { frame, gate, inFrame } from './frame';
 import type { PlanGate } from '../../../components/phone/ProSheet';
 
-const api = vi.hoisted(() => ({ startBackup: vi.fn(), pauseBackup: vi.fn(), saveBackupSettings: vi.fn(), removeSafe: vi.fn() }));
+const api = vi.hoisted(() => ({
+  startBackup: vi.fn(), pauseBackup: vi.fn(), saveBackupSettings: vi.fn(), removeSafe: vi.fn(), backUpToLocations: vi.fn(), removeLocation: vi.fn(),
+  useLocations: vi.fn((): { data?: unknown } => ({})), useLocationDetails: vi.fn((): { data?: unknown } => ({})),
+}));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 beforeEach(() => {
   for (const f of Object.values(api)) f.mockReset();
   for (const f of [api.startBackup, api.pauseBackup, api.saveBackupSettings]) f.mockResolvedValue(backupState());
+  api.backUpToLocations.mockResolvedValue(undefined);
+  api.removeLocation.mockResolvedValue(undefined);
+  api.useLocations.mockReturnValue({});
+  api.useLocationDetails.mockReturnValue({});
 });
 
 const card = (name = 'Studio iMac') => screen.getByRole('region', { name });
@@ -238,5 +247,121 @@ describe('Backup with locations', () => {
     inFrame(<BackupScreen state={backupState({ stage: 'unpaired', computer: null, folder: null })} notify={vi.fn()} onChoose={vi.fn()} onPair={vi.fn()}
       locations={locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' })] })} onSettings={vi.fn()} />);
     expect(screen.queryByRole('region', { name: 'Automatic backup' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Backup on a tablet (T6–T9)', () => {
+  const tablet = frame('ios', { tablet: true, form: 'tablet' });
+  const drive = location({ on: true, connected: true, account: 'alex.m@gmail.com', copies: 2, lastBackup: '2026-11-19T08:00:00Z' });
+  const archive = location({ id: 's1', kind: 'webDav', name: 'Archive', on: false, connected: true, settings: { url: 'https://nas.local/dav' } });
+  const files = [
+    { id: 'a', name: 'IMG_1.JPG', sizeBytes: 1024 ** 2, isVideo: false }, { id: 'b', name: 'IMG_2.MOV', sizeBytes: 2 * 1024 ** 2, isVideo: true },
+  ] as unknown as React.ComponentProps<typeof BackupScreen>['files'];
+  function show(listed: LocationsDto, more: Partial<React.ComponentProps<typeof BackupScreen>> = {}) {
+    api.useLocations.mockReturnValue({ data: listed });
+    const notify = vi.fn(), onSend = vi.fn();
+    const view = inFrame(<BackupScreen state={backupState()} notify={notify} onChoose={vi.fn()} onPair={vi.fn()} locations={listed} onSettings={vi.fn()} files={files} onSend={onSend} {...more} />,
+      tablet, gate({ plan: plan({ tier: 'pro' }) }));
+    return { ...view, notify, onSend };
+  }
+  const pane = (name: string) => screen.getByRole('region', { name });
+
+  it('lists every location with its switch, the first on beside it, lit, with how backing up there stands and Back up now', async () => {
+    const running = locations({ pro: true, locations: [...locations().locations.slice(0, 1), drive, archive],
+      activity: { task: 'backup', stage: 'running', locations: [{ id: 'google-drive', done: 1, total: 2, bytes: 0, totalBytes: 2, problem: null }], sent: null } });
+    const { again, notify } = show(running);
+    expect(within(screen.getByRole('region', { name: 'Locations' })).getAllByRole('switch')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: /^Google Drive/ })).toHaveAttribute('aria-current', 'true');
+    expect(within(pane('Google Drive details')).queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    expect(within(pane('Google Drive details')).getByRole('status')).toHaveTextContent('1 of 2');
+    expect(within(pane('Google Drive details')).getByRole('status')).not.toHaveClass('text-danger-t');
+    expect(within(pane('Google Drive details')).getByRole('button', { name: 'Pause' })).toBeInTheDocument();
+    const idle = { ...running, activity: null };
+    api.useLocations.mockReturnValue({ data: idle });
+    again(<BackupScreen state={backupState()} notify={notify} onChoose={vi.fn()} onPair={vi.fn()} locations={idle} onSettings={vi.fn()} />, tablet);
+    await userEvent.click(within(pane('Google Drive details')).getByRole('button', { name: 'Back up now' }));
+    expect(api.backUpToLocations).toHaveBeenCalledOnce();
+    expect(notify).toHaveBeenLastCalledWith('Backing up to Google Drive. Every copy is checked.', 'info');
+  });
+
+  it('shows the location chosen, Connect to server with Cancel, and a server added to change, each beside the list', async () => {
+    show(locations({ pro: true, locations: [...locations().locations.slice(0, 1), drive, archive] }));
+    await userEvent.click(screen.getByRole('button', { name: /^Studio iMac/ }));
+    expect(pane('Studio iMac details')).toBeInTheDocument();
+    expect(within(pane('Studio iMac details')).queryByRole('button', { name: 'Back up now' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Connect to server…/ }));
+    expect(within(pane('Connect to server')).getByRole('heading', { name: 'Connect to server' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Studio iMac/ })).not.toHaveAttribute('aria-current');
+    await userEvent.click(within(pane('Connect to server')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('region', { name: 'Connect to server' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Archive/ }));
+    expect(within(pane('Archive details')).queryByRole('button', { name: 'Back up now' })).not.toBeInTheDocument();
+    await userEvent.click(within(pane('Archive details')).getByRole('button', { name: 'Edit' }));
+    expect(within(pane('Connect to server')).getByRole('heading', { name: 'Edit Archive' })).toBeInTheDocument();
+  });
+
+  it('says why backing up to a location stopped, and once a server is removed shows the first on again', async () => {
+    const stopped = locations({ pro: true, locations: [...locations().locations.slice(0, 1), { ...archive, on: true }],
+      activity: { task: 'backup', stage: 'running', locations: [{ id: 's1', done: 0, total: 2, bytes: 0, totalBytes: 2, problem: 'Archive is full.' }], sent: null } });
+    show(stopped);
+    expect(within(pane('Archive details')).getByRole('status')).toHaveClass('text-danger-t');
+    await userEvent.click(screen.getByRole('button', { name: /^Studio iMac/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Archive/ }));
+    await userEvent.click(within(pane('Archive details')).getByRole('button', { name: 'Remove location' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Remove Archive?' })).getByRole('button', { name: 'Remove location' }));
+    await vi.waitFor(() => expect(screen.getByRole('button', { name: /^Archive/ })).toHaveAttribute('aria-current', 'true'));
+  });
+
+  it('with no way to send given, choosing photos and Send to… only puts them away', async () => {
+    show(locations(), { onSend: undefined });
+    await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
+    await userEvent.click(within(pane('Choose photos')).getByRole('button', { name: /IMG_2\.MOV/ }));
+    await userEvent.click(within(pane('Choose photos')).getByRole('button', { name: 'Send to…' }));
+    expect(screen.queryByRole('region', { name: 'Choose photos' })).not.toBeInTheDocument();
+  });
+
+  it('with only the computer on shows it, and with none on the first there is', () => {
+    const { unmount } = show(locations());
+    expect(pane('Studio iMac details')).toBeInTheDocument();
+    unmount();
+    show(locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' }), location()] }));
+    expect(pane('Computer details')).toBeInTheDocument();
+  });
+
+  it('chooses photos to send beside the list, all or some, and Send to… sends those; Cancel puts them away', async () => {
+    const { onSend } = show(locations({ pro: true, locations: [...locations().locations.slice(0, 1), drive] }));
+    await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
+    const picker = () => pane('Choose photos');
+    expect(screen.getByRole('button', { name: 'Choose photos to send' })).toHaveAttribute('aria-current', 'true');
+    expect(within(picker()).getByRole('button', { name: 'Send to…' })).toBeDisabled();
+    await userEvent.click(within(picker()).getByRole('button', { name: 'Select all' }));
+    expect(picker()).toHaveTextContent('2 selected');
+    expect(picker()).toHaveTextContent('3.0 MB');
+    await userEvent.click(within(picker()).getByRole('button', { name: 'Deselect all' }));
+    await userEvent.click(within(picker()).getByRole('button', { name: /IMG_1\.JPG/ }));
+    await userEvent.click(within(picker()).getByRole('button', { name: 'Send to…' }));
+    expect(onSend).toHaveBeenCalledWith(['a']);
+    expect(screen.queryByRole('region', { name: 'Choose photos' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
+    await userEvent.click(within(picker()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('region', { name: 'Choose photos' })).not.toBeInTheDocument();
+  });
+
+  it('with nothing in the library, Select all chooses nothing', async () => {
+    show(locations(), { files: undefined });
+    await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
+    await userEvent.click(within(pane('Choose photos')).getByRole('button', { name: 'Select all' }));
+    expect(pane('Choose photos')).toHaveTextContent('0 selected');
+  });
+
+  it('shows what a send did beside the list, in place of the location', async () => {
+    const onDone = vi.fn();
+    show(locations({ pro: true, locations: [...locations().locations.slice(0, 1), drive] }), {
+      sent: <SentSheet sent={{ locationId: 'google-drive', items: 2, matched: 2, bytes: 5 }} location="Google Drive" cloudPhotos={false} notify={vi.fn()} onDone={onDone} />,
+    });
+    expect(pane('Sent')).toHaveTextContent('2 items sent to Google Drive');
+    expect(screen.queryByRole('dialog', { name: 'Sent' })).not.toBeInTheDocument();
+    await userEvent.click(within(pane('Sent')).getByRole('button', { name: 'Done' }));
+    expect(onDone).toHaveBeenCalledOnce();
   });
 });

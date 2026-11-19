@@ -7,7 +7,7 @@ public sealed class LocationDto
 {
     /// <summary>How PhotoSense knows it: "computer", "google-drive", or an id of its own for one added.</summary>
     [JsonPropertyName("id")] public string Id { get; init; } = string.Empty;
-    /// <summary>What sort of place it is: "computer", "googleDrive", "oneDrive", "dropbox", "box", "amazonS3", "s3Compatible", "azureBlob", "webDav" or "sftp".</summary>
+    /// <summary>What sort of place it is: "computer", "googleDrive", "oneDrive", "dropbox", "amazonS3", "s3Compatible", "azureBlob", "webDav" or "sftp".</summary>
     [JsonPropertyName("kind")] public string Kind { get; init; } = string.Empty;
     /// <summary>What it is called: the service's name, or the name the person gave one they added.</summary>
     [JsonPropertyName("name")] public string Name { get; init; } = string.Empty;
@@ -85,6 +85,9 @@ public sealed class LocationsDto
     [JsonPropertyName("pro")] public bool Pro { get; init; }
     /// <summary>What they are doing, or last did since PhotoSense started.</summary>
     [JsonPropertyName("activity")] public LocationActivityDto? Activity { get; init; }
+
+    /// <summary>On the free plan, the id of the location backups have gone to, which the plan is held to; null on Pro or before the first backup.</summary>
+    [JsonPropertyName("held")] public string? Held { get; init; }
 }
 
 /// <summary>How much a location holds.</summary>

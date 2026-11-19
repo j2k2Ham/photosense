@@ -6,14 +6,14 @@ using PhotoSense.Infrastructure.Locations;
 namespace PhotoSense.Tests.Infrastructure;
 
 /// <summary>
-/// Signing in to Google Drive, OneDrive, Dropbox and Box: each in the system's browser with PKCE and the narrowest
+/// Signing in to Google Drive, OneDrive and Dropbox: each in the system's browser with PKCE and the narrowest
 /// access, the answer tied to its sign-in, the tokens exchanged and renewed, and the account named.
 /// </summary>
 public class CloudAccountsTests
 {
     private static readonly CloudAppOptions Registered = new()
     {
-        GoogleClientId = "1234-abc.apps.googleusercontent.com", MicrosoftClientId = "ms-app", DropboxClientId = "db-key", BoxClientId = "box-id", BoxClientSecret = "box-secret",
+        GoogleClientId = "1234-abc.apps.googleusercontent.com", MicrosoftClientId = "ms-app", DropboxClientId = "db-key",
     };
 
     private static (CloudAccounts Accounts, FakeNetwork Network, TestClock Clock) Make(CloudAppOptions? apps = null)
@@ -32,9 +32,8 @@ public class CloudAccountsTests
         var (accounts, _, _) = Make();
         await Assert.That(LocationKinds.Cloud.All(accounts.Available)).IsTrue();
         await Assert.That(accounts.Available(LocationKind.AmazonS3)).IsFalse();
-        var (none, _, _) = Make(new CloudAppOptions { BoxClientId = "box-id" });
+        var (none, _, _) = Make(new CloudAppOptions());
         await Assert.That(LocationKinds.Cloud.Any(none.Available)).IsFalse();
-        await Assert.That(Make(new CloudAppOptions()).Accounts.Available(LocationKind.Box)).IsFalse();
     }
 
     [Test]
@@ -54,8 +53,6 @@ public class CloudAccountsTests
         await Assert.That((microsoft["scope"], microsoft["redirect_uri"])).IsEqualTo(("Files.ReadWrite.AppFolder offline_access User.Read", "com.j2k2ham.photosense.auth:/onedrive"));
         var dropbox = QueryOf(accounts.Begin(LocationKind.Dropbox).Start);
         await Assert.That((dropbox.ContainsKey("scope"), dropbox["token_access_type"])).IsEqualTo((false, "offline"));
-        var box = accounts.Begin(LocationKind.Box);
-        await Assert.That((box.Start.Host, QueryOf(box.Start).ContainsKey("scope"), box.CallbackScheme)).IsEqualTo(("account.box.com", false, "com.j2k2ham.photosense.auth"));
         await Assert.That(() => accounts.Begin(LocationKind.Sftp)).Throws<ArgumentException>();
     }
 
@@ -68,9 +65,7 @@ public class CloudAccountsTests
             .On("https://login.microsoftonline.com/common/oauth2/v2.0/token", """{"access_token":"a2"}""")
             .On("https://graph.microsoft.com/v1.0/me", """{"mail":null,"userPrincipalName":"alex.m@outlook.com"}""")
             .On("https://api.dropboxapi.com/oauth2/token", """{"access_token":"a3","refresh_token":"r3"}""")
-            .On("https://api.dropboxapi.com/2/users/get_current_account", """{"email":"alex@dropbox.example"}""")
-            .On("https://api.box.com/oauth2/token", """{"access_token":"a4","refresh_token":"r4","expires_in":3600}""")
-            .On("https://api.box.com/2.0/users/me", """{"login":"alex@studio-m.com"}""");
+            .On("https://api.dropboxapi.com/2/users/get_current_account", """{"email":"alex@dropbox.example"}""");
         async Task<CloudAccount> FinishAsync(LocationKind kind, string answer)
         {
             var begun = accounts.Begin(kind);
@@ -89,9 +84,6 @@ public class CloudAccountsTests
         await Assert.That(microsoft.Secrets[CloudAccounts.Expires]).IsEqualTo(clock.GetUtcNow().AddHours(1).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
         // The answer in the fragment, as some services send it.
         await Assert.That((await FinishAsync(LocationKind.Dropbox, "#code=c&state=STATE")).Name).IsEqualTo("alex@dropbox.example");
-        var box = await FinishAsync(LocationKind.Box, "code=c&state=STATE");
-        await Assert.That(box.Name).IsEqualTo("alex@studio-m.com");
-        await Assert.That(network.Asked.Last(h => h.Url == "https://api.box.com/oauth2/token").Body).Contains("client_secret=box-secret");
     }
 
     [Test]
@@ -138,7 +130,6 @@ public class CloudAccountsTests
         {
             (LocationKind.OneDrive, "https://login.microsoftonline.com/common/oauth2/v2.0/token", "https://graph.microsoft.com/v1.0/me", "OneDrive"),
             (LocationKind.Dropbox, "https://api.dropboxapi.com/oauth2/token", "https://api.dropboxapi.com/2/users/get_current_account", "Dropbox"),
-            (LocationKind.Box, "https://api.box.com/oauth2/token", "https://api.box.com/2.0/users/me", "Box"),
         })
         {
             var (accounts, network, _) = Make();
@@ -156,10 +147,10 @@ public class CloudAccountsTests
     public async Task Tokens_Are_Renewed_With_The_Refresh_Token_And_Run_Out_A_Minute_Early(CancellationToken ct)
     {
         var (accounts, network, clock) = Make();
-        network.On("https://api.box.com/oauth2/token", """{"access_token":"new","expires_in":60}""");
-        var renewed = await accounts.RenewAsync(LocationKind.Box, new Dictionary<string, string> { [CloudAccounts.Refresh] = "r" }, ct);
+        network.On("https://api.dropboxapi.com/oauth2/token", """{"access_token":"new","expires_in":60}""");
+        var renewed = await accounts.RenewAsync(LocationKind.Dropbox, new Dictionary<string, string> { [CloudAccounts.Refresh] = "r" }, ct);
         await Assert.That((renewed[CloudAccounts.Access], renewed[CloudAccounts.Refresh])).IsEqualTo(("new", "r"));
-        await Assert.That(network.Asked.Single().Body).Contains("grant_type=refresh_token").And.Contains("refresh_token=r").And.Contains("client_secret=box-secret");
+        await Assert.That(network.Asked.Single().Body).Contains("grant_type=refresh_token").And.Contains("refresh_token=r").And.Contains("client_id=db-key");
         network.On("https://oauth2.googleapis.com/token", """{"access_token":"g"}""");
         await Assert.That((await accounts.RenewAsync(LocationKind.GoogleDrive, new Dictionary<string, string>(), ct))[CloudAccounts.Refresh]).IsEqualTo("");
 

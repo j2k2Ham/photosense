@@ -20,7 +20,7 @@ export interface PlanGate {
   remove(count: number, label: string, run: (allowed: number) => void, largest?: boolean): void;
   /**
    * Opens the Pro sheet, for its own sake or for a Pro feature, carrying on with `then` once Pro is bought. For a second
-   * location, `instead` names the one on and offers to use the new one in its place.
+   * location, `instead` names the one on and, until backups have gone there, offers to use the new one in its place.
    */
   offer(reason: ProReason, then?: () => void, instead?: Instead): void;
 }
@@ -31,8 +31,8 @@ export interface Instead {
   readonly current: string;
   /** The new one's name, for "Use Dropbox instead". */
   readonly wanted: string;
-  /** Turns the new one on in place of the one that is on. */
-  run(): void;
+  /** Turns the new one on in place of the one that is on; none once backups have gone there, as the free plan is then held to it. */
+  run?(): void;
 }
 
 const PlanContext = createContext<PlanGate | null>(null);
@@ -67,13 +67,13 @@ export function usePlanSheet(notify: (message: string, kind: ToastKind) => void)
       if (!overLimit(plan, count)) run(count);
       else setAsked({ reason: 'limit', count, label, then: () => run(count), partial: run, largest });
     },
-    offer(reason, then, instead) { setAsked({ reason, then, instead, current: instead?.current }); },
+    offer(reason, then, instead) { setAsked({ reason, then, instead, current: instead?.current, held: instead !== undefined && !instead.run }); },
   };
   const sheet = asked && plan && (
     <ProSheet plan={plan} ask={asked} notify={notify} onClose={() => setAsked(undefined)}
       onBought={() => { setAsked(undefined); asked.then?.(); }}
       onPartial={asked.partial && plan.leftToday ? () => { setAsked(undefined); asked.partial!(plan.leftToday!); } : undefined}
-      onInstead={asked.instead && (() => { setAsked(undefined); asked.instead!.run(); })} />
+      onInstead={asked.instead?.run && (() => { setAsked(undefined); asked.instead!.run!(); })} />
   );
   return { gate, sheet };
 }

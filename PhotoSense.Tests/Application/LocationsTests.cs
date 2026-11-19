@@ -117,7 +117,7 @@ public sealed class LocationsTests : IDisposable
     {
         var listed = await JsonAsync("locations", ct);
         var ids = listed.GetProperty("locations").EnumerateArray().Select(l => l.GetProperty("id").GetString()!).ToList();
-        await Assert.That(ids).IsEquivalentTo(["computer", "google-drive", "onedrive", "dropbox", "box"], CollectionOrdering.Matching);
+        await Assert.That(ids).IsEquivalentTo(["computer", "google-drive", "onedrive", "dropbox"], CollectionOrdering.Matching);
         // Not paired: the computer cannot be turned on.
         var computer = listed.GetProperty("locations")[0];
         await Assert.That((computer.GetProperty("on").GetBoolean(), computer.GetProperty("connected").GetBoolean(), computer.GetProperty("kind").GetString())).IsEqualTo((false, false, "computer"));
@@ -140,34 +140,87 @@ public sealed class LocationsTests : IDisposable
     }
 
     [Test]
-    public async Task A_Cloud_Service_Is_Signed_In_To_As_It_Is_Turned_On_And_The_Free_Plan_Keeps_One_Location_On(CancellationToken ct)
+    public async Task A_Cloud_Service_Is_Signed_In_To_As_It_Is_Turned_On_And_The_Free_Plan_Keeps_One_On_Besides_The_Computer(CancellationToken ct)
     {
         await PairedAsync(ct);
-        // On the free plan the computer is on, so Google Drive is offered in its place.
-        await SaysAsync("POST", "locations/google-drive/on", HttpStatusCode.PaymentRequired, "The free plan backs up to one location, and Studio iMac is on.", ct);
+        // The free plan backs up to the computer and one location besides: Google Drive goes on beside it.
+        await SaysAsync("POST", "locations/google-drive/on", HttpStatusCode.NoContent, null, ct);
         await Assert.That(_signIn.Opened.Single().Start.AbsoluteUri).IsEqualTo("https://sign-in.example/google-drive");
         var drive = (await Locations.StateAsync(ct)).Locations.Single(l => l.Id == "google-drive");
-        await Assert.That((drive.Connected, drive.On, drive.Account)).IsEqualTo((true, false, "alex.m@gmail.com"));
-        var limit = await Assert.ThrowsAsync<LocationLimitException>(() => Locations.TurnOnAsync("google-drive", ct));
-        await Assert.That((limit!.Current, limit.Wanted)).IsEqualTo(("Studio iMac", "google-drive"));
-        // Signed in already: Use instead asks nothing more.
-        await SaysAsync("POST", "locations/google-drive/instead", HttpStatusCode.NoContent, null, ct);
-        var state = await Locations.StateAsync(ct);
-        await Assert.That(state.Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["google-drive"]);
-        await Assert.That(_signIn.Opened).Count().IsEqualTo(1);
+        await Assert.That((drive.Connected, drive.On, drive.Account)).IsEqualTo((true, true, "alex.m@gmail.com"));
+        // A second besides the computer is offered in Google Drive's place.
+        await SaysAsync("POST", "locations/dropbox/on", HttpStatusCode.PaymentRequired, "The free plan backs up to your computer and one other location, and Google Drive is on.", ct);
+        var limit = await Assert.ThrowsAsync<LocationLimitException>(() => Locations.TurnOnAsync("dropbox", ct));
+        await Assert.That((limit!.Current, limit.Wanted, limit.Held)).IsEqualTo(("Google Drive", "dropbox", false));
+        // Signed in already: Use instead asks nothing more, and the computer stays on.
+        await SaysAsync("POST", "locations/dropbox/instead", HttpStatusCode.NoContent, null, ct);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["computer", "dropbox"]);
+        await Assert.That(_signIn.Opened).Count().IsEqualTo(2);
+        // The computer goes off and on whatever else is on.
+        await SaysAsync("POST", "locations/computer/off", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/computer/on", HttpStatusCode.NoContent, null, ct);
 
-        // On Pro both are on; when Pro ends, the one used last stays on.
+        // On Pro all are on; when Pro ends, the computer stays, and of the rest the one used last.
         Pro();
-        await Locations.TurnOnAsync("computer", ct);
-        await Assert.That((await Locations.StateAsync(ct)).Locations.Count(l => l.On)).IsEqualTo(2);
+        await Locations.TurnOnAsync("google-drive", ct);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Count(l => l.On)).IsEqualTo(3);
+        var dropbox = (await Store.ListAsync(ct)).Single(l => l.Id == "dropbox");
+        await Store.SaveAsync(dropbox with { LastUsed = TestClock.Day.AddDays(1) }, ct);
         _app.Purchases.Clear();
-        await Assert.That((await Locations.StateAsync(ct)).Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["computer"]);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["computer", "dropbox"]);
 
         // Signed out: its tokens and what it held are forgotten; only a cloud service is signed out of.
         await SaysAsync("POST", "locations/google-drive/disconnect", HttpStatusCode.NoContent, null, ct);
         await Assert.That(_secrets.Kept.ContainsKey("google-drive")).IsFalse();
         await Assert.That((await Locations.StateAsync(ct)).Locations.Single(l => l.Id == "google-drive").Connected).IsFalse();
         await SaysAsync("POST", "locations/computer/disconnect", HttpStatusCode.Conflict, "Only a cloud service is signed out of.", ct);
+    }
+
+    [Test]
+    public async Task Once_Backups_Have_Gone_To_A_Location_Besides_The_Computer_The_Free_Plan_Is_Held_To_It_And_Only_Pro_Adds_Another(CancellationToken ct)
+    {
+        // Backed up to: the computer is never held, and goes off and on as the person likes.
+        await _phone.GetRequiredService<IBackupLedger>().SaveComputerAsync(new BackupComputer("computer-1", "Studio iMac", "Pictures/PhotoSense", null, TestClock.Day), ct);
+        await Assert.That((await JsonAsync("locations", ct)).GetProperty("held").ValueKind).IsEqualTo(JsonValueKind.Null);
+        await SaysAsync("POST", "locations/computer/off", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/computer/on", HttpStatusCode.NoContent, null, ct);
+
+        // Google Drive goes on beside it; once backed up to, the free plan is held to it.
+        await Locations.TurnOnAsync("google-drive", ct);
+        var drive = (await Store.ListAsync(ct)).Single(l => l.Id == "google-drive");
+        await Store.SaveAsync(drive with { LastBackup = TestClock.Day }, ct);
+        await Assert.That((await JsonAsync("locations", ct)).GetProperty("held").GetString()).IsEqualTo("google-drive");
+        await SaysAsync("POST", "locations/dropbox/on", HttpStatusCode.PaymentRequired, "The free plan backs up to your computer and one other location, and your backups are on Google Drive.", ct);
+        var limit = await Assert.ThrowsAsync<LocationLimitException>(() => Locations.TurnOnAsync("dropbox", ct));
+        await Assert.That(limit!.Held).IsTrue();
+        await SaysAsync("POST", "locations/dropbox/instead", HttpStatusCode.PaymentRequired, "your backups are on Google Drive", ct);
+        await SaysAsync("POST", "locations/google-drive/off", HttpStatusCode.PaymentRequired,
+            "Google Drive is the only location besides your computer the free plan can use, as your backups are there.", ct);
+        await SaysAsync("POST", "locations/google-drive/disconnect", HttpStatusCode.PaymentRequired, "Google Drive is the only location besides your computer", ct);
+        // The computer is still free to go off and on.
+        await SaysAsync("POST", "locations/computer/off", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/computer/on", HttpStatusCode.NoContent, null, ct);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["computer", "google-drive"]);
+
+        // On Pro nothing is held: another goes on, and any goes off.
+        Pro();
+        await Assert.That((await JsonAsync("locations", ct)).GetProperty("held").ValueKind).IsEqualTo(JsonValueKind.Null);
+        await Locations.TurnOnAsync("dropbox", ct);
+        var archive = await AddS3Async(ct);
+        await SaysAsync("POST", "locations/google-drive/off", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/dropbox/off", HttpStatusCode.NoContent, null, ct);
+
+        // A server backed up to, once Pro ends, is held and cannot be removed; one not held is signed out of as before.
+        var server = (await Store.ListAsync(ct)).Single(l => l.Id == archive);
+        await Store.SaveAsync(server with { LastBackup = TestClock.Day }, ct);
+        _app.Purchases.Clear();
+        await Assert.That((await Locations.StateAsync(ct)).Held).IsEqualTo(archive);
+        await SaysAsync("POST", $"locations/{archive}/remove", HttpStatusCode.PaymentRequired, "Archive is the only location besides your computer", ct);
+        await SaysAsync("POST", "locations/dropbox/disconnect", HttpStatusCode.NoContent, null, ct);
+        // On Pro again, it is removed.
+        Pro();
+        await SaysAsync("POST", $"locations/{archive}/remove", HttpStatusCode.NoContent, null, ct);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Any(l => l.Id == archive)).IsFalse();
     }
 
     [Test]
@@ -178,10 +231,10 @@ public sealed class LocationsTests : IDisposable
         _signIn.Back = start => new Uri("com.j2k2ham.photosense.auth:/dropbox?error=access_denied");
         _accounts.Finish = (_, _) => throw new IOException("Dropbox was not connected: access was not allowed.");
         await SaysAsync("POST", "locations/dropbox/on", HttpStatusCode.BadGateway, "access was not allowed", ct);
-        _accounts.Registered.Remove(LocationKind.Box);
-        await SaysAsync("POST", "locations/box/on", HttpStatusCode.Conflict, "Box can be connected once PhotoSense is registered with it.", ct);
+        _accounts.Registered.Remove(LocationKind.OneDrive);
+        await SaysAsync("POST", "locations/onedrive/on", HttpStatusCode.Conflict, "OneDrive can be connected once PhotoSense is registered with it.", ct);
         var listed = (await Locations.StateAsync(ct)).Locations;
-        await Assert.That(listed.Single(l => l.Id == "box").Available).IsFalse();
+        await Assert.That(listed.Single(l => l.Id == "onedrive").Available).IsFalse();
         await Assert.That(listed.Where(l => l.Kind != LocationKind.Computer).All(l => !l.Connected && !l.On)).IsTrue();
         // Details of one not connected ask nothing of it.
         await Assert.That((await Locations.DetailsAsync("dropbox", ct)).Space).IsNull();
@@ -228,9 +281,9 @@ public sealed class LocationsTests : IDisposable
         await SaysAsync("POST", $"locations/{id}/name", HttpStatusCode.NoContent, null, ct, new { name = " Photos archive " });
         await Assert.That((await Locations.StateAsync(ct)).Locations.Single(l => l.Id == id).Name).IsEqualTo("Photos archive");
         await SaysAsync("POST", $"locations/{id}/name", HttpStatusCode.Conflict, "Enter a name.", ct, new { name = "" });
-        await SaysAsync("POST", "locations/box/name", HttpStatusCode.Conflict, "Box keeps its own name.", ct, new { name = "Mine" });
+        await SaysAsync("POST", "locations/dropbox/name", HttpStatusCode.Conflict, "Dropbox keeps its own name.", ct, new { name = "Mine" });
         // Those added are listed by name after the cloud services.
-        await Assert.That((await Locations.StateAsync(ct)).Locations.Skip(5).Select(l => l.Name)).IsEquivalentTo(["Photos archive", "WebDAV"], CollectionOrdering.Matching);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Skip(4).Select(l => l.Name)).IsEquivalentTo(["Photos archive", "WebDAV"], CollectionOrdering.Matching);
 
         // Removed: forgotten with its secrets; nothing there is deleted. Only one added is removed.
         await SaysAsync("POST", $"locations/{plain}/remove", HttpStatusCode.NoContent, null, ct);

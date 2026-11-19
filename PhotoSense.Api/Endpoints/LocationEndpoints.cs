@@ -25,7 +25,7 @@ internal sealed class LocationEndpoints
         var state = await _locations!.StateAsync(ct);
         return await Answers.JsonAsync(req, new LocationsDto
         {
-            Locations = [.. state.Locations.Select(Dto)], CountAt = state.CountAt, Pro = state.Pro,
+            Locations = [.. state.Locations.Select(Dto)], CountAt = state.CountAt, Pro = state.Pro, Held = state.Held,
             Activity = state.Activity is { } a ? new LocationActivityDto
             {
                 Task = Camel(a.Task), Stage = Camel(a.Stage),
@@ -156,6 +156,7 @@ internal sealed class LocationEndpoints
             return await run(_locations!);
         }
         catch (LocationLimitException ex) { refusal = (HttpStatusCode.PaymentRequired, ex.Message); }
+        catch (OnlyLocationException ex) { refusal = (HttpStatusCode.PaymentRequired, ex.Message); }
         catch (ProNeededException ex) { refusal = (HttpStatusCode.PaymentRequired, ex.Message); }
         catch (KeyNotFoundException ex) { refusal = (HttpStatusCode.NotFound, ex.Message); }
         catch (ArgumentOutOfRangeException) { refusal = (HttpStatusCode.BadRequest, "Choose any location, or 2 locations."); }

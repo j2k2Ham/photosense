@@ -500,10 +500,28 @@ test.describe('on a phone', () => {
     const card = page.getByRole('region', { name: 'Locations' });
     await expect(card).toContainText('Google Drive');
     await expect(card).toContainText('Attic NAS');
-    await card.locator('xpath=..').getByRole('button', { name: 'Back up now' }).click();
+    if (isMobile) {
+      await card.locator('xpath=..').getByRole('button', { name: 'Back up now' }).click();
+    } else {
+      // A tablet lists every location, the first on beside the list with its own Back up now (T6).
+      await expect(card.getByRole('button', { name: /^Google Drive/ })).toHaveAttribute('aria-current', 'true');
+      await page.getByRole('region', { name: 'Google Drive details' }).getByRole('button', { name: 'Back up now' }).click();
+    }
     await expect(message(page, 'Backing up to 2 locations. Every copy is checked.')).toBeVisible();
     expect(phone.asked.some(a => a.startsWith('locations/backup'))).toBe(true);
-    await expect(card).toContainText('2 files · backed up today');
+    if (isMobile) await expect(card).toContainText('2 files · backed up today');
+    else await expect(page.getByRole('region', { name: 'Google Drive details' })).toContainText('Checked copies 2 files');
+
+    // On a tablet, Connect to server and the server's page show beside the list too (T7).
+    if (!isMobile) {
+      await card.getByRole('button', { name: /^Attic NAS/ }).click();
+      await expect(page.getByRole('region', { name: 'Attic NAS details' })).toContainText('WebDAV');
+      await card.getByRole('button', { name: /^Connect to server/ }).click();
+      const beside = page.getByRole('region', { name: 'Connect to server' });
+      await expect(beside.getByRole('radio', { name: 'SFTP' })).toBeVisible();
+      await beside.getByRole('button', { name: 'Cancel' }).click();
+      await expect(beside).toBeHidden();
+    }
   });
 
   test('The app icon menu and the widgets open Search, today’s swipe set, or Backup with a backup started @phone', async ({ page }) => {
@@ -721,7 +739,7 @@ test.describe('on a phone', () => {
     await expect(page.getByText(/^Within 5 km · /)).toBeVisible();
   });
 
-  test('Backup says what waits on the computer, backs up, pauses and carries on, and Send now sends what is chosen in Library @phone', async ({ page, photos }) => {
+  test('Backup says what waits on the computer, backs up, pauses and carries on, and Send now sends what is chosen in Library, or beside the list on a tablet @phone', async ({ page, photos, isMobile }) => {
     const phone = new Phone();
     await phone.attach(page);
     photos.picture('IMG_0001.JPG', { seed: 1 });
@@ -732,7 +750,7 @@ test.describe('on a phone', () => {
     await expect.poll(() => phone.asked).toContain('auto');
     await phoneTab(page, 'Backup');
     const backup = backupScreen(page);
-    const card = backup.getByRole('region', { name: 'DESKTOP-1' });
+    const card = backup.getByRole('region', { name: 'DESKTOP-1', exact: true });
     await expect(card).toContainText('2 new items waiting');
     await expect(card).toContainText('automatic backup is off');
     await card.getByRole('button', { name: 'Back up now' }).click();
@@ -753,10 +771,18 @@ test.describe('on a phone', () => {
 
     phone.set({ stage: 'ready', waiting: 2 });
     await backup.getByRole('button', { name: 'Choose photos to send' }).click();
-    const library = page.getByRole('region', { name: 'Library' });
-    await expect(page.getByRole('toolbar', { name: 'What is selected' })).toBeVisible();
-    await library.getByRole('button', { name: 'IMG_0001.JPG' }).click();
-    await page.getByRole('toolbar', { name: 'What is selected' }).getByRole('button', { name: 'Send' }).click();
+    if (isMobile) {
+      const library = page.getByRole('region', { name: 'Library' });
+      await expect(page.getByRole('toolbar', { name: 'What is selected' })).toBeVisible();
+      await library.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+      await page.getByRole('toolbar', { name: 'What is selected' }).getByRole('button', { name: 'Send' }).click();
+    } else {
+      // A tablet chooses beside Backup's list (T8).
+      const picker = page.getByRole('region', { name: 'Choose photos' });
+      await picker.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+      await expect(picker).toContainText('1 selected');
+      await picker.getByRole('button', { name: 'Send to…' }).click();
+    }
     await expect(message(page, 'Sending 1 item to DESKTOP-1.')).toBeVisible();
     expect(phone.asked.at(-1)).toMatch(/^start \{"files":\["[^"]+"\]\}$/);
     await expect(backupScreen(page)).toBeVisible();

@@ -37,7 +37,8 @@ function Screen() {
       <button type="button" onClick={offer('vault')}>Hidden</button>
       <button type="button" onClick={offer('none')}>Get Pro</button>
       <button type="button" onClick={offer('server')}>Connect to server</button>
-      <button type="button" onClick={() => gate.offer('location', carried, { current: 'Studio iMac', wanted: 'Dropbox', run: ran })}>Dropbox</button>
+      <button type="button" onClick={() => gate.offer('location', carried, { current: 'Google Drive', wanted: 'Dropbox', run: ran })}>Dropbox</button>
+      <button type="button" onClick={() => gate.offer('location', carried, { current: 'Google Drive', wanted: 'OneDrive' })}>OneDrive</button>
     </>
   );
 }
@@ -75,13 +76,20 @@ describe('the plan gate', () => {
   it('opens for a second location saying which is on, what Pro adds for locations, and uses the new one instead', async () => {
     show();
     await userEvent.click(screen.getByRole('button', { name: 'Dropbox' }));
-    expect(sheet()).toHaveTextContent('The free plan backs up to one location, and Studio iMac is on. Pro adds as many as you like.');
+    expect(sheet()).toHaveTextContent('The free plan backs up to your computer and one other location, and Google Drive is on. Pro adds as many as you like.');
     expect(sheet()).toHaveTextContent('Back up to as many locations as you like');
     await userEvent.click(within(sheet()).getByRole('button', { name: 'Use Dropbox instead' }));
     expect(ran).toHaveBeenCalledOnce();
     expect(screen.queryByRole('dialog', { name: 'PhotoSense Pro' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Connect to server' }));
     expect(sheet()).toHaveTextContent('Connecting your own server, like Amazon S3, Azure or a home NAS, is part of Pro.');
+    expect(within(sheet()).queryByRole('button', { name: /instead$/ })).not.toBeInTheDocument();
+  });
+
+  it('once backups are on the one that is on, offers only Pro for a second location, never one in its place', async () => {
+    show();
+    await userEvent.click(screen.getByRole('button', { name: 'OneDrive' }));
+    expect(sheet()).toHaveTextContent('The free plan backs up to your computer and one other location, and your backups are on Google Drive. Pro adds as many as you like.');
     expect(within(sheet()).queryByRole('button', { name: /instead$/ })).not.toBeInTheDocument();
   });
 

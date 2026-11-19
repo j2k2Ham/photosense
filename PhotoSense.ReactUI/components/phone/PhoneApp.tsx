@@ -127,6 +127,9 @@ export function PhoneApp(props: Props) {
   const [chosenLast, setChosenLast] = useState<string>();
   const sent = locations?.activity?.task === 'send' && locations.activity.stage === 'ready' ? locations.activity.sent : null;
   const sentLocation = sent && sent.locationId === sentTo ? locations!.locations.find(l => l.id === sentTo) : undefined;
+  const sentShown = sent && sentLocation && <SentSheet sent={sent} location={sentLocation.name} cloudPhotos={safe?.cloudPhotos ?? false} notify={notify} onDone={() => setSentTo(undefined)} />;
+  // On a tablet's Backup, what a send did fills the pane beside the list (T9); elsewhere it is a sheet.
+  const sentInPane = form === 'tablet' && props.tab === 'backup';
   // Swipe to clean: today's set, asked once the tabs show; swiping and its summary cover everything while they show.
   const swipe = useSwipe(ready).data;
   const [swiping, setSwiping] = useState<'cards' | 'summary'>();
@@ -249,7 +252,6 @@ export function PhoneApp(props: Props) {
     <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
       plan={gate.plan} onSubscription={() => { if (!tablet) setSheet('subscription'); }} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
       removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
-      computer={backup && (backup.computer ? { name: backup.computer, folder: backup.folder } : null)} onPair={() => setSheet('pair')}
       onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
       onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
       onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} beside={tablet ? subscription : undefined}
@@ -274,7 +276,7 @@ export function PhoneApp(props: Props) {
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}
           onNoLocation={() => { setFilter('unplaced'); props.onTab('library'); }} />,
         backup: <BackupScreen state={backup} notify={notify} onChoose={() => { setSelecting(true); props.onTab('library'); }} onPair={() => setSheet('pair')}
-          locations={locations} onSettings={openSettings} />,
+          locations={locations} onSettings={openSettings} files={library.files} onSend={ids => void send(ids)} sent={sentInPane ? sentShown : undefined} />,
       }}
       sheet={<>
         {sheet === 'settings' && settings}
@@ -296,7 +298,7 @@ export function PhoneApp(props: Props) {
         {watching && year?.year != null && <YearStories review={year} notify={notify} onClose={() => setWatching(false)} />}
         {sharing && <ShareSheet card={sharing} notify={notify} onClose={() => setSharing(undefined)} />}
         {sending && <SendToSheet locations={sendable} count={sending.length} chosen={chosenLast} onSend={l => void sendTo(l, sending)} onClose={() => setSending(undefined)} />}
-        {sent && sentLocation && <SentSheet sent={sent} location={sentLocation.name} cloudPhotos={safe?.cloudPhotos ?? false} notify={notify} onDone={() => setSentTo(undefined)} />}
+        {!sentInPane && sentShown}
         {proSheet}
       </>} />
     </PlanProvider>

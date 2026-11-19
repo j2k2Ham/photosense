@@ -88,8 +88,10 @@ export interface ProAsk {
   /** For the limit: how many were chosen, and what they are called ("items", "duplicates"). */
   readonly count?: number;
   readonly label?: string;
-  /** For a second location: the one that is on. */
+  /** For a second location besides the computer: the one that is on. */
   readonly current?: string;
+  /** For a second location: backups have gone to the one that is on, so the free plan is held to it. */
+  readonly held?: boolean;
 }
 
 /** The line at the top of the Pro sheet that says why it opened; none when it was opened for its own sake. */
@@ -109,7 +111,9 @@ export function contextLine(ask: ProAsk, plan: Pick<PlanDto, 'leftToday' | 'remo
     case 'search': return 'Searching for what is in photos is part of Pro. Searching by date and place stays free.';
     case 'fix': return 'Fixing dates, places and file names is part of Pro.';
     case 'vault': return 'The hidden vault is part of Pro.';
-    case 'location': return `The free plan backs up to one location, and ${ask.current} is on. Pro adds as many as you like.`;
+    case 'location': return ask.held
+      ? `The free plan backs up to your computer and one other location, and your backups are on ${ask.current}. Pro adds as many as you like.`
+      : `The free plan backs up to your computer and one other location, and ${ask.current} is on. Pro adds as many as you like.`;
     case 'server': return 'Connecting your own server, like Amazon S3, Azure or a home NAS, is part of Pro.';
     default: return undefined;
   }

@@ -114,7 +114,7 @@ public static class PhotoSensePhoneServices
         s.AddSingleton(signIn);
         s.AddSingleton(sp => new CloudAccounts(apps ?? new CloudAppOptions(), http, sp.GetRequiredService<TimeProvider>()));
         s.AddSingleton<ICloudAccounts>(sp => sp.GetRequiredService<CloudAccounts>());
-        s.AddSingleton<IRemoteFolders>(sp => new RemoteFolders(sp.GetRequiredService<CloudAccounts>(), http, sp.GetRequiredService<TimeProvider>()));
+        s.AddSingleton<IRemoteFolders>(sp => new RemoteFolders(sp.GetRequiredService<CloudAccounts>(), http));
     }
 
     private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,

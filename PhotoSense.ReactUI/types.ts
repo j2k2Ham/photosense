@@ -897,7 +897,7 @@ export interface RenamingDto {
 }
 
 /** What sort of place a location is. */
-export type LocationKind = 'computer' | 'googleDrive' | 'oneDrive' | 'dropbox' | 'box' | 'amazonS3' | 's3Compatible' | 'azureBlob' | 'webDav' | 'sftp';
+export type LocationKind = 'computer' | 'googleDrive' | 'oneDrive' | 'dropbox' | 'amazonS3' | 's3Compatible' | 'azureBlob' | 'webDav' | 'sftp';
 
 /** A place the phone backs up to, as the page lists it (`LocationDto`). */
 export interface LocationDto {
@@ -955,6 +955,8 @@ export interface LocationsDto {
   countAt: number;
   pro: boolean;
   activity: LocationActivityDto | null;
+  /** On the free plan, the id of the location backups have gone to, which the plan is held to; null on Pro or before the first backup. */
+  held: string | null;
 }
 
 /** A location in full (`GET /api/locations/{id}`). */

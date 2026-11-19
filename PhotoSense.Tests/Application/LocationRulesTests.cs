@@ -22,11 +22,10 @@ public class LocationRulesTests
         await hashing.CopyToAsync(Stream.Null, ct);
         await Assert.That(hashing.Sha256).IsEqualTo(Convert.ToHexStringLower(SHA256.HashData(bytes)));
         await Assert.That(hashing.Of(ChecksumKind.Md5)).IsEqualTo(Convert.ToHexStringLower(MD5.HashData(bytes)));
-        await Assert.That(hashing.Of(ChecksumKind.Sha1)).IsEqualTo(Convert.ToHexStringLower(SHA1.HashData(bytes)));
         var blocks = bytes.Chunk(HashingStream.DropboxBlock).SelectMany(b => SHA256.HashData(b)).ToArray();
         await Assert.That(hashing.Of(ChecksumKind.DropboxContent)).IsEqualTo(Convert.ToHexStringLower(SHA256.HashData(blocks)));
         await Assert.That(hashing.Matches(new RemoteChecksum(ChecksumKind.Md5, hashing.Of(ChecksumKind.Md5).ToUpperInvariant()))).IsTrue();
-        await Assert.That(hashing.Matches(new RemoteChecksum(ChecksumKind.Sha1, "0"))).IsFalse();
+        await Assert.That(hashing.Matches(new RemoteChecksum(ChecksumKind.Md5, "0"))).IsFalse();
     }
 
     [Test]
@@ -68,9 +67,9 @@ public class LocationRulesTests
     public async Task Each_Kind_Of_Location_Is_Named_And_Known_As_The_Person_Sees_It()
     {
         await Assert.That(Enum.GetValues<LocationKind>().Select(LocationKinds.NameOf)).IsEquivalentTo(
-            ["Computer", "Google Drive", "OneDrive", "Dropbox", "Box", "Amazon S3", "S3-compatible", "Azure Blob Storage", "WebDAV", "SFTP"], CollectionOrdering.Matching);
-        await Assert.That(new[] { LocationKind.Computer }.Concat(LocationKinds.Cloud).Select(LocationKinds.IdOf)).IsEquivalentTo(["computer", "google-drive", "onedrive", "dropbox", "box"], CollectionOrdering.Matching);
+            ["Computer", "Google Drive", "OneDrive", "Dropbox", "Amazon S3", "S3-compatible", "Azure Blob Storage", "WebDAV", "SFTP"], CollectionOrdering.Matching);
+        await Assert.That(new[] { LocationKind.Computer }.Concat(LocationKinds.Cloud).Select(LocationKinds.IdOf)).IsEquivalentTo(["computer", "google-drive", "onedrive", "dropbox"], CollectionOrdering.Matching);
         await Assert.That(() => LocationKinds.IdOf(LocationKind.Sftp)).Throws<ArgumentException>();
-        await Assert.That((LocationKinds.IsCloud(LocationKind.Box), LocationKinds.IsServer(LocationKind.Box), LocationKinds.IsServer(LocationKind.WebDav))).IsEqualTo((true, false, true));
+        await Assert.That((LocationKinds.IsCloud(LocationKind.Dropbox), LocationKinds.IsServer(LocationKind.Dropbox), LocationKinds.IsServer(LocationKind.WebDav))).IsEqualTo((true, false, true));
     }
 }

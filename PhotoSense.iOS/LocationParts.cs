@@ -66,7 +66,7 @@ internal sealed class WebSignIn : IWebSignIn
             {
                 if (back is not null) answer.TrySetResult(new Uri(back.AbsoluteString!));
                 // The person closed the sheet: no token of the caller's was cancelled.
-                else if (error is { Code: (long)ASWebAuthenticationSessionErrorCode.CanceledLogin }) answer.TrySetCanceled(CancellationToken.None);
+                else if (error is not null && error.Code == (nint)(long)ASWebAuthenticationSessionErrorCode.CanceledLogin) answer.TrySetCanceled(CancellationToken.None);
                 else answer.TrySetException(new IOException($"The sign-in sheet could not be shown: {error?.LocalizedDescription}"));
             })
             {

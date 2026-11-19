@@ -11,8 +11,6 @@ public enum LocationKind
     OneDrive,
     /// <summary>Dropbox, in its app folder, Apps/PhotoSense.</summary>
     Dropbox,
-    /// <summary>Box, in a folder named PhotoSense.</summary>
-    Box,
     /// <summary>An Amazon S3 bucket.</summary>
     AmazonS3,
     /// <summary>A bucket on a service that answers as S3 does, at an address of its own.</summary>
@@ -29,7 +27,7 @@ public enum LocationKind
 public static class LocationKinds
 {
     /// <summary>The cloud services, which the person signs in to and which are always listed.</summary>
-    public static readonly IReadOnlyList<LocationKind> Cloud = [LocationKind.GoogleDrive, LocationKind.OneDrive, LocationKind.Dropbox, LocationKind.Box];
+    public static readonly IReadOnlyList<LocationKind> Cloud = [LocationKind.GoogleDrive, LocationKind.OneDrive, LocationKind.Dropbox];
 
     /// <summary>What Connect to server adds, one at a time.</summary>
     public static readonly IReadOnlyList<LocationKind> Servers = [LocationKind.AmazonS3, LocationKind.S3Compatible, LocationKind.AzureBlob, LocationKind.WebDav, LocationKind.Sftp];
@@ -47,7 +45,6 @@ public static class LocationKinds
         LocationKind.GoogleDrive => "Google Drive",
         LocationKind.OneDrive => "OneDrive",
         LocationKind.Dropbox => "Dropbox",
-        LocationKind.Box => "Box",
         LocationKind.AmazonS3 => "Amazon S3",
         LocationKind.S3Compatible => "S3-compatible",
         LocationKind.AzureBlob => "Azure Blob Storage",
@@ -62,7 +59,6 @@ public static class LocationKinds
         LocationKind.GoogleDrive => "google-drive",
         LocationKind.OneDrive => "onedrive",
         LocationKind.Dropbox => "dropbox",
-        LocationKind.Box => "box",
         _ => throw new ArgumentException("A location added by Connect to server has an id of its own.", nameof(kind)),
     };
 }
@@ -132,8 +128,6 @@ public enum ChecksumKind
     Sha256,
     /// <summary>MD5, as Azure Blob Storage keeps it.</summary>
     Md5,
-    /// <summary>SHA-1, as Box keeps it.</summary>
-    Sha1,
     /// <summary>Dropbox's own: the SHA-256 of the SHA-256s of each 4 MB of the file.</summary>
     DropboxContent,
 }

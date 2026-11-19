@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import {
-  backUpToLocations, checkLocations, connectServer, deleteSent, disconnectLocation, locationInstead, pauseLocations, removeLocation, renameLocation, setCountAt,
+  backUpToLocations, checkLocations, connectServer, organizeThumbnailUrl, deleteSent, disconnectLocation, locationInstead, pauseLocations, removeLocation, renameLocation, setCountAt,
   turnOffLocation, turnOnLocation, useLocationDetails, useLocations, type ApiError,
 } from '../../lib/apiClient';
 import { checkedAt } from '../../lib/backup';
 import { formatBytes } from '../../lib/format';
 import { items } from '../../lib/library';
 import {
-  CLOUD_FOLDERS, CLOUD_TILES, detailRows, isCloud, isServer, KIND_NAMES, progressLine, SERVER_KINDS, startingSettings, statusLine, type ServerField,
+  CLOUD_FOLDERS, CLOUD_TILES, detailRows, heldLine, isCloud, isServer, KIND_NAMES, progressLine, SERVER_KINDS, startingSettings, statusLine, storageAmount, type ServerField,
 } from '../../lib/locations';
 import { limitLine } from '../../lib/plan';
 import { deviceWord, usePhone } from '../../lib/phone';
-import type { LocationDto, LocationsDto, SendResultDto } from '../../types';
+import type { LocationDto, LocationsDto, OrganizeFileDto, SendResultDto } from '../../types';
 import type { ToastKind } from '../Toaster';
-import { ListGroup, ListRow, PhoneButton, Radio, Segmented } from './Controls';
+import { HeaderTextButton, ListGroup, ListRow, PhoneButton, Radio, Segmented, StickyFooter } from './Controls';
 import { LaptopIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
-import { LayerScreen, PlaceContext, PushedHeader } from './Screens';
+import { PhotoGrid } from './PhotoGrid';
+import { LayerScreen, PlaceContext, PushedHeader, useInPlace } from './Screens';
 import { ConfirmSheet, Sheet } from './Sheet';
 
 type Notify = (message: string, kind: ToastKind) => void;
@@ -44,11 +45,18 @@ const ServerGlyph = () => (
 );
 
 /**
- * Settings' Locations (53): the computer, Google Drive, OneDrive, Dropbox and Box, and every location Connect to
- * server added, each with a switch; turning a cloud service on signs in to it. Connect to server adds one; the rule
+ * Settings' Locations (53): the computer, Google Drive, OneDrive and Dropbox, and every location Connect to server
+ * added, each with a switch; turning a cloud service on signs in to it, and the computer not paired yet pairs it. Connect to server adds one; the rule
  * for Safe to delete says on how many a copy must be checked. A row opens its details.
  */
-export function LocationsGroup({ notify, onPair }: { notify: Notify; onPair(): void }) {
+export function LocationsGroup({ notify, onPair, chosen, onChoose }: {
+  notify: Notify;
+  onPair(): void;
+  /** On a tablet's Backup, the location whose page shows beside the list, lit there. */
+  readonly chosen?: string;
+  /** On a tablet's Backup, shows a location's page, or Connect to server (`connect`), beside the list instead of over it. */
+  onChoose?(what: string): void;
+}) {
   const data = useLocations(true).data;
   const gate = usePlanGate();
   const [signingIn, setSigningIn] = useState<string>();
@@ -66,6 +74,7 @@ export function LocationsGroup({ notify, onPair }: { notify: Notify; onPair(): v
   }
 
   async function turn(location: LocationDto, on: boolean) {
+    if (!on && location.id === data!.held) return notify(heldLine(location.name), 'info');
     if (!on) return act(() => turnOffLocation(location.id), `${location.name} is off. Nothing there was deleted.`);
     if (location.kind === 'computer' && !location.connected) return onPair();
     setSigningIn(location.id);
@@ -74,9 +83,12 @@ export function LocationsGroup({ notify, onPair }: { notify: Notify; onPair(): v
       notify(`${location.name} is on.`, 'ok');
     } catch (e) {
       if (status(e) === 402) {
-        const current = data!.locations.find(l => l.on && l.id !== location.id)!.name;
+        // The free plan always backs up to the computer; the one it counts is the other that is on.
+        const on = data!.locations.find(l => l.on && l.id !== location.id && l.kind !== 'computer')!;
+        const current = on.name;
+        // Once backups have gone to the one that is on, the free plan stays with it: only Pro adds another.
         gate.offer('location', () => void act(() => turnOnLocation(location.id), `${location.name} is on.`),
-          { current, wanted: location.name, run: () => void act(() => locationInstead(location.id), `${location.name} is on in place of ${current}.`) });
+          { current, wanted: location.name, run: on.id === data!.held ? undefined : () => void act(() => locationInstead(location.id), `${location.name} is on in place of ${current}.`) });
       } else {
         notify(said(e), status(e) === 409 ? 'info' : 'error');
       }
@@ -85,15 +97,17 @@ export function LocationsGroup({ notify, onPair }: { notify: Notify; onPair(): v
     }
   }
 
-  const connect = () => (data.pro ? setConnecting(true) : gate.offer('server', () => setConnecting(true)));
+  const startConnecting = () => (onChoose ? onChoose('connect') : setConnecting(true));
+  const connect = () => (data.pro ? startConnecting() : gate.offer('server', startConnecting));
   const opened = data.locations.find(l => l.id === open);
   return (
     <>
       <div className="flex flex-col gap-2">
         <ListGroup header="Locations">
           {data.locations.map(l => (
-            <li key={l.id} className="flex min-h-[60px] items-center gap-3 px-4 py-2">
-              <button type="button" onClick={() => setOpen(l.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+            <li key={l.id} className={`flex min-h-[60px] items-center gap-3 px-4 py-2 ${chosen === l.id ? 'bg-sel' : ''}`}>
+              <button type="button" aria-current={chosen === l.id ? 'true' : undefined} className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                onClick={() => (l.kind === 'computer' && !l.connected ? onPair() : onChoose ? onChoose(l.id) : setOpen(l.id))}>
                 <LocationTile location={l} />
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-[16px]">{l.name}</span>
@@ -115,7 +129,7 @@ export function LocationsGroup({ notify, onPair }: { notify: Notify; onPair(): v
         <p className="px-1 text-[13px] leading-[1.45] text-t2">
           {data.pro
             ? 'Turn on the places that should keep a copy of your photos and videos. PhotoSense backs up to every one that is on.'
-            : 'Turn on the place that should keep a copy of your photos and videos. The free plan backs up to one location. Pro adds as many as you like.'}
+            : 'Turn on the places that should keep a copy of your photos and videos. The free plan backs up to your computer and one other location. Pro adds as many as you like.'}
         </p>
       </div>
       <div className="flex flex-col gap-2">
@@ -131,7 +145,7 @@ export function LocationsGroup({ notify, onPair }: { notify: Notify; onPair(): v
       </div>
       {/* Over everything, Settings on a tablet included. */}
       <PlaceContext.Provider value={false}>
-        {opened && <LocationScreen location={opened} notify={notify} onEdit={() => { setOpen(undefined); setConnecting(opened); }} onClose={() => setOpen(undefined)} />}
+        {opened && <LocationScreen location={opened} held={opened.id === data.held} notify={notify} onEdit={() => { setOpen(undefined); setConnecting(opened); }} onClose={() => setOpen(undefined)} />}
         {connecting && <ConnectServerScreen editing={connecting === true ? undefined : connecting} notify={notify} onClose={() => setConnecting(undefined)} />}
       </PlaceContext.Provider>
     </>
@@ -145,6 +159,10 @@ const SwitchLook = ({ on }: { readonly on: boolean }) => (
 
 interface ScreenProps {
   readonly location: LocationDto;
+  /** Backups have gone here on the free plan, which is held to it: it is not turned off, signed out of or removed. */
+  readonly held?: boolean;
+  /** On a tablet's Backup, how backing up to the locations stands, and its buttons. */
+  readonly actions?: React.ReactNode;
   notify: Notify;
   /** Opens Connect to server with this location's settings, to change it. */
   onEdit(): void;
@@ -156,7 +174,8 @@ interface ScreenProps {
  * how a location added is reached (its keys masked), Rename and Edit for one added, and Turn off, Disconnect or Remove
  * location, none of which deletes anything there.
  */
-export function LocationScreen({ location, notify, onEdit, onClose }: ScreenProps) {
+export function LocationScreen({ location, held, actions, notify, onEdit, onClose }: ScreenProps) {
+  const inPlace = useInPlace();
   const { platform, tablet, ios } = usePhone();
   const details = useLocationDetails(location.id).data;
   const [asking, setAsking] = useState<'remove' | 'disconnect'>();
@@ -176,8 +195,9 @@ export function LocationScreen({ location, notify, onEdit, onClose }: ScreenProp
   }
 
   return (
-    <LayerScreen label={location.name} onBack={onClose} frozen={asking !== undefined || naming}>
-      <PushedHeader title={location.name} onBack={onClose} />
+    // Beside a tablet's list, where the computer's card already bears its name.
+    <LayerScreen label={inPlace ? `${location.name} details` : location.name} onBack={onClose} frozen={asking !== undefined || naming}>
+      <PushedHeader title={location.name} onBack={inPlace ? undefined : onClose} />
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-5 px-4 pb-6 pt-2">
         <section aria-label="How it stands" className="flex items-center gap-3 rounded-cell bg-cell p-4">
           <LocationTile location={location} />
@@ -186,12 +206,13 @@ export function LocationScreen({ location, notify, onEdit, onClose }: ScreenProp
             <span className={`text-[13.5px] ${location.problem ? 'text-danger-t' : 'text-t2'}`}>{statusLine(location)}</span>
           </span>
         </section>
+        {actions}
         {details?.space && (
           <section aria-label="Storage" className="flex flex-col gap-1.5">
             <div role="progressbar" aria-label={`${location.name} storage`} aria-valuemin={0} aria-valuemax={details.space.total} aria-valuenow={details.space.used} className="h-2 overflow-hidden rounded-full bg-fill2">
               <div className="h-full rounded-full bg-acc" style={{ width: `${Math.min(100, (details.space.used / details.space.total) * 100)}%` }} />
             </div>
-            <p className="text-[13px] text-t2">{formatBytes(details.space.used)} of {formatBytes(details.space.total)} used</p>
+            <p className="text-[13px] text-t2">{storageAmount(details.space.used)} of {storageAmount(details.space.total)} used</p>
           </section>
         )}
         {details?.problem && <p role="alert" className="text-[14px] text-danger-t">{details.problem}</p>}
@@ -216,9 +237,9 @@ export function LocationScreen({ location, notify, onEdit, onClose }: ScreenProp
           </>
         )}
         <div className="flex flex-col gap-2">
-          {location.on && <PhoneButton kind="secondary" onClick={() => void act(() => turnOffLocation(location.id), `${location.name} is off. Nothing there was deleted.`, false)}>Turn off</PhoneButton>}
-          {isCloud(location.kind) && location.connected && <PhoneButton kind="danger" onClick={() => setAsking('disconnect')}>Disconnect</PhoneButton>}
-          {isServer(location.kind) && <PhoneButton kind="danger" onClick={() => setAsking('remove')}>Remove location</PhoneButton>}
+          {location.on && <PhoneButton kind="secondary" onClick={() => (held ? notify(heldLine(location.name), 'info') : void act(() => turnOffLocation(location.id), `${location.name} is off. Nothing there was deleted.`, false))}>Turn off</PhoneButton>}
+          {isCloud(location.kind) && location.connected && <PhoneButton kind="danger" onClick={() => (held ? notify(heldLine(location.name), 'info') : setAsking('disconnect'))}>Disconnect</PhoneButton>}
+          {isServer(location.kind) && <PhoneButton kind="danger" onClick={() => (held ? notify(heldLine(location.name), 'info') : setAsking('remove'))}>Remove location</PhoneButton>}
           <p className="px-1 text-center text-[13px] leading-[1.45] text-t2">Files at {location.name} are not deleted. Photos backed up only here stop counting as safe to delete.</p>
         </div>
       </div>
@@ -256,6 +277,7 @@ function NameSheet({ name, onSave, onClose }: { readonly name: string; onSave(na
  * page filled in, saying what to change. Changing one added starts from its settings; its keys are typed again.
  */
 export function ConnectServerScreen({ editing, notify, onClose }: { readonly editing?: LocationDto; notify: Notify; onClose(): void }) {
+  const inPlace = useInPlace();
   const { ios, platform, tablet } = usePhone();
   const [kind, setKind] = useState(SERVER_KINDS.find(k => k.kind === editing?.kind) ?? SERVER_KINDS[0]);
   const [name, setName] = useState(editing?.name ?? '');
@@ -307,7 +329,8 @@ export function ConnectServerScreen({ editing, notify, onClose }: { readonly edi
   return (
     <LayerScreen label="Connect to server" onBack={onClose}
       footer={<PhoneButton disabled={busy} onClick={() => void connect()}>{busy ? 'Checking…' : editing ? 'Save' : 'Connect'}</PhoneButton>}>
-      <PushedHeader title={editing ? `Edit ${editing.name}` : 'Connect to server'} onBack={onClose} />
+      <PushedHeader title={editing ? `Edit ${editing.name}` : 'Connect to server'} onBack={inPlace ? undefined : onClose}
+        trailing={inPlace ? <HeaderTextButton onClick={onClose}>Cancel</HeaderTextButton> : undefined} />
       <div className="mx-auto flex w-full max-w-[560px] flex-col gap-5 px-4 pb-6 pt-2">
         {!editing && (
           <div role="radiogroup" aria-label="Kind" className="flex flex-wrap gap-2">
@@ -383,6 +406,7 @@ export function SentSheet({ sent, location, cloudPhotos, notify, onDone }: {
   onDone(): void;
 }) {
   const { platform, tablet, ios, words } = usePhone();
+  const inPlace = useInPlace();
   const gate = usePlanGate();
   const [busy, setBusy] = useState(false);
   const device = deviceWord(platform, tablet);
@@ -400,8 +424,8 @@ export function SentSheet({ sent, location, cloudPhotos, notify, onDone }: {
     }
   })(), true);
 
-  return (
-    <Sheet title="Sent" bare onClose={onDone}>
+  const body = (
+    <>
       <div className="flex flex-col gap-2 px-5 pb-2 pt-4">
         <h2 className="font-title text-[21px] font-bold">{items(sent.matched)} sent to {location}</h2>
         <p className="text-[15px] leading-[1.45] text-t2">
@@ -417,7 +441,40 @@ export function SentSheet({ sent, location, cloudPhotos, notify, onDone }: {
         {sent.matched > 0 && limitLine(gate.plan) && <p className="text-center text-[13px] text-t2">{limitLine(gate.plan)}</p>}
         <PhoneButton kind="secondary" onClick={onDone}>Done</PhoneButton>
       </div>
-    </Sheet>
+    </>
+  );
+  // On a tablet's Backup it fills the pane beside the list (T9).
+  if (inPlace) return <section aria-label="Sent" className="mx-auto flex w-full max-w-[560px] flex-col gap-2 pb-6 pt-[calc(var(--safe-t)+24px)]">{body}</section>;
+  return <Sheet title="Sent" bare onClose={onDone}>{body}</Sheet>;
+}
+
+/**
+ * Send now on a tablet (T8): Library's pictures and videos to choose from, filling the pane beside Backup's list, and
+ * Send to… with how many are chosen.
+ */
+export function SendPicker({ files, onSend, onClose }: { readonly files: readonly OrganizeFileDto[]; onSend(ids: string[]): void; onClose(): void }) {
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const tap = (id: string) => setPicked(before => { const next = new Set(before); if (!next.delete(id)) next.add(id); return next; });
+  const bytes = files.filter(f => picked.has(f.id)).reduce((n, f) => n + f.sizeBytes, 0);
+  const all = picked.size === files.length && files.length > 0;
+  return (
+    <LayerScreen label="Choose photos" onBack={onClose} footer={(
+      <StickyFooter>
+        <div className="flex items-center gap-3">
+          <p className="flex min-w-0 flex-1 flex-col text-[14px]"><span className="font-semibold">{picked.size.toLocaleString()} selected</span>{picked.size > 0 && <span className="text-t2">{formatBytes(bytes)}</span>}</p>
+          <span className="w-[160px]"><PhoneButton disabled={picked.size === 0} onClick={() => onSend([...picked])}>Send to…</PhoneButton></span>
+        </div>
+      </StickyFooter>
+    )}>
+      <PushedHeader title="Choose photos" trailing={(
+        <span className="flex gap-1">
+          <HeaderTextButton onClick={() => setPicked(all ? new Set() : new Set(files.map(f => f.id)))}>{all ? 'Deselect all' : 'Select all'}</HeaderTextButton>
+          <HeaderTextButton onClick={onClose}>Cancel</HeaderTextButton>
+        </span>
+      )} />
+      <PhotoGrid selecting selected={picked} onTap={tap}
+        items={files.map(f => ({ id: f.id, name: f.name, thumbnail: f.isVideo ? undefined : organizeThumbnailUrl(f.id) }))} />
+    </LayerScreen>
   );
 }
 
@@ -430,14 +487,6 @@ export function LocationsCard({ data, notify, onSettings }: { readonly data: Loc
   const activity = data.activity;
   const running = activity?.stage === 'running';
   const now = new Date();
-  async function act(run: () => Promise<void>, done: string) {
-    try {
-      await run();
-      notify(done, 'info');
-    } catch (e) {
-      notify(said(e), 'error');
-    }
-  }
   return (
     <div className="flex flex-col gap-2">
       <ListGroup header="Locations" trailing={on.length > 0 ? `${on.length} on` : undefined}>
@@ -457,14 +506,29 @@ export function LocationsCard({ data, notify, onSettings }: { readonly data: Loc
         })}
         <ListRow chevron onClick={onSettings}>{on.length > 0 ? 'Choose locations' : 'Back up to cloud storage or your own server'}</ListRow>
       </ListGroup>
-      {on.length > 0 && (
-        <div className="flex gap-2">
-          {running
-            ? <PhoneButton kind="secondary" onClick={() => void act(pauseLocations, 'Paused. What is there stays there.')}>Pause</PhoneButton>
-            : <PhoneButton kind="secondary" onClick={() => void act(backUpToLocations, `Backing up to ${on.length === 1 ? on[0].name : `${on.length} locations`}. Every copy is checked.`)}>Back up now</PhoneButton>}
-          <PhoneButton kind="secondary" disabled={running} onClick={() => void act(checkLocations, 'Checking every copy.')}>Check all backups</PhoneButton>
-        </div>
-      )}
+      {on.length > 0 && <LocationsButtons data={data} notify={notify} />}
+    </div>
+  );
+}
+
+/** Back up now (or Pause while backing up) to every location that is on but the computer, and Check all backups. */
+export function LocationsButtons({ data, notify }: { readonly data: LocationsDto; notify: Notify }) {
+  const on = data.locations.filter(l => l.on && l.kind !== 'computer');
+  const running = data.activity?.stage === 'running';
+  async function act(run: () => Promise<void>, done: string) {
+    try {
+      await run();
+      notify(done, 'info');
+    } catch (e) {
+      notify(said(e), 'error');
+    }
+  }
+  return (
+    <div className="flex gap-2">
+      {running
+        ? <PhoneButton kind="secondary" onClick={() => void act(pauseLocations, 'Paused. What is there stays there.')}>Pause</PhoneButton>
+        : <PhoneButton kind="secondary" onClick={() => void act(backUpToLocations, `Backing up to ${on.length === 1 ? on[0].name : `${on.length} locations`}. Every copy is checked.`)}>Back up now</PhoneButton>}
+      <PhoneButton kind="secondary" disabled={running} onClick={() => void act(checkLocations, 'Checking every copy.')}>Check all backups</PhoneButton>
     </div>
   );
 }

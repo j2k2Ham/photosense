@@ -1054,7 +1054,7 @@ describe("a phone's locations", () => {
     answering(undefined, 204);
     const asks: [() => Promise<unknown>, string, string][] = [
       [() => api.turnOnLocation('google-drive'), 'google-drive/on', '{}'], [() => api.turnOffLocation('google-drive'), 'google-drive/off', '{}'],
-      [() => api.locationInstead('box'), 'box/instead', '{}'], [() => api.disconnectLocation('box'), 'box/disconnect', '{}'],
+      [() => api.locationInstead('dropbox'), 'dropbox/instead', '{}'], [() => api.disconnectLocation('dropbox'), 'dropbox/disconnect', '{}'],
       [() => api.removeLocation('s 1'), 's%201/remove', '{}'], [() => api.renameLocation('s1', 'NAS'), 's1/name', '{"name":"NAS"}'],
       [() => api.setCountAt(2), 'count', '{"countAt":2}'], [api.backUpToLocations, 'backup', '{}'], [api.checkLocations, 'check', '{}'],
       [api.pauseLocations, 'pause', '{}'], [api.locationsIfDue, 'auto', '{}'], [() => api.sendToLocation('s1', ['a']), 's1/send', '{"ids":["a"]}'],
@@ -1066,9 +1066,9 @@ describe("a phone's locations", () => {
       expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
     }
     // Refused for Pro: the page is told which.
-    answering({ error: 'The free plan backs up to one location, and Studio iMac is on.' }, 402);
+    answering({ error: 'The free plan backs up to your computer and one other location, and Google Drive is on.' }, 402);
     swr.mutate.mockClear();
-    await expect(api.turnOnLocation('box')).rejects.toMatchObject({ message: 'The free plan backs up to one location, and Studio iMac is on.', status: 402 });
+    await expect(api.turnOnLocation('dropbox')).rejects.toMatchObject({ message: 'The free plan backs up to your computer and one other location, and Google Drive is on.', status: 402 });
     expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
   });
 
