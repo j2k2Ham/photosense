@@ -61,7 +61,7 @@ public class SceneDelegate : UIResponder, IUIWindowSceneDelegate
         Window.RootViewController = new PageViewController();
         Window.MakeKeyAndVisible();
         // Started from a widget or the app icon's menu: the page asks what to open once it is ready.
-        IosNotifier.Open(connectionOptions.ShortcutItem?.Type ?? Opens(connectionOptions.UrlContexts?.FirstOrDefault()?.Url));
+        IosNotifier.Open(connectionOptions.ShortcutItem?.Type ?? Opens(connectionOptions.UrlContexts?.AnyObject?.Url));
     }
 
     /// <summary>The app icon's menu tapped while PhotoSense was running.</summary>
