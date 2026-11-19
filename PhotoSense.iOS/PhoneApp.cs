@@ -14,7 +14,8 @@ public static class PhoneApp
 {
     private static readonly Lazy<ServiceProvider> Built = new(() => new ServiceCollection()
         .AddPhotoSensePhone(new PhotoKitLibrary(DataFolder), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory), new BonjourAdvertiser(), new StoreKitStore(),
-            new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), IosNotifier.Shared, new IosShareSheet(), UIDevice.CurrentDevice.Name)
+            new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), IosNotifier.Shared, new IosShareSheet(), new KeychainVaultKeys(), new DeviceUnlocker(),
+            UIDevice.CurrentDevice.Name)
         .AddPhotoSenseApi()
         .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "iphone"))
         .BuildServiceProvider());

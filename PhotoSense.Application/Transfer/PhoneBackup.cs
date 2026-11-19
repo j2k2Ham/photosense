@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Application.Plans;
+using PhotoSense.Application.Vault;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
@@ -36,6 +37,12 @@ public sealed record TripFolderRun(string Folder, BackupStage Stage, string? Pro
 /// <param name="Problem">Why they were not renamed.</param>
 /// <param name="Renamed">How many the computer renamed.</param>
 public sealed record NamesRun(FileNaming Names, BackupStage Stage, string? Problem, int? Renamed);
+
+/// <summary>Hidden items being brought back from the computer to a phone's vault, or the last time it was asked.</summary>
+/// <param name="Stage">How it stands.</param>
+/// <param name="Problem">Why it stopped.</param>
+/// <param name="Restored">How many items the computer gave back, once it is done.</param>
+public sealed record RestoreRun(BackupStage Stage, string? Problem, int? Restored);
 
 /// <summary>A picture or video in the strip of those backing up, by its id in the library, and whether it is on the computer yet.</summary>
 /// <param name="Id">Its id, as Organize and Library know it.</param>
@@ -127,6 +134,7 @@ public sealed class PhoneBackup
     private readonly string _root;
     private readonly TimeProvider _clock;
     private readonly object _lock = new();
+    private readonly IVaultFiles _vault;
     private Run? _run;
     private CancellationTokenSource? _stop;
 
@@ -145,6 +153,10 @@ public sealed class PhoneBackup
         // How the computer is to name the copies, once this backup is done, and how many it renamed.
         public FileNaming? Names;
         public int? Renamed;
+        // The hidden vault's files this backup sends, sealed; and the vault whose files it ends by bringing back, and how many came.
+        public List<VaultFileInfo> Hidden = [];
+        public string? Restore;
+        public int? Restored;
     }
 
     /// <summary>Backs up the library at <paramref name="root"/> to the computer the phone was paired with.</summary>
@@ -160,9 +172,11 @@ public sealed class PhoneBackup
     /// <param name="name">What this phone is called, as the computer shows it.</param>
     /// <param name="root">The library's folder.</param>
     /// <param name="clock">How long the computer may stay silent, and when things happen.</param>
+    /// <param name="vault">The hidden vault's files, which a backup sends as they are kept, sealed.</param>
     public PhoneBackup(IBackupLedger ledger, IComputerFinder finder, IPairingStore pairs, OrganizeLibrary library, IPhotoFileSystem files, Subscription plan, DailyRemovals removals,
-        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock)
+        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault)
     {
+        _vault = vault;
         _ledger = ledger;
         _finder = finder;
         _pairs = pairs;
@@ -197,7 +211,8 @@ public sealed class PhoneBackup
                 ? [.. waiting.Take(StripSize).Select(i => new BackupTile(i.Main.Id, false))]
                 : Strip(run);
             return new BackupState(run?.Stage ?? BackupStage.Ready, computer.Name, computer.Folder, waiting.Count, waiting.Sum(i => i.Bytes), onComputer,
-                run?.Done.Count ?? 0, run?.Queue.Count ?? 0, run?.Bytes ?? 0, run?.Queue.Sum(f => f.SizeBytes) ?? 0, computer.LastChecked, computer.LastBackup, strip, run?.Problem, settings);
+                run?.Done.Count ?? 0, run is null ? 0 : run.Queue.Count + run.Hidden.Count, run?.Bytes ?? 0, run is null ? 0 : run.Queue.Sum(f => f.SizeBytes) + run.Hidden.Sum(f => f.Length),
+                computer.LastChecked, computer.LastBackup, strip, run?.Problem, settings);
         }
     }
 
@@ -343,6 +358,39 @@ public sealed class PhoneBackup
         lock (_lock) return _run is { Names: { } names } run ? new NamesRun(names, run.Stage, run.Problem, run.Renamed) : null;
     }
 
+    /// <summary>
+    /// Brings the hidden vault's files sealed with this key back from the computer, after a backup: those this phone
+    /// sent, and those another phone with the same recovery key sent. It goes on by itself; <see cref="RestoreRun"/>
+    /// says how it stands.
+    /// </summary>
+    /// <param name="keyId">The id of the vault's key, which the computer finds its files by without the key.</param>
+    /// <param name="ct">Stops it before it starts.</param>
+    /// <exception cref="InvalidOperationException">The phone has been paired with no computer, or a backup is running.</exception>
+    public async Task RestoreHiddenAsync(byte[] keyId, CancellationToken ct)
+    {
+        var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException(PairFirst);
+        lock (_lock)
+        {
+            if (_run is { Stage: BackupStage.Running }) throw new InvalidOperationException($"A backup to {computer.Name} is running. Restore once it ends.");
+            Start(new Run { Restore = Convert.ToHexStringLower(keyId) }, computer, []);
+        }
+    }
+
+    /// <summary>The hidden items being brought back, or the last time it was asked; null when it was not since PhotoSense started.</summary>
+    public RestoreRun? RestoreRun()
+    {
+        lock (_lock) return _run is { Restore: not null } run ? new RestoreRun(run.Stage, run.Problem, run.Restored) : null;
+    }
+
+    /// <summary>Each of the hidden vault's files, by name, and whether the computer holds it, as it last said.</summary>
+    public async Task<IReadOnlyDictionary<string, bool>> HiddenOnComputerAsync(CancellationToken ct)
+    {
+        var held = await _ledger.OnComputerAsync(ct);
+        var on = new Dictionary<string, bool>(StringComparer.Ordinal);
+        foreach (var file in Hidden()) on[file.Name] = held.Contains(await HiddenChecksumAsync(file, ct));
+        return on;
+    }
+
     /// <summary>How many of this phone's files the computer holds, as it last said.</summary>
     public async Task<int> HeldAsync(CancellationToken ct) => (await _ledger.OnComputerAsync(ct)).Count;
 
@@ -437,21 +485,42 @@ public sealed class PhoneBackup
                     queue.Add(file);
                     said[file.Id] = sha;
                 }
-            lock (_lock) run.Queue = queue;
-            await Lists.SendAsync(channel, "offer", "files", [.. queue.Select(f => (JsonNode)new JsonObject
+            var hidden = new List<VaultFileInfo>();
+            // The vault goes with a whole backup, sealed as it is kept; never with what was chosen to send.
+            if (only is null)
+                foreach (var file in Hidden())
+                {
+                    var sha = await HiddenChecksumAsync(file, stop);
+                    if (held.Contains(sha)) continue;
+                    hidden.Add(file);
+                    said[HiddenId(file)] = sha;
+                }
+            lock (_lock)
             {
-                ["id"] = f.Id, ["name"] = f.Name, ["size"] = f.SizeBytes, ["modified"] = f.ModifiedUtc.ToString("O"), ["sha256"] = said[f.Id],
-            })], null, stop);
+                run.Queue = queue;
+                run.Hidden = hidden;
+            }
+            await Lists.SendAsync(channel, "offer", "files", [
+                .. queue.Select(f => (JsonNode)new JsonObject
+                {
+                    ["id"] = f.Id, ["name"] = f.Name, ["size"] = f.SizeBytes, ["modified"] = f.ModifiedUtc.ToString("O"), ["sha256"] = said[f.Id],
+                }),
+                .. hidden.Select(f => (JsonNode)new JsonObject
+                {
+                    ["id"] = HiddenId(f), ["name"] = f.Name, ["size"] = f.Length, ["modified"] = f.ModifiedUtc.ToString("O"), ["sha256"] = said[HiddenId(f)], ["hidden"] = true,
+                })], null, stop);
             var sent = new Dictionary<string, string>(StringComparer.Ordinal);
             while (true)
             {
                 var asked = await channel.ReceiveAsync(stop, "get", "got", "done");
                 var id = Wire.Text(asked, "t") == "done" ? null : Wire.Text(asked, "id");
                 if (id is null) break;
-                var file = queue.FirstOrDefault(f => f.Id == id) ?? throw new TransferException("The computer asked for a file that was not offered.");
+                var file = queue.FirstOrDefault(f => f.Id == id);
+                var sealedFile = hidden.FirstOrDefault(f => HiddenId(f) == id);
+                if (file is null && sealedFile is null) throw new TransferException("The computer asked for a file that was not offered.");
                 if (Wire.Text(asked, "t") == "get")
                 {
-                    sent[id] = await SendFileAsync(channel, run, file, stop);
+                    sent[id] = file is not null ? await SendFileAsync(channel, run, file, stop) : await SendHiddenAsync(channel, run, sealedFile!, stop);
                     continue;
                 }
                 // On the computer only with the very bytes that were sent, or that the phone said it had.
@@ -470,6 +539,7 @@ public sealed class PhoneBackup
                 lock (_lock) run.Renamed = named["renamed"]!.GetValue<int>();
                 computer = computer with { Names = naming };
             }
+            if (run.Restore is { } key) await RestoreAsync(channel, run, key, stop);
             var safe = await SafeAsync(stop);
             await channel.SendAsync(new JsonObject { ["t"] = "bye", ["safe"] = safe.Removable.Count, ["safeBytes"] = safe.Removable.Bytes }, stop);
             await _ledger.SaveComputerAsync(computer with { LastBackup = _clock.GetUtcNow() }, CancellationToken.None);
@@ -505,7 +575,25 @@ public sealed class PhoneBackup
         lock (_lock) run.Next = Math.Max(run.Next, run.Queue.IndexOf(file));
         // A picture kept only in iCloud is fetched first, which can take a while; the computer is told of it.
         await using var read = await channel.MeanwhileAsync(stop => _files.OpenReadAsync(file.Path, stop), _clock, ct);
-        await channel.SendAsync(new JsonObject { ["t"] = "file", ["id"] = file.Id, ["size"] = read.Length }, ct);
+        var check = await SendBytesAsync(channel, run, file.Id, read, ct);
+        await _ledger.KeepChecksumAsync(file.Path, file.SizeBytes, file.ModifiedUtc, check, ct);
+        await channel.SendAsync(new JsonObject { ["t"] = "end", ["id"] = file.Id, ["sha256"] = check }, ct);
+        return check;
+    }
+
+    private async Task<string> SendHiddenAsync(SecureChannel channel, Run run, VaultFileInfo file, CancellationToken ct)
+    {
+        await using var read = _vault.OpenRead(file.Name);
+        var check = await SendBytesAsync(channel, run, HiddenId(file), read, ct);
+        await _ledger.KeepChecksumAsync(HiddenPath(file.Name), file.Length, file.ModifiedUtc, check, ct);
+        await channel.SendAsync(new JsonObject { ["t"] = "end", ["id"] = HiddenId(file), ["sha256"] = check }, ct);
+        return check;
+    }
+
+    // Sends a file's bytes, after saying how many; returns their checksum.
+    private async Task<string> SendBytesAsync(SecureChannel channel, Run run, string id, Stream read, CancellationToken ct)
+    {
+        await channel.SendAsync(new JsonObject { ["t"] = "file", ["id"] = id, ["size"] = read.Length }, ct);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var piece = new byte[SecureChannel.PieceSize];
         for (int n; (n = await read.ReadAsync(piece, ct)) > 0;)
@@ -514,10 +602,60 @@ public sealed class PhoneBackup
             await channel.SendDataAsync(piece.AsMemory(0, n), ct);
             lock (_lock) run.Bytes += n;
         }
-        var check = Convert.ToHexStringLower(hash.GetHashAndReset());
-        await _ledger.KeepChecksumAsync(file.Path, file.SizeBytes, file.ModifiedUtc, check, ct);
-        await channel.SendAsync(new JsonObject { ["t"] = "end", ["id"] = file.Id, ["sha256"] = check }, ct);
-        return check;
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
+    }
+
+    // Brings back the vault's files sealed with this key that the computer holds and this phone has not, each checked.
+    private async Task RestoreAsync(SecureChannel channel, Run run, string key, CancellationToken ct)
+    {
+        await channel.SendAsync(new JsonObject { ["t"] = "vault", ["key"] = key }, ct);
+        var offered = await Lists.ReceiveAsync(channel, "vault", "files", null, null, ct);
+        var mine = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var file in Hidden()) mine.Add(await HiddenChecksumAsync(file, ct));
+        var restored = 0;
+        foreach (var file in offered.OfType<JsonObject>())
+        {
+            var sha = Wire.Text(file, "sha256");
+            if (!mine.Add(sha)) continue;
+            await channel.SendAsync(new JsonObject { ["t"] = "fetch", ["sha256"] = sha }, ct);
+            var size = (await channel.ReceiveAsync(ct, "file"))["size"] is JsonValue said && said.TryGetValue(out long n) && n >= 0
+                ? n : throw new TransferException("The computer sent something PhotoSense does not understand.");
+            // Checked before it is the vault's: a file cut short or damaged does not stay.
+            await _vault.WriteAsync($"{sha[..32]}{VaultBox.Extension}", async output =>
+            {
+                using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+                for (long written = 0; written < size;)
+                {
+                    var piece = await channel.ReceiveDataAsync(ct);
+                    if (written + piece.Length > size) throw new TransferException("The computer sent more of a file than it said it would.");
+                    hash.AppendData(piece);
+                    await output.WriteAsync(piece, ct);
+                    written += piece.Length;
+                }
+                if (Convert.ToHexStringLower(hash.GetHashAndReset()) != sha || Wire.Text(await channel.ReceiveAsync(ct, "end"), "sha256") != sha)
+                    throw new TransferException("A hidden item arrived damaged, so it was not kept. Restore again.");
+            }, ct);
+            restored++;
+        }
+        await channel.SendAsync(new JsonObject { ["t"] = "fetched" }, ct);
+        lock (_lock) run.Restored = restored;
+    }
+
+    // The vault's own files, as backups send them.
+    private IEnumerable<VaultFileInfo> Hidden() => _vault.List().Where(f => f.Name.EndsWith(VaultBox.Extension, StringComparison.Ordinal));
+
+    private static string HiddenId(VaultFileInfo file) => $"hidden:{file.Name}";
+
+    // What the ledger knows a vault file's checksum by: no photo of the library has a path like it.
+    private static string HiddenPath(string name) => $"vault:{name}";
+
+    private async Task<string> HiddenChecksumAsync(VaultFileInfo file, CancellationToken ct)
+    {
+        if (await _ledger.ChecksumAsync(HiddenPath(file.Name), file.Length, file.ModifiedUtc, ct) is { } known) return known;
+        string sha;
+        await using (var read = _vault.OpenRead(file.Name)) sha = Convert.ToHexStringLower(await SHA256.HashDataAsync(read, ct));
+        await _ledger.KeepChecksumAsync(HiddenPath(file.Name), file.Length, file.ModifiedUtc, sha, ct);
+        return sha;
     }
 
     // A few of those sent last and those coming next.

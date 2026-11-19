@@ -27,6 +27,14 @@ public sealed record LibraryFile(string Id, string Path, long SizeBytes, DateTim
     public bool DateFromFile => Details.TakenOn is null;
     /// <summary>When it was taken, as the camera's clock had it; failing that, when the file was last changed.</summary>
     public DateTime Date => Details.TakenOn ?? ModifiedUtc.ToLocalTime();
+
+    /// <summary>
+    /// What its preview is kept under. A scan keeps previews by what the file holds; a file no scan has read is kept
+    /// by its size and the instant it was last changed: those stay with it when it is moved, and a copy that shares
+    /// them shares the picture too.
+    /// </summary>
+    public string PreviewKey => ContentHash
+        ?? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{System.IO.Path.GetExtension(Path).ToUpperInvariant()}|{SizeBytes}|{ModifiedUtc.Ticks}")));
 }
 
 /// <summary>How far the reading of a folder has got, with some of the files it has found.</summary>

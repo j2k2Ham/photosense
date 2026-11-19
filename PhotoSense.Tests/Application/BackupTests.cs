@@ -47,7 +47,7 @@ public sealed class BackupTests : IDisposable
     {
         _phone = new ServiceCollection()
             .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(), _computers, _device,
-                new FakeNotifier(), new FakeShareSheet(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+                new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()
@@ -528,7 +528,7 @@ public sealed class BackupTests : IDisposable
     {
         var services = new TestApi().Services;
         var computer = new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(),
-            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock());
+            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles());
         var refused = await new BackupApi(new TestApi(s => s.AddSingleton(computer))).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);
         await Assert.That((refused.StatusCode, refused.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is on its computer."));
         var neither = await new BackupApi(new TestApi()).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);

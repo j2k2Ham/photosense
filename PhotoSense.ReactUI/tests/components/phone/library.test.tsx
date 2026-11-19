@@ -12,7 +12,7 @@ import { frame, gate, inFrame } from './frame';
 const api = vi.hoisted(() => ({
   usePhotoAccess: vi.fn(), planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), chooseMorePhotos: vi.fn(),
   usePhotoDetails: vi.fn(), setFavorite: vi.fn(), sharePhoto: vi.fn(), useSearch: vi.fn(), refreshSearch: vi.fn(),
-  useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(), useFixes: vi.fn(),
+  useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(), useFixes: vi.fn(), useVault: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
@@ -45,6 +45,7 @@ beforeEach(() => {
   api.useSearch.mockReturnValue({ data: undefined, error: undefined });
   api.useTrips.mockReturnValue({ data: undefined });
   api.useFixes.mockReturnValue({ data: undefined });
+  api.useVault.mockReturnValue({ data: undefined });
 });
 
 interface ShowProps { lib?: Library; platform?: Platform; more?: Partial<PhoneFrame>; selecting?: boolean; made?: Album[]; backup?: LibraryBackupDto; safe?: SafeReviewDto; onReview?: () => void; removeLocation?: boolean }
@@ -454,6 +455,14 @@ describe("Library's search", () => {
     await userEvent.click(screen.getByRole('button', { name: 'Needs fixing, Looking…' }));
     expect(sheet('Fix dates and places')).toHaveTextContent('Looking at dates and places…');
     await userEvent.click(within(sheet('Fix dates and places')).getByRole('button', { name: 'Back' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('opens the hidden vault from its tile, and Back closes it', async () => {
+    show();
+    await userEvent.click(screen.getByRole('button', { name: 'Hidden, Looking…' }));
+    expect(sheet('Hidden')).toBeInTheDocument();
+    await userEvent.click(within(sheet('Hidden')).getByRole('button', { name: 'Back' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

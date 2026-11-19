@@ -65,6 +65,19 @@ public interface IMediaStore
     void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
 
     /// <summary>
+    /// Adds a picture or video to a folder as a new file, under its name or, when that is taken, the one Android
+    /// gives it; dated as given, and placed too where its file can say so. Returns the store's id for it.
+    /// </summary>
+    /// <param name="folder">The folder as the store says it: "DCIM/Camera/".</param>
+    /// <param name="name">Its name.</param>
+    /// <param name="content">What it holds.</param>
+    /// <param name="taken">When it was taken; null to leave Android's own.</param>
+    /// <param name="place">Where it was taken; null for nowhere.</param>
+    /// <param name="ct">Stops it before Android has it.</param>
+    /// <exception cref="IOException">Android could not take it.</exception>
+    Task<string> ImportAsync(string folder, string name, Stream content, DateTime? taken, PlaceChange? place, CancellationToken ct);
+
+    /// <summary>
     /// A copy of a picture or video for sharing, in the app's cache, without its place and camera details as asked: a
     /// HEIC picture becomes a JPEG, as Android cannot rewrite HEIC's details; a video is re-written, not re-encoded.
     /// </summary>

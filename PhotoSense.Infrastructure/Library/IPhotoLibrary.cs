@@ -100,6 +100,14 @@ public interface IPhotoLibrary
     void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
 
     /// <summary>
+    /// Adds a picture or video to the library as a new item, its files together (a Live Photo's picture and its
+    /// video), dated and placed as given. Returns the library's id for it.
+    /// </summary>
+    /// <exception cref="IOException">The library could not take it.</exception>
+    /// <exception cref="UnauthorizedAccessException">PhotoSense may not add to the library.</exception>
+    Task<string> ImportAsync(IReadOnlyList<(LibraryFileKind Kind, string FileName, Stream Content)> files, DateTime? taken, PlaceChange? place, CancellationToken ct);
+
+    /// <summary>
     /// A copy of one file of a picture or video for sharing, in the app's temporary folder, without its place and camera
     /// details as asked, fetched from the cloud first when it is kept there.
     /// </summary>

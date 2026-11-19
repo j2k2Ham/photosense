@@ -16,7 +16,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// sends to the phone's own bin. Nothing is ever copied onto the phone: photos are copied to a computer.
 /// </para>
 /// </summary>
-public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor, IFavoritePhotos, ISharingCopies, IPhotoDetails
+public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor, IFavoritePhotos, ISharingCopies, IPhotoDetails, IPhotoImport
 {
     /// <summary>Where what is removed from the phone's storage as a whole waits, as Android shows it: inside Pictures.</summary>
     public const string RemovedHere = "PhotoSense Removed";
@@ -167,6 +167,24 @@ public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, I
         try { return await _store.CompressAsync(video.Id, target, progress, ct); }
         // The copy is a new file: the phone is read afresh.
         finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>Each file goes in the folder it was in, when that is one Android keeps photos in; otherwise in Pictures.</remarks>
+    public async Task<IReadOnlyList<string>> ImportAsync(string folder, IReadOnlyList<ImportedFile> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        string where;
+        try { where = StoreFolder(Inside(folder)); }
+        // A folder Android would refuse, or one from another phone: Pictures, where any photo may go.
+        catch (UnauthorizedAccessException) { where = Pictures + "/"; }
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (var file in files) ids.Add(await _store.ImportAsync(where, file.Name, file.Content, taken, place, ct));
+        }
+        // The phone has new files: it is read afresh.
+        finally { _seen = null; }
+        return [.. Look().Files.Where(f => ids.Contains(f.Value.Entry.Id)).Select(f => f.Key)];
     }
 
     /// <inheritdoc />

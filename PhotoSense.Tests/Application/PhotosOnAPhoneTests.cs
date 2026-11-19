@@ -34,7 +34,7 @@ public sealed class PhotosOnAPhoneTests : IDisposable
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, App, new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddPhotoSensePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, App, new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for PhotoSense for iPhone and iPad"))
             .AddStandInStores()

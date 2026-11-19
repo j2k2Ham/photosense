@@ -397,6 +397,7 @@ export const GUIDE: GuideTopic[] = [
           '**Backup** shows a backup arriving, file by file, each with a tick once it matched its checksum, and otherwise when the last one was.',
           '**On this computer** says how many of its photos and videos are here; **Checked** that each matched its SHA-256 checksum; **Safe to delete on the phone** how many the phone could remove, and how much space that frees there.',
           '**Files from this phone** names the folder its backups go to. **Change…** sends them to another folder from then on; what is there already stays. **Trip folders** says where they are made and how many were made when the phone asked; its **Change…** makes them in another folder from then on.',
+          'A phone’s hidden vault arrives encrypted, in a **Hidden** folder inside its folder. This computer cannot open those files: only the phone, or a new phone given its recovery key, can. Leave them where they are, so that a backup never sends them twice.',
           '**File names** says how the phone’s copies are named here: **As on the phone** (IMG_4821.HEIC) to start with. **Rename by date…** opens **Rename files by date**: choose **Date and time** (2026-03-02 14.31.07.HEIC) or **Date, time and place** (2026-03-02 14.31.07 Big Sky.HEIC), see the first few names now and after, and **Rename** them. Copies backed up from then on are named the same way. A Live Photo’s video takes its picture’s name; files with the same date and time get -2, -3 at the end; a file that does not say when it was taken keeps its name. Only the copies on this computer change, as one move listed in **Recently moved**, where **Undo** puts the names back. Renaming is part of Pro, which a phone’s Pro covers. Once named by date, **Change names…** also offers **As on the phone** for what arrives from then on.',
           '**Pause backups** turns the phone away until **Resume backups**. **Activity** lists what happened.',
         ],
@@ -593,11 +594,12 @@ export const GUIDE: GuideTopic[] = [
     id: 'library',
     only: PHONES,
     title: 'Library',
-    summary: 'Every photo and video, by month: searching, trips, viewing one, sharing it, choosing several, and what can be done with them.',
+    summary: 'Every photo and video, by month: searching, trips, fixing dates, the hidden vault, viewing one, sharing it, choosing several, and what can be done with them.',
     keywords: ['photos', 'pictures', 'gallery', 'camera roll', 'view', 'select', 'choose', 'delete', 'send', 'filter', 'no location', 'videos', 'month',
       'year in review', 'recap', 'wrapped', 'stats', 'share card', 'brag', 'story', 'search', 'find', 'look for', 'favorite', 'heart', 'info', 'camera',
       'share', 'location', 'gps', 'privacy', 'metadata', 'exif', 'trips', 'travel', 'vacation', 'holiday', 'map', 'home', 'journey', 'trip folder',
-      'wrong date', 'fix date', 'missing location', 'needs fixing', '1970', '2000', 'rename', 'file names'],
+      'wrong date', 'fix date', 'missing location', 'needs fixing', '1970', '2000', 'rename', 'file names', 'hidden', 'hide', 'vault', 'private', 'secret',
+      'lock', 'face id', 'fingerprint', 'encrypted', 'recovery key', 'unhide'],
     sections: [
       {
         text: [
@@ -665,6 +667,26 @@ export const GUIDE: GuideTopic[] = [
       {
         only: ANDROID,
         text: ['A JPEG, PNG or WebP picture has its own date and place written again in its file; the picture itself is untouched. A video, or a HEIC picture, gets its new date in Android’s own record, but cannot be given a place, so it is not listed under Missing location.'],
+      },
+      {
+        heading: 'Hidden',
+        text: [
+          'The **Hidden** tile, beside **Needs fixing**, opens the hidden vault: photos and videos you keep out of your library, encrypted inside PhotoSense and opened only after your phone checks it is you. The hidden vault is part of Pro.',
+          '**Turn on Hidden** shows your **recovery key**: 32 letters and digits in groups of four. Write it down and keep it away from your phone. With it, a new phone paired with your computer brings your hidden items back; without it, nobody can open them, PhotoSense included. **Show recovery key**, while Hidden is open, shows it again.',
+          '**Add photos** opens your library to choose from. **Hide** encrypts each one into Hidden and checks the copy before anything leaves the library; then your phone asks before they leave it. They wait where your phone keeps what is deleted, for 30 days, as anything deleted does, and do not count toward the free plan’s daily removals.',
+          'Hidden locks when you choose **Lock** and whenever PhotoSense goes to the background. Locked, it shows only how many items it holds.',
+          'Tap an item to see it. **Unhide** puts it back in your library with its date and place. **Delete** puts it back, then deletes it after your phone asks, where it can still be found for 30 days; on the free plan it counts toward the day’s removals.',
+          'Backups carry hidden items to your computer still encrypted: the computer keeps them in a **Hidden** folder beside your phone’s photos and cannot open them. If you delete PhotoSense, hidden items that are not backed up are deleted too, and Hidden says how many that would be.',
+          'On a new phone, pair your computer first, then open Hidden and choose **Restore with a recovery key**. Type the key, and **Restore** brings your hidden items back from the computer after a backup.',
+        ],
+      },
+      {
+        only: IOS,
+        text: ['Hidden opens with Face ID or Touch ID, or your iPhone’s passcode when they fail. An iPhone with no passcode cannot open Hidden. What is hidden, or deleted from Hidden, waits in **Recently Deleted** in Photos. The recovery key is kept in your iPhone’s Keychain, never in a backup of the phone.'],
+      },
+      {
+        only: ANDROID,
+        text: ['Hidden opens with your fingerprint or face, or your phone’s PIN, pattern or password. What is hidden, or deleted from Hidden, waits in the bin. The recovery key is sealed by Android’s own Keystore, and hidden items are left out of Google’s backup of the app.'],
       },
       {
         heading: 'Trips',

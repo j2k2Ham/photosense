@@ -876,6 +876,44 @@ describe('fixing dates and places, and naming copies by date', () => {
     expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/fixes`);
   });
 
+  it('asks how the hidden vault stands only while wanted, and every second while its items come back', async () => {
+    const api = await load();
+    api.useVault(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useVault(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/vault`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ restore: null }), every({ restore: { stage: 'ready' } }), every({ restore: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+  });
+
+  it('turns the vault on, restores, unlocks, locks, shows the key, and hides, puts back and deletes, asking everything again after', async () => {
+    const api = await load();
+    answering({ recoveryKey: 'K7QP' });
+    await expect(api.turnOnVault()).resolves.toBe('K7QP');
+    expect(lastRequest()).toEqual({ url: `${API}/vault/on`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/vault`);
+    await expect(api.vaultRecoveryKey()).resolves.toBe('K7QP');
+    expect(lastRequest()).toEqual({ url: `${API}/vault/key`, init: { headers: json } });
+    answering(undefined, 202);
+    await api.recoverVault('K7QP');
+    expect(lastRequest()).toEqual({ url: `${API}/vault/recover`, init: { method: 'POST', body: '{"recoveryKey":"K7QP"}', headers: json } });
+    answering({ unlocked: true });
+    await expect(api.unlockVault()).resolves.toBe(true);
+    expect(lastRequest()).toEqual({ url: `${API}/vault/unlock`, init: { method: 'POST', headers: json } });
+    answering(undefined, 204);
+    await api.lockVault();
+    expect(lastRequest()).toEqual({ url: `${API}/vault/lock`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    answering({ changed: 2 });
+    await expect(api.hideItems(['a', 'b'])).resolves.toBe(2);
+    expect(lastRequest()).toEqual({ url: `${API}/vault/hide`, init: { method: 'POST', body: '{"ids":["a","b"]}', headers: json } });
+    expect((swr.mutate.mock.lastCall![0] as () => boolean)()).toBe(true);
+    await api.unhideItems(['h 1']);
+    expect(lastRequest().url).toBe(`${API}/vault/unhide`);
+    await api.deleteHidden(['h 1']);
+    expect(lastRequest().url).toBe(`${API}/vault/delete`);
+    expect([api.vaultThumbnailUrl('h 1'), api.vaultImageUrl('h 1')]).toEqual([`${API}/vault/h%201/thumbnail`, `${API}/vault/h%201/image`]);
+  });
+
   it('on a computer, asks what renaming would do only for a phone, and renames', async () => {
     const api = await load();
     api.useRenaming(undefined, 'date');

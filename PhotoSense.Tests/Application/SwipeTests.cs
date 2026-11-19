@@ -36,7 +36,7 @@ public sealed class SwipeTests : IDisposable
     {
         _phone = new ServiceCollection()
             .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(),
-                new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+                new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()
@@ -292,7 +292,7 @@ public sealed class SwipeTests : IDisposable
         var services = computer.Services;
         var onDisk = new SwipeToClean(new MemorySwipeStore(), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
             new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
-                TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock()),
+                TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles()),
             TestPlans.Removals(), In("Pictures"), new TestClock());
         var asked = await new TestApi(s => s.AddSingleton(onDisk)).SendAsync(Http.Post("swipe/delete").FromClient(), ct, "swipe/delete");
         await Assert.That((asked.StatusCode, asked.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is swiped."));

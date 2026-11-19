@@ -37,6 +37,8 @@
         <string>_photosense._tcp</string>
         <string>_photosense-pc._tcp</string>
     </array>
+    <key>NSFaceIDUsageDescription</key>
+    <string>PhotoSense uses Face ID to unlock Hidden.</string>
     <key>NSCameraUsageDescription</key>
     <string>PhotoSense uses the camera only to scan the pairing code on your computer.</string>
     <key>PHPhotoLibraryPreventAutomaticLimitedAccessAlert</key>

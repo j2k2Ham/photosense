@@ -9,6 +9,7 @@ using AndroidX.Media3.Effect;
 using AndroidX.Media3.Transformer;
 using Microsoft.Win32.SafeHandles;
 using PhotoSense.Domain.Services;
+using Android.Webkit;
 using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 using AndroidUri = Android.Net.Uri;
@@ -214,6 +215,39 @@ public sealed class AndroidMediaStore(Context context) : IMediaStore
             Resolver.Delete(uri, null, null);
             throw new IOException($"The phone would not keep the smaller copy: {e.Message}");
         }
+    }
+
+    /// <summary>
+    /// Adds a picture or video to a folder as a new file, hidden from other apps until it is all there; dated as
+    /// given, and, for a JPEG, PNG or WebP, with its date and place written in its file too.
+    /// </summary>
+    public async Task<string> ImportAsync(string folder, string name, Stream content, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        var video = MediaFiles.IsVideo(name);
+        var extension = Path.GetExtension(name).TrimStart('.').ToLowerInvariant();
+        var values = new ContentValues();
+        values.Put(MediaStore.IMediaColumns.DisplayName, name);
+        values.Put(MediaStore.IMediaColumns.MimeType, MimeTypeMap.Singleton?.GetMimeTypeFromExtension(extension) ?? (video ? "video/mp4" : "image/jpeg"));
+        values.Put(MediaStore.IMediaColumns.RelativePath, folder);
+        values.Put(MediaStore.IMediaColumns.IsPending, 1);
+        if (taken is { } when) values.Put(MediaStore.IMediaColumns.DateTaken, new DateTimeOffset(DateTime.SpecifyKind(when, DateTimeKind.Local)).ToUnixTimeMilliseconds());
+        AndroidUri? uri = null;
+        var whole = false;
+        try
+        {
+            uri = Resolver.Insert(video ? Videos : Images, values) ?? throw new IOException($"The phone would not take {name} back.");
+            await using (var into = Resolver.OpenOutputStream(uri) ?? throw new IOException($"The phone would not take {name} back."))
+                await content.CopyToAsync(into, ct);
+            if (!video && extension is "jpg" or "jpeg" or "png" or "webp" && (taken is not null || place is not null)) WriteDetails(uri, name, taken, place);
+            var kept = new ContentValues();
+            kept.Put(MediaStore.IMediaColumns.IsPending, 0);
+            Resolver.Update(uri, kept, null, null);
+            whole = true;
+            return $"{(video ? "video" : "image")}/{ContentUris.ParseId(uri)}";
+        }
+        catch (Java.Lang.Exception e) { throw new IOException($"The phone would not take {name} back: {e.Message}"); }
+        // Not taken whole: nothing of it is left.
+        finally { if (!whole && uri is not null) Resolver.Delete(uri, null, null); }
     }
 
     // When the video was taken, in milliseconds since 1970, as the media store has it.

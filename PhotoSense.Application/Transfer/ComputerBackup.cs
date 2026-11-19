@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Plans;
+using PhotoSense.Application.Vault;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -39,6 +40,12 @@ public sealed class ComputerBackup
 
     /// <summary>How many items of a long list go in one message.</summary>
     public const int ListPart = 2000;
+
+    /// <summary>
+    /// The folder, inside a phone's, that its hidden vault's files are kept in, sealed: only a phone with the vault's
+    /// recovery key can open them.
+    /// </summary>
+    public const string HiddenFolder = "Hidden";
 
     private readonly IBackupStore _store;
     private readonly IPhotoFileSystem _files;
@@ -258,7 +265,9 @@ public sealed class ComputerBackup
         await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)), ["names"] = record.Names.ToString() }, ct);
 
         var offered = await Lists.ReceiveAsync(channel, "offer", "files", null, null, ct);
-        var files = offered.OfType<JsonObject>().Select(f => (Id: Wire.Text(f, "id"), Name: PhoneReceiving.Plain(Wire.Text(f, "name")), Size: Size(f), Sha256: Sha(f))).ToList();
+        var files = offered.OfType<JsonObject>()
+            .Select(f => (Id: Wire.Text(f, "id"), Name: PhoneReceiving.Plain(Wire.Text(f, "name")), Size: Size(f), Sha256: Sha(f), Hidden: f["hidden"] is JsonValue h && h.TryGetValue(out bool hid) && hid))
+            .ToList();
         lock (_lock) _arriving[phone.Id] = new ArrivingBackup(0, files.Count, 0, files.Sum(f => f.Size), _clock.GetUtcNow(), []);
         if (files.Count > 0) await NoteAsync(phone.Id, $"Receiving {Items(files.Count)}", ct);
         string? arriving = null;
@@ -268,7 +277,7 @@ public sealed class ComputerBackup
             var taken = new HashSet<string>(PhotoPath.Comparer);
             // The new stems of the pictures named by date, which their Live Photo videos take too.
             var stems = new Dictionary<string, string>(PhotoPath.Comparer);
-            foreach (var (id, name, _, said) in files)
+            foreach (var (id, name, _, said, sealedFile) in files)
             {
                 // A file whose checksum the phone knows and this computer holds is not sent again.
                 if (said is not null && held.ContainsKey(said))
@@ -277,16 +286,19 @@ public sealed class ComputerBackup
                     Arrived(phone.Id, held[said].Path, 0);
                     continue;
                 }
-                arriving = Path.Combine(record.Folder, $".{name}.{Guid.NewGuid():N}{PhoneReceiving.Arriving}");
+                // The vault's files are kept apart, sealed, as they came.
+                var into = sealedFile ? Path.Combine(record.Folder, HiddenFolder) : record.Folder;
+                if (sealedFile && !_files.FolderExists(into)) _files.MakeFolder(into);
+                arriving = Path.Combine(into, $".{name}.{Guid.NewGuid():N}{PhoneReceiving.Arriving}");
                 var check = await ReceiveFileAsync(channel, phone.Id, id, arriving, ct);
                 string path;
                 if (held.TryGetValue(check, out var there)) { _files.DeleteCopy(arriving); path = there.Path; }
                 else
                 {
-                    path = _changes.FreePlace(Path.Combine(record.Folder, name), taken);
+                    path = _changes.FreePlace(Path.Combine(into, name), taken);
                     _files.Move(arriving, path);
                     // Named by date, as the person chose, once it is whole and its file can say when it was taken.
-                    if (record.Names != FileNaming.AsOnPhone && await DatedAsync(path, record.Names, stems, taken, ct) is { } dated)
+                    if (!sealedFile && record.Names != FileNaming.AsOnPhone && await DatedAsync(path, record.Names, stems, taken, ct) is { } dated)
                     {
                         _files.Move(path, dated);
                         path = dated;
@@ -301,11 +313,12 @@ public sealed class ComputerBackup
                 Arrived(phone.Id, path, 0);
             }
             await channel.SendAsync(new JsonObject { ["t"] = "done" }, ct);
-            var bye = await channel.ReceiveAsync(ct, "bye", "trip", "names");
-            // What the phone asks for after its backup, until it says goodbye: a trip's folder, or its copies named by date.
+            var bye = await channel.ReceiveAsync(ct, "bye", "trip", "names", "vault");
+            // What the phone asks for after its backup, until it says goodbye: a trip's folder, its copies named by date, or its hidden vault back.
             while (Wire.Text(bye, "t") != "bye")
             {
-                if (Wire.Text(bye, "t") == "trip")
+                if (Wire.Text(bye, "t") == "vault") await GiveBackHiddenAsync(channel, phone, Wire.Text(bye, "key"), ct);
+                else if (Wire.Text(bye, "t") == "trip")
                 {
                     var folder = string.Empty;
                     var checksums = (await Lists.ReceiveAsync(channel, "trip", "sha256", bye, last => folder = Wire.Text(last, "folder"), ct)).Select(n => n?.GetValue<string>()).OfType<string>().ToList();
@@ -326,7 +339,7 @@ public sealed class ComputerBackup
                         await channel.SendAsync(new JsonObject { ["t"] = "named", ["problem"] = ex.Message }, ct);
                     }
                 }
-                bye = await channel.ReceiveAsync(ct, "bye", "trip", "names");
+                bye = await channel.ReceiveAsync(ct, "bye", "trip", "names", "vault");
             }
             await _store.SavePhoneAsync(record with
             {
@@ -342,6 +355,32 @@ public sealed class ComputerBackup
             if (arriving is not null && _files.FileExists(arriving)) _files.DeleteCopy(arriving);
             if (came > 0) await NoteAsync(phone.Id, $"{Items(came)} backed up and checked", CancellationToken.None);
         }
+    }
+
+    // Lists the hidden vault's files sealed with this key, from whichever phone sent them, and sends those the phone asks for.
+    private async Task GiveBackHiddenAsync(SecureChannel channel, Device phone, string key, CancellationToken ct)
+    {
+        var sealedFiles = new Dictionary<string, HeldFile>(StringComparer.Ordinal);
+        foreach (var other in await _store.PhonesAsync(ct))
+            foreach (var held in await _store.HeldAsync(other.Id, ct))
+            {
+                if (!held.Path.EndsWith(VaultBox.Extension, StringComparison.OrdinalIgnoreCase) || sealedFiles.ContainsKey(held.Sha256) || !_files.FileExists(held.Path)) continue;
+                await using var read = await _files.OpenReadAsync(held.Path, ct);
+                if (await VaultBox.KeyIdOfAsync(read, ct) == key) sealedFiles[held.Sha256] = held;
+            }
+        await Lists.SendAsync(channel, "vault", "files", [.. sealedFiles.Values.Select(h => (JsonNode)new JsonObject { ["sha256"] = h.Sha256, ["size"] = h.Size })], null, ct);
+        var given = 0;
+        for (var asked = await channel.ReceiveAsync(ct, "fetch", "fetched"); Wire.Text(asked, "t") == "fetch"; asked = await channel.ReceiveAsync(ct, "fetch", "fetched"))
+        {
+            var held = sealedFiles.GetValueOrDefault(Wire.Text(asked, "sha256")) ?? throw new TransferException("The phone asked for a file that was not offered.");
+            await using var read = await _files.OpenReadAsync(held.Path, ct);
+            await channel.SendAsync(new JsonObject { ["t"] = "file", ["size"] = read.Length }, ct);
+            var piece = new byte[SecureChannel.PieceSize];
+            for (int n; (n = await read.ReadAsync(piece, ct)) > 0;) await channel.SendDataAsync(piece.AsMemory(0, n), ct);
+            await channel.SendAsync(new JsonObject { ["t"] = "end", ["sha256"] = held.Sha256 }, ct);
+            given++;
+        }
+        if (given > 0) await NoteAsync(phone.Id, $"{Items(given)} of the hidden vault given back", ct);
     }
 
     /// <summary>Notes that a phone's backup stopped part way, and why.</summary>

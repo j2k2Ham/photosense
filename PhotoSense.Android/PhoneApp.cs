@@ -37,7 +37,9 @@ public static class PhoneApp
         _built = new ServiceCollection()
             .AddPhotoSenseAndroid(new AndroidMediaStore(context), new AndroidAccess(), new AndroidImageAnalyzer(), DataFolder(context), context.CacheDir!.AbsolutePath,
                 new NsdAdvertiser(context), new PlayBillingStore(TimeProvider.System),
-                new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), new AndroidNotifier(context), new AndroidShareSheet(context), $"{Build.Manufacturer} {Build.Model}".Trim())
+                new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), new AndroidNotifier(context), new AndroidShareSheet(context),
+                new KeystoreVaultKeys(context), new DeviceUnlocker(), $"{Build.Manufacturer} {Build.Model}".Trim(),
+                vaultFolder: Path.Combine(context.NoBackupFilesDir!.AbsolutePath, "Hidden"))
             .AddPhotoSenseApi()
             .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "android"))
             .BuildServiceProvider();

@@ -225,6 +225,46 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         return shortSide <= 720 ? AVAssetExportSessionPreset.Preset1280x720 : AVAssetExportSessionPreset.Hevc1920x1080;
     }
 
+    /// <summary>
+    /// Puts a picture or video back in Photos as a new item, its files together, dated and placed as given. The
+    /// files are written to the app's own temporary folder for Photos to take, and deleted after.
+    /// </summary>
+    public async Task<string> ImportAsync(IReadOnlyList<(LibraryFileKind Kind, string FileName, Stream Content)> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "unhidden", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var written = new List<(LibraryFileKind Kind, string File)>();
+            foreach (var (kind, name, content) in files)
+            {
+                var file = Path.Combine(folder, Path.GetFileName(name));
+                await using (var output = File.Create(file)) await content.CopyToAsync(output, ct);
+                written.Add((kind, file));
+            }
+            ct.ThrowIfCancellationRequested();
+            var made = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            string? id = null;
+            PHPhotoLibrary.SharedPhotoLibrary.PerformChanges(() =>
+            {
+                var request = PHAssetCreationRequest.CreationRequestForAsset();
+                foreach (var (kind, file) in written)
+                    request.AddResource(kind switch { LibraryFileKind.Photo => PHAssetResourceType.Photo, LibraryFileKind.Video => PHAssetResourceType.Video, _ => PHAssetResourceType.PairedVideo },
+                        NSUrl.FromFilename(file), new PHAssetResourceCreationOptions { OriginalFilename = Path.GetFileName(file) });
+                if (taken is { } when) request.CreationDate = (NSDate)DateTime.SpecifyKind(when, DateTimeKind.Local);
+                if (place is { Latitude: { } lat, Longitude: { } lon }) request.Location = new CLLocation(lat, lon);
+                id = request.PlaceholderForCreatedAsset?.LocalIdentifier;
+            }, (done, error) =>
+            {
+                if (done && id is not null) made.TrySetResult(id);
+                else made.TrySetException(new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense put it back in Photos." : $"Photos would not take it back: {error?.LocalizedDescription}"));
+            });
+            return await made.Task;
+        }
+        // Whatever happened, the files written for Photos to take do not stay.
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
     // The copy, as a new item of the library with the original's date, place and favorite mark.
     private static Task KeepAsync(PHAsset original, string file)
     {

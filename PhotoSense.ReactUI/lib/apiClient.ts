@@ -3,7 +3,7 @@ import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
   CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
-  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto,
+  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -695,6 +695,71 @@ export const undoFix = (kind: 'dates' | 'places') => fix('undo', { kind });
 export async function renameOnComputer(style: FileNaming): Promise<void> {
   await post(`${fixesUrl}/names`, JSON.stringify({ kind: style }));
   await mutate(fixesUrl);
+}
+
+const vaultUrl = `${API_BASE}/vault`;
+
+/**
+ * On a phone: how the hidden vault stands, and, once unlocked, what it holds; asked every second while its items are
+ * brought back from the computer. Nothing is asked while `on` is false.
+ */
+export function useVault(on: boolean) {
+  return useSWR<VaultDto>(on ? vaultUrl : null, json, { refreshInterval: latest => (latest?.restore?.stage === 'running' ? 1000 : 0) });
+}
+
+/** Turns the hidden vault on (Pro), unlocked; gives its recovery key, to write down. */
+export async function turnOnVault(): Promise<string> {
+  const { recoveryKey } = await json<{ recoveryKey: string }>(`${vaultUrl}/on`, { method: 'POST' });
+  await mutate(vaultUrl);
+  return recoveryKey;
+}
+
+/** Takes a vault's recovery key and brings its items back from the computer; `useVault` says how it stands. */
+export async function recoverVault(recoveryKey: string): Promise<void> {
+  await post(`${vaultUrl}/recover`, JSON.stringify({ recoveryKey }));
+  await mutate(vaultUrl);
+}
+
+/** Asks the phone's own question; true when the person passed it and the vault is open. */
+export async function unlockVault(): Promise<boolean> {
+  const { unlocked } = await json<{ unlocked: boolean }>(`${vaultUrl}/unlock`, { method: 'POST' });
+  await mutate(vaultUrl);
+  return unlocked;
+}
+
+/** Locks the hidden vault. */
+export async function lockVault(): Promise<void> {
+  await send(`${vaultUrl}/lock`, 'POST');
+  await mutate(vaultUrl);
+}
+
+/** The vault's recovery key, while it is unlocked, to write down again. */
+export async function vaultRecoveryKey(): Promise<string> {
+  return (await json<{ recoveryKey: string }>(`${vaultUrl}/key`)).recoveryKey;
+}
+
+// A change of what the vault holds, after which the library and the vault are asked again.
+async function vaultChange(what: 'hide' | 'unhide' | 'delete', ids: readonly string[]): Promise<number> {
+  const result = await json<FixResultDto>(`${vaultUrl}/${what}`, { method: 'POST', body: JSON.stringify({ ids }) });
+  await mutate(() => true);
+  return result.changed;
+}
+
+/** Seals Library's pictures and videos into the vault; the phone then asks before they leave the library. */
+export const hideItems = (ids: readonly string[]) => vaultChange('hide', ids);
+/** Puts items of the vault back in the library, each with its date and place. */
+export const unhideItems = (ids: readonly string[]) => vaultChange('unhide', ids);
+/** Puts items back and sends them to Recently Deleted or the bin, after the phone asks. */
+export const deleteHidden = (ids: readonly string[]) => vaultChange('delete', ids);
+
+/** An item's small preview, made when it was hidden; shown only while the vault is open. */
+export function vaultThumbnailUrl(id: string): string {
+  return `${vaultUrl}/${encodeURIComponent(id)}/thumbnail`;
+}
+
+/** The picture as the vault's viewer shows it. */
+export function vaultImageUrl(id: string): string {
+  return `${vaultUrl}/${encodeURIComponent(id)}/image`;
 }
 
 /** On a computer: what naming a phone's copies so would make of the first few, and how many; nothing is asked while `id` is undefined. */

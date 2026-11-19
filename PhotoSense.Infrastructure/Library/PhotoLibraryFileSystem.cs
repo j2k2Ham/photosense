@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor, ISharingCopies, IPhotoDetails
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor, ISharingCopies, IPhotoDetails, IPhotoImport
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -217,6 +217,26 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         try { return await _library.CompressAsync(video.Item.Id, target, progress, ct); }
         // The copy is a new item: the library is read afresh.
         finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>It goes in the album it was in, when PhotoSense made that album and it is there still; otherwise at the top of the library.</remarks>
+    public async Task<IReadOnlyList<string>> ImportAsync(string folder, IReadOnlyList<ImportedFile> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        var album = Look().Albums.GetValueOrDefault(Path.TrimEndingDirectorySeparator(folder));
+        // The first is the picture or the video; a second is a Live Photo's moving part.
+        var kinds = files.Select((f, i) => (i > 0 ? LibraryFileKind.PairedVideo : MediaFiles.IsVideo(f.Name) ? LibraryFileKind.Video : LibraryFileKind.Photo, f.Name, f.Content)).ToList();
+        string id;
+        try { id = await _library.ImportAsync(kinds, taken, place, ct); }
+        // The library has a new item: it is read afresh.
+        finally { _seen = null; }
+        if (album is not null)
+        {
+            var change = new LibraryChange();
+            change.Add.Add((id, album));
+            Apply(change);
+        }
+        return [.. Look().Files.Where(f => f.Value.Item.Id == id).Select(f => f.Key)];
     }
 
     /// <summary>

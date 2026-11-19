@@ -861,6 +861,35 @@ export interface FixResultDto {
   changed: number;
 }
 
+/** An item of the hidden vault, as its grid shows it once unlocked (PhotoSense.Contracts.Organize.VaultItemDto). */
+export interface VaultItemDto {
+  id: string;
+  /** Its name, as Library showed it. */
+  name: string;
+  /** When it was taken, as the camera's clock had it; null when nothing said. */
+  taken: string | null;
+  isVideo: boolean;
+  /** What its files take. */
+  bytes: number;
+  /** The computer holds it, sealed. */
+  onComputer: boolean;
+}
+
+/** How the hidden vault stands, and, once unlocked, what it holds (PhotoSense.Contracts.Organize.VaultDto). */
+export interface VaultDto {
+  stage: 'off' | 'locked' | 'open';
+  /** How many items it holds. */
+  count: number;
+  /** How many the computer does not hold yet, which deleting PhotoSense would delete. */
+  notBackedUp: number;
+  /** The computer backups go to; null before one is paired. */
+  computer: string | null;
+  /** What it holds, the latest hidden first; empty while locked. */
+  items: VaultItemDto[];
+  /** Hidden items being brought back from the computer, or the last time they were; null when they were not since PhotoSense started. */
+  restore: { stage: 'running' | 'ready' | 'failed' | 'paused' | 'unpaired'; problem: string | null; restored: number | null } | null;
+}
+
 /** On a computer: what renaming a phone's copies would make of their names (PhotoSense.Contracts.Organize.RenamingDto). */
 export interface RenamingDto {
   count: number;

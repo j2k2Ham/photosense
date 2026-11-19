@@ -142,6 +142,9 @@ export const SearchIcon = (p: IconProps) => <Line size={19} {...p}><circle cx="1
 /** A past search: a clock. */
 export const ClockIcon = (p: IconProps) => <Line size={18} {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Line>;
 
+/** The hidden vault: a padlock. */
+export const LockIcon = (p: IconProps) => <Line size={20} {...p}><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></Line>;
+
 /** A date: a calendar's page. */
 export const CalendarIcon = (p: IconProps) => <Line size={18} {...p}><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></Line>;
 

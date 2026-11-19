@@ -5,10 +5,12 @@ using PhotoSense.Application.Organizing;
 using PhotoSense.Application.Plans;
 using PhotoSense.Application.Removal;
 using PhotoSense.Application.Transfer;
+using PhotoSense.Application.Vault;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Metadata;
 using PhotoSense.Infrastructure.Transfer;
+using PhotoSense.Infrastructure.Vault;
 
 using PhotoSense.Application;
 
@@ -41,16 +43,18 @@ public static class PhotoSensePhoneServices
     /// <param name="device">What sort of phone it is, whether it is charging, its storage and whether its photos are in iCloud too.</param>
     /// <param name="notifier">The phone's own notifications.</param>
     /// <param name="share">The phone's own share sheet, for the cards.</param>
+    /// <param name="vaultKeys">Where the hidden vault's recovery key is kept: the Keychain, or the Android Keystore.</param>
+    /// <param name="unlocker">The phone's own question before the hidden vault opens.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, string name, string root = LibraryRoot, ITransferListener? listener = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, string name, string root = LibraryRoot, ITransferListener? listener = null)
     {
         var photos = new PhotoLibraryFileSystem(library, root);
         s.AddSingleton(photos);
-        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, name, listener);
+        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, name, listener);
     }
 
     /// <summary>PhotoSense as it runs on an Android phone: as <see cref="AddPhotoSensePhone"/>, on the photos of the phone's own storage.</summary>
@@ -67,23 +71,30 @@ public static class PhotoSensePhoneServices
     /// <param name="device">What sort of phone it is, whether it is charging, its storage and whether its photos are in iCloud too.</param>
     /// <param name="notifier">The phone's own notifications.</param>
     /// <param name="share">The phone's own share sheet, for the cards.</param>
+    /// <param name="vaultKeys">Where the hidden vault's recovery key is kept: the Keychain, or the Android Keystore.</param>
+    /// <param name="unlocker">The phone's own question before the hidden vault opens.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the storage is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
+    /// <param name="vaultFolder">Where the hidden vault's files are kept; a folder inside <paramref name="dataFolder"/> by default. Android's own backup of the app stops for good once it grows past 25 MB, so the app keeps them where that backup does not go.</param>
     public static IServiceCollection AddPhotoSenseAndroid(this IServiceCollection s, IMediaStore store, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, string name, string root = StorageRoot, ITransferListener? listener = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, string name, string root = StorageRoot, ITransferListener? listener = null,
+        string? vaultFolder = null)
     {
         var photos = new MediaFileSystem(store, root);
         s.AddSingleton(photos);
-        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, name, listener);
+        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, name, listener,
+            vaultFolder);
     }
 
     private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore, ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device,
-        INotifier notifier, IShareSheet share, string name, ITransferListener? listener)
-        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, ISharingCopies, IPhotoDetails
+        INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, string name, ITransferListener? listener, string? vaultFolder = null)
+        where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, ISharingCopies, IPhotoDetails, IPhotoImport
     {
+        // The hidden vault's own files, beside what PhotoSense records, where the phone never empties them.
+        var vault = new FolderVaultFiles(vaultFolder ?? Path.Combine(dataFolder, "Hidden"));
         s.AddSingleton(Options.Create(new PhotoStorageOptions
         {
             DatabasePath = Path.Combine(dataFolder, "photosense.db"),
@@ -102,7 +113,7 @@ public static class PhotoSensePhoneServices
         // Backing up to that computer, and what is then safe to delete from the phone.
         s.AddSingleton(device);
         s.AddSingleton(sp => new PhoneBackup(sp.GetRequiredService<IBackupLedger>(), computers, sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos,
-            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>(), vault));
         // Swipe to clean: a set a day, what is marked deleted together at the end.
         s.AddSingleton(sp => new SwipeToClean(sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos, sp.GetRequiredService<PhoneBackup>(),
             sp.GetRequiredService<DailyRemovals>(), Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
@@ -125,6 +136,10 @@ public static class PhotoSensePhoneServices
         s.AddSingleton<IPhotoDetails>(photos);
         s.AddSingleton(sp => new PhotoFixes(sp.GetRequiredService<IPhotoRepository>(), photos, sp.GetRequiredService<IDetailsFixStore>(), sp.GetRequiredService<IMediaDetailsStore>(),
             sp.GetRequiredService<OrganizeLibrary>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<Subscription>(), sp.GetRequiredService<TimeProvider>()));
+        // The hidden vault: sealed inside PhotoSense, behind the phone's own question, carried to the computer sealed.
+        s.AddSingleton(sp => new HiddenVault(vaultKeys, unlocker, vault, photos, photos, photos, sp.GetRequiredService<OrganizeLibrary>(), analyzer, sp.GetRequiredService<IPhotoRepository>(),
+            sp.GetRequiredService<IThumbnailStore>(), sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), sp.GetRequiredService<PhoneBackup>(),
+            Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));
         s.AddPhotoSenseApplication().AddPhotoSenseCore();
         // Registered after the core's own, so that a fix holds whatever a file says, Photos on an iPhone leaving the file as it was.
         s.AddSingleton<IPhotoMetadataExtractor>(sp => new FixedPhotoMetadata(new BasicExifMetadataExtractor(), photos, sp.GetRequiredService<IDetailsFixStore>()));

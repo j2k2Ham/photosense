@@ -1,6 +1,7 @@
 using BackgroundTasks;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Application.Plans;
+using PhotoSense.Application.Vault;
 using UserNotifications;
 
 namespace PhotoSense.iOS;
@@ -65,7 +66,11 @@ public class SceneDelegate : UIResponder, IUIWindowSceneDelegate
     [Export("sceneDidBecomeActive:")]
     public void DidBecomeActive(UIScene scene) => _ = PhoneApp.CheckStorageAsync();
 
-    /// <summary>Gone to the background: iOS is asked to wake the app later, to check the storage.</summary>
+    /// <summary>Gone to the background: the hidden vault locks, and iOS is asked to wake the app later, to check the storage.</summary>
     [Export("sceneDidEnterBackground:")]
-    public void DidEnterBackground(UIScene scene) => AppDelegate.AskForRefresh();
+    public void DidEnterBackground(UIScene scene)
+    {
+        PhoneApp.Services.GetRequiredService<HiddenVault>().Lock();
+        AppDelegate.AskForRefresh();
+    }
 }

@@ -11,7 +11,7 @@ public sealed class PhotoSenseRoutes
     internal PhotoSenseRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
-        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips, FixEndpoints fixes)
+        CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips, FixEndpoints fixes, VaultEndpoints vault)
     {
         Router = new ApiRouter()
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
@@ -72,6 +72,17 @@ public sealed class PhotoSenseRoutes
             .Post("fixes/places", (r, _, ct) => fixes.PlacesAsync(r, ct))
             .Post("fixes/undo", (r, _, ct) => fixes.UndoAsync(r, ct))
             .Post("fixes/names", (r, _, ct) => fixes.NamesAsync(r, ct))
+            .Get("vault", (r, _, ct) => vault.StateAsync(r, ct))
+            .Post("vault/on", (r, _, ct) => vault.TurnOnAsync(r, ct))
+            .Post("vault/recover", (r, _, ct) => vault.RecoverAsync(r, ct))
+            .Post("vault/unlock", (r, _, ct) => vault.UnlockAsync(r, ct))
+            .Post("vault/lock", (r, _, ct) => vault.LockAsync(r, ct))
+            .Get("vault/key", (r, _, ct) => vault.KeyAsync(r, ct))
+            .Post("vault/hide", (r, _, ct) => vault.HideAsync(r, ct))
+            .Post("vault/unhide", (r, _, ct) => vault.UnhideAsync(r, ct))
+            .Post("vault/delete", (r, _, ct) => vault.DeleteAsync(r, ct))
+            .Get("vault/{id}/thumbnail", (r, v, ct) => vault.ThumbnailAsync(r, v["id"], ct))
+            .Get("vault/{id}/image", (r, v, ct) => vault.ImageAsync(r, v["id"], ct))
             .Get("trips", (r, _, ct) => trips.ListAsync(r, ct))
             .Get("trips/towns", (r, _, ct) => trips.TownsAsync(r, ct))
             .Post("trips/home", (r, _, ct) => trips.HomeAsync(r, ct))

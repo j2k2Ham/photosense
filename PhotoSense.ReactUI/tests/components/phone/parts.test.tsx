@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -145,8 +145,9 @@ describe('a sheet', () => {
   it('closes on Back, through the page\'s history', async () => {
     const closed = vi.fn();
     inFrame(<Sheet title="Settings" onClose={closed}>x</Sheet>);
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(closed).toHaveBeenCalledOnce();
+    act(() => history.back());
+    // The browser goes back when it gets to it, which under a full run's load can take a while.
+    await waitFor(() => expect(closed).toHaveBeenCalledOnce());
   });
 
   it('asks a question with what goes and what stays, the button that does it, and Cancel', async () => {

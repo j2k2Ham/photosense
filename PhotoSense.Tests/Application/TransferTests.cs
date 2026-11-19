@@ -49,7 +49,7 @@ public sealed class TransferTests : IDisposable
     public TransferTests()
     {
         _phone = new ServiceCollection()
-            .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), _advertiser, _app, _scanner, _computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), _advertiser, _app, _scanner, _computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()

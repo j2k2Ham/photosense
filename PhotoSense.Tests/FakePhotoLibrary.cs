@@ -133,6 +133,37 @@ internal sealed class FakePhotoLibrary : IPhotoLibrary
         return bytes.LongLength;
     }
 
+    /// <summary>What was put in the library as new items, in order: each one's id, when it was taken and where.</summary>
+    public List<(string Id, DateTime? Taken, PlaceChange? Place)> Imported { get; } = [];
+
+    /// <summary>When set, the next item put in the library fails, and this is why; nothing is added.</summary>
+    public string? RefuseImport { get; set; }
+
+    /// <inheritdoc />
+    /// <remarks>Read a piece at a time, as the phone's framework writes a file from what it is given.</remarks>
+    public async Task<string> ImportAsync(IReadOnlyList<(LibraryFileKind Kind, string FileName, Stream Content)> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        if (RefuseImport is { } why)
+        {
+            RefuseImport = null;
+            throw new IOException(why);
+        }
+        var read = new List<(LibraryFileKind, string, byte[])>();
+        foreach (var (kind, name, content) in files)
+        {
+            using var copy = new MemoryStream();
+            await content.CopyToAsync(copy, ct);
+            read.Add((kind, name, copy.ToArray()));
+        }
+        var id = $"imported-{Imported.Count + 1}";
+        Add(id, [.. read]);
+        Imported.Add((id, taken, place));
+        return id;
+    }
+
+    /// <summary>The bytes of one file of a picture or video, as the library keeps them.</summary>
+    public byte[] Bytes(string id, LibraryFileKind kind) => _bytes[(id, kind)];
+
     /// <summary>Each change of dates and places asked for, in order, as the ids and what each was given.</summary>
     public List<IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)>> DetailsChanged { get; } = [];
 

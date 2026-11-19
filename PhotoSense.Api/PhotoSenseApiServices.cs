@@ -1,6 +1,7 @@
 using PhotoSense.Application.Organizing;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Application.Transfer;
+using PhotoSense.Application.Vault;
 using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -55,6 +56,7 @@ public static class PhotoSenseApiServices
         // Only a phone fixes dates and places.
         s.AddSingleton(sp => new FixEndpoints(sp.GetService<PhotoFixes>(), sp.GetService<PhoneBackup>(), sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<PhotoDtoMapper>()));
         // Only a phone has Trips.
+        s.AddSingleton(sp => new VaultEndpoints(sp.GetService<HiddenVault>()));
         s.AddSingleton(sp => new TripEndpoints(sp.GetService<Trips>(), sp.GetService<PhoneBackup>(), sp.GetRequiredService<PhotoDtoMapper>()));
         // A phone sends and a computer receives: each program has the one half.
         s.AddSingleton(sp => new TransferEndpoints(sp.GetService<PhoneSending>(), sp.GetService<PhoneReceiving>()));
@@ -67,7 +69,7 @@ public static class PhotoSenseApiServices
             sp.GetRequiredService<RemovedEndpoints>(), sp.GetRequiredService<TransferEndpoints>(), sp.GetRequiredService<PlanEndpoints>(),
             sp.GetRequiredService<ScanFoundEndpoints>(), sp.GetRequiredService<PairingEndpoints>(), sp.GetRequiredService<BackupEndpoints>(), sp.GetRequiredService<SwipeEndpoints>(), sp.GetRequiredService<CategoryEndpoints>(),
             sp.GetRequiredService<CompressionEndpoints>(), sp.GetRequiredService<NoticeEndpoints>(), sp.GetRequiredService<YearEndpoints>(), sp.GetRequiredService<ViewerEndpoints>(),
-            sp.GetRequiredService<TripEndpoints>(), sp.GetRequiredService<FixEndpoints>()));
+            sp.GetRequiredService<TripEndpoints>(), sp.GetRequiredService<FixEndpoints>(), sp.GetRequiredService<VaultEndpoints>()));
         return s;
     }
 }

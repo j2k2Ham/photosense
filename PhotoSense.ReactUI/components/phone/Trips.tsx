@@ -8,7 +8,8 @@ import { dayTitle, folderNote, homeNote, NO_TRIPS, townName, tripCount, tripDate
 import type { OrganizeFileDto, PhotoDto, TownDto, TripDto, TripsDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, Radio, Segmented } from './Controls';
-import { HomeIcon, VideoIcon } from './Icons';
+import { CollectionTile } from './CollectionTile';
+import { HomeIcon, MapIcon, VideoIcon } from './Icons';
 import { PhotoGrid } from './PhotoGrid';
 import { LayerScreen, PushedHeader } from './Screens';
 import { Sheet } from './Sheet';
@@ -29,13 +30,9 @@ export function TripsTile({ trips, onOpen }: { readonly trips: TripsDto | undefi
   const latest = trips?.trips[0];
   const count = trips === undefined ? 'Finding trips…' : trips.trips.length === 0 ? 'No trips yet' : `${trips.trips.length.toLocaleString()} trip${trips.trips.length === 1 ? '' : 's'}`;
   return (
-    <button type="button" onClick={onOpen} aria-label={`Trips, ${count}`} className="relative block h-[96px] w-full overflow-hidden rounded-[16px] bg-fill text-left">
-        {latest && <Cover photo={latest.cover} />}
-        <span className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 bg-[linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.72))] px-3.5 pb-2.5 pt-8 text-white">
-          <span className="text-[16px] font-semibold">Trips</span>
-          <span className="text-[13px]">{count}</span>
-        </span>
-    </button>
+    <CollectionTile label="Trips" line={count} onOpen={onOpen}>
+      {latest ? <Cover photo={latest.cover} /> : <span className="text-t2"><MapIcon /></span>}
+    </CollectionTile>
   );
 }
 

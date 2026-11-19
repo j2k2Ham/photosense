@@ -1,4 +1,4 @@
-import { act, render, renderHook } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -103,9 +103,9 @@ describe('Back', () => {
     rerender(three(false, true, false));
     await settle();
     expect([first.mock.calls.length, later.mock.calls.length, brief.mock.calls.length]).toEqual([0, 0, 0]);
-    await act(async () => { history.back(); });
-    await settle();
-    expect([first.mock.calls.length, later.mock.calls.length, brief.mock.calls.length]).toEqual([0, 1, 0]);
+    act(() => history.back());
+    // The browser goes back when it gets to it, which under a full run's load can take a while.
+    await waitFor(() => expect([first.mock.calls.length, later.mock.calls.length, brief.mock.calls.length]).toEqual([0, 1, 0]));
   });
 
   it('a Back that lands on an entry left over from before closes every layer made since', async () => {

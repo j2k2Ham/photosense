@@ -6,6 +6,7 @@ import type { FixesDto, PhotoDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { CalendarIcon, CheckIcon, ImageIcon, PinIcon, VideoIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
+import { CollectionTile } from './CollectionTile';
 import { LayerScreen, PushedHeader } from './Screens';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
@@ -16,13 +17,9 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function FixesTile({ fixes, onOpen }: { readonly fixes: FixesDto | undefined; onOpen(): void }) {
   const count = fixes === undefined ? 'Looking…' : fixes.total === 0 ? 'All fixed' : items(fixes.total);
   return (
-    <button type="button" onClick={onOpen} aria-label={`Needs fixing, ${count}`} className="relative block h-[96px] w-full overflow-hidden rounded-[16px] bg-fill text-left">
-      <span aria-hidden className="absolute left-3.5 top-3 grid h-8 w-8 place-items-center rounded-[9px] bg-acc-soft text-on-acc-soft"><CalendarIcon /></span>
-      <span className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 px-3.5 pb-2.5">
-        <span className="text-[16px] font-semibold">Needs fixing</span>
-        <span className="text-[13px] text-t2">{count}</span>
-      </span>
-    </button>
+    <CollectionTile label="Needs fixing" line={count} onOpen={onOpen}>
+      <span className="text-t2"><CalendarIcon /></span>
+    </CollectionTile>
   );
 }
 

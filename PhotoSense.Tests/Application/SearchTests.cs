@@ -140,7 +140,7 @@ public sealed class ViewerOnAPhoneTests : IDisposable
     {
         _phone = new ServiceCollection()
             .AddPhotoSensePhone(_library, new FakePhotoAccess(), _analyzer, In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(),
-                new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), _share, "Jamie's iPhone", _root, new TcpTransferListener(0))
+                new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), _share, new FakeVaultKeys(), new FakeUnlocker(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()

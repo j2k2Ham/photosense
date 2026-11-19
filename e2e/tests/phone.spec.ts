@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { expect, message, test } from '../fixtures/app';
-import { noFix, Phone, SAFE } from '../fixtures/phone';
+import { noFix, Phone, RECOVERY_KEY, SAFE } from '../fixtures/phone';
 import { phoneSettings, phoneTab, question } from '../fixtures/screens';
 import { PLACES } from '../fixtures/media';
 
@@ -380,6 +380,55 @@ test.describe('on a phone', () => {
     expect(phone.asked).toContain('fixes/names {"kind":"date"}');
     await fixes.getByRole('button', { name: 'Back' }).click();
     await expect(fixes).toBeHidden();
+  });
+
+  test('The hidden vault turns on with a recovery key to write down, hides the photos chosen, and puts one back @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2023, 11, 27, 23, 34) });
+    photos.picture('IMG_0002.JPG', { seed: 2, taken: new Date(2023, 10, 2, 8, 0) });
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    // Pro, as turning the vault on is.
+    await page.route(url => url.pathname.endsWith('/api/plan'), route => route.fulfill({
+      json: { tier: 'pro', kind: 'lifetime', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] },
+    }));
+    // Library's ids, which the stand-in vault names what it hides by.
+    page.on('response', async answer => {
+      if (!/\/api\/organize\/files(\?|$)/.test(answer.url())) return;
+      const listed = await answer.json().catch(() => null) as { files?: { id: string; name: string }[] } | null;
+      for (const f of listed?.files ?? []) phone.names[f.id] = f.name;
+    });
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const library = page.getByRole('region', { name: 'Library' });
+    await expect(library.getByRole('button', { name: 'IMG_0001.JPG' })).toBeVisible({ timeout: 60_000 });
+    await library.getByRole('button', { name: 'Hidden, Turn on' }).click();
+    const hidden = page.getByRole('dialog', { name: 'Hidden' });
+    await expect(hidden).toContainText('Keep private photos behind Face ID.');
+    await hidden.getByRole('button', { name: 'Turn on Hidden' }).click();
+    const key = page.getByRole('dialog', { name: 'Recovery key' });
+    await expect(key.getByLabel('Your recovery key')).toHaveText(RECOVERY_KEY);
+    await key.getByRole('button', { name: 'I wrote it down' }).click();
+    await expect(hidden).toContainText('Nothing is hidden yet.');
+
+    await hidden.getByRole('button', { name: 'Add photos' }).click();
+    const picker = page.getByRole('dialog', { name: 'Choose photos to hide' });
+    await expect(picker).toContainText(/Then your (iPhone|iPad) asks before they leave Photos/);
+    await picker.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+    await picker.getByRole('button', { name: 'IMG_0002.JPG' }).click();
+    await picker.getByRole('button', { name: 'Hide 2 items' }).click();
+    await expect(message(page, '2 items hidden.')).toBeVisible();
+    await expect(picker).toBeHidden();
+    await expect(hidden.getByRole('note')).toContainText('2 items are not backed up yet.');
+
+    await hidden.getByRole('button', { name: 'IMG_0001.JPG' }).click();
+    const viewer = page.getByRole('dialog', { name: 'IMG_0001.JPG' });
+    await viewer.getByRole('button', { name: 'Unhide' }).click();
+    await expect(message(page, 'IMG_0001.JPG is back in your library.')).toBeVisible();
+    await expect(hidden.getByRole('note')).toContainText('1 item is not backed up yet.');
+    await hidden.getByRole('button', { name: 'Lock' }).click();
+    await expect(hidden).toContainText('Hidden is locked1 item');
+    expect(phone.asked.filter(a => a.startsWith('vault/')).map(a => a.split(' ')[0])).toEqual(['vault/on', 'vault/hide', 'vault/unhide', 'vault/lock']);
   });
 
   test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {

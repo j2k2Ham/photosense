@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, useFixes, usePhotoAccess, useTrips } from '../../lib/apiClient';
+import { applyOrganize, chooseMorePhotos, organizeThumbnailUrl, planOrganize, removeOrganize, undoChange, useFixes, usePhotoAccess, useTrips, useVault } from '../../lib/apiClient';
 import { useBackLayer } from '../../lib/backStack';
 import { formatDuration, leaf } from '../../lib/format';
 import {
@@ -19,6 +19,7 @@ import { RootHeader, Screen } from './Screens';
 import { SearchField, SearchScreen } from './Search';
 import { Viewer } from './Viewer';
 import { FixesScreen, FixesTile } from './Fixes';
+import { HiddenScreen, HiddenTile } from './Hidden';
 import { TripsScreen, TripsTile } from './Trips';
 import { YearCard } from './YearInReview';
 import { usePlanGate } from './ProSheet';
@@ -81,8 +82,10 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   const [searching, setSearching] = useState(false);
   const [tripping, setTripping] = useState(false);
   const [fixing, setFixing] = useState(false);
+  const [hiding, setHiding] = useState(false);
   const trips = useTrips(!selecting).data;
   const fixes = useFixes(!selecting).data;
+  const vault = useVault(!selecting).data;
   const [busy, setBusy] = useState(false);
 
   const counts = useMemo(() => (root ? filterCounts(files, root, platform, backedUp) : undefined), [files, root, platform, backedUp]);
@@ -181,9 +184,10 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       <RootHeader title={title} subtitle={subtitle} textAction={textAction} onStop={selecting && !ios ? stopSelecting : undefined} noGear={selecting} />
       {!selecting && <SearchField onOpen={() => setSearching(true)} />}
       {!selecting && (
-        <div className="grid grid-cols-2 gap-3 px-4 pb-3">
+        <div className="grid grid-cols-3 gap-3 px-4 pb-3 md:max-w-[480px]">
           <TripsTile trips={trips} onOpen={() => setTripping(true)} />
           <FixesTile fixes={fixes} onOpen={() => setFixing(true)} />
+          <HiddenTile vault={vault} free={gate.plan?.tier === 'free'} onOpen={() => setHiding(true)} />
         </div>
       )}
       {access === 'selected' && (
@@ -235,6 +239,7 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
       {createPortal(<>
       {searching && <SearchScreen files={files} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setSearching(false)} />}
       {fixing && <FixesScreen notify={notify} onClose={() => setFixing(false)} />}
+      {hiding && <HiddenScreen files={files} notify={notify} onClose={() => setHiding(false)} />}
       {tripping && <TripsScreen files={files} frozen={viewed !== undefined} notify={notify} onOpen={f => setViewing(f.id)} onClose={() => setTripping(false)} />}
       {viewed && (
         <Viewer file={viewed} places={places} root={root!} removeLocation={removeLocation} notify={notify} onClose={() => setViewing(undefined)}

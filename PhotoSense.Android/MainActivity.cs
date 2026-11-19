@@ -10,6 +10,8 @@ using Android.Views;
 using Android.Webkit;
 using Android.Window;
 using Android.Widget;
+using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Application.Vault;
 
 namespace PhotoSense.AndroidApp;
 
@@ -130,6 +132,13 @@ public sealed class MainActivity : Activity
     {
         /// <summary>Goes back in the page, or leaves the app when there is nowhere to go back to.</summary>
         public void OnBackInvoked() => back();
+    }
+
+    /// <summary>Off the screen: the hidden vault locks.</summary>
+    protected override void OnStop()
+    {
+        PhoneApp.Services.GetRequiredService<HiddenVault>().Lock();
+        base.OnStop();
     }
 
     protected override void OnDestroy()

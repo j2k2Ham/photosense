@@ -203,11 +203,7 @@ internal sealed class OrganizeEndpoints
         // Videos are never decoded, so they have no picture to show.
         if (await _library.FindAsync(id, ct) is not { IsVideo: false } file) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        // A scan keeps previews by what the file holds. A file no scan has read is kept by its size and the
-        // instant it was last changed: those stay with it when it is moved, and a copy that shares them
-        // shares the picture too.
-        var key = file.ContentHash
-            ?? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{Path.GetExtension(file.Path).ToUpperInvariant()}|{file.SizeBytes}|{file.ModifiedUtc.Ticks}")));
+        var key = file.PreviewKey;
         var jpeg = await _thumbnails.GetAsync(key, ct);
         if (jpeg is null)
         {

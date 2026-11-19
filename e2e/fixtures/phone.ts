@@ -141,6 +141,29 @@ export class Phone {
       this.sharedPhotos.push(JSON.parse(route.request().postData()!));
       return route.fulfill({ status: 204 });
     });
+    // The hidden vault, which only a phone has: turned on with a key, unlocked at once, and what is hidden kept by name.
+    await page.route(url => /\/api\/vault(\/|$)/.test(url.pathname), async route => {
+      const what = new URL(route.request().url()).pathname.split('/api/vault').pop()!.replace(/^\//, '');
+      const v = this.vault;
+      if (!what) return json(route, v);
+      if (/\/(thumbnail|image)$/.test(what)) return route.fulfill({ contentType: 'image/jpeg', body: Buffer.from(SMALL_JPEG, 'base64') });
+      const body = route.request().postData() ?? '';
+      this.asked.push(`vault/${what} ${body}`.trim());
+      if (what === 'on' || what === 'key') {
+        this.vault = { ...v, stage: 'open' };
+        return json(route, { recoveryKey: RECOVERY_KEY });
+      }
+      if (what === 'unlock') { this.vault = { ...v, stage: 'open' }; return json(route, { unlocked: true }); }
+      if (what === 'lock') { this.vault = { ...v, stage: 'locked', items: [] }; return route.fulfill({ status: 204 }); }
+      const ids = (JSON.parse(body) as { ids: string[] }).ids;
+      if (what === 'hide') {
+        const added = ids.map((id, i) => ({ id: `h${v.items.length + i + 1}`, name: this.names[id] ?? id, taken: null, isVideo: false, bytes: 1000, onComputer: false }));
+        this.vault = { ...v, count: v.count + added.length, notBackedUp: v.notBackedUp + added.length, items: [...added, ...v.items] };
+        return json(route, { changed: added.length });
+      }
+      this.vault = { ...v, count: v.count - ids.length, notBackedUp: Math.max(0, v.notBackedUp - ids.length), items: v.items.filter(i => !ids.includes(i.id)) };
+      return json(route, { changed: ids.length });
+    });
     // Fix dates and places, which only a phone does: each fix is done at once, and Undo puts it back.
     await page.route(url => /\/api\/fixes(\/|$)/.test(url.pathname), async route => {
       const what = new URL(route.request().url()).pathname.split('/api/fixes').pop()!.replace(/^\//, '');
@@ -232,6 +255,14 @@ export class Phone {
   /** The copies of photos handed to the share sheet, with what each left out. */
   readonly sharedPhotos: { path: string; removeLocation: boolean; removeCamera: boolean }[] = [];
 
+  /** The hidden vault, as the phone would say: off and empty unless the test says otherwise. */
+  vault: { stage: 'off' | 'locked' | 'open'; count: number; notBackedUp: number; computer: string | null; items: { id: string; name: string; taken: string | null; isVideo: boolean; bytes: number; onComputer: boolean }[]; restore: null } = {
+    stage: 'off', count: 0, notBackedUp: 0, computer: null, items: [], restore: null,
+  };
+
+  /** The names of Library's photos by their ids, which the stand-in vault keeps them by. */
+  names: Record<string, string> = {};
+
   /** What needs fixing, as the phone would say: nothing unless the test says otherwise. */
   fixes: { total: number; dates: FixGroup; places: FixGroup; names: { computer: string; files: number; style: string; now: string | null; after: string | null; stage: string | null; problem: string | null; renamed: number | null } | null } = {
     total: 0, dates: noFix(), places: noFix(), names: null,
@@ -276,3 +307,9 @@ export interface FixGroup { count: number; photos: unknown[]; date: string | nul
 
 /** A kind of fix with nothing to fix. */
 export const noFix = (more: Partial<FixGroup> = {}): FixGroup => ({ count: 0, photos: [], date: null, place: null, placeCount: 0, undo: 0, ...more });
+
+/** The recovery key the stand-in vault gives when it is turned on. */
+export const RECOVERY_KEY = 'K7QP-2M9X-AB12-CD34-EF56-GH78-JK90-MN12';
+
+// A JPEG of one pixel, for the vault's previews.
+const SMALL_JPEG = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';

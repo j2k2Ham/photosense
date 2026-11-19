@@ -88,7 +88,7 @@ describe('the guide itself', () => {
 
   it('finds each feature by the words a person would use, on each platform', () => {
     expect(ids('trash', 'computer')).toContain('removed');
-    expect(ids('recover', 'computer')).toEqual(['removed']);
+    expect(ids('recover', 'computer')).toEqual(['phones', 'removed']);
     expect(ids('transfer', 'computer')).toEqual(['phones']);
     expect(ids('price', 'computer')).toEqual(['plan']);
     expect(ids('dark mode', 'computer')).toEqual(['menu']);
@@ -101,7 +101,7 @@ describe('the guide itself', () => {
     expect(ids('rename by date', 'computer')).toEqual(['phones']);
 
     for (const platform of ['ios', 'android'] as const) {
-      expect(ids('recover', platform)).toEqual(['phone-removed']);
+      expect(ids('recover', platform)).toEqual(['library', 'phone-removed']);
       expect(ids('transfer', platform)).toEqual(['backup']);
       expect(ids('cancel subscription', platform)).toEqual(['phone-plan']);
       expect(ids('dupes', platform)).toEqual(['phone-cleanup']);
@@ -115,6 +115,9 @@ describe('the guide itself', () => {
       expect(ids('screenshot', platform)).toContain('phone-cleanup');
       expect(ids('wrong date', platform)).toEqual(['library']);
       expect(ids('missing location', platform)).toEqual(['library']);
+      expect(ids('vault', platform)).toEqual(['library']);
+      expect(ids('recovery key', platform)).toEqual(['library']);
+      expect(ids('unhide', platform)).toEqual(['library']);
       expect(ids('big videos', platform)).toEqual(['phone-cleanup']);
       expect(ids('free up space', platform)).toContain('phone-cleanup');
       expect(ids('shrink', platform)).toEqual(['phone-cleanup']);

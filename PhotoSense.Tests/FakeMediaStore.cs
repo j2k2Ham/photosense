@@ -83,6 +83,27 @@ internal sealed class FakeMediaStore : IMediaStore
         return Task.FromResult(bytes.LongLength);
     }
 
+    /// <summary>What was put on the phone as new files, in order: each one's id, folder, name, when it was taken and where.</summary>
+    public List<(string Id, string Folder, string Name, DateTime? Taken, PlaceChange? Place)> Imported { get; } = [];
+
+    /// <inheritdoc />
+    /// <remarks>Read a piece at a time, without waiting, as Android copies a file from what it is given; a taken name gets a number, as Android gives one.</remarks>
+    public Task<string> ImportAsync(string folder, string name, Stream content, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        using var copy = new MemoryStream();
+        content.CopyTo(copy);
+        var free = name;
+        for (var n = 1; _entries.Any(e => e.Folder == folder && e.Name == free); n++) free = $"{Path.GetFileNameWithoutExtension(name)} ({n}){Path.GetExtension(name)}";
+        var id = $"imported-{Imported.Count + 1}";
+        Add(id, folder, free, copy.ToArray(), PhotoSense.Domain.ValueObjects.MediaFiles.IsVideo(name));
+        Imported.Add((id, folder, free, taken, place));
+        return Task.FromResult(id);
+    }
+
+    /// <summary>The bytes a picture or video is kept as.</summary>
+    public byte[] Bytes(string id) => _bytes[id];
+
     /// <summary>Each change of dates and places asked for, in order, as the ids and what each was given.</summary>
     public List<IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)>> DetailsChanged { get; } = [];
 
