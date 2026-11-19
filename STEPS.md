@@ -1,6 +1,6 @@
 # PhotoSense: what is left to do
 
-Last updated 2026-11-19 (growth step 12: widgets and the app icon's menu, confirmed by Jamie). Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
+Last updated 2026-11-19 (growth step 12 confirmed; step 13, Family, on hold until a server). Keep this file current: tick a step when it is done, add what comes up, and move a question to the step it settles once Jamie answers. CLAUDE.md loads it into every session.
 
 ## What Jamie is asking for, and why
 
@@ -276,7 +276,11 @@ Rules of the design, beside CLAUDE.md's (Jamie, 2026-11-16): every deletion goes
     - On Android the Storage widget is 4 × 2 and widens; the Swipe widget 2 × 2. Their colours follow the page's Material skin, light and dark.
     - The icon menu's icons: the system's symbols on an iPhone (magnifying glass, two cards, an arrow up), simple line drawings on Android.
   - Not checked: the iPhone's widget extension building at all (only on GitHub, after a push: `swiftc` building an extension outside Xcode, its entry point and the App Group on the simulator are untried); either phone's widgets drawn on a home screen, their taps, or the icon menus; a device signed with the App Group, which needs registering for the App ID with the developer account (before TestFlight).
-- [ ] **13. Family (37–40, D4):** Family Sharing on iOS, invite links on Android, duplicates across members by checksum.
+- [ ] **13. Family (37–40, D4):** Family Sharing on iOS, invite links on Android, duplicates across members by checksum. **On hold until PhotoSense has a server of its own** (Jamie, 2026-11-19), to keep families and their places: iOS does not tell an app who is in the Apple family, Google Play does not share an app's subscription with a family (subscriptions are left out of its Family Library), and without a server a phone's invite could not be checked.
+  - Jamie's answers for when it is built (2026-11-19):
+    - **Keep one copy:** one copy of a photo several members' backups hold (by SHA-256) goes into `Pictures/PhotoSense/Family`; the other copies move into `_PhotoSense_Removed` in each member's folder, with Undo, as everything on a computer does; the computer notes that each member's photo is held in Family, so it still counts as backed up for Safe to delete and is never sent again. Nothing changes on any phone.
+    - **Who sees the shared photos:** a phone shows, and acts on, only the shared photos that person has too; the family computer (D4) shows them all, as it holds everyone's backups.
+    - **Leaving:** the organizer can remove a member, and a member can leave; the place opens again, their backups stay on the computer, nothing is deleted, and they lose the family's Pro (on an iPhone, Apple's Family Sharing still decides it).
 - [ ] **14. Cloud storage (51–65)** (added by Jamie, 2026-11-16; copy in `FeatureCloud.dc.html`'s `PROV`, `TYPES`, `ERR` and `renderVals()`):
   - Backup locations (53): the computer, Google Drive, OneDrive, Dropbox and Box, and servers; each signed in through the system browser (ASWebAuthenticationSession, Custom Tabs) with the narrowest scope (Drive `drive.file` in My Drive/PhotoSense, OneDrive and Dropbox app folders, a Box folder named PhotoSense); PhotoSense never sees a password.
   - Connect to server (58–60), Pro: Amazon S3, S3-compatible, Azure Blob, WebDAV, SFTP and SMB; Connect lists the folder, writes a test file, reads it back, compares checksums and deletes it before the server is added; plain errors that say what to change. Keys and passwords in the Keychain or Android Keystore.
