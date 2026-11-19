@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widgets' and the app icon menu's words. -->
+<resources>
+  <string name="widget_storage">Storage</string>
+  <string name="widget_storage_about">How full the phone is, what can be freed, and backing up</string>
+  <string name="widget_swipe">Swipe to clean</string>
+  <string name="widget_swipe_about">Today\'s set to swipe and your streak</string>
+  <string name="shortcut_search">Search photos</string>
+  <string name="shortcut_swipe">Start swipe</string>
+  <string name="shortcut_backup">Back up now</string>
+</resources>

@@ -65,6 +65,8 @@ public sealed class BackupWorker : ListenableWorker
                 if (await backup.AutomaticAsync(stop)) await backup.Running;
                 // Woken anyway: a low-storage alert goes if one is due.
                 await PhoneApp.Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(stop);
+                // And the home screen widgets are told how things stand.
+                await PhoneApp.Services.GetRequiredService<PhoneWidgets>().RefreshAsync(stop);
             }
             // Stopped by Android, or the backup could not start: it is tried again at the next hour, and the app shows why.
             catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)

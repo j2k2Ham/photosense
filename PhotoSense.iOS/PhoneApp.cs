@@ -15,7 +15,7 @@ public static class PhoneApp
     private static readonly Lazy<ServiceProvider> Built = new(() => new ServiceCollection()
         .AddPhotoSensePhone(new PhotoKitLibrary(DataFolder), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory), new BonjourAdvertiser(), new StoreKitStore(),
             new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), IosNotifier.Shared, new IosShareSheet(), new KeychainVaultKeys(), new DeviceUnlocker(),
-            UIDevice.CurrentDevice.Name)
+            new IosWidgets(), UIDevice.CurrentDevice.Name)
         .AddPhotoSenseApi()
         .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "iphone"))
         .BuildServiceProvider());
@@ -42,6 +42,8 @@ public static class PhoneApp
         foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync(CancellationToken.None)) log.Log("audit", "Warning", sentence);
         // The trial's reminder follows the plan.
         await Services.GetRequiredService<PhoneNotices>().RemindAsync(CancellationToken.None);
+        // The home screen widgets show how things stand now.
+        await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(CancellationToken.None);
     });
 
     /// <summary>Sends a low-storage alert if one is due, once the app is ready.</summary>
@@ -50,6 +52,14 @@ public static class PhoneApp
         await Ready;
         // Nothing stops a check part way: it reads the storage and sends one notification at most.
         await Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(CancellationToken.None);
+    }
+
+    /// <summary>Hands the home screen widgets how things stand, once the app is ready.</summary>
+    public static async Task RefreshWidgetsAsync()
+    {
+        await Ready;
+        // Nothing stops it part way: it reads what PhotoSense knows and writes one small file.
+        await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(CancellationToken.None);
     }
 
     private static string Folder(NSSearchPathDirectory which) => NSFileManager.DefaultManager.GetUrls(which, NSSearchPathDomain.User)[0].Path!;

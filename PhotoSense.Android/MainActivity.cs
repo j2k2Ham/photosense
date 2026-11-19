@@ -16,6 +16,8 @@ using PhotoSense.Application.Vault;
 namespace PhotoSense.AndroidApp;
 
 /// <summary>The one screen: the page, the whole of it, under the phone's own bars, which the page keeps clear of.</summary>
+// The app icon's menu (36): Search photos, Start swipe, Back up now.
+[MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
 [Activity(Name = "com.j2k2ham.photosense.MainActivity", Label = "PhotoSense", MainLauncher = true, Exported = true, Theme = "@android:style/Theme.DeviceDefault.NoActionBar",
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.UiMode)]
 public sealed class MainActivity : Activity
@@ -134,10 +136,11 @@ public sealed class MainActivity : Activity
         public void OnBackInvoked() => back();
     }
 
-    /// <summary>Off the screen: the hidden vault locks.</summary>
+    /// <summary>Off the screen: the hidden vault locks, and the home screen widgets are told how things stand.</summary>
     protected override void OnStop()
     {
         PhoneApp.Services.GetRequiredService<HiddenVault>().Lock();
+        _ = PhoneApp.RefreshWidgetsAsync();
         base.OnStop();
     }
 

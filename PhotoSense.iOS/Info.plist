@@ -51,6 +51,46 @@
     <array>
       <string>fetch</string>
     </array>
+    <!-- The home screen widgets open PhotoSense with photosense://opens/backup, /swipe or /free-up-space. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleURLName</key>
+        <string>com.j2k2ham.photosense</string>
+        <key>CFBundleURLSchemes</key>
+        <array>
+          <string>photosense</string>
+        </array>
+      </dict>
+    </array>
+    <!-- 36: the app icon's menu. -->
+    <key>UIApplicationShortcutItems</key>
+    <array>
+      <dict>
+        <key>UIApplicationShortcutItemType</key>
+        <string>search</string>
+        <key>UIApplicationShortcutItemTitle</key>
+        <string>Search photos</string>
+        <key>UIApplicationShortcutItemIconSymbolName</key>
+        <string>magnifyingglass</string>
+      </dict>
+      <dict>
+        <key>UIApplicationShortcutItemType</key>
+        <string>swipe</string>
+        <key>UIApplicationShortcutItemTitle</key>
+        <string>Start swipe</string>
+        <key>UIApplicationShortcutItemIconSymbolName</key>
+        <string>rectangle.on.rectangle</string>
+      </dict>
+      <dict>
+        <key>UIApplicationShortcutItemType</key>
+        <string>backup</string>
+        <key>UIApplicationShortcutItemTitle</key>
+        <string>Back up now</string>
+        <key>UIApplicationShortcutItemIconSymbolName</key>
+        <string>arrow.up.to.line.compact</string>
+      </dict>
+    </array>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>UIApplicationSceneManifest</key>

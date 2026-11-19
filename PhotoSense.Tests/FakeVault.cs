@@ -42,6 +42,16 @@ internal sealed class FakeUnlocker : IUnlocker
     }
 }
 
+/// <summary>The phone's home screen widgets, keeping what they were last handed.</summary>
+internal sealed class FakeWidgets : IWidgets
+{
+    /// <summary>What the widgets show now; null until they were handed anything.</summary>
+    public WidgetSnapshot? Shown { get; private set; }
+
+    /// <inheritdoc />
+    public void Show(WidgetSnapshot snapshot) => Shown = snapshot;
+}
+
 /// <summary>The hidden vault's own files, in memory, as a phone keeps them inside the app.</summary>
 internal sealed class MemoryVaultFiles : IVaultFiles
 {

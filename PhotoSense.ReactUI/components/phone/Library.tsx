@@ -60,13 +60,15 @@ interface Props {
   onYear?(): void;
   /** Whether Share photo starts with Remove location on, as Settings has it. */
   readonly removeLocation?: boolean;
+  /** Raised each time Search is asked for from outside, as from the app icon's menu: Search opens. */
+  readonly searchAsked?: number;
 }
 
 /**
  * Library: every picture and video on the phone, latest first, by month, narrowed by a filter, with the search field
  * above them (26). Tapping one opens it; Select chooses several to send, put in an album or folder, or delete.
  */
-export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true }: Props) {
+export function LibraryScreen({ library, selecting, onSelecting, filter, onFilter, made = NO_ALBUMS, notify, onSend, backup, safe, onReview, year, onYear, removeLocation = true, searchAsked = 0 }: Props) {
   const { platform, ios, tablet, words } = usePhone();
   const backedUp = useMemo<BackedUp | undefined>(() => (backup?.computer ? { on: new Set(backup.onComputer), waiting: new Set(backup.waiting) } : undefined), [backup]);
   const [bannerHidden, setBannerHidden] = useState(false);
@@ -80,6 +82,12 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
   const gate = usePlanGate();
   const [viewing, setViewing] = useState<string>();
   const [searching, setSearching] = useState(false);
+  // Search asked for from outside opens it, adjusted while drawing rather than after.
+  const [searchSeen, setSearchSeen] = useState(searchAsked);
+  if (searchAsked !== searchSeen) {
+    setSearchSeen(searchAsked);
+    setSearching(true);
+  }
   const [tripping, setTripping] = useState(false);
   const [fixing, setFixing] = useState(false);
   const [hiding, setHiding] = useState(false);

@@ -67,6 +67,7 @@ public sealed class VaultTests : IDisposable
         public readonly FakeComputerFinder Computers = new();
         public readonly FakeVaultKeys Keys = new();
         public readonly FakeUnlocker Unlocker = new();
+        public readonly FakeWidgets Widgets = new();
         public readonly string Root;
         public readonly ServiceProvider Services;
         private readonly ApiRouter _router;
@@ -76,7 +77,7 @@ public sealed class VaultTests : IDisposable
             Root = Path.Combine(data, "Photo Library");
             Services = new ServiceCollection()
                 .AddPhotoSensePhone(Library, new FakePhotoAccess(), new MagickImageAnalyzer(), Path.Combine(data, "Documents"), Path.Combine(data, "Caches"), new FakeAdvertiser(), App,
-                    new FakeCodeScanner(), Computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), Keys, Unlocker, name, Root, new TcpTransferListener(0))
+                    new FakeCodeScanner(), Computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), Keys, Unlocker, Widgets, name, Root, new TcpTransferListener(0))
                 .AddPhotoSenseApi()
                 .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
                 .AddStandInStores()
@@ -546,7 +547,7 @@ public sealed class VaultTests : IDisposable
         var root = Path.Combine(In("Pixel"), "Phone");
         using var services = new ServiceCollection()
             .AddPhotoSenseAndroid(store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), app, new FakeCodeScanner(), new FakeComputerFinder(),
-                new FakeDevice { Kind = "Android phone" }, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), "Pixel 8", root, new TcpTransferListener(0), In("nobackup"))
+                new FakeDevice { Kind = "Android phone" }, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), "Pixel 8", root, new TcpTransferListener(0), In("nobackup"))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("android", "1.2.0.57", () => "notices"))
             .AddStandInStores()

@@ -782,6 +782,49 @@ describe('PhotoSense on a phone', () => {
     expect(api.openedNotice).toHaveBeenCalledTimes(asked);
   });
 
+  it("opens what a widget or the app icon's menu asks: a backup started, today's swipe set, or Search; and says why a backup could not start", async () => {
+    width(false);
+    api.useSwipe.mockImplementation(() => ({ data: swipeState({ set: [swipeCard('a')] }) }));
+    api.useBackup.mockReturnValue({ data: backupState() });
+    const tell = (opens: string) => {
+      api.openedNotice.mockResolvedValueOnce({ opens });
+      return act(async () => { window.dispatchEvent(new Event('photosense-notice')); });
+    };
+    render(<App start="library" />);
+    await act(async () => { await Promise.resolve(); });
+    api.startBackup.mockClear();
+    await tell('backup');
+    await waitFor(() => expect(api.startBackup).toHaveBeenCalledOnce());
+    expect(screen.getByRole('heading', { level: 1, name: 'Backup' })).toBeInTheDocument();
+
+    await tell('swipe');
+    const swiping = await screen.findByRole('dialog', { name: 'Swipe to clean' });
+    await userEvent.click(within(swiping).getByRole('button', { name: 'Close' }));
+
+    await tell('search');
+    expect(await screen.findByRole('dialog', { name: 'Search' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+
+    // A backup that cannot start says why.
+    api.startBackup.mockRejectedValueOnce(new Error('A backup to Studio iMac is running.'));
+    await tell('backup');
+    await waitFor(() => expect(notify).toHaveBeenCalledWith('A backup to Studio iMac is running.', 'error'));
+
+    // With no computer, Backup only opens, to pair one; with today's set through, Clean up only.
+    api.startBackup.mockClear();
+    api.useBackup.mockReturnValue({ data: backupState({ computer: null }) });
+    api.useSwipe.mockImplementation(() => ({ data: swipeState({ set: [swipeCard('a', { delete: false })] }) }));
+    // Drawn again, as the phone's answers changed.
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'Tabs' })).getByRole('button', { name: /^Library/ }));
+    await tell('backup');
+    await tell('swipe');
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Swipe to clean' })).not.toBeInTheDocument();
+    expect(api.startBackup).not.toHaveBeenCalled();
+    api.useSwipe.mockReturnValue({});
+    api.useBackup.mockReturnValue({});
+  });
+
   it("pushes a category opened from Find over Clean up's first screen, which Back, or on a tablet the tab, takes back", async () => {
     width(false);
     const { unmount } = render(<App start="cleanup" />);

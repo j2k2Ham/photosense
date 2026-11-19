@@ -55,6 +55,17 @@ public sealed class IosNotifier : UNUserNotificationCenterDelegate, INotifier
     /// <inheritdoc />
     public string? TakeOpened() => Interlocked.Exchange(ref _opened, null);
 
+    /// <summary>
+    /// A widget or the app icon's menu tapped: notes what it opens, as a notification would, and tells the page. Only
+    /// what PhotoSense opens is taken.
+    /// </summary>
+    public static void Open(string? opens)
+    {
+        if (opens is not ("backup" or "swipe" or "search" or "free-up-space")) return;
+        _opened = opens;
+        PageViewController.Shown?.TellNotice();
+    }
+
     /// <summary>Shown as a banner while PhotoSense is open too.</summary>
     public override void WillPresentNotification(UNUserNotificationCenter center, UNNotification notification, Action<UNNotificationPresentationOptions> completionHandler)
         => completionHandler(UNNotificationPresentationOptions.Banner | UNNotificationPresentationOptions.List);

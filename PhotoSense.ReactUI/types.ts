@@ -676,7 +676,7 @@ export interface NoticeStateDto {
 
 /** What a notification tapped asked to open, once (PhotoSense.Contracts.Cleaning.NoticeOpenedDto). */
 export interface NoticeOpenedDto {
-  opens: 'free-up-space' | 'subscription' | null;
+  opens: 'free-up-space' | 'subscription' | 'backup' | 'swipe' | 'search' | null;
 }
 
 /** A town photos were taken in during the year, with how many (PhotoSense.Contracts.Cleaning.YearPlaceDto). */

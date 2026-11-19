@@ -148,10 +148,23 @@ export function PhoneApp(props: Props) {
   // Year in review: its card in Library while it is due, and its cards over everything.
   const year = useYear(ready).data;
   const [watching, setWatching] = useState(false);
-  // A notification tapped opens what it is about: Free up space, or the subscription.
+  // Search, asked for from the app icon's menu, opens over Library.
+  const [searchAsked, setSearchAsked] = useState(0);
+  // A notification, a widget or the app icon's menu tapped opens what it is about: Free up space, the subscription,
+  // a backup started (Backup's pairing when there is no computer yet), today's swipe set, or Search.
   const opened = useEffectEvent(() => void openedNotice().then(o => {
     if (o.opens === 'free-up-space') { props.onTab('cleanup'); cleanUp.open('free'); }
     else if (o.opens === 'subscription') setSheet('subscription');
+    else if (o.opens === 'backup') {
+      props.onTab('backup');
+      if (paired) void startBackup().catch(e => notify(said(e), 'error'));
+    } else if (o.opens === 'swipe') {
+      props.onTab('cleanup');
+      if (swipe && swipe.set.some(c => c.delete === null)) setSwiping('cards');
+    } else if (o.opens === 'search') {
+      props.onTab('library');
+      setSearchAsked(n => n + 1);
+    }
   }, e => notify(said(e), 'error')));
   useEffect(() => {
     if (!ready) return;
@@ -193,7 +206,7 @@ export function PhoneApp(props: Props) {
       screens={{
         library: <LibraryScreen library={library} selecting={selecting} onSelecting={setSelecting} filter={filter} onFilter={setFilter} made={made} notify={notify}
           backup={libraryBackup} safe={safe} onReview={() => setSheet('safe')} onSend={ids => void send(ids)} year={year} onYear={() => setWatching(true)}
-          removeLocation={props.settings.removeLocationWhenSharing} />,
+          removeLocation={props.settings.removeLocationWhenSharing} searchAsked={searchAsked} />,
         cleanup: <CleanUpScreen cleanUp={cleanUp} root={library.root} status={status} notify={notify} onScanAgain={() => void scan()} swipe={swipe} library={library} onSwipe={setSwiping}
           lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })} />,
         organize: <OrganizeScreen organize={organize} library={library} made={made} onMade={album => setMade(m => [...m, album])} notify={notify}

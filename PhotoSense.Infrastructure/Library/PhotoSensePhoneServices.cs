@@ -45,16 +45,17 @@ public static class PhotoSensePhoneServices
     /// <param name="share">The phone's own share sheet, for the cards.</param>
     /// <param name="vaultKeys">Where the hidden vault's recovery key is kept: the Keychain, or the Android Keystore.</param>
     /// <param name="unlocker">The phone's own question before the hidden vault opens.</param>
+    /// <param name="widgets">The phone's home screen widgets.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the library is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     public static IServiceCollection AddPhotoSensePhone(this IServiceCollection s, IPhotoLibrary library, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, string name, string root = LibraryRoot, ITransferListener? listener = null)
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets, string name, string root = LibraryRoot, ITransferListener? listener = null)
     {
         var photos = new PhotoLibraryFileSystem(library, root);
         s.AddSingleton(photos);
-        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, name, listener);
+        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, widgets, name, listener);
     }
 
     /// <summary>PhotoSense as it runs on an Android phone: as <see cref="AddPhotoSensePhone"/>, on the photos of the phone's own storage.</summary>
@@ -73,24 +74,25 @@ public static class PhotoSensePhoneServices
     /// <param name="share">The phone's own share sheet, for the cards.</param>
     /// <param name="vaultKeys">Where the hidden vault's recovery key is kept: the Keychain, or the Android Keystore.</param>
     /// <param name="unlocker">The phone's own question before the hidden vault opens.</param>
+    /// <param name="widgets">The phone's home screen widgets.</param>
     /// <param name="name">What the phone is called, as a computer shows it.</param>
     /// <param name="root">Where the storage is shown; tests give a folder of their own.</param>
     /// <param name="listener">Waits for computers to connect; the phone's own network by default.</param>
     /// <param name="vaultFolder">Where the hidden vault's files are kept; a folder inside <paramref name="dataFolder"/> by default. Android's own backup of the app stops for good once it grows past 25 MB, so the app keeps them where that backup does not go.</param>
     public static IServiceCollection AddPhotoSenseAndroid(this IServiceCollection s, IMediaStore store, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore,
-        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, string name, string root = StorageRoot, ITransferListener? listener = null,
+        ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device, INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets, string name, string root = StorageRoot, ITransferListener? listener = null,
         string? vaultFolder = null)
     {
         var photos = new MediaFileSystem(store, root);
         s.AddSingleton(photos);
-        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, name, listener,
+        return s.AddPhone(photos, photos, root, access, analyzer, dataFolder, cacheFolder, advertiser, appStore, scanner, computers, device, notifier, share, vaultKeys, unlocker, widgets, name, listener,
             vaultFolder);
     }
 
     private static IServiceCollection AddPhone<TPhotos>(this IServiceCollection s, TPhotos photos, IVideoCompressor compressor, string root, IPhotoAccess access, IImageAnalyzer analyzer,
         string dataFolder, string cacheFolder, ITransferAdvertiser advertiser, IAppStore appStore, ICodeScanner scanner, IComputerFinder computers, IDeviceStatus device,
-        INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, string name, ITransferListener? listener, string? vaultFolder = null)
+        INotifier notifier, IShareSheet share, IVaultKeyStore vaultKeys, IUnlocker unlocker, IWidgets widgets, string name, ITransferListener? listener, string? vaultFolder = null)
         where TPhotos : class, IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, ISharingCopies, IPhotoDetails, IPhotoImport
     {
         // The hidden vault's own files, beside what PhotoSense records, where the phone never empties them.
@@ -136,6 +138,8 @@ public static class PhotoSensePhoneServices
         s.AddSingleton<IPhotoDetails>(photos);
         s.AddSingleton(sp => new PhotoFixes(sp.GetRequiredService<IPhotoRepository>(), photos, sp.GetRequiredService<IDetailsFixStore>(), sp.GetRequiredService<IMediaDetailsStore>(),
             sp.GetRequiredService<OrganizeLibrary>(), sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<Subscription>(), sp.GetRequiredService<TimeProvider>()));
+        // The home screen widgets, handed what to show.
+        s.AddSingleton(sp => new PhoneWidgets(widgets, device, sp.GetRequiredService<CleanUpCategories>(), sp.GetRequiredService<PhoneBackup>(), sp.GetRequiredService<SwipeToClean>()));
         // The hidden vault: sealed inside PhotoSense, behind the phone's own question, carried to the computer sealed.
         s.AddSingleton(sp => new HiddenVault(vaultKeys, unlocker, vault, photos, photos, photos, sp.GetRequiredService<OrganizeLibrary>(), analyzer, sp.GetRequiredService<IPhotoRepository>(),
             sp.GetRequiredService<IThumbnailStore>(), sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), sp.GetRequiredService<PhoneBackup>(),

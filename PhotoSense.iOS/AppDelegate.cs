@@ -31,11 +31,11 @@ public class AppDelegate : UIApplicationDelegate
         if (!BGTaskScheduler.Shared.Submit(request, out var error)) Say.Line($"background refresh not scheduled: {error?.LocalizedDescription}");
     }
 
-    // iOS woke the app: it checks the storage, asks to be woken again, and says it has finished.
+    // iOS woke the app: it checks the storage, tells the widgets how things stand, asks to be woken again, and says it has finished.
     private static void Refresh(BGTask task)
     {
         AskForRefresh();
-        var checking = PhoneApp.CheckStorageAsync();
+        var checking = Task.WhenAll(PhoneApp.CheckStorageAsync(), PhoneApp.RefreshWidgetsAsync());
         task.ExpirationHandler = () => task.SetTaskCompleted(false);
         checking.ContinueWith(done => task.SetTaskCompleted(done.IsCompletedSuccessfully), TaskScheduler.Default);
     }
@@ -60,17 +60,38 @@ public class SceneDelegate : UIResponder, IUIWindowSceneDelegate
         Window ??= new UIWindow(windowScene);
         Window.RootViewController = new PageViewController();
         Window.MakeKeyAndVisible();
+        // Started from a widget or the app icon's menu: the page asks what to open once it is ready.
+        IosNotifier.Open(connectionOptions.ShortcutItem?.Type ?? Opens(connectionOptions.UrlContexts?.FirstOrDefault()?.Url));
     }
+
+    /// <summary>The app icon's menu tapped while PhotoSense was running.</summary>
+    [Export("windowScene:performActionForShortcutItem:completionHandler:")]
+    public void PerformAction(UIWindowScene windowScene, UIApplicationShortcutItem shortcutItem, Action<bool> completionHandler)
+    {
+        IosNotifier.Open(shortcutItem.Type);
+        completionHandler(true);
+    }
+
+    /// <summary>A widget tapped while PhotoSense was running: photosense://opens/backup.</summary>
+    [Export("scene:openURLContexts:")]
+    public void OpenUrlContexts(UIScene scene, NSSet<UIOpenUrlContext> urlContexts)
+    {
+        foreach (var context in urlContexts) IosNotifier.Open(Opens(context.Url));
+    }
+
+    // What a widget's link opens: the last part of photosense://opens/backup.
+    private static string? Opens(NSUrl? url) => url?.Scheme == "photosense" && url.Host == "opens" ? url.LastPathComponent : null;
 
     /// <summary>Back on screen: a low-storage alert goes if one is due.</summary>
     [Export("sceneDidBecomeActive:")]
     public void DidBecomeActive(UIScene scene) => _ = PhoneApp.CheckStorageAsync();
 
-    /// <summary>Gone to the background: the hidden vault locks, and iOS is asked to wake the app later, to check the storage.</summary>
+    /// <summary>Gone to the background: the hidden vault locks, the home screen widgets are told how things stand, and iOS is asked to wake the app later, to check the storage.</summary>
     [Export("sceneDidEnterBackground:")]
     public void DidEnterBackground(UIScene scene)
     {
         PhoneApp.Services.GetRequiredService<HiddenVault>().Lock();
+        _ = PhoneApp.RefreshWidgetsAsync();
         AppDelegate.AskForRefresh();
     }
 }

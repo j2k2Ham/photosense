@@ -116,6 +116,8 @@ describe('the guide itself', () => {
       expect(ids('wrong date', platform)).toEqual(['library']);
       expect(ids('missing location', platform)).toEqual(['library']);
       expect(ids('vault', platform)).toEqual(['library']);
+      expect(ids('widget', platform)).toEqual(['phone-start']);
+      expect(ids('quick action', platform)).toEqual(['phone-start']);
       expect(ids('recovery key', platform)).toEqual(['library']);
       expect(ids('unhide', platform)).toEqual(['library']);
       expect(ids('big videos', platform)).toEqual(['phone-cleanup']);

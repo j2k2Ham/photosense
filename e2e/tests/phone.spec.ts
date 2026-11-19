@@ -431,6 +431,26 @@ test.describe('on a phone', () => {
     expect(phone.asked.filter(a => a.startsWith('vault/')).map(a => a.split(' ')[0])).toEqual(['vault/on', 'vault/hide', 'vault/unhide', 'vault/lock']);
   });
 
+  test('The app icon menu and the widgets open Search, today’s swipe set, or Backup with a backup started @phone', async ({ page }) => {
+    const phone = new Phone();
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Library');
+    const tapped = async (opens: string) => {
+      phone.opens = opens;
+      await page.evaluate(() => window.dispatchEvent(new Event('photosense-notice')));
+    };
+    await tapped('search');
+    const search = page.getByRole('dialog', { name: 'Search' });
+    await expect(search).toBeVisible();
+    await search.getByRole('button', { name: /^(Cancel|Back)$/ }).click();
+    await expect(search).toBeHidden();
+    await tapped('backup');
+    await expect(page.getByRole('heading', { level: 1, name: 'Backup' })).toBeVisible();
+    await tapped('swipe');
+    await expect(page.getByRole('heading', { level: 1, name: 'Clean up' })).toBeVisible();
+  });
+
   test('Swipe to clean shows today\'s set one at a time, marks by a drag or a button, takes back the last, and deletes what is marked in one confirmation @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });

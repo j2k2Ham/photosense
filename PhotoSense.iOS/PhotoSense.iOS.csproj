@@ -60,15 +60,37 @@
       <StoreBridgeLibrary>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)libPhotoSenseStore.a</StoreBridgeLibrary>
     </PropertyGroup>
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Exec Command="xcrun --sdk $(StoreBridgeSdk) swiftc -parse-as-library -emit-library -static -O -module-name PhotoSenseStore -target $(StoreBridgeTarget) -o &quot;$(StoreBridgeLibrary)&quot; Native/StoreKitBridge.swift" />
+    <Exec Command="xcrun --sdk $(StoreBridgeSdk) swiftc -parse-as-library -emit-library -static -O -module-name PhotoSenseStore -target $(StoreBridgeTarget) -o &quot;$(StoreBridgeLibrary)&quot; Native/StoreKitBridge.swift Native/WidgetsBridge.swift" />
     <!-- Where Xcode keeps the Swift libraries an older iOS needs beside the system's own. -->
     <Exec Command="xcode-select -p" ConsoleToMSBuild="true" StandardOutputImportance="low">
       <Output TaskParameter="ConsoleOutput" PropertyName="StoreBridgeDeveloperDir" />
     </Exec>
     <ItemGroup>
-      <NativeReference Include="$(StoreBridgeLibrary)" Kind="Static" ForceLoad="true" SmartLink="false" Frameworks="StoreKit Foundation UIKit"
+      <NativeReference Include="$(StoreBridgeLibrary)" Kind="Static" ForceLoad="true" SmartLink="false" Frameworks="StoreKit Foundation UIKit WidgetKit"
         LinkerFlags="-L/usr/lib/swift -L$(StoreBridgeDeveloperDir)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(StoreBridgeSdk)" />
     </ItemGroup>
+  </Target>
+  <!-- The home screen widgets (Native/Widgets) are a WidgetKit extension, Swift and SwiftUI alone: built here into
+       PhotoSenseWidgets.appex for the phone or the simulator being built for, with its own Info.plist and the App Group
+       it shares with the app, and put in the app's PlugIns, where iOS finds it. -->
+  <PropertyGroup>
+    <WidgetsOutput>$(MSBuildProjectDirectory)/obj/widgets/$(Configuration)-$(RuntimeIdentifier)</WidgetsOutput>
+    <WidgetsBundle>$(WidgetsOutput)/PhotoSenseWidgets.appex</WidgetsBundle>
+    <WidgetsPlatform Condition="'$(StoreBridgeSdk)' == 'iphonesimulator'">iPhoneSimulator</WidgetsPlatform>
+    <WidgetsPlatform Condition="'$(WidgetsPlatform)' == ''">iPhoneOS</WidgetsPlatform>
+  </PropertyGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <AdditionalAppExtensions Include="$(WidgetsOutput)">
+      <Name>PhotoSenseWidgets</Name>
+      <BuildOutput></BuildOutput>
+    </AdditionalAppExtensions>
+  </ItemGroup>
+  <Target Name="BuildWidgets" BeforeTargets="BeforeBuild" DependsOnTargets="BuildStoreBridge;PhotoSenseVersion" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <MakeDir Directories="$(WidgetsBundle)" />
+    <Exec Command="xcrun --sdk $(StoreBridgeSdk) swiftc -parse-as-library -application-extension -O -module-name PhotoSenseWidgets -target $(StoreBridgeTarget) -o &quot;$(WidgetsBundle)/PhotoSenseWidgets&quot; Native/Widgets/PhotoSenseWidgets.swift" />
+    <WriteLinesToFile File="$(WidgetsBundle)/Info.plist" Overwrite="true" Lines="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;;&lt;plist version=&quot;1.0&quot;&gt;&lt;dict&gt;;&lt;key&gt;CFBundleDevelopmentRegion&lt;/key&gt;&lt;string&gt;en&lt;/string&gt;;&lt;key&gt;CFBundleDisplayName&lt;/key&gt;&lt;string&gt;PhotoSense&lt;/string&gt;;&lt;key&gt;CFBundleExecutable&lt;/key&gt;&lt;string&gt;PhotoSenseWidgets&lt;/string&gt;;&lt;key&gt;CFBundleIdentifier&lt;/key&gt;&lt;string&gt;$(ApplicationId).widgets&lt;/string&gt;;&lt;key&gt;CFBundleInfoDictionaryVersion&lt;/key&gt;&lt;string&gt;6.0&lt;/string&gt;;&lt;key&gt;CFBundleName&lt;/key&gt;&lt;string&gt;PhotoSenseWidgets&lt;/string&gt;;&lt;key&gt;CFBundlePackageType&lt;/key&gt;&lt;string&gt;XPC!&lt;/string&gt;;&lt;key&gt;CFBundleShortVersionString&lt;/key&gt;&lt;string&gt;$(ApplicationDisplayVersion)&lt;/string&gt;;&lt;key&gt;CFBundleVersion&lt;/key&gt;&lt;string&gt;$(ApplicationVersion)&lt;/string&gt;;&lt;key&gt;CFBundleSupportedPlatforms&lt;/key&gt;&lt;array&gt;&lt;string&gt;$(WidgetsPlatform)&lt;/string&gt;&lt;/array&gt;;&lt;key&gt;MinimumOSVersion&lt;/key&gt;&lt;string&gt;$(SupportedOSPlatformVersion)&lt;/string&gt;;&lt;key&gt;UIDeviceFamily&lt;/key&gt;&lt;array&gt;&lt;integer&gt;1&lt;/integer&gt;&lt;integer&gt;2&lt;/integer&gt;&lt;/array&gt;;&lt;key&gt;NSExtension&lt;/key&gt;&lt;dict&gt;&lt;key&gt;NSExtensionPointIdentifier&lt;/key&gt;&lt;string&gt;com.apple.widgetkit-extension&lt;/string&gt;&lt;/dict&gt;;&lt;/dict&gt;&lt;/plist&gt;" />
+    <!-- Signed with the App Group it shares with the app; a build for a phone is signed again, with the app, by the publish. -->
+    <Exec Command="codesign --force --sign - --entitlements Native/Widgets/PhotoSenseWidgets.entitlements &quot;$(WidgetsBundle)&quot;" />
   </Target>
   <Target Name="RequireThePage" BeforeTargets="Build" Condition="!Exists('..\PhotoSense.ReactUI\out\index.html')">
     <Error Text="Build the page first: in PhotoSense.ReactUI, run npm ci, then npm run build with NEXT_PUBLIC_API_BASE set to /api." />

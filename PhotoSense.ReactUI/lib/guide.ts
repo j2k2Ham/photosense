@@ -546,8 +546,9 @@ export const GUIDE: GuideTopic[] = [
     id: 'phone-start',
     only: PHONES,
     title: 'Getting started',
-    summary: 'The first launch, the four tabs, Settings, and finding your way back.',
-    keywords: ['overview', 'introduction', 'welcome', 'first time', 'begin', 'setup', 'tabs', 'back', 'tablet', 'sidebar'],
+    summary: 'The first launch, the four tabs, Settings, finding your way back, and the home screen widgets.',
+    keywords: ['overview', 'introduction', 'welcome', 'first time', 'begin', 'setup', 'tabs', 'back', 'tablet', 'sidebar', 'widget', 'home screen',
+      'shortcut', 'quick action', 'long press', 'press and hold'],
     sections: [
       {
         text: [
@@ -586,6 +587,28 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'The phone’s Back gesture or button goes back from a screen opened over another, and puts away a sheet.',
           'On a tablet the tabs are down the left side. In **Clean up** and **Organize**, the list and what you open from it sit side by side.',
+        ],
+      },
+      {
+        heading: 'Widgets and the app icon',
+        text: [
+          'Two widgets keep PhotoSense on your home screen. **Storage** shows how full your device is, how much Clean up can free, and how backing up stands; tap it for **Free up space**, or **Back up now** to open **Backup** and start a backup. Before you pair a computer, its button says **Pair** and opens **Backup** to pair one. **Swipe to clean** shows how many of today’s photos are left to swipe, the last seven days and your streak; tap it to start swiping.',
+          'The widgets show how things stood when you last left PhotoSense, or when your device last let it back up or check its storage. Open PhotoSense to bring them up to date.',
+          'Press and hold the PhotoSense icon for **Search photos**, **Start swipe** and **Back up now**. The widgets and the menu are free.',
+        ],
+      },
+      {
+        only: IOS,
+        steps: [
+          'To add a widget, press and hold an empty spot of your home screen until the apps jiggle, then tap **Edit** and **Add Widget**.',
+          'Search for **PhotoSense**, choose **Storage** or **Swipe to clean**, and tap **Add Widget**.',
+        ],
+      },
+      {
+        only: ANDROID,
+        steps: [
+          'To add a widget, press and hold an empty spot of your home screen, then tap **Widgets**.',
+          'Find **PhotoSense**, then press and hold **Storage** or **Swipe to clean** and place it on your home screen.',
         ],
       },
     ],

@@ -169,6 +169,18 @@ jobs:
           sys.exit(0 if report['passed'] else 1)
           EOF
 
+      - name: See the widgets
+        run: |
+          # The extension is in the app, iOS took it as a widget, and the app wrote what the widgets show.
+          app=$(find PhotoSense.iOS/bin -name '*.app' -type d -print -quit)
+          if [ ! -f "$app/PlugIns/PhotoSenseWidgets.appex/PhotoSenseWidgets" ]; then echo "::error title=Widgets::no PlugIns/PhotoSenseWidgets.appex in the app"; exit 1; fi
+          registered=$(xcrun simctl spawn "$UDID" pluginkit -m -A -p com.apple.widgetkit-extension 2>&1 | grep -c "$BUNDLE.widgets" || true)
+          echo "::notice title=Widgets::registered with iOS: $registered"
+          if [ "$registered" = "0" ]; then echo "::error title=Widgets::iOS did not register $BUNDLE.widgets"; exit 1; fi
+          group=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" groups 2>&1 | awk '/group.com.j2k2ham.photosense/ {print $2}')
+          if [ -z "$group" ] || [ ! -s "$group/widgets.json" ]; then echo "::error title=Widgets::the app wrote nothing into its App Group (${group:-none})"; exit 1; fi
+          echo "::notice title=Widgets show::$(head -c 600 "$group/widgets.json")"
+
       - name: What the app said
         if: failure()
         run: |

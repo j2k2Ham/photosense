@@ -37,7 +37,7 @@ public sealed class NoticesTests : IDisposable
     {
         _phone = new ServiceCollection()
             .AddPhotoSensePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(),
-                new FakeComputerFinder(), _device, _notifier, new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+                new FakeComputerFinder(), _device, _notifier, new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddPhotoSenseApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()
