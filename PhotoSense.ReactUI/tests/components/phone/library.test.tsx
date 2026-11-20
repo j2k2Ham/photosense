@@ -37,7 +37,8 @@ beforeEach(() => {
     destination: destination.basePath, exists: true, items: asked.map(a => ({ id: a.id, folder: destination.basePath })), clashes: [], taken: { [destination.basePath]: ['IMG_9154.HEIC'] }, companions: 0,
   }));
   api.applyOrganize.mockResolvedValue(applied());
-  api.removeOrganize.mockResolvedValue(applied());
+  // Deleted to the phone's own bin: nothing to undo (Jamie, 2026-11-20).
+  api.removeOrganize.mockResolvedValue(applied({ batchId: '' }));
   api.undoChange.mockResolvedValue({ restored: 2, skipped: 0, problems: [] });
   api.usePhotoDetails.mockReturnValue({ data: { camera: 'iPhone 15 Pro', favorite: false } });
   api.setFavorite.mockResolvedValue({ camera: 'iPhone 15 Pro', favorite: true });
@@ -186,22 +187,17 @@ describe('choosing in Library', () => {
     expect(await screen.findByRole('button', { name: 'Select' })).toBeInTheDocument();
   });
 
-  it('deletes what is chosen after a question naming it, says where it went, and Undo brings it back', async () => {
+  it('deletes what is chosen after a question naming it, and says where it waits, with no Undo', async () => {
     const { notify } = show({ selecting: true });
     await userEvent.click(tile('IMG_9154.HEIC'));
     await userEvent.click(tile('IMG_9080.MOV'));
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Delete' }));
     const question = sheet('Delete 2 items?');
-    expect(question).toHaveTextContent('IMG_9154.HEIC, IMG_9080.MOV go to PhotoSense Removed.');
-    expect(question).toHaveTextContent('Undo can bring them back. Delete permanently, in Settings, sends them to Recently Deleted.');
+    expect(question).toHaveTextContent('IMG_9154.HEIC, IMG_9080.MOV go to Recently Deleted for 30 days.');
     await userEvent.click(within(question).getByRole('button', { name: 'Delete 2 items' }));
     expect(api.removeOrganize).toHaveBeenCalledWith(ROOT, ['f1', 'f2']);
-    expect(notify).toHaveBeenLastCalledWith('2 items moved to PhotoSense Removed.', 'ok', expect.objectContaining({ label: 'Undo' }));
+    expect(notify).toHaveBeenLastCalledWith('2 items deleted. They wait in Recently Deleted for 30 days.', 'ok', undefined);
     expect(screen.queryByRole('toolbar')).not.toBeInTheDocument();
-
-    await act(async () => toastAction(notify)());
-    expect(api.undoChange).toHaveBeenCalledWith('b1');
-    expect(notify).toHaveBeenLastCalledWith('Moved 2 items back.', 'ok');
   });
 
   it('on the free plan asks the plan first, deletes the largest when fewer are left, and says the removals left in the question', async () => {
@@ -228,6 +224,10 @@ describe('choosing in Library', () => {
     });
     expect(notify).toHaveBeenLastCalledWith('Moved 2 items to Anaconda.', 'ok', expect.objectContaining({ label: 'Undo' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    await act(async () => toastAction(notify)());
+    expect(api.undoChange).toHaveBeenCalledWith('b1');
+    expect(notify).toHaveBeenLastCalledWith('Moved 2 items back.', 'ok');
   });
 
   it('offers the albums named in Organize, made with the first files put in them, beside those there are', async () => {
@@ -292,11 +292,17 @@ describe('choosing in Library', () => {
     expect(notify).toHaveBeenLastCalledWith('Cannot reach the phone.', 'error');
     await userEvent.click(within(sheet('Delete 1 item?')).getByRole('button', { name: 'Cancel' }));
 
-    api.removeOrganize.mockResolvedValueOnce(applied({ skipped: 2, problems: [] }));
+    api.removeOrganize.mockResolvedValueOnce(applied({ batchId: '', skipped: 2, problems: [] }));
     await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Delete' }));
     await userEvent.click(within(sheet('Delete 1 item?')).getByRole('button', { name: 'Delete 1 item' }));
     expect(notify).toHaveBeenCalledWith('2 left where they are.', 'error');
-    const undo = (notify.mock.calls.find(c => c[0] === '2 items moved to PhotoSense Removed.')![2] as { run(): void }).run;
+
+    // Undo of a move says what it could not put back.
+    await userEvent.click(screen.getByRole('button', { name: 'Select' }));
+    await choose();
+    await userEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Add to album' }));
+    await userEvent.click(within(sheet('Add 1 to an album')).getByRole('button', { name: 'Anaconda' }));
+    const undo = (notify.mock.calls.find(c => c[0] === 'Moved 2 items to Anaconda.')![2] as { run(): void }).run;
     await act(async () => undo());
     expect(notify).toHaveBeenLastCalledWith('2 could not be put back. Moved since.', 'error');
     await act(async () => undo());
@@ -363,7 +369,7 @@ describe('the viewer', () => {
     await userEvent.click(within(viewer).getByRole('button', { name: 'Delete' }));
     await userEvent.click(within(sheet('Delete 1 item?')).getByRole('button', { name: 'Delete 1 item' }));
     expect(api.removeOrganize).toHaveBeenCalledWith(ROOT, ['f2']);
-    expect(notify).toHaveBeenLastCalledWith('2 items moved to Pictures/PhotoSense Removed.', 'ok', expect.anything());
+    expect(notify).toHaveBeenLastCalledWith('2 items deleted. They wait in the bin for 30 days.', 'ok', undefined);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await userEvent.click(tile('IMG_9154.HEIC'));

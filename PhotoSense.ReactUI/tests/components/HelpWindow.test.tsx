@@ -44,7 +44,7 @@ describe('the guide itself', () => {
   });
 
   it("has a topic for each part of PhotoSense on an iPhone or iPad and on Android, with no button to a computer's screens", () => {
-    const titles = ['Getting started', 'Library', 'Clean up', 'Organize', 'Backing up to your computer', 'Cloud storage and your own locations', 'Removed photos and deleting permanently', 'The free plan and Pro', 'Settings', 'If something looks wrong'];
+    const titles = ['Getting started', 'Library', 'Clean up', 'Organize', 'Backing up to your computer', 'Cloud storage and your own locations', 'Deleted photos', 'The free plan and Pro', 'Settings', 'If something looks wrong'];
     for (const platform of ['ios', 'android'] as const) {
       const phone = guideFor(platform);
       expect(phone.map(t => t.title)).toEqual(titles);
@@ -237,7 +237,7 @@ describe('the help window', () => {
     expect(topics().map(t => t.firstElementChild!.textContent)).toEqual(guideFor('android').map(t => t.title));
     expect(page()).toHaveTextContent('1 of 10');
     expect(page()).toHaveTextContent('The first launch');
-    await userEvent.click(topic('Removed photos and deleting permanently'));
+    await userEvent.click(topic('Deleted photos'));
     expect(page()).toHaveTextContent('Pictures/PhotoSense Removed');
     expect(page()).not.toHaveTextContent('Recently Deleted');
     expect(within(page()).queryByRole('button', { name: /^(Go to|Show|Open)/ })).not.toBeInTheDocument();

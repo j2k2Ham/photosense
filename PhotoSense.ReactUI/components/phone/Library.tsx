@@ -8,6 +8,7 @@ import {
   type Album, type BackedUp, type Library, type LibraryFilter,
 } from '../../lib/library';
 import { checkedAt, gigabytes } from '../../lib/backup';
+import { deletedSaid } from '../../lib/categories';
 import { checkFolderName, resolveNames } from '../../lib/organize';
 import { deviceWord, usePhone, type Collection } from '../../lib/phone';
 import type { LibraryBackupDto, OrganizeDestination, OrganizeFileDto, OrganizePlaceDto, SafeReviewDto, YearReviewDto } from '../../types';
@@ -164,7 +165,8 @@ export function LibraryScreen({ library, selecting, onSelecting, filter, onFilte
     return applyOrganize({ ...destination, mode: 'move', companions: true, label, files: Object.entries(names).map(([id, name]) => ({ id, name })) });
   }, done => `Moved ${items(done)} to ${label}.`);
 
-  const remove = (going: OrganizeFileDto[]) => change(() => removeOrganize(root!, going.map(f => f.id)), done => `${items(done)} moved to ${words.removed}.`);
+  // To the phone's own bin, which has no Undo of PhotoSense's (Jamie, 2026-11-20).
+  const remove = (going: OrganizeFileDto[]) => change(() => removeOrganize(root!, going.map(f => f.id)), done => deletedSaid(done, words.bin));
 
   async function chooseMore() {
     try {

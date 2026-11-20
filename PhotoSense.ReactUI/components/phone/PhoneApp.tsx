@@ -6,6 +6,7 @@ import { LocationsGroup, SendToSheet, SentSheet } from './Locations';
 import type { LocationDto } from '../../types';
 import { formatBytes } from '../../lib/format';
 import { deviceWord } from '../../lib/phone';
+import { useStored } from '../../lib/stored';
 import type { ResultCard } from '../../lib/shareCard';
 import { ShareSheet } from './Share';
 import { YearStories } from './YearInReview';
@@ -24,7 +25,7 @@ import { items as itemsSaid, useLibrary, type Album, type LibraryFilter } from '
 import { useOrganize } from '../../lib/phoneOrganize';
 import { OrganizeScreen, RecentSheet, undoMove } from './Organize';
 import { PhoneShell } from './PhoneShell';
-import { DeletePermanently, items, SettingsSheet } from './SettingsSheet';
+import { items, MoveRemoved, SettingsSheet } from './SettingsSheet';
 import { PlanProvider, usePlanSheet } from './ProSheet';
 import { SubscriptionScreen } from './Subscription';
 import { SwipeSession, SwipeSummary } from './Swipe';
@@ -175,7 +176,14 @@ export function PhoneApp(props: Props) {
   // What Settings says of the photos, of what waits to be erased (in the library, once it is known, and wherever else the
   // service knows of), and of what Undo can still put back.
   const access = usePhotoAccess().data?.access;
-  const removed = useRemoved(sheet === 'settings' || sheet === 'erase' || place === 'settings' ? [library.root].filter(root => root !== undefined) : null).data;
+  // What waits in PhotoSense Removed from before deleting went to the phone's bin is offered once, at the first launch
+  // after the update, then in Settings while anything waits (Jamie, 2026-11-20).
+  const [offered, setOffered] = useStored('photosense-removed-offered');
+  const asking = ready && offered === null;
+  const removed = useRemoved(asking || sheet === 'settings' || sheet === 'erase' || place === 'settings' ? [library.root].filter(root => root !== undefined) : null).data;
+  const offering = asking && removed !== undefined && removed.files > 0;
+  // Nothing waits: there is nothing to offer, now or later.
+  useEffect(() => { if (asking && removed?.files === 0) setOffered(() => 'nothing'); }, [asking, removed, setOffered]);
   const batches = useOrganizeBatches().data;
   const [busy, setBusy] = useState(false);
   const bin = WORDS[platform].bin;
@@ -223,10 +231,10 @@ export function PhoneApp(props: Props) {
     };
   }, [ready]);
 
-  async function erase(askOnce: boolean) {
+  async function erase() {
     setBusy(true);
+    setOffered(() => 'asked');
     try {
-      if (askOnce) props.onSettings({ eraseAskTwice: false });
       const result = await eraseRemoved(removed!.folders.map(f => f.path));
       if (result.erased > 0) notify(`${items(result.erased)} deleted. They wait in ${bin} for 30 days.`, 'ok');
       if (result.skipped > 0) notify(`${items(result.skipped)} could not be deleted. ${result.problems[0] ?? ''}`.trim(), 'error');
@@ -253,7 +261,7 @@ export function PhoneApp(props: Props) {
       plan={gate.plan} onSubscription={() => { if (!tablet) setSheet('subscription'); }} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
       removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
       onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
-      onScanAgain={() => void scan()} onDeletePermanently={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
+      onScanAgain={() => void scan()} onMoveRemoved={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
       onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} beside={tablet ? subscription : undefined}
       locations={<LocationsGroup notify={notify} onPair={() => setSheet('pair')} />} />
   );
@@ -281,7 +289,7 @@ export function PhoneApp(props: Props) {
       sheet={<>
         {sheet === 'settings' && settings}
         {sheet === 'subscription' && subscription}
-        {sheet === 'erase' && removed && <DeletePermanently removed={removed} askTwice={props.settings.eraseAskTwice} busy={busy} onErase={askOnce => void erase(askOnce)} onCancel={closeSheet} />}
+        {(sheet === 'erase' || offering) && removed && <MoveRemoved removed={removed} busy={busy} onMove={() => void erase()} onLater={() => { setOffered(() => 'later'); closeSheet(); }} />}
         {sheet === 'recent' && <RecentSheet batches={batches ?? []} root={library.root} busy={busy} onUndo={b => void undo(b.id)} onClose={closeSheet} />}
         {sheet === 'safe' && (
           <SafeToDelete safe={safe} notify={notify} onBack={closeSheet} onRemoved={(removed, partial) => { setSheet(undefined); setFreed({ removed, partial }); }} />

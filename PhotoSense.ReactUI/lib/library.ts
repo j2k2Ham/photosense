@@ -138,16 +138,16 @@ export function albumsOf(files: readonly OrganizeFileDto[], root: string, words:
 /** Where a new album or folder is made: at the top of an iPhone's library; in Pictures on Android, which keeps photos only in DCIM, Pictures or Movies. */
 export const newAlbumBase = (root: string, platform: Platform) => (platform === 'ios' ? root : joinPath(root, 'Pictures'));
 
-/** The question before files are deleted, naming them: its title, what happens, and its button. */
+/**
+ * The question before files are deleted, naming them: its title, what happens, and its button. They go to the phone's
+ * Recently Deleted or bin (Jamie, 2026-11-17), which PhotoSense cannot take them back from.
+ */
 export function deleteQuestion(names: readonly string[], words: Words): { title: string; lines: string[]; button: string } {
   const n = names.length, one = n === 1;
   const named = names.slice(0, 3).join(', ') + (n > 3 ? ` and ${(n - 3).toLocaleString()} more` : '');
   return {
     title: `Delete ${items(n)}?`,
-    lines: [
-      `${named} ${one ? 'goes' : 'go'} to ${words.removed}.`,
-      `Undo can bring ${one ? 'it' : 'them'} back. Delete permanently, in Settings, sends ${one ? 'it' : 'them'} to ${words.bin}.`,
-    ],
+    lines: [`${named} ${one ? 'goes' : 'go'} to ${words.bin} for 30 days.`],
     button: `Delete ${items(n)}`,
   };
 }

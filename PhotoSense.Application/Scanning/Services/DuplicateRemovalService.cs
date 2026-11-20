@@ -92,7 +92,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
             problems.Add($"The same file as the photo kept, under another path, so it was left alone: {photo.SourcePath}");
         }
         var removed = removal.Removed.Concat(removal.Forgotten).ToList();
-        return new BulkRemovalResult(removed.Count, removed.Sum(p => p.FileSizeBytes), skipped, problems, removal.Companions.Count, removal.BatchId);
+        return new BulkRemovalResult(removed.Count, removed.Sum(p => p.FileSizeBytes), skipped, problems, removal.Companions.Count, removal.BatchId, removal.Kept);
     }
 
     /// <inheritdoc />
@@ -152,6 +152,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         private readonly HashSet<string> _taken = new(PhotoPath.Comparer);
         private readonly List<Photo> _missing = [];
         private List<OrganizeBatchItem> _left = [];
+        private bool _erased;
 
         /// <summary>Photos whose files are no longer there: only what was recorded of them goes.</summary>
         public IReadOnlyList<Photo> Forgotten => _missing;
@@ -159,14 +160,16 @@ public class DuplicateRemovalService : IDuplicateRemovalService
         public IEnumerable<Photo> Removed => _batch.Items.Where(i => !i.Companion).Select(i => _of[i].Photo);
         /// <summary>Photos that turned out, once moved, to have taken the file kept with them, and were put straight back.</summary>
         public IReadOnlyList<Photo> LetGo => _left.Where(i => !i.Companion).Select(i => _of[i].Photo).ToList();
+        /// <summary>The photos kept in place of the copies whose files went, by path, each once.</summary>
+        public IReadOnlyList<string> Kept => _batch.Items.Select(i => _of[i].Stays?.SourcePath).OfType<string>().Distinct(PhotoPath.Comparer).ToList();
         /// <summary>The sidecars and Live Photo videos going with the photos.</summary>
         public IReadOnlyList<OrganizeBatchItem> Companions => _batch.Items.Where(i => i.Companion).ToList();
         /// <summary>Photos asked for that were to go.</summary>
         public int Asked => _batch.Items.Count(i => !i.Companion) + _missing.Count;
-        /// <summary>What to undo the removal by; absent when no file is to move.</summary>
-        public Guid? BatchId => _batch.Items.Count > 0 ? _batch.Id : null;
-        /// <summary>Where the photo of a request for one is held now.</summary>
-        public string HeldAt => _batch.Items.First(i => !i.Companion).To;
+        /// <summary>What to undo the removal by; absent when no file is to move, or when they went to a phone's bin, which has no undo.</summary>
+        public Guid? BatchId => _batch.Items.Count > 0 && !_erased ? _batch.Id : null;
+        /// <summary>Where the photo of a request for one is held now; null when it went to a phone's bin.</summary>
+        public string? HeldAt => _erased ? null : _batch.Items.First(i => !i.Companion).To;
 
         /// <summary>A photo stays while its file is there as it was scanned and this request is not taking it.</summary>
         public bool Stays(Photo photo) => ScannedFile.IsIntact(photo, service._files) && !_going.Contains(photo.SourcePath);
@@ -219,6 +222,7 @@ public class DuplicateRemovalService : IDuplicateRemovalService
                 var done = await service._changes.CarryOutAsync(_batch, item => _of[item].Stays is not { } stays || service._files.FileExists(stays.SourcePath), ct);
                 if (!done.Done) return done;
                 _left = done.Left.ToList();
+                _erased = done.Erased;
                 // The files have gone: forgetting the records of those already gone is finished too.
                 ct = CancellationToken.None;
             }

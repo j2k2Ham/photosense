@@ -68,18 +68,18 @@ describe('albums and folders', () => {
 });
 
 describe('the question before deleting', () => {
-  it('names what goes, where it goes and how it comes back', () => {
+  it('names what goes, and that it waits in Recently Deleted or the bin for 30 days', () => {
     expect(deleteQuestion(['IMG_9154.HEIC', 'IMG_9080.JPG', 'IMG_9043.HEIC'], WORDS.ios)).toEqual({
       title: 'Delete 3 items?',
-      lines: ['IMG_9154.HEIC, IMG_9080.JPG, IMG_9043.HEIC go to PhotoSense Removed.', 'Undo can bring them back. Delete permanently, in Settings, sends them to Recently Deleted.'],
+      lines: ['IMG_9154.HEIC, IMG_9080.JPG, IMG_9043.HEIC go to Recently Deleted for 30 days.'],
       button: 'Delete 3 items',
     });
     expect(deleteQuestion(['IMG_1.JPG'], WORDS.android)).toEqual({
       title: 'Delete 1 item?',
-      lines: ['IMG_1.JPG goes to Pictures/PhotoSense Removed.', 'Undo can bring it back. Delete permanently, in Settings, sends it to the bin.'],
+      lines: ['IMG_1.JPG goes to the bin for 30 days.'],
       button: 'Delete 1 item',
     });
-    expect(deleteQuestion(['a', 'b', 'c', 'd', 'e'], WORDS.ios).lines[0]).toBe('a, b, c and 2 more go to PhotoSense Removed.');
+    expect(deleteQuestion(['a', 'b', 'c', 'd', 'e'], WORDS.ios).lines[0]).toBe('a, b, c and 2 more go to Recently Deleted for 30 days.');
   });
 });
 

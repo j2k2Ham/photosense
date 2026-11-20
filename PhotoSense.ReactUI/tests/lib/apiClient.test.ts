@@ -133,7 +133,7 @@ describe('requests that act on photos', () => {
     expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
     // With no group named nothing is asked for, least of all "every duplicate".
     fetchMock.mockClear();
-    await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
+    await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

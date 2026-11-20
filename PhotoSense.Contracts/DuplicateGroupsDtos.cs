@@ -106,8 +106,10 @@ public sealed class BulkRemovalResultDto
     [JsonPropertyName("companions")] public int Companions { get; init; }
     /// <summary>Why each file left alone was left, naming it.</summary>
     [JsonPropertyName("problems")] public IReadOnlyList<string> Problems { get; init; } = [];
-    /// <summary>What to undo the removal by; absent when no file was moved.</summary>
+    /// <summary>What to undo the removal by; absent when no file was moved, or when they went to a phone's bin.</summary>
     [JsonPropertyName("batchId")] public string? BatchId { get; init; }
+    /// <summary>The photos kept in place of the copies that went, by path, so that the message can name what stays.</summary>
+    [JsonPropertyName("stays")] public IReadOnlyList<string> Stays { get; init; } = [];
 }
 
 /// <summary>What the scans so far have found to free, by kind.</summary>

@@ -158,15 +158,23 @@ public sealed class PhotosOnAPhoneTests : IDisposable
         var listed = await JsonAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}", ct);
         await Assert.That(listed.GetProperty("files").GetArrayLength()).IsEqualTo(4);
 
-        // The copy goes, with its Live Photo video, into the album of removed pictures, in one change; the person
-        // is asked nothing, and Undo takes it back, leaving the album empty.
+        // Refused at iOS's question, nothing goes and nothing is counted.
         var photos = _services.GetRequiredService<PhotoLibraryFileSystem>();
+        _library.Refuse = "You chose not to delete these photos.";
+        var (asked, refused) = await AskAsync("POST", "photos/bulk/remove-duplicates", ct);
+        await Assert.That((asked, photos.FilesIn(_root).Count, _library.RecentlyDeleted.Count)).IsEqualTo((200, 4, 0));
+        await Assert.That(refused).Contains("You chose not to delete these photos. Nothing was deleted.");
+
+        // Said yes, the copy goes, with its Live Photo video, to Recently Deleted in one change (Jamie, 2026-11-17): no
+        // album of removed pictures, nothing to undo, one counted toward the day, and the photo kept named.
         var removed = await JsonAsync("POST", "photos/bulk/remove-duplicates", ct);
-        await Assert.That((removed.GetProperty("removed").GetInt32(), removed.GetProperty("companions").GetInt32(), _library.Changes.Count)).IsEqualTo((1, 1, 1));
-        await Assert.That(_library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length).IsEqualTo(1);
-        await Assert.That((photos.FilesIn(_root).Count, photos.FilesIn(Path.Combine(_root, "_PhotoSense_Removed")).Count)).IsEqualTo((2, 2));
-        await JsonAsync("POST", $"organize/undo/{removed.GetProperty("batchId").GetString()}", ct);
-        await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length, _library.RecentlyDeleted.Count)).IsEqualTo((4, 0, 0));
+        await Assert.That((removed.GetProperty("removed").GetInt32(), removed.GetProperty("companions").GetInt32(), removed.GetProperty("batchId").ValueKind)).IsEqualTo((1, 1, JsonValueKind.Null));
+        await Assert.That((_library.Changes.Count, _library.RecentlyDeleted.Count, _library.InAlbums().ContainsKey(PhotoLibraryFileSystem.RemovedAlbum))).IsEqualTo((2, 1, false));
+        var stays = removed.GetProperty("stays").EnumerateArray().Single().GetString()!;
+        // Named as the review showed it, among two of one name; alone now, the library calls it IMG_0001.JPG.
+        await Assert.That(photos.FilesIn(_root).Count).IsEqualTo(2);
+        await Assert.That(Path.GetFileName(stays)).StartsWith("IMG_0001 (").And.EndsWith(").JPG");
+        await Assert.That((await JsonAsync("GET", "plan", ct)).GetProperty("leftToday").GetInt32()).IsEqualTo(49);
 
         // What PhotoSense records is kept where the phone keeps an app's own files, and the previews where it may clear them.
         await Assert.That((_services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveDatabasePath() == Path.Combine(In("Documents"), "photosense.db"), Directory.EnumerateFiles(Path.Combine(In("Caches"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))

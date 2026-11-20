@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { appIconUrl } from '../../lib/apiClient';
 import { DISTANCE_UNITS, type DistanceUnit } from '../../lib/distance';
 import { formatBytes } from '../../lib/format';
@@ -26,7 +26,7 @@ interface Props {
   readonly errorCount: number;
   /** How much of the photos PhotoSense may see, once the phone has said. */
   readonly access?: PhotoAccessDto['access'];
-  /** What waits in PhotoSense Removed, once the service has said. */
+  /** What waits in PhotoSense Removed from before deleting went to the phone's bin, once the service has said. */
   readonly removed?: RemovedFilesDto;
   /** How many moves and deletions Undo can still put back, once known. */
   readonly moves?: number;
@@ -47,7 +47,8 @@ interface Props {
   /** Opens the phone's own settings for PhotoSense, where its access to the photos is changed. */
   onPhotoAccess(): void;
   onScanAgain(): void;
-  onDeletePermanently(): void;
+  /** Offers to move what waits in PhotoSense Removed to Recently Deleted or the bin. */
+  onMoveRemoved(): void;
   onRecent(): void;
   onErrors(): void;
   onHelp(): void;
@@ -63,17 +64,16 @@ interface Props {
 /**
  * Settings, from the gear, over every tab: the plan, which opens Subscription; the locations backups go to, the
  * computer among them; the theme and the unit of distance; the
- * photos PhotoSense may see and scanning again; what waits in PhotoSense Removed and Delete permanently; what was moved
- * and what went wrong; sharing without the place; and help, about and privacy.
+ * photos PhotoSense may see and scanning again; while anything waits in PhotoSense Removed from before, what does and
+ * moving it to the phone's bin; what was moved and what went wrong; sharing without the place; and help, about and privacy.
  */
 export function SettingsSheet(p: Props) {
-  const { ios } = usePhone();
+  const { ios, words } = usePhone();
   const inPlace = useInPlace();
   // What a row leads to opens over the screen once Settings has gone; on a tablet Settings stays beside it.
   const then = (go: () => void) => () => { if (!inPlace) p.onClose(); go(); };
   const access = p.access === undefined ? undefined
     : p.access === 'everything' ? (ios ? 'Full access' : 'All photos and videos') : p.access === 'selected' ? 'Some chosen' : 'None';
-  const empty = p.removed !== undefined && p.removed.files === 0;
   const rows = (
       <div className="flex flex-col gap-5 px-4 pb-6 pt-2">
         {p.plan && <PlanSummary plan={p.plan} on={inPlace} onOpen={p.onSubscription} />}
@@ -91,12 +91,13 @@ export function SettingsSheet(p: Props) {
           <ListRow chevron detail={access} onClick={then(p.onPhotoAccess)}>Photo access</ListRow>
           <ListRow onClick={then(p.onScanAgain)}><span className="text-acc">Scan again</span></ListRow>
         </ListGroup>
-        <ListGroup header="Removed files">
-          <ListRow detail={p.removed === undefined ? '…' : empty ? 'Empty' : `${items(p.removed.files)} · ${formatBytes(p.removed.bytes)}`}>PhotoSense Removed</ListRow>
-          <ListRow danger={!empty} disabled={p.removed === undefined || empty} onClick={then(p.onDeletePermanently)}>
-            <span className={empty ? 'text-t3' : undefined}>Delete permanently…</span>
-          </ListRow>
-        </ListGroup>
+        {/* Nothing new goes there (Jamie, 2026-11-20): shown only until what waits from before has gone to the bin. */}
+        {p.removed !== undefined && p.removed.files > 0 && (
+          <ListGroup header="Removed files">
+            <ListRow detail={`${items(p.removed.files)} · ${formatBytes(p.removed.bytes)}`}>{words.removed}</ListRow>
+            <ListRow danger onClick={then(p.onMoveRemoved)}>Move to {words.bin}…</ListRow>
+          </ListGroup>
+        )}
         <ListGroup header="History">
           <ListRow chevron detail={p.moves === undefined ? undefined : p.moves.toLocaleString()} onClick={then(p.onRecent)}>Recently moved</ListRow>
           <ListRow detail={p.errorCount === 0 ? 'None' : p.errorCount.toLocaleString()} onClick={then(p.onErrors)}>Errors</ListRow>
@@ -151,40 +152,28 @@ function PlanSummary({ plan, on, onOpen }: { readonly plan: PlanDto; readonly on
   );
 }
 
-interface EraseProps {
+interface MoveProps {
   readonly removed: RemovedFilesDto;
-  /** Whether to ask a second time, as Settings has it. */
-  readonly askTwice: boolean;
   readonly busy: boolean;
-  /** Erases what waits, saying whether not to ask the second time again. */
-  onErase(askOnce: boolean): void;
-  onCancel(): void;
+  /** Moves what waits to the phone's bin, after the phone's own question. */
+  onMove(): void;
+  /** Leaves it where it is, for Settings to offer again. */
+  onLater(): void;
 }
 
 /**
- * Delete permanently on a phone: what waits in PhotoSense Removed goes to the phone's own bin, after a question, and a
- * second one unless the person has said not to ask it again. The phone then asks too.
+ * What waits in PhotoSense Removed from before deleting on a phone went straight to its bin (Jamie, 2026-11-20): offered
+ * once after the update, and from Settings while anything waits, it goes to Recently Deleted or the bin after the phone's
+ * own question. It does not count toward the day's free removals: each was counted when it was first removed.
  */
-export function DeletePermanently({ removed, askTwice, busy, onErase, onCancel }: EraseProps) {
+export function MoveRemoved({ removed, busy, onMove, onLater }: MoveProps) {
   const { ios, words } = usePhone();
-  const [sure, setSure] = useState(false);
-  const [askOnce, setAskOnce] = useState(false);
-  const n = items(removed.files);
-  if (!sure) {
-    return (
-      <ConfirmSheet title={`Delete ${n} permanently?`} confirmLabel={`Delete ${n}`} busy={busy} onCancel={onCancel}
-        onConfirm={() => (askTwice ? setSure(true) : onErase(false))}
-        lines={[
-          'This cannot be undone.',
-          `Everything in ${words.removed} (${formatBytes(removed.bytes)}) goes to ${words.bin}, where ${ios ? 'iOS' : 'Android'} keeps it for 30 days.`,
-          'Undo can no longer bring these back, and they leave Recently moved.',
-        ]} />
-    );
-  }
+  const n = items(removed.files), one = removed.files === 1;
   return (
-    <ConfirmSheet title="Are you sure?" confirmLabel={`Delete ${n}`} busy={busy} onCancel={onCancel} onConfirm={() => onErase(askOnce)}
-      lines={[`The ${n} in ${words.removed} ${removed.files === 1 ? 'goes' : 'go'} to ${words.bin}. Undo can no longer bring ${removed.files === 1 ? 'it' : 'them'} back.`]}>
-      <div className="pt-2"><PhoneSwitch label="Do not ask me this second time again" on={askOnce} onChange={setAskOnce} /></div>
-    </ConfirmSheet>
+    <ConfirmSheet title={`${n} ${one ? 'waits' : 'wait'} in ${words.removed}`} confirmLabel={`Move ${n}`} cancelLabel="Not now" busy={busy} onCancel={onLater} onConfirm={onMove}
+      lines={[
+        `Move ${one ? 'it' : 'them'} to ${words.bin} (${formatBytes(removed.bytes)})? ${ios ? 'iOS' : 'Android'} keeps ${one ? 'it' : 'them'} there for 30 days.`,
+        `PhotoSense now deletes straight to ${words.bin}, so nothing new goes to ${words.removed}.`,
+      ]} />
   );
 }

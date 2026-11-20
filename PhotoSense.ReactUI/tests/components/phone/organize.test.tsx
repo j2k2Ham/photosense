@@ -445,7 +445,7 @@ describe('names already taken', () => {
     expect(await screen.findByText('2 names are already taken in Anaconda. Each gets a number, as in a1 (1).JPG.')).toBeInTheDocument();
   });
 
-  it('deletes either file after a question naming the one that stays, with Undo; Cancel keeps both', async () => {
+  it('deletes either file after a question naming the one that stays, saying where it waits; Cancel keeps both', async () => {
     const { notify } = show();
     await userEvent.click(row('Anaconda'));
     await userEvent.click(await screen.findByRole('button', { name: 'Review each name' }));
@@ -458,7 +458,8 @@ describe('names already taken', () => {
     await userEvent.click(within(names).getByRole('button', { name: 'Delete a2.JPG, going in' }));
     await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete' }));
     expect(api.removeOrganize).toHaveBeenCalledWith(ROOT, ['a2']);
-    expect(notify).toHaveBeenLastCalledWith('a2.JPG deleted from Photo Library. a2.JPG in Photo Library › Anaconda › 2023 stays.', 'ok', expect.objectContaining({ label: 'Undo' }));
+    // Gone to the phone's own bin, which has no Undo of PhotoSense's (Jamie, 2026-11-20).
+    expect(notify).toHaveBeenLastCalledWith('a2.JPG deleted from Photo Library. a2.JPG in Photo Library › Anaconda › 2023 stays. a2.JPG waits in Recently Deleted for 30 days.', 'ok');
     // No name is taken any longer, so the sheet has gone.
     expect(await screen.findByText('3 of 3 files will move. Tap a file to leave it where it is.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -472,7 +473,7 @@ describe('names already taken', () => {
     await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete a2.JPG, already there' }));
     expect(planGate.remove).toHaveBeenCalledWith(1, 'items', expect.any(Function));
     const asked = within(sheet('Name taken')).getByRole('alertdialog', { name: 'Delete a2.JPG?' });
-    expect(asked).toHaveTextContent('a2.JPG goes to PhotoSense Removed, where Undo can still bring it back.');
+    expect(asked).toHaveTextContent('a2.JPG goes to Recently Deleted for 30 days.');
     expect(asked).toHaveTextContent('Free plan: 38 removals left today.');
   });
 
@@ -488,7 +489,7 @@ describe('names already taken', () => {
     }
   });
 
-  it('names another file of the same move as also going in, and a deletion with nothing to undo offers no Undo', async () => {
+  it('names another file of the same move as also going in, and either can be deleted', async () => {
     taken = {};
     files = [at('a1', { place: 0, date: '2023-01-01T00:00:00' }), at('dup', { name: 'a1.JPG', place: 0, date: '2023-02-01T00:00:00', folder: `${ROOT}/Other` })];
     files = [files[0], { ...files[1], folder: ROOT }];
@@ -501,7 +502,7 @@ describe('names already taken', () => {
     expect(names).toHaveTextContent('Also from Photo Library');
     await userEvent.click(within(names).getByRole('button', { name: 'Delete a1.JPG, also going in' }));
     await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete' }));
-    expect(notify).toHaveBeenLastCalledWith('a1.JPG deleted from Photo Library. a1.JPG in Photo Library stays.', 'ok', undefined);
+    expect(notify).toHaveBeenLastCalledWith('a1.JPG deleted from Photo Library. a1.JPG in Photo Library stays. a1.JPG waits in Recently Deleted for 30 days.', 'ok');
   });
 });
 

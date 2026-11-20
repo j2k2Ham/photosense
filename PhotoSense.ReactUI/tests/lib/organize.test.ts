@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkFolderName, clashSummary, clusterPlaces, dateRange, defaultSettings, fileLine, fileTag, haversineKm, joinPath, mapLayout, nextFreeName, noChoices, pathOf, placeKey,
-  placeInFull, placeName, placeOf, relativeFolder, resolveNames, searchText, separatorOf, shortDate, splitName, suggest, totalBytes, unplaced,
+  fromScanned, placeInFull, placeName, placeOf, relativeFolder, resolveNames, searchText, separatorOf, shortDate, splitName, suggest, totalBytes, unplaced,
   type OrganizeChoices, type OrganizeSettings,
 } from '../../lib/organize';
 import type { OrganizeFileDto, OrganizeFilesDto, OrganizePlaceDto, OrganizePlanDto } from '../../types';
@@ -89,6 +89,14 @@ describe('names and paths', () => {
     // Another folder that merely starts with the same letters, and one elsewhere altogether.
     expect(relativeFolder(ROOT, `${ROOT} old\\2023`)).toBe(`${ROOT} old\\2023`);
     expect(relativeFolder(ROOT, 'D:\\Backup')).toBe('D:\\Backup');
+  });
+
+  it('names a folder from the scanned folder it is in, as a phone does from its library', () => {
+    expect(fromScanned(ROOT, [ROOT])).toBe('Phone Pictures');
+    expect(fromScanned(`${ROOT}\\2023\\July`, [undefined, 'D:\\Backup', ROOT + '\\'])).toBe('Phone Pictures › 2023 › July');
+    expect(fromScanned('/home/p/Butte', ['/home/p'])).toBe('p › Butte');
+    // In none of them: named in full.
+    expect(fromScanned('E:\\Elsewhere', [ROOT])).toBe('E:\\Elsewhere');
   });
 
   it('says when files are from', () => {

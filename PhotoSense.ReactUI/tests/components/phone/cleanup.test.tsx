@@ -52,9 +52,9 @@ beforeEach(() => {
     for (const mode of ['duplicates', 'similar'] as const)
       groups[mode] = groups[mode].map(g => ({ ...g, members: g.members.filter(m => m.photo.id !== id) })).filter(g => g.members.length > 0);
     changed();
-    return { heldAt: 'x', companions: 0, batchId: 'b1' };
+    return { heldAt: null, companions: 0, batchId: null };
   });
-  api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 21 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: 'b2' });
+  api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 21 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: null, stays: ['/Photo Library/IMG_4299.JPG', '/Photo Library/DLWL2718.MP4'] });
   api.setKept.mockResolvedValue(undefined);
   api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
   // Find's rows: how many there are to delete of each kind, and what they take.
@@ -99,7 +99,6 @@ async function turnTo(kind: 'Duplicates' | 'Similar shots') {
 const rows = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button');
 const row = (name: string) => within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
 const sheet = (name: string | RegExp) => screen.getByRole('dialog', { name });
-const toastAction = (notify: ReturnType<typeof vi.fn>) => (notify.mock.calls.at(-1)![2] as { run(): void }).run;
 const table = (name: string) => within(screen.getByRole('table', { name })).getAllByRole('row').map(r => r.textContent);
 
 describe('Clean up\'s first screen', () => {
@@ -229,7 +228,7 @@ describe('Clean up\'s list', () => {
     groups = { duplicates: [], similar: [] };
     api.useGroupsThrough.mockImplementation((mode: GroupMode) => ({ data: groupsPage(mode, []) }));
     const { again } = show({ platform: 'android' });
-    expect(screen.getByText('No duplicates left. What you deleted waits in Pictures/PhotoSense Removed until you delete it permanently.')).toBeInTheDocument();
+    expect(screen.getByText('No duplicates left. What you deleted waits in the bin for 30 days.')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Duplicates to delete' })).not.toBeInTheDocument();
     await turnTo('Similar shots');
     expect(screen.getByText('No similar shots left to review.')).toBeInTheDocument();
@@ -334,40 +333,26 @@ describe('a group\'s review', () => {
 });
 
 describe('deleting on a phone', () => {
-  it('asks first, naming the file that stays and the file that goes; then says both, goes back to the list, and Undo puts the copy back', async () => {
+  it('asks first, naming the file that stays and the file that goes; then says both and where the copy waits, with no Undo, and goes back to the list', async () => {
     const { notify } = show();
     await userEvent.click(row('IMG_4299.JPG'));
     await userEvent.click(screen.getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     const asked = sheet('Delete IMG_4299.HEIC?');
     expect(asked).toHaveTextContent('IMG_4299.JPG stays, in Photo Library.');
-    expect(asked).toHaveTextContent('IMG_4299.HEIC, in Photo Library › Butte, goes to PhotoSense Removed, where Undo can still bring it back.');
+    expect(asked).toHaveTextContent('IMG_4299.HEIC, in Photo Library › Butte, goes to Recently Deleted for 30 days.');
     await userEvent.click(within(asked).getByRole('button', { name: 'Cancel' }));
     expect(api.removePhoto).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     await userEvent.click(within(sheet('Delete IMG_4299.HEIC?')).getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     expect(api.removePhoto).toHaveBeenCalledWith('IMG_4299.HEIC');
-    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays.', 'ok', expect.objectContaining({ label: 'Undo' }));
+    // The phone's own bin has no Undo of PhotoSense's (Jamie, 2026-11-20).
+    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays. The copy waits in Recently Deleted for 30 days.', 'ok');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Groups' })).toBeInTheDocument();
-
-    const undo = toastAction(notify);
-    api.undoChange.mockResolvedValueOnce({ restored: 1, skipped: 0, problems: [] })
-      .mockResolvedValueOnce({ restored: 0, skipped: 1, problems: ['Moved since.'] })
-      .mockResolvedValueOnce({ restored: 0, skipped: 1, problems: [] })
-      .mockRejectedValueOnce(new Error('No such change.'));
-    await act(async () => undo());
-    expect(api.undoChange).toHaveBeenCalledWith('b1');
-    expect(notify).toHaveBeenLastCalledWith('Put IMG_4299.HEIC back where it was.', 'ok');
-    await act(async () => undo());
-    expect(notify).toHaveBeenLastCalledWith('1 could not be put back. Moved since.', 'error');
-    await act(async () => undo());
-    expect(notify).toHaveBeenLastCalledWith('1 could not be put back.', 'error');
-    await act(async () => undo());
-    expect(notify).toHaveBeenLastCalledWith('No such change.', 'error');
   });
 
-  it('stays on a group with copies left, on the copy that took the deleted one\'s place; a removal that moved nothing offers no Undo', async () => {
+  it('stays on a group with copies left, on the copy that took the deleted one\'s place', async () => {
     api.removePhoto.mockImplementationOnce(async (id: string) => {
       groups.duplicates[1] = { ...groups.duplicates[1], members: groups.duplicates[1].members.filter(m => m.photo.id !== id) };
       changed();
@@ -378,7 +363,7 @@ describe('deleting on a phone', () => {
     await userEvent.click(within(screen.getByRole('group', { name: 'Copies' })).getByRole('button', { name: 'Copy 2' }));
     await userEvent.click(screen.getByRole('button', { name: 'Delete DLWL2718 (1).MP4' }));
     await userEvent.click(within(sheet('Delete DLWL2718 (1).MP4?')).getByRole('button', { name: 'Delete DLWL2718 (1).MP4' }));
-    expect(notify).toHaveBeenLastCalledWith('DLWL2718 (1).MP4 deleted. DLWL2718.MP4 stays.', 'ok', undefined);
+    expect(notify).toHaveBeenLastCalledWith('DLWL2718 (1).MP4 deleted. DLWL2718.MP4 stays. The copy waits in Recently Deleted for 30 days.', 'ok');
     expect(screen.getByRole('button', { name: 'See DLWL2718 (8E01B7C2).MP4 full screen' })).toHaveTextContent('Copy 1 of 1');
   });
 
@@ -394,18 +379,18 @@ describe('deleting on a phone', () => {
 
   it('on the free plan with fewer left than there are duplicates, deletes the groups that free the most, as many as are left, saying how many are left', async () => {
     planGate = gate({ plan: plan({ leftToday: 2 }), remove: vi.fn((_count: number, _label: string, run: (allowed: number) => void) => run(2)) });
-    api.removeGroups.mockResolvedValue({ removed: 1, bytes: 12 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: 'b3' });
+    api.removeGroups.mockResolvedValue({ removed: 1, bytes: 12 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: null, stays: ['/Photo Library/Butte/IMG_4299.JPG'] });
     const { notify } = show();
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     expect(planGate.remove).toHaveBeenCalledWith(3, 'duplicates', expect.any(Function));
     const asked = sheet('Delete 1 duplicate?');
-    expect(asked).toHaveTextContent('1 copy goes to PhotoSense Removed (12.0 MB), where Undo can still bring it back.');
+    expect(asked).toHaveTextContent('1 copy goes to Recently Deleted (12.0 MB) for 30 days.');
     expect(asked).toHaveTextContent('The largest go first. The best copy of each picture or video stays.');
     expect(asked).toHaveTextContent('Free plan: 2 removals left today.');
     await userEvent.click(within(asked).getByRole('button', { name: 'Delete 1 duplicate' }));
     expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['group-IMG_4299.JPG'], 'duplicates');
     expect(api.removeDuplicates).not.toHaveBeenCalled();
-    expect(notify).toHaveBeenLastCalledWith('1 duplicate deleted. The best copy of each stays.', 'ok', expect.objectContaining({ label: 'Undo' }));
+    expect(notify).toHaveBeenLastCalledWith('Deleted 1 copy. The original stays: IMG_4299.JPG in Photo Library › Butte. The copy waits in Recently Deleted for 30 days.', 'ok');
   });
 
   it('asks the plan before a copy goes, and says the removals left in the question', async () => {
@@ -417,34 +402,33 @@ describe('deleting on a phone', () => {
     expect(sheet('Delete IMG_4299.HEIC?')).toHaveTextContent('Free plan: 38 removals left today.');
   });
 
-  it('asks before deleting every duplicate, then says how many went, with Undo, and how many were left alone', async () => {
+  it('asks before deleting every duplicate, then says how many went, naming an original that stays, and how many were left alone', async () => {
     const { notify } = show();
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     const asked = sheet('Delete all duplicates?');
-    expect(asked).toHaveTextContent('3 copies go to PhotoSense Removed (21.0 MB), where Undo can still bring them back.');
+    expect(asked).toHaveTextContent('3 copies go to Recently Deleted (21.0 MB) for 30 days.');
     expect(asked).toHaveTextContent('The best copy of each picture or video stays. Copies marked keep are skipped.');
     expect(asked).toHaveTextContent('Similar shots are not included.');
-    api.removeDuplicates.mockResolvedValueOnce({ removed: 3, bytes: 1, skipped: 1, companions: 2, problems: ['IMG_1.JPG is open elsewhere.'], batchId: 'b2' });
+    api.removeDuplicates.mockResolvedValueOnce({ removed: 3, bytes: 1, skipped: 1, companions: 2, problems: ['IMG_1.JPG is open elsewhere.'], batchId: null, stays: ['/Photo Library/IMG_4299.JPG', '/Photo Library/DLWL2718.MP4'] });
     await userEvent.click(within(asked).getByRole('button', { name: 'Delete 3 duplicates' }));
     expect(api.removeDuplicates).toHaveBeenCalledWith(undefined, 'duplicates');
     expect(notify.mock.calls).toEqual([
-      ['3 duplicates and 2 linked files deleted. The best copy of each stays.', 'ok', expect.objectContaining({ label: 'Undo' })],
+      ['Deleted 3 copies and 2 linked files. The originals stay, such as IMG_4299.JPG in Photo Library. The copies wait in Recently Deleted for 30 days.', 'ok'],
       ['1 left alone. IMG_1.JPG is open elsewhere.', 'error'],
     ]);
-    api.undoChange.mockResolvedValueOnce({ restored: 3, skipped: 0, problems: [] });
-    await act(async () => (notify.mock.calls[0][2] as { run(): void }).run());
-    expect(notify).toHaveBeenLastCalledWith('Put the 3 duplicates back where they were.', 'ok');
 
     notify.mockClear();
-    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 2, companions: 0, problems: [], batchId: null });
+    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 2, companions: 0, problems: [], batchId: null, stays: [] });
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     await userEvent.click(within(sheet('Delete all duplicates?')).getByRole('button', { name: 'Delete 3 duplicates' }));
     expect(notify.mock.calls).toEqual([['2 left alone.', 'error']]);
+  });
 
-    notify.mockClear();
+  it('names the original by the folder alone before the library is known', async () => {
+    const { notify } = show({ root: '' });
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     await userEvent.click(within(sheet('Delete all duplicates?')).getByRole('button', { name: 'Delete 3 duplicates' }));
-    expect(notify.mock.calls).toEqual([['3 duplicates deleted. The best copy of each stays.', 'ok', expect.objectContaining({ label: 'Undo' })]]);
+    expect(notify).toHaveBeenLastCalledWith('Deleted 3 copies. The originals stay, such as IMG_4299.JPG in Photo Library. The copies wait in Recently Deleted for 30 days.', 'ok');
   });
 });
 
@@ -506,7 +490,7 @@ describe('the picture full screen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'See IMG_4299.HEIC full screen' }));
     await userEvent.click(within(sheet('IMG_4299.HEIC, full screen')).getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     await userEvent.click(within(sheet('Delete IMG_4299.HEIC?')).getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
-    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays.', 'ok', expect.anything());
+    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays. The copy waits in Recently Deleted for 30 days.', 'ok');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
@@ -533,7 +517,7 @@ describe('Clean up on a tablet', () => {
     groups = { duplicates: [], similar: [] };
     const { again } = show({ tablet: true });
     expect(screen.getAllByRole('heading', { name: 'Duplicates', level: 1 })).toHaveLength(2);
-    expect(screen.getAllByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.')).toHaveLength(2);
+    expect(screen.getAllByText('No duplicates left. What you deleted waits in Recently Deleted for 30 days.')).toHaveLength(2);
     await turnTo('Similar shots');
     expect(screen.getAllByText('No similar shots left to review.')).toHaveLength(2);
     again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);

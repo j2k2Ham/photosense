@@ -791,19 +791,19 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Sending and deleting',
         tips: [
           '**Send** backs up the chosen photos and videos to your computer now, and opens **Backup** to show them going. It copies them; nothing leaves this device.',
-          '**Delete** asks first, naming what goes. Each message after has **Undo**.',
+          '**Delete** asks first, naming what goes, and the message after says how many went. Moves have **Undo**; deletions do not.',
         ],
       },
       {
         only: IOS,
         tips: [
-          'What you delete waits in the album **PhotoSense Removed**, where **Undo** can still bring it back, until **Delete permanently** in Settings.',
+          'What you delete goes to the phone’s **Recently Deleted**, after iOS asks too, and waits there for 30 days. It is counted toward the day’s free removals. To bring it back, open **Recently Deleted** in Photos.',
         ],
       },
       {
         only: ANDROID,
         tips: [
-          'What you delete waits in **Pictures/PhotoSense Removed**, where **Undo** can still bring it back, until **Delete permanently** in Settings.',
+          'What you delete goes to the phone’s bin, after Android asks too, and waits there for 30 days. It is counted toward the day’s free removals. To bring it back, open the bin in your gallery app.',
         ],
       },
       {
@@ -973,9 +973,21 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Good to know',
         tips: [
-          'Each message after a deletion has **Undo**, which puts the files back where they were.',
+          'After **Delete all duplicates**, the message names one of the originals that stay, and where it is.',
           'The last copy of a photo is never deleted as a duplicate.',
           'When nothing is left, Clean up says so, and where what you deleted waits.',
+        ],
+      },
+      {
+        only: IOS,
+        tips: [
+          'What you delete goes to the phone’s **Recently Deleted**, after iOS asks too, and waits there for 30 days. PhotoSense cannot take anything back out of it, so the message after a deletion has no **Undo**.',
+        ],
+      },
+      {
+        only: ANDROID,
+        tips: [
+          'What you delete goes to the phone’s bin, after Android asks too, and waits there for 30 days. PhotoSense cannot take anything back out of it, so the message after a deletion has no **Undo**.',
         ],
       },
     ],
@@ -1032,7 +1044,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Your own, and undoing',
         tips: [
-          '**Recently moved** lists what was moved or deleted, in Organize, Library or Clean up, each with **Undo**. Files go back under the names they had.',
+          '**Recently moved** lists what was moved, in Organize or Library, each with **Undo**. Files go back under the names they had. Deletions go to the phone’s own bin and are not listed.',
         ],
       },
       {
@@ -1235,51 +1247,48 @@ export const GUIDE: GuideTopic[] = [
   {
     id: 'phone-removed',
     only: PHONES,
-    title: 'Removed photos and deleting permanently',
-    summary: 'Where deleted photos wait, putting them back, and sending them to the phone’s own bin.',
-    keywords: ['trash', 'bin', 'recently deleted', 'deleted', 'restore', 'recover', 'get back', 'undelete', 'erase', 'free space', 'empty'],
+    title: 'Deleted photos',
+    summary: 'Where deleted photos go, how to get them back, and what waits in PhotoSense Removed from before.',
+    keywords: ['trash', 'bin', 'recently deleted', 'deleted', 'restore', 'recover', 'get back', 'undelete', 'erase', 'free space', 'empty', 'photosense removed', 'delete permanently'],
     sections: [
       {
         only: IOS,
         text: [
-          'What you delete in Library, Clean up or Organize waits in an album called **PhotoSense Removed**. Photos there are not gone: **Undo** brings them back.',
+          'Whatever you delete in PhotoSense, in Library, Clean up, Swipe to clean, Organize or Safe to delete, goes to the phone’s **Recently Deleted**, after iOS asks you too. It waits there for 30 days, then iOS erases it.',
+          'To bring a photo back, open **Recently Deleted** in Photos and recover it there. PhotoSense cannot take anything out of Recently Deleted, so its messages after a deletion have no **Undo**.',
         ],
       },
       {
         only: ANDROID,
         text: [
-          'What you delete in Library, Clean up or Organize waits in **Pictures/PhotoSense Removed**. Photos there are not gone: **Undo** brings them back.',
+          'Whatever you delete in PhotoSense, in Library, Clean up, Swipe to clean, Organize or Safe to delete, goes to the phone’s bin, after Android asks you too. It waits there for 30 days, then Android erases it.',
+          'To bring a photo back, open the bin in your gallery app and restore it there. PhotoSense cannot take anything out of the bin, so its messages after a deletion have no **Undo**.',
         ],
       },
       {
-        heading: 'Putting photos back',
-        tips: [
-          'Press **Undo** in the message that says what was deleted.',
-          'Later, open **Recently moved**, in Settings or in Organize, and press **Undo** beside the deletion.',
+        heading: 'What waits in PhotoSense Removed from before',
+        text: [
+          'Before this version, PhotoSense moved what you deleted into PhotoSense Removed, where Undo could still bring it back. Nothing new goes there now.',
         ],
-      },
-      {
-        heading: 'Deleting permanently',
         steps: [
-          'In **Settings**, **PhotoSense Removed** says how many items wait there and how much space they take.',
-          'Tap **Delete permanently…**. A question says how many go and where; nothing has gone yet.',
-          'Confirm, and a second question asks **Are you sure?** Confirm there too.',
+          'The first time you open this version, a question says how many items still wait there and offers to move them. Tap **Move**; the phone asks too.',
+          'Tap **Not now** to leave them. In **Settings**, **PhotoSense Removed** then says how many wait, and **Move to …** offers it again.',
         ],
         tips: [
-          'Undo can no longer bring them back, and they leave **Recently moved**.',
-          'The second question has a switch, **Do not ask me this second time again**.',
+          'Moving them does not count toward the day’s free removals: each was counted when you first deleted it.',
+          'Once nothing waits there, PhotoSense Removed leaves Settings.',
         ],
       },
       {
         only: IOS,
         tips: [
-          'They go to the phone’s **Recently Deleted**, which keeps them for 30 days; iOS asks you first.',
+          'They wait in the album **PhotoSense Removed**, and go to **Recently Deleted**.',
         ],
       },
       {
         only: ANDROID,
         tips: [
-          'They go to the phone’s bin, which keeps them for 30 days; Android asks you first.',
+          'They wait in **Pictures/PhotoSense Removed**, and go to the bin.',
         ],
       },
     ],
@@ -1335,7 +1344,7 @@ export const GUIDE: GuideTopic[] = [
           '**Theme**: **Auto** follows the phone’s own light or dark setting; **Dark** or **Light** keeps one. **Distances**: miles or kilometers, for Organize.',
           '**Clean up**: **Low-storage alerts**, a notification when less than a tenth of the storage is free, at most once a week.',
           '**Photo access** says what PhotoSense may see, and opens the phone’s own settings for PhotoSense to change it. **Scan again** reads your library again.',
-          '**PhotoSense Removed** says what waits there; **Delete permanently…** empties it.',
+          '**PhotoSense Removed**, while anything still waits there from before, says how much, and **Move to …** sends it to where the phone keeps deleted photos for 30 days.',
           '**Recently moved** lists what can still be undone. **Errors** lists what went wrong.',
           '**Privacy**: **Remove location when sharing** sets whether **Share photo** starts with **Remove location** on.',
           '**Help** opens this guide. **About PhotoSense** shows the version and who makes it, with the support page, the terms and what others made that PhotoSense uses. **Privacy policy** opens the privacy policy.',

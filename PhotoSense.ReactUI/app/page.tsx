@@ -24,7 +24,8 @@ import {
   clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, stopScan, undoChange, useGroups,
   useAbout, useCategories, usePlan, useScanProgress, useScanStatus,
 } from '../lib/apiClient';
-import { someGroups } from '../lib/cleanup';
+import { originalsStay, someGroups } from '../lib/cleanup';
+import { fromScanned } from '../lib/organize';
 import { formatBytes, linkedFiles } from '../lib/format';
 import { limitLine, overLimit } from '../lib/plan';
 import type { GuidePlace } from '../lib/guide';
@@ -284,8 +285,9 @@ export default function HomePage() {
     const going = group?.members.filter(m => !m.photo.kept) ?? [];
     const kind = kindOf(mode);
     const what = going.length === 1 ? going[0].photo.fileName : `${result.removed} ${kind}${result.removed === 1 ? '' : 's'}`;
-    const stays = group ? `. ${group.keeper.fileName} stays where it is.` : '';
-    if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}${stays}`, 'ok', undoAction(result.batchId, kind, going.length === 1 ? going[0].photo.fileName : undefined));
+    // Delete all duplicates names an original that stays, and the folder it is in (Jamie, 2026-11-20).
+    const stays = group ? `${group.keeper.fileName} stays where it is.` : originalsStay(result.stays, f => fromScanned(f, folders));
+    if (result.removed > 0) push(`Moved ${what} (${formatBytes(result.bytes)})${linkedFiles(result.companions)} to ${REMOVED_FOLDER}.${stays && ` ${stays}`}`, 'ok', undoAction(result.batchId, kind, going.length === 1 ? going[0].photo.fileName : undefined));
     if (result.skipped > 0) push(`${result.skipped} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
   const removeTicked = (keys = [...ticked.keys()]) => run(async () => {

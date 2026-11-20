@@ -78,7 +78,7 @@ test.describe('on a phone', () => {
     expect(phone.asked).toContain('library/choose-more');
   });
 
-  test('Clean up deletes a copy after a question naming both files by where each is, Undo brings it back, and Delete all duplicates keeps one of each @phone', async ({ page, photos, service }) => {
+  test('Clean up deletes a copy after a question naming both files by where each is, with no Undo, and Delete all duplicates names an original that stays @phone', async ({ page, photos, service }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.picture('IMG_0002.JPG', { seed: 2 });
     photos.copy('IMG_0001.JPG', 'Saved again/IMG_0001.JPG');
@@ -110,27 +110,24 @@ test.describe('on a phone', () => {
     await review.getByRole('button', { name: 'Delete IMG_0001.JPG' }).click();
     const asked = page.getByRole('dialog', { name: 'Delete IMG_0001.JPG?' });
     await expect(asked).toContainText(/IMG_0001\.JPG stays, in Photo Library/);
-    await expect(asked).toContainText(/IMG_0001\.JPG, in Photo Library.*, goes to PhotoSense Removed, where Undo can still bring it back\./);
+    await expect(asked).toContainText(/IMG_0001\.JPG, in Photo Library.*, goes to Recently Deleted for 30 days\./);
     await asked.getByRole('button', { name: 'Delete IMG_0001.JPG' }).click();
-    await expect(message(page, /^IMG_0001\.JPG, in Photo Library.*, deleted\. The one in Photo Library.* stays\.$/)).toBeVisible();
+    // A phone's Recently Deleted has no Undo of PhotoSense's. The program standing in for the phone is a computer's,
+    // which holds the copy in _PhotoSense_Removed.
+    await expect(message(page, /^IMG_0001\.JPG, in Photo Library.*, deleted\. The one in Photo Library.* stays\. The copy waits in Recently Deleted for 30 days\.$/)).toBeVisible();
+    await expect(page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' })).toHaveCount(0);
     expect(one()).toBe(1);
     expect(photos.files('_PhotoSense_Removed').length).toBe(1);
     await expect(groups.getByRole('listitem')).toHaveCount(1);
 
-    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
-    await expect(message(page, 'Put IMG_0001.JPG back where it was.')).toBeVisible();
-    expect(one()).toBe(2);
-    await expect(groups.getByRole('listitem')).toHaveCount(2);
-
     await page.getByRole('button', { name: 'Delete all duplicates' }).click();
     const all = page.getByRole('dialog', { name: 'Delete all duplicates?' });
-    await expect(all).toContainText('2 copies go to PhotoSense Removed');
-    await all.getByRole('button', { name: 'Delete 2 duplicates' }).click();
-    await expect(message(page, '2 duplicates deleted. The best copy of each stays.')).toBeVisible();
-    expect(one()).toBe(1);
+    await expect(all).toContainText('1 copy goes to Recently Deleted');
+    await all.getByRole('button', { name: 'Delete 1 duplicate' }).click();
+    await expect(message(page, /^Deleted 1 copy\. The original stays: IMG_0002\.JPG in Photo Library.*\. The copy waits in Recently Deleted for 30 days\.$/)).toBeVisible();
     expect([photos.exists('IMG_0002.JPG'), photos.exists('Saved again/IMG_0002.JPG')].filter(Boolean)).toHaveLength(1);
     // Said under the list, and beside it too at a tablet's width.
-    await expect(page.getByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.').first()).toBeVisible();
+    await expect(page.getByText('No duplicates left. What you deleted waits in Recently Deleted for 30 days.').first()).toBeVisible();
   });
 
   test('Find opens a kind of its own, whose files go in one confirmation, and the storage bar opens Free up space @phone', async ({ page, photos, service, isMobile }) => {
@@ -589,7 +586,7 @@ test.describe('on a phone', () => {
     await expect(panel).toContainText('Done for today. A new set is ready tomorrow.');
   });
 
-  test('Library shows every photo by month; chosen ones go into a new album, or are deleted after a question and come back with Undo @phone', async ({ page, photos }) => {
+  test('Library shows every photo by month; chosen ones go into a new album, or are deleted after a question saying where they wait @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1, taken: new Date(2023, 11, 27, 23, 34) });
     photos.picture('IMG_0002.JPG', { seed: 2, taken: new Date(2023, 10, 2, 8, 0) });
     const phone = new Phone();
@@ -621,13 +618,11 @@ test.describe('on a phone', () => {
     await library.getByRole('button', { name: 'IMG_0002.JPG' }).click();
     await bar.getByRole('button', { name: 'Delete' }).click();
     const asked = page.getByRole('dialog', { name: 'Delete 1 item?' });
-    await expect(asked).toContainText('IMG_0002.JPG goes to PhotoSense Removed.');
+    await expect(asked).toContainText('IMG_0002.JPG goes to Recently Deleted for 30 days.');
     await asked.getByRole('button', { name: 'Delete 1 item' }).click();
-    await expect(message(page, '1 item moved to PhotoSense Removed.')).toBeVisible();
-    expect(photos.exists('_PhotoSense_Removed/IMG_0002.JPG')).toBe(true);
-    await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
-    await expect(message(page, 'Moved 1 item back.')).toBeVisible();
-    expect(photos.exists('IMG_0002.JPG')).toBe(true);
+    await expect(message(page, '1 item deleted. It waits in Recently Deleted for 30 days.')).toBeVisible();
+    // The program standing in for the phone is a computer's, which holds it in _PhotoSense_Removed.
+    expect(photos.exists('IMG_0002.JPG')).toBe(false);
   });
 
   test('Help, from Settings, is the phone\'s own guide, in its words, and finds a feature by the words a person would use @phone', async ({ page }) => {
@@ -641,8 +636,8 @@ test.describe('on a phone', () => {
     await expect(help.getByRole('article')).toHaveAccessibleName('Getting started');
     await expect(help.getByRole('article')).toContainText('The first launch');
     // An iPhone's words: albums, PhotoSense Removed and Recently Deleted; nothing of a computer's screens.
-    await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /^Removed photos and deleting permanently/ }).click();
-    await expect(help.getByRole('article')).toContainText('an album called PhotoSense Removed');
+    await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /^Deleted photos/ }).click();
+    await expect(help.getByRole('article')).toContainText('the album PhotoSense Removed');
     await expect(help.getByRole('article')).toContainText('Recently Deleted');
     await expect(help.getByRole('article')).not.toContainText('_PhotoSense_Removed');
     await help.getByRole('textbox', { name: 'Search the guide' }).fill('cancel subscription');
@@ -651,41 +646,35 @@ test.describe('on a phone', () => {
     await expect(help.getByRole('article')).toContainText('Manage in App Store');
   });
 
-  test('Settings says what waits in PhotoSense Removed, and Delete permanently erases it after two questions @phone', async ({ page, photos }) => {
+  test('What waits in PhotoSense Removed from before is offered once at launch, and Settings moves it to Recently Deleted @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
-    photos.picture('IMG_0002.JPG', { seed: 2 });
+    photos.picture('_PhotoSense_Removed/IMG_0002.JPG', { seed: 2 });
     const phone = new Phone();
     phone.root = photos.root;
     await phone.attach(page);
     await page.goto('/');
-    await phoneTab(page, 'Library');
-    const library = page.getByRole('region', { name: 'Library' });
-    await expect(library.getByRole('button', { name: 'Select' })).toBeVisible({ timeout: 60_000 });
-    await library.getByRole('button', { name: 'Select' }).click();
-    await library.getByRole('button', { name: 'IMG_0002.JPG' }).click();
-    await page.getByRole('toolbar', { name: 'What is selected' }).getByRole('button', { name: 'Delete' }).click();
-    await page.getByRole('dialog', { name: 'Delete 1 item?' }).getByRole('button', { name: 'Delete 1 item' }).click();
-    await expect(message(page, '1 item moved to PhotoSense Removed.')).toBeVisible();
+    const offer = page.getByRole('dialog', { name: '1 item waits in PhotoSense Removed' });
+    await expect(offer).toContainText('Move it to Recently Deleted');
+    await expect(offer).toContainText('PhotoSense now deletes straight to Recently Deleted, so nothing new goes to PhotoSense Removed.');
+    await offer.getByRole('button', { name: 'Not now' }).click();
+    await expect(offer).toBeHidden();
+    expect(photos.exists('_PhotoSense_Removed/IMG_0002.JPG')).toBe(true);
 
+    // Offered once only: Settings offers it from then on.
+    await page.reload();
     let settings = await phoneSettings(page);
+    await expect(page.getByRole('dialog', { name: /waits? in PhotoSense Removed$/ })).toHaveCount(0);
     await expect(settings.getByText('PhotoSense Removed').locator('xpath=ancestor::li')).toContainText(/1 item · \d+ KB/);
-    await expect(settings.getByRole('button', { name: /^Recently moved\s*1$/ })).toBeVisible();
     await expect(settings.getByRole('button', { name: /^Photo access\s*Full access$/ })).toBeVisible();
-    await settings.getByRole('button', { name: 'Delete permanently…' }).click();
-    const first = page.getByRole('dialog', { name: 'Delete 1 item permanently?' });
-    await expect(first).toContainText('Undo can no longer bring these back, and they leave Recently moved.');
-    await first.getByRole('button', { name: 'Delete 1 item' }).click();
-    const sure = page.getByRole('dialog', { name: 'Are you sure?' });
-    await expect(sure).toContainText('The 1 item in PhotoSense Removed goes to Recently Deleted. Undo can no longer bring it back.');
-    await sure.getByRole('button', { name: 'Delete 1 item' }).click();
+    await settings.getByRole('button', { name: 'Move to Recently Deleted…' }).click();
+    await page.getByRole('dialog', { name: '1 item waits in PhotoSense Removed' }).getByRole('button', { name: 'Move 1 item' }).click();
     await expect(message(page, '1 item deleted. They wait in Recently Deleted for 30 days.')).toBeVisible();
     expect(photos.exists('_PhotoSense_Removed/IMG_0002.JPG')).toBe(false);
     expect(photos.exists('IMG_0001.JPG')).toBe(true);
 
     settings = await phoneSettings(page);
-    await expect(settings.getByText('PhotoSense Removed').locator('xpath=ancestor::li')).toContainText('Empty');
-    await expect(settings.getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
-    await expect(settings.getByRole('button', { name: /^Recently moved\s*0$/ })).toBeVisible();
+    await expect(settings.getByRole('button', { name: /^Recently moved/ })).toBeVisible();
+    await expect(settings.getByText('PhotoSense Removed')).toHaveCount(0);
   });
 
   test('About, from Settings, names the phone app, which has no menu @phone', async ({ page }) => {

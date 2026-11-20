@@ -60,13 +60,15 @@ interface ConfirmProps {
   readonly busy?: boolean;
   /** What the question leads to: danger for anything that removes files. */
   readonly kind?: 'danger' | 'primary';
+  /** The button that changes nothing: Cancel, or Not now for an offer. */
+  readonly cancelLabel?: string;
   readonly children?: React.ReactNode;
   onConfirm(): void;
   onCancel(): void;
 }
 
 /** A question in a sheet: its title, what will happen, the button that does it, and Cancel. */
-export function ConfirmSheet({ title, lines, confirmLabel, busy, kind = 'danger', children, onConfirm, onCancel }: ConfirmProps) {
+export function ConfirmSheet({ title, lines, confirmLabel, busy, kind = 'danger', cancelLabel = 'Cancel', children, onConfirm, onCancel }: ConfirmProps) {
   return (
     <Sheet title={title} bare onClose={onCancel}>
       <div className="flex flex-col gap-2 px-5 pb-2 pt-4">
@@ -76,7 +78,7 @@ export function ConfirmSheet({ title, lines, confirmLabel, busy, kind = 'danger'
       </div>
       <div className="flex flex-col gap-2 px-4 pt-3">
         <PhoneButton kind={kind} disabled={busy} onClick={onConfirm}>{confirmLabel}</PhoneButton>
-        <PhoneButton kind="secondary" onClick={onCancel}>Cancel</PhoneButton>
+        <PhoneButton kind="secondary" onClick={onCancel}>{cancelLabel}</PhoneButton>
       </div>
     </Sheet>
   );

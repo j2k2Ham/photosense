@@ -80,7 +80,7 @@ beforeEach(() => {
   api.openInViewer.mockResolvedValue(undefined);
   api.retryNow.mockResolvedValue(undefined);
   api.removePhoto.mockResolvedValue({ companions: 0 });
-  api.removeDuplicates.mockResolvedValue({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
+  api.removeDuplicates.mockResolvedValue({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [] });
   api.clearResults.mockResolvedValue({ forgotten: 0 });
   api.startScan.mockResolvedValue({ instanceId: 'scan-7' });
   api.fetchGroupTotals.mockResolvedValue({ duplicates: 263, similar: 170 });
@@ -698,7 +698,7 @@ describe('deleting', () => {
       members: [member({ id: 'c', fileName: 'IMG_0648.JPG', folder, fileSizeBytes: 15_521_465 })],
     });
     groupsFor = () => ({ data: groupsPage([twin]) });
-    api.removeDuplicates.mockResolvedValue({ removed: 1, bytes: 15_521_465, skipped: 0, companions: 0, problems: [] });
+    api.removeDuplicates.mockResolvedValue({ removed: 1, bytes: 15_521_465, skipped: 0, companions: 0, problems: [], stays: [] });
     open();
     expect(desk().querySelector('[data-file="original"]')).toHaveTextContent(`IMG_0377.JPG${folder}`);
     expect(desk().querySelector('[data-file="copy"]')).toHaveTextContent('IMG_0648.JPGIn the same folder as the original');
@@ -717,7 +717,7 @@ describe('deleting', () => {
       members: [2, 3, 4].map(n => member({ id: `s${n}`, fileName: `IMG_700${n}.JPG` }, 'similar')),
     });
     groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([shots], {}, 'similar') : groupsPage([groupA, groupB]) });
-    api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 18_279_000, skipped: 0, companions: 0, problems: [] });
+    api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 18_279_000, skipped: 0, companions: 0, problems: [], stays: [] });
     open();
     currentMode = 'similar';
     await userEvent.click(tab(/Similar/));
@@ -745,7 +745,7 @@ describe('deleting', () => {
   });
 
   it('the duplicates of one group: counts what goes and what is kept', async () => {
-    api.removeDuplicates.mockResolvedValue({ removed: 2, bytes: 9_139_000, skipped: 0, companions: 0, problems: [] });
+    api.removeDuplicates.mockResolvedValue({ removed: 2, bytes: 9_139_000, skipped: 0, companions: 0, problems: [], stays: [] });
     open();
     await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 2 copies · 8.7 MB' }));
     expect(screen.getByRole('alertdialog', { name: 'Delete the 2 duplicates of IMG_4198.JPG?' })).toBeInTheDocument();
@@ -780,19 +780,21 @@ describe('deleting', () => {
   });
 
   it('all duplicates: reports what was moved and what was left alone', async () => {
-    api.removeDuplicates.mockResolvedValue({ removed: 1, bytes: 6_093_000, skipped: 1, companions: 1, problems: ['Changed since the scan, left alone: C:\\photos\\x.jpg'] });
+    api.removeDuplicates.mockResolvedValue({ removed: 1, bytes: 6_093_000, skipped: 1, companions: 1, problems: ['Changed since the scan, left alone: C:\\photos\\x.jpg'], stays: ['C:\\photos\\Butte\\IMG_1.JPG'] });
+    saveLastScan({ root: 'C:\\photos', second: '', recursive: true });
     open();
     await click('Delete all duplicates');
     expect(screen.getByRole('alertdialog', { name: 'Delete all duplicates?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent('3 files taking 14.5 MB will be removed.The best copy of each picture or video stays. Copies you marked keep are skipped.');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
     expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith(undefined, 'duplicates');
-    expect(await toast('Moved 1 duplicate (5.8 MB) and 1 linked file to _PhotoSense_Removed')).toBeInTheDocument();
+    // An original that stays is named, with its folder from the scanned folder (Jamie, 2026-11-20).
+    expect(await toast('Moved 1 duplicate (5.8 MB) and 1 linked file to _PhotoSense_Removed. The original stays: IMG_1.JPG in photos › Butte.')).toBeInTheDocument();
     expect(screen.getByText('1 left alone. Changed since the scan, left alone: C:\\photos\\x.jpg')).toBeInTheDocument();
   });
 
   it('all duplicates: says what was left alone even with no reason, and nothing when nothing happened', async () => {
-    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 3, companions: 0, problems: [] });
+    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 3, companions: 0, problems: [], stays: [] });
     open();
     await click('Delete all duplicates');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
@@ -818,7 +820,7 @@ describe('ticking groups', () => {
   const all = (name = 'Select all') => within(gallery()).getByRole('checkbox', { name }) as HTMLInputElement;
   const selection = () => screen.getByRole('region', { name: 'Selected groups' });
   const noSelection = () => expect(screen.queryByRole('region', { name: 'Selected groups' })).not.toBeInTheDocument();
-  const removed = (changes: Partial<{ removed: number; bytes: number; skipped: number; companions: number; problems: string[] }> = {}) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], ...changes });
+  const removed = (changes: Partial<{ removed: number; bytes: number; skipped: number; companions: number; problems: string[] }> = {}) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [], ...changes });
 
   it('selects groups one by one or all at once, says what they come to, and deletes their duplicates together after asking', async () => {
     api.removeGroups.mockResolvedValue(removed({ removed: 3, bytes: 15_232_000, companions: 1 }));
@@ -919,7 +921,7 @@ describe('ticking groups', () => {
 describe('undoing a removal', () => {
   // The Undo on the message that says what went.
   const undoOn = async (message: string) => within((await toast(message)).parentElement!).getByRole('button', { name: 'Undo' });
-  const removed = (changes: Partial<{ removed: number; bytes: number; batchId: string }>) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], ...changes });
+  const removed = (changes: Partial<{ removed: number; bytes: number; batchId: string; stays: string[] }>) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [], ...changes });
 
   it('puts a copy deleted on its own back, from the message that says it went', async () => {
     api.removePhoto.mockResolvedValue({ heldAt: 'C:\\photos\\2024\\_PhotoSense_Removed\\IMG_4198 (1).JPG', companions: 0, batchId: 'b1' });
@@ -945,7 +947,7 @@ describe('undoing a removal', () => {
 
     await click('Delete all duplicates');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
-    await userEvent.click(await undoOn('Moved 1 duplicate (5.8 MB) to _PhotoSense_Removed'));
+    await userEvent.click(await undoOn('Moved 1 duplicate (5.8 MB) to _PhotoSense_Removed.'));
     expect(api.undoChange).toHaveBeenLastCalledWith('b3');
     expect(await toast('Put the duplicate back where it was.')).toBeInTheDocument();
   });
@@ -1407,14 +1409,14 @@ describe('on a phone or tablet', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
   });
 
-  it('leads from Settings to the errors, help, About and the privacy policy, and offers no deleting while nothing waits', async () => {
+  it('leads from Settings to the errors, help, About and the privacy policy, and shows no PhotoSense Removed while nothing waits', async () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
     // Nothing left to clean up: an iPad's sidebar has no count to show beside Clean up.
     groupsFor = mode => ({ data: groupsPage([], {}, mode) });
     api.useRemoved.mockReturnValue({ data: { files: 0, bytes: 0, folders: [] } });
     api.useAboutText.mockReturnValue({ data: 'About text' } as never);
     open();
-    expect(within(await settings()).getByRole('button', { name: 'Delete permanently…' })).toBeDisabled();
+    expect(within(await settings()).queryByText('PhotoSense Removed')).not.toBeInTheDocument();
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Privacy policy' }));
     expect(within(screen.getByRole('navigation', { name: 'About' })).getByRole('button', { name: 'Privacy policy' })).toHaveAttribute('aria-current', 'page');
     await userEvent.keyboard('{Escape}');

@@ -76,6 +76,8 @@ public sealed class PhotosOnAndroidTests : IDisposable
         _store.Add("11", "DCIM/Camera/", "IMG_0001.jpg", picture);
         _store.Add("12", "Pictures/WhatsApp/", "IMG_0001.jpg", picture);
         _store.Add("13", "Movies/", "VID_0001.mp4", MediaSamples.Movie(), video: true);
+        // Removed before PhotoSense deleted to the bin, and waiting still.
+        _store.Add("14", "Pictures/PhotoSense Removed/DCIM/Camera/", "IMG_0009.jpg", picture);
 
         // The phone's storage is the one folder offered, with its own folders inside it.
         var places = await JsonAsync("GET", "folders", ct);
@@ -88,20 +90,24 @@ public sealed class PhotosOnAndroidTests : IDisposable
         var groups = await JsonAsync("GET", "scan/groups?mode=duplicates&page=1&pageSize=50", ct);
         await Assert.That(groups.GetProperty("total").GetInt32()).IsEqualTo(1);
 
-        // The copy waits in the removed folder of the whole phone, which Android keeps inside Pictures, and Undo takes it back.
-        var removed = await JsonAsync("POST", "photos/bulk/remove-duplicates", ct);
-        await Assert.That((removed.GetProperty("removed").GetInt32(), _store.Changes.Count)).IsEqualTo((1, 1));
-        var went = _store.Places().Values.Single(p => p.StartsWith("Pictures/PhotoSense Removed/", StringComparison.Ordinal));
-        await Assert.That(went).IsEqualTo(went.Contains("WhatsApp", StringComparison.Ordinal) ? "Pictures/PhotoSense Removed/Pictures/WhatsApp/IMG_0001.jpg" : "Pictures/PhotoSense Removed/DCIM/Camera/IMG_0001.jpg");
+        // The copy deleted from its review goes straight to Android's bin (Jamie, 2026-11-17): nothing waits in
+        // Pictures/PhotoSense Removed, and there is nothing to undo.
+        var copy = groups.GetProperty("items")[0].GetProperty("members")[0].GetProperty("photo").GetProperty("id").GetString();
+        var one = await JsonAsync("DELETE", $"photos/{copy}?physical=true", ct);
+        await Assert.That((one.GetProperty("heldAt").ValueKind, one.GetProperty("batchId").ValueKind, _store.Trashed.Count)).IsEqualTo((JsonValueKind.Null, JsonValueKind.Null, 1));
+        await Assert.That(_store.Places().Values.Count(p => p.StartsWith("Pictures/PhotoSense Removed/", StringComparison.Ordinal))).IsEqualTo(1);
+
+        // Library's Delete does the same.
+        var listed = await JsonAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}", ct);
+        var movie = listed.GetProperty("files").EnumerateArray().Single(f => f.GetProperty("name").GetString() == "VID_0001.mp4").GetProperty("id").GetString();
+        var deleted = await JsonAsync("POST", "organize/remove", ct, new { root = _root, files = new[] { new { id = movie } } });
+        await Assert.That((deleted.GetProperty("done").GetInt32(), deleted.GetProperty("batchId").ValueKind, _store.Trashed.Count, _store.Places().Count)).IsEqualTo((1, JsonValueKind.Null, 2, 2));
+
+        // What waited in PhotoSense Removed from before goes to the bin too, by Delete permanently.
         var waiting = await JsonAsync("GET", $"removed?root={Uri.EscapeDataString(_root)}", ct);
         await Assert.That((waiting.GetProperty("files").GetInt32(), waiting.GetProperty("folders")[0].GetProperty("path").GetString())).IsEqualTo((1, Path.Combine(_root, "_PhotoSense_Removed")));
-        await JsonAsync("POST", $"organize/undo/{removed.GetProperty("batchId").GetString()}", ct);
-        await Assert.That(_store.Places().Values.Order(StringComparer.Ordinal)).IsEquivalentTo(["DCIM/Camera/IMG_0001.jpg", "Movies/VID_0001.mp4", "Pictures/WhatsApp/IMG_0001.jpg"], CollectionOrdering.Matching);
-
-        // Removed again and deleted permanently: it goes to the phone's bin.
-        await JsonAsync("POST", "photos/bulk/remove-duplicates", ct);
         var erased = await JsonAsync("POST", "removed/erase", ct, new { folders = new[] { Path.Combine(_root, "_PhotoSense_Removed") } });
-        await Assert.That((erased.GetProperty("erased").GetInt32(), _store.Trashed.Count, _store.Places().Count)).IsEqualTo((1, 1, 2));
+        await Assert.That((erased.GetProperty("erased").GetInt32(), _store.Trashed.Count, _store.Places().Count)).IsEqualTo((1, 3, 1));
 
         await Assert.That((_services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveDatabasePath() == Path.Combine(In("files"), "photosense.db"), Directory.EnumerateFiles(Path.Combine(In("cache"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))
             .IsEqualTo((true, true));

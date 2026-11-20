@@ -68,8 +68,10 @@ export interface BulkRemovalResultDto {
   /** Sidecars and Live Photo videos moved along with the files they belonged to. */
   companions: number;
   problems: string[];
-  /** What to undo the removal by; absent when no file was moved. */
+  /** What to undo the removal by; absent when no file was moved, or when they went to a phone's bin. */
   batchId?: string | null;
+  /** The photos kept in place of the copies that went, by path, so that the message can name what stays. */
+  stays: string[];
 }
 
 /** What removing one file did. */

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, undoChange, useCategories, useGroups } from '../../lib/apiClient';
+import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, useCategories, useGroups } from '../../lib/apiClient';
 import { amountOf, FIND_HUES, FIND_LABELS, findRows, freeable, percentFull, rowLine, type FindId, type FindRow } from '../../lib/categories';
 import { ofStorage } from '../../lib/backup';
 import { useBackLayer } from '../../lib/backStack';
@@ -8,8 +8,8 @@ import {
   allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, someGroups, whereOf, type CleanUp, type DetailRow, type Question,
 } from '../../lib/cleanup';
 import { limitLine } from '../../lib/plan';
-import { formatBytes, groupSummary, matchLabel } from '../../lib/format';
-import type { Library } from '../../lib/library';
+import { formatBytes, groupSummary, leaf, matchLabel } from '../../lib/format';
+import { whereIs, type Library } from '../../lib/library';
 import { usePhone } from '../../lib/phone';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
@@ -89,28 +89,21 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
     finally { setBusy(false); }
   }
 
-  const undo = (batchId: string, what: string, one: boolean) => act(async () => {
-    const result = await undoChange(batchId);
-    if (result.restored > 0) notify(`Put ${what} back where ${one ? 'it was' : 'they were'}.`, 'ok');
-    if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} could not be put back. ${result.problems[0] ?? ''}`.trim(), 'error');
-  });
-  const undoAction = (batchId: string | null | undefined, what: string, one: boolean): ToastAction | undefined =>
-    batchId ? { label: 'Undo', run: () => void undo(batchId, what, one) } : undefined;
-
   const deleteCopy = (from: DuplicateGroupDto, member: GroupMemberDto) => act(async () => {
     const result = await removePhoto(member.photo.id);
     setAsked(undefined);
     setComparing(undefined);
     // The copy after the one deleted takes its place: going through a group's copies does not start again from the first.
     cleanUp.chooseCopy(Math.max(0, Math.min(from.members.indexOf(member), from.members.length - 2)));
-    notify(copyGone(member.photo, from.keeper, result.companions, where), 'ok', undoAction(result.batchId, member.photo.fileName, true));
+    // Gone to the phone's own bin, which PhotoSense cannot take anything back from: there is no Undo (Jamie, 2026-11-20).
+    notify(copyGone(member.photo, from.keeper, result.companions, where, words.bin), 'ok');
   });
 
   const deleteAll = (keys?: string[]) => act(async () => {
     const result = keys ? await removeGroups(keys, 'duplicates') : await removeDuplicates(undefined, 'duplicates');
     setAsked(undefined);
     cleanUp.review(undefined);
-    if (result.removed > 0) notify(allGone(result.removed, result.companions), 'ok', undoAction(result.batchId, `the ${duplicates(result.removed)}`, false));
+    if (result.removed > 0) notify(allGone(result.removed, result.companions, result.stays, f => (root ? whereIs(f, root, words) : leaf(f)), `The ${result.removed === 1 ? 'copy waits' : 'copies wait'} in ${words.bin} for 30 days.`), 'ok');
     if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
 
@@ -168,7 +161,7 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
         {items.length > 0 && <GroupRows groups={items} mode={mode} selected={tablet ? group?.key : undefined} onOpen={cleanUp.review} />}
         {data && items.length === 0 && (
           <p className="px-1 py-6 text-[15px] leading-[1.45] text-t2">
-            {mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.removed} until you delete it permanently.` : 'No similar shots left to review.'}
+            {mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.bin} for 30 days.` : 'No similar shots left to review.'}
           </p>
         )}
         <div ref={end} />
@@ -200,7 +193,7 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swip
             <SplitView list={list} detail={review ?? (
               <>
                 <PushedHeader title={KINDS[mode]} gear />
-                {data && <p className="px-6 py-16 text-center text-[15px] leading-[1.45] text-t2">{mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.removed} until you delete it permanently.` : 'No similar shots left to review.'}</p>}
+                {data && <p className="px-6 py-16 text-center text-[15px] leading-[1.45] text-t2">{mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.bin} for 30 days.` : 'No similar shots left to review.'}</p>}
               </>
             )} />
           </Screen>

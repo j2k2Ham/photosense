@@ -39,8 +39,10 @@ public sealed record RemovalResult(RemovalOutcome Outcome, string? HeldAt = null
 /// <param name="Skipped">Files left alone because removing them could not be shown to be safe, or, when a file could not be moved, every file.</param>
 /// <param name="Problems">Why each file left alone was left, naming it.</param>
 /// <param name="Companions">Sidecars and Live Photo videos moved along with the files they belonged to.</param>
-/// <param name="BatchId">What to undo the removal by; absent when no file was moved.</param>
-public sealed record BulkRemovalResult(int Removed, long Bytes, int Skipped, IReadOnlyList<string> Problems, int Companions = 0, Guid? BatchId = null);
+/// <param name="BatchId">What to undo the removal by; absent when no file was moved, or when they went to a phone's bin.</param>
+/// <param name="Stays">The photos kept in place of the copies that went, by path, so that the message can name what stays.</param>
+public sealed record BulkRemovalResult(int Removed, long Bytes, int Skipped, IReadOnlyList<string> Problems, int Companions = 0, Guid? BatchId = null,
+    IReadOnlyList<string>? Stays = null);
 
 /// <summary>Removes the copies and look-alikes a scan found, into the folder that holds removed files.</summary>
 public interface IDuplicateRemovalService

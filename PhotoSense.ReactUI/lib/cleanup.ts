@@ -144,11 +144,14 @@ export function scannedLine(total: number, completed: string, now: Date): string
 /** A question in a sheet: its title, what will happen, and its button. */
 export interface Question { readonly title: string; readonly lines: readonly string[]; readonly button: string }
 
-/** The question before one copy is deleted: the file that stays, then the file that goes, each with where it is. */
+/**
+ * The question before one copy is deleted: the file that stays, then the file that goes, each with where it is. It goes
+ * to the phone's Recently Deleted or bin (Jamie, 2026-11-17), which the phone asks about too.
+ */
 export function copyQuestion(copy: PhotoDto, keeper: PhotoDto, where: (p: PhotoDto) => string, words: Words): Question {
   return {
     title: `Delete ${copy.fileName}?`,
-    lines: [`${keeper.fileName} stays, in ${where(keeper)}.`, `${copy.fileName}, in ${where(copy)}, goes to ${words.removed}, where Undo can still bring it back.`],
+    lines: [`${keeper.fileName} stays, in ${where(keeper)}.`, `${copy.fileName}, in ${where(copy)}, goes to ${words.bin} for 30 days.`],
     button: `Delete ${copy.fileName}`,
   };
 }
@@ -158,7 +161,7 @@ export function allQuestion(count: number, bytes: number, words: Words, some = f
   return {
     title: some ? `Delete ${duplicates(count)}?` : 'Delete all duplicates?',
     lines: [
-      `${count.toLocaleString()} ${count === 1 ? 'copy goes' : 'copies go'} to ${words.removed} (${formatBytes(bytes)}), where Undo can still bring ${count === 1 ? 'it' : 'them'} back.`,
+      `${count.toLocaleString()} ${count === 1 ? 'copy goes' : 'copies go'} to ${words.bin} (${formatBytes(bytes)}) for 30 days.`,
       some ? 'The largest go first. The best copy of each picture or video stays.' : 'The best copy of each picture or video stays. Copies marked keep are skipped.',
       'Similar shots are not included.',
     ],
@@ -187,14 +190,39 @@ export function someGroups(groups: readonly DuplicateGroupDto[], count: number):
  * What was said once a copy has gone: the file that went and the file that stays. Two of one name are told apart by
  * where each is, as they could be taken for one file.
  */
-export function copyGone(copy: PhotoDto, keeper: PhotoDto, companions: number, where: (p: PhotoDto) => string): string {
+export function copyGone(copy: PhotoDto, keeper: PhotoDto, companions: number, where: (p: PhotoDto) => string, bin: string): string {
+  const waits = `The copy waits in ${bin} for 30 days.`;
   if (copy.fileName.toLowerCase() === keeper.fileName.toLowerCase())
-    return `${copy.fileName}${linkedFiles(companions)}, in ${where(copy)}, deleted. The one in ${where(keeper)} stays.`;
-  return `${copy.fileName}${linkedFiles(companions)} deleted. ${keeper.fileName} stays.`;
+    return `${copy.fileName}${linkedFiles(companions)}, in ${where(copy)}, deleted. The one in ${where(keeper)} stays. ${waits}`;
+  return `${copy.fileName}${linkedFiles(companions)} deleted. ${keeper.fileName} stays. ${waits}`;
 }
 
-/** What was said once every duplicate has gone. */
-export const allGone = (removed: number, companions: number) => `${duplicates(removed)}${linkedFiles(companions)} deleted. The best copy of each stays.`;
+/** The folder a file is in, by its path: what is before its name. */
+const folderOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')));
+
+/**
+ * "The originals stay, such as IMG_4821.HEIC in Photo Library.": an original kept in place of the copies that went, and
+ * where it is, so that the copies are not taken for the photos themselves (Jamie, 2026-11-20); empty when none is known.
+ * @param stays The originals kept, by path, as the service said.
+ * @param where Names a folder as the person knows it.
+ */
+export function originalsStay(stays: readonly string[], where: (folder: string) => string): string {
+  const first = stays[0];
+  if (first === undefined) return '';
+  return `${stays.length === 1 ? 'The original stays:' : 'The originals stay, such as'} ${leaf(first)} in ${where(folderOf(first))}.`;
+}
+
+/**
+ * "Deleted 12 copies. The originals stay, such as IMG_4821.HEIC in Photo Library.": what a phone says once the
+ * duplicates have gone, naming an original that stays and where it is, then where the copies wait.
+ * @param stays The originals kept, by path, as the service said.
+ * @param where Names a folder as the person knows it.
+ * @param waiting Where the copies wait: "The copies wait in Recently Deleted for 30 days."
+ */
+export function allGone(removed: number, companions: number, stays: readonly string[], where: (folder: string) => string, waiting: string): string {
+  const deleted = `Deleted ${removed.toLocaleString()} ${removed === 1 ? 'copy' : 'copies'}${linkedFiles(companions)}.`;
+  return `${deleted} ${originalsStay(stays, where) || 'The best copy of each stays.'} ${waiting}`;
+}
 
 /** What was said once a copy is marked keep, or no longer is. */
 export function keepSaid(photo: PhotoDto, kept: boolean, mode: GroupMode): string {

@@ -11,7 +11,11 @@ namespace PhotoSense.Application.Changes;
 /// <param name="Done">The change was carried out in full. When it was not, none of it was.</param>
 /// <param name="Problem">Why it was not, naming the file.</param>
 /// <param name="Left">Files it let go of after all, as it was told to, and put straight back.</param>
-public sealed record ChangeResult(bool Done, string? Problem, IReadOnlyList<OrganizeBatchItem> Left);
+/// <param name="Erased">
+/// A removal on a phone: the files went to its Recently Deleted or bin, so there is no change to undo, and nothing
+/// waits in PhotoSense Removed.
+/// </param>
+public sealed record ChangeResult(bool Done, string? Problem, IReadOnlyList<OrganizeBatchItem> Left, bool Erased = false);
 
 /// <summary>What undoing a change came to.</summary>
 /// <param name="Found">There was such a change, carried out and not undone.</param>
@@ -93,7 +97,9 @@ public sealed class FileChanges
     /// <param name="ct">Stops the change while files are moving; every file that had gone is then put back.</param>
     /// <remarks>
     /// A removal of more files than the free plan has left today is refused before anything is written down; one
-    /// carried out counts the files that went, their companions aside.
+    /// carried out counts the files that went, their companions aside. On a phone a removal goes to the phone's
+    /// Recently Deleted or bin after its own question (Jamie, 2026-11-17), all together: it is not written down, and
+    /// there is nothing to undo.
     /// </remarks>
     /// <exception cref="OperationCanceledException">Cancelled; every file that had gone is back.</exception>
     public async Task<ChangeResult> CarryOutAsync(OrganizeBatch batch, Func<OrganizeBatchItem, bool>? keep, CancellationToken ct)
@@ -105,6 +111,7 @@ public sealed class FileChanges
             var asked = batch.Items.Count(i => !i.Companion);
             if (allowance is not null && !allowance.Allows(asked)) return new ChangeResult(false, DailyRemovals.Refusal(allowance, asked), []);
             var records = batch.Removed ? await RecordsAtAsync(batch.Items.Select(i => i.From), ct) : [];
+            if (allowance is not null && Together(batch) is { } phone) return await EraseAsync(phone, batch, records, allowance, ct);
             if (records.Count > 0) await _batches.KeepRecordsAsync(batch.Id, records, ct);
             batch.State = ChangeState.Started;
             await _batches.SaveAsync(batch, ct);
@@ -318,6 +325,29 @@ public sealed class FileChanges
         {
             _one.Release();
         }
+    }
+
+    /// <summary>
+    /// Sends a removal's files, companions and all, to the phone's Recently Deleted or bin in one go, after the phone's
+    /// own question: the files and the scan's records of them go, and the removal counts toward the day's free ones.
+    /// </summary>
+    private async Task<ChangeResult> EraseAsync(IPhotoChangesTogether phone, OrganizeBatch batch, List<Photo> records, RemovalAllowance allowance, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            phone.EraseAll([.. batch.Items.Select(i => i.From)]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new ChangeResult(false, $"{Sentence(ex.Message)} Nothing was deleted.", []);
+        }
+        // Gone to the phone's bin: forgotten and counted whatever happens.
+        await _repo.DeleteAllAsync([.. records.Select(r => r.Id)], CancellationToken.None);
+        batch.Files = batch.Items.Count(i => !i.Companion);
+        batch.Bytes = records.Sum(r => r.FileSizeBytes);
+        await _removals.RecordAsync(batch.Files, batch.Bytes, allowance, CancellationToken.None);
+        return new ChangeResult(true, null, [], Erased: true);
     }
 
     // Where the photos are kept by something that takes many changes as one, a move is handed over whole; a copy never is.
@@ -553,11 +583,12 @@ public sealed class FileChanges
         batch.State = ChangeState.Done;
     }
 
-    // With no one file to blame, the files are spoken of together: they were handed over as one.
+    // With no one file to blame, the files are spoken of together: they were handed over as one, which only a phone's
+    // moves are, its removals going to its bin instead.
     private static string Problem(OrganizeBatch batch, OrganizeBatchItem? item, string? folder, Exception ex)
     {
         var what = folder is not null ? CouldNotMake(folder)
-            : item is null ? $"The files could not be {(batch.Removed ? "removed" : "moved")}"
+            : item is null ? "The files could not be moved"
             : $"{Path.GetFileName(item.From)} could not be {(batch.Copy ? "copied" : "moved")}";
         var nothing = batch.Removed ? "Nothing was removed: every file is where it was." : batch.Copy ? "Nothing was copied, and no copy was left behind." : "Nothing was moved: every file is where it was.";
         return $"{what}: {Sentence(ex.Message)} {nothing}";

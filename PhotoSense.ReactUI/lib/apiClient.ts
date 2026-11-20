@@ -204,7 +204,7 @@ export async function removeDuplicates(groupKey?: string, mode: GroupMode = 'dup
  */
 export async function removeGroups(groupKeys: string[], mode: GroupMode): Promise<BulkRemovalResultDto> {
   // With no group named the service would take every duplicate.
-  if (groupKeys.length === 0) return { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
+  if (groupKeys.length === 0) return { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [] };
   // Named in the body, as more of them than an address holds can be ticked.
   const result = await json<BulkRemovalResultDto>(`${API_BASE}/photos/bulk/remove-duplicates${mode === 'similar' ? '?mode=similar' : ''}`,
     { method: 'POST', body: JSON.stringify({ groups: groupKeys }) });

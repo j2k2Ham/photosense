@@ -21,6 +21,8 @@ internal sealed class TogetherFiles : IPhotoFileSystem, IPhotoChangesTogether
     public HashSet<int> FailingMoves { get; } = [];
     /// <summary>Erasing fails, as a phone does when the person says no.</summary>
     public bool FailErasing { get; set; }
+    /// <summary>What the phone says when erasing fails.</summary>
+    public string Refusal { get; set; } = "Nothing was deleted.";
     /// <summary>Taking empty folders away fails.</summary>
     public bool FailTidying { get; set; }
     /// <summary>Every set of moves handed over, in order.</summary>
@@ -49,7 +51,7 @@ internal sealed class TogetherFiles : IPhotoFileSystem, IPhotoChangesTogether
     public void EraseAll(IReadOnlyList<string> paths)
     {
         Erased.Add(paths);
-        if (FailErasing) throw new IOException("Nothing was deleted.");
+        if (FailErasing) throw new IOException(Refusal);
         foreach (var path in paths) _files.Erase(path);
     }
 
@@ -157,11 +159,33 @@ public sealed class ChangesTogetherTests
         _files.FailingMoves.Add(1);
         var moved = await _changes.CarryOutAsync(Batch(), null, ct);
         await Assert.That((moved.Done, moved.Problem)).IsEqualTo((false, "The files could not be moved: The person said no. Nothing was moved: every file is where it was."));
-
-        _files.FailingMoves.Add(2);
-        var removed = await _changes.CarryOutAsync(Batch(removed: true), null, ct);
-        await Assert.That(removed.Problem).IsEqualTo("The files could not be removed: The person said no. Nothing was removed: every file is where it was.");
         await Assert.That(_files.FileExists(In("IMG_1.JPG"))).IsTrue();
+    }
+
+    [Test]
+    public async Task A_Removal_Goes_To_The_Phones_Bin_In_One_Go_Counted_With_Nothing_Written_Down_To_Undo(CancellationToken ct)
+    {
+        var plan = new PlanParts();
+        var repo = new InMemoryPhotoRepository();
+        var changes = new FileChanges(_batches, repo, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals(plan));
+
+        // The person says no to the phone's question: nothing goes, nothing is counted, and nothing is written down.
+        _files.FailErasing = true;
+        _files.Refusal = "You chose not to delete these photos.";
+        var batch = Batch(removed: true);
+        await repo.AddOrUpdateAsync(TestPhotos.Make("IMG_1.JPG", folder: _root, size: 3), ct);
+        var refused = await changes.CarryOutAsync(batch, null, ct);
+        await Assert.That((refused.Done, refused.Problem, refused.Erased)).IsEqualTo((false, "You chose not to delete these photos. Nothing was deleted.", false));
+        await Assert.That((_files.FileExists(In("IMG_1.JPG")), _files.Moves.Count, await _batches.GetAsync(batch.Id, ct))).IsEqualTo((true, 0, (OrganizeBatch?)null));
+
+        // Said yes: every file, the Live Photo video too, goes in one go; the scan's record goes; two count toward the day.
+        _files.FailErasing = false;
+        var erased = await changes.CarryOutAsync(batch, null, ct);
+        await Assert.That((erased.Done, erased.Erased, batch.Files, batch.Bytes, _files.Erased[^1].Count)).IsEqualTo((true, true, 2, 3L, 3));
+        await Assert.That((_files.FileExists(In("IMG_1.JPG")), _files.FileExists(In("IMG_1.MOV")), _files.FolderExists(In("Trips")))).IsEqualTo((false, false, false));
+        await Assert.That((await repo.GetAllAsync(ct)).Count).IsEqualTo(0);
+        await Assert.That((await TestPlans.Removals(plan).TodayAsync(ct)).Used).IsEqualTo(2);
+        await Assert.That(await _batches.GetAsync(batch.Id, ct)).IsNull();
     }
 
     [Test]

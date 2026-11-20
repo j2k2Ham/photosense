@@ -164,8 +164,9 @@ public sealed class OrganizeMover
         var companions = batch.Items.Count(i => i.Companion);
         var renamed = asked.Count(a => !a.Item.Companion && !string.Equals(Path.GetFileName(a.Item.To), Path.GetFileName(a.Item.From), StringComparison.Ordinal));
         // The files have gone; what was done is recorded whatever happens.
-        await _audit.AddAsync(new AuditEntry { Action = action, PhotoId = batch.Id.ToString(), Details = $"{batch.Files} files to {where} with {companions} linked files" }, CancellationToken.None);
-        return new OrganizeResult(batch.Id, batch.Files, batch.Bytes, companions, renamed, skipped, problems, asked.Select(a => (a.Id, a.Item.To)).ToList());
+        await _audit.AddAsync(new AuditEntry { Action = action, PhotoId = batch.Id.ToString(), Details = $"{batch.Files} files to {(outcome.Erased ? "the phone's bin" : where)} with {companions} linked files" }, CancellationToken.None);
+        // Gone to a phone's bin, a removal has nothing to undo it by.
+        return new OrganizeResult(outcome.Erased ? null : batch.Id, batch.Files, batch.Bytes, companions, renamed, skipped, problems, asked.Select(a => (a.Id, a.Item.To)).ToList());
     }
 
     // A file's place in the change: under the name asked for, or that name numbered when it is taken on disk or by another file going there.
