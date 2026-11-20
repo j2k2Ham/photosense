@@ -313,10 +313,24 @@ public sealed class BackupTests : IDisposable
     {
         Library();
         await PairedAsync(ct);
-        await BackedUpAsync(ct);
+        await PhoneAsync("GET", "backup", ct);
+        var reading = new TaskCompletionSource();
+        var held = new TaskCompletionSource();
+        _library.Fetching = async stop =>
+        {
+            reading.TrySetResult();
+            await held.Task.WaitAsync(stop);
+        };
+        await PhoneAsync("POST", "backup/start", ct);
+        await reading.Task.WaitAsync(ct);
+        // Paused on the computer while a backup arrives: that backup is let finish, and the pause stays once it has.
         var phoneId = (await PhoneOnComputerAsync(ct)).GetProperty("id").GetString()!;
         var paused = (await _computer.PausePhoneAsync(Http.Post("backup/phones/x/pause", "{\"paused\":true}").FromClient(), phoneId, ct)).Json();
         await Assert.That(paused.GetProperty("paused").GetBoolean()).IsTrue();
+        _library.Fetching = null;
+        held.TrySetResult();
+        await Backup.Running;
+        await Assert.That((await NotedOnComputerAsync("4 items backed up and checked", ct)).GetProperty("paused").GetBoolean()).IsTrue();
         _library.Add("DDDDDDDD-4", (LibraryFileKind.Photo, "IMG_0004.JPG", MediaSamples.Picture("NEW-4")));
         var refused = await BackedUpAsync(ct);
         await Assert.That((refused.GetProperty("stage").GetString(), refused.GetProperty("problem").GetString(), refused.GetProperty("waiting").GetInt32()))
@@ -329,8 +343,9 @@ public sealed class BackupTests : IDisposable
         var resumed = await BackedUpAsync(ct);
         await Assert.That((resumed.GetProperty("stage").GetString(), resumed.GetProperty("waiting").GetInt32(), resumed.GetProperty("folder").GetString())).IsEqualTo(("ready", 0, elsewhere));
         await Assert.That(Directory.GetFiles(elsewhere).Select(f => Path.GetFileName(f)!)).IsEquivalentTo(["IMG_0004.JPG"], CollectionOrdering.Matching);
-        await Assert.That(Names(await NotedOnComputerAsync("1 item backed up and checked", ct)).Take(5)).IsEquivalentTo(
-            ["1 item backed up and checked", "Receiving 1 item", $"Backups now go to {elsewhere}", "Backups resumed", "Backups paused on this computer"], CollectionOrdering.Matching);
+        await Assert.That(Names(await NotedOnComputerAsync("1 item backed up and checked", ct)).Take(6)).IsEquivalentTo(
+            ["1 item backed up and checked", "Receiving 1 item", $"Backups now go to {elsewhere}", "Backups resumed", "4 items backed up and checked", "Backups paused on this computer"],
+            CollectionOrdering.Matching);
 
         var nowhere = await _computer.FolderAsync(Http.Post("backup/phones/x/folder", JsonSerializer.Serialize(new { folder = In("Nowhere") })).FromClient(), phoneId, ct);
         await Assert.That((nowhere.StatusCode, nowhere.Text())).IsEqualTo((HttpStatusCode.BadRequest, $"Folder not found: {In("Nowhere")}"));

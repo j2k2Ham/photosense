@@ -58,6 +58,7 @@ public sealed class ComputerBackup
     private readonly IPlaceNameResolver _places;
     private readonly object _lock = new();
     private readonly Dictionary<string, ArrivingBackup> _arriving = [];
+    private readonly SemaphoreSlim _changing = new(1, 1);
 
     /// <summary>Keeps phones' backups in folders of <paramref name="root"/>, one for each phone.</summary>
     /// <param name="store">The phones, the files held for each, and what happened.</param>
@@ -126,10 +127,9 @@ public sealed class ComputerBackup
     /// <exception cref="DirectoryNotFoundException">The folder is not there.</exception>
     public async Task<BackupPhone> MoveToAsync(string phoneId, string folder, CancellationToken ct)
     {
-        var phone = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
+        _ = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
         if (!_files.FolderExists(folder)) throw new DirectoryNotFoundException($"Folder not found: {folder}");
-        var moved = phone with { Folder = folder };
-        await _store.SavePhoneAsync(moved, ct);
+        var moved = await ChangePhoneAsync(phoneId, p => p with { Folder = folder }, ct);
         await NoteAsync(phoneId, $"Backups now go to {Named(folder)}", ct);
         return moved;
     }
@@ -139,10 +139,9 @@ public sealed class ComputerBackup
     /// <exception cref="DirectoryNotFoundException">The folder is not there.</exception>
     public async Task<BackupPhone> TripsGoToAsync(string phoneId, string folder, CancellationToken ct)
     {
-        var phone = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
+        _ = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
         if (!_files.FolderExists(folder)) throw new DirectoryNotFoundException($"Folder not found: {folder}");
-        var moved = phone with { TripsFolder = folder };
-        await _store.SavePhoneAsync(moved, ct);
+        var moved = await ChangePhoneAsync(phoneId, p => p with { TripsFolder = folder }, ct);
         await NoteAsync(phoneId, $"Trip folders now go in {Named(folder)}", ct);
         return moved;
     }
@@ -183,7 +182,7 @@ public sealed class ComputerBackup
             // The files have moved: where they are now is kept whatever happens.
             foreach (var (file, to) in plan) await _store.HoldAsync(file with { Path = to }, CancellationToken.None);
         }
-        await _store.SavePhoneAsync(phone with { Names = naming }, CancellationToken.None);
+        await ChangePhoneAsync(phoneId, p => p with { Names = naming }, CancellationToken.None);
         await NoteAsync(phoneId, naming == FileNaming.AsOnPhone ? "New backups keep the phone's names" : $"Renamed {Items(plan.Count)} by date", CancellationToken.None);
         return plan.Count;
     }
@@ -231,9 +230,7 @@ public sealed class ComputerBackup
     /// <exception cref="ArgumentException">No such phone.</exception>
     public async Task<BackupPhone> PauseAsync(string phoneId, bool paused, CancellationToken ct)
     {
-        var phone = await PhoneAsync(phoneId, ct) ?? throw new ArgumentException("That phone is not paired with this computer.");
-        var changed = phone with { Paused = paused };
-        await _store.SavePhoneAsync(changed, ct);
+        var changed = await ChangePhoneAsync(phoneId, p => p with { Paused = paused }, ct);
         await NoteAsync(phoneId, paused ? "Backups paused on this computer" : "Backups resumed", ct);
         return changed;
     }
@@ -260,8 +257,7 @@ public sealed class ComputerBackup
 
         var held = await CheckAsync(channel, record, ct);
         if (!_files.FolderExists(record.Folder)) _files.MakeFolder(record.Folder);
-        record = record with { LastChecked = _clock.GetUtcNow() };
-        await _store.SavePhoneAsync(record, ct);
+        record = await ChangePhoneAsync(phone.Id, p => p with { LastChecked = _clock.GetUtcNow() }, ct);
         await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)), ["names"] = record.Names.ToString() }, ct);
 
         var offered = await Lists.ReceiveAsync(channel, "offer", "files", null, null, ct);
@@ -331,7 +327,6 @@ public sealed class ComputerBackup
                     try
                     {
                         var renamed = await RenameAsync(phone.Id, naming, ct);
-                        record = record with { Names = naming };
                         await channel.SendAsync(new JsonObject { ["t"] = "named", ["renamed"] = renamed }, ct);
                     }
                     catch (Exception ex) when (ex is InvalidOperationException or IOException)
@@ -341,11 +336,11 @@ public sealed class ComputerBackup
                 }
                 bye = await channel.ReceiveAsync(ct, "bye", "trip", "names", "vault");
             }
-            await _store.SavePhoneAsync(record with
+            await ChangePhoneAsync(phone.Id, p => p with
             {
                 LastBackup = _clock.GetUtcNow(),
-                Safe = bye["safe"] is JsonValue s && s.TryGetValue(out int safe) ? safe : record.Safe,
-                SafeBytes = bye["safeBytes"] is JsonValue b && b.TryGetValue(out long bytes) ? bytes : record.SafeBytes,
+                Safe = bye["safe"] is JsonValue s && s.TryGetValue(out int safe) ? safe : p.Safe,
+                SafeBytes = bye["safeBytes"] is JsonValue b && b.TryGetValue(out long bytes) ? bytes : p.SafeBytes,
             }, ct);
         }
         finally
@@ -413,8 +408,7 @@ public sealed class ComputerBackup
             // The files have moved: where they are now is kept whatever happens.
             foreach (var (file, item) in going.Zip(batch.Items)) await _store.HoldAsync(file with { Path = item.To }, CancellationToken.None);
         }
-        record = record with { TripFolders = (record.TripFolders ?? []).Where(f => !PhotoPath.Comparer.Equals(f, folder)).Append(folder).ToList() };
-        await _store.SavePhoneAsync(record, CancellationToken.None);
+        record = await ChangePhoneAsync(record.Id, p => p with { TripFolders = (p.TripFolders ?? []).Where(f => !PhotoPath.Comparer.Equals(f, folder)).Append(folder).ToList() }, CancellationToken.None);
         await NoteAsync(record.Id, $"Made the trip folder {Named(folder)} with {Items(going.Count)}", CancellationToken.None);
         return (record, new JsonObject { ["t"] = "trip-made", ["folder"] = Named(folder), ["moved"] = going.Count });
     }
@@ -519,6 +513,26 @@ public sealed class ComputerBackup
     }
 
     private async Task<BackupPhone?> PhoneAsync(string id, CancellationToken ct) => (await _store.PhonesAsync(ct)).FirstOrDefault(p => p.Id == id);
+
+    /// <summary>
+    /// Changes a phone's record as it is now, one change at a time: a backup takes minutes, and a pause, a folder or a
+    /// way of naming chosen in Phones meanwhile must not be lost when it saves what it did.
+    /// </summary>
+    /// <exception cref="ArgumentException">No such phone.</exception>
+    private async Task<BackupPhone> ChangePhoneAsync(string id, Func<BackupPhone, BackupPhone> change, CancellationToken ct)
+    {
+        await _changing.WaitAsync(ct);
+        try
+        {
+            var changed = change(await PhoneAsync(id, ct) ?? throw new ArgumentException("That phone is not paired with this computer."));
+            await _store.SavePhoneAsync(changed, ct);
+            return changed;
+        }
+        finally
+        {
+            _changing.Release();
+        }
+    }
 
     private Task NoteAsync(string phoneId, string text, CancellationToken ct) => _store.NoteAsync(new BackupEvent(phoneId, _clock.GetUtcNow(), text), ct);
 
