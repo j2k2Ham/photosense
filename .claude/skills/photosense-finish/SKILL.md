@@ -43,5 +43,5 @@ Keep it short; the detail lives in STEPS.md and the commits.
 
 - Commit or push only when Jamie asks, and ask each time, unless Jamie has said pushes for checks are fine for the work in hand. No pull request unless asked.
 - Stage the files by name. Never `git stash`: Jamie keeps uncommitted work in the tree. Never `git rm`: a partial commit once captured only the deletions.
-- Leave out build output, coverage reports, `e2e/.cache`, `test-results` and `docs/design_handoff_photosense_redesign`.
+- Leave out build output, coverage reports, `e2e/.cache` and `test-results`. Everything in `docs/` may be committed (Jamie, 2026-11-20) but `docs/registering-cloud-sign-in.md`, which git ignores.
 - End each commit message with the attribution line the session gives.

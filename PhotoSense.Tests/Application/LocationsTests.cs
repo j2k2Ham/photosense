@@ -156,6 +156,12 @@ public sealed class LocationsTests : IDisposable
         await SaysAsync("POST", "locations/dropbox/instead", HttpStatusCode.NoContent, null, ct);
         await Assert.That((await Locations.StateAsync(ct)).Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["computer", "dropbox"]);
         await Assert.That(_signIn.Opened).Count().IsEqualTo(2);
+        // Before any backup has gone to it, the one on goes off, and another goes on in its place.
+        await SaysAsync("POST", "locations/dropbox/off", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/google-drive/on", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/google-drive/off", HttpStatusCode.NoContent, null, ct);
+        await SaysAsync("POST", "locations/dropbox/on", HttpStatusCode.NoContent, null, ct);
+        await Assert.That((await Locations.StateAsync(ct)).Locations.Where(l => l.On).Select(l => l.Id)).IsEquivalentTo(["computer", "dropbox"]);
         // The computer goes off and on whatever else is on.
         await SaysAsync("POST", "locations/computer/off", HttpStatusCode.NoContent, null, ct);
         await SaysAsync("POST", "locations/computer/on", HttpStatusCode.NoContent, null, ct);

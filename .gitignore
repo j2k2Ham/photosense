@@ -378,3 +378,6 @@ site/out/
 
 # Backup of CLAUDE.md made when the kit's section was merged into it
 CLAUDE.md.bak
+
+# Kept by Jamie only
+docs/registering-cloud-sign-in.md

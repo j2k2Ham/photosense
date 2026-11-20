@@ -35,7 +35,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 | `PhotoSense.ReactUI` | The page: Next.js 16, React 19, SWR, Tailwind 3 |
 | `PhotoSense.Tests`, `e2e`, `PhotoSense.Benchmarks` | TUnit tests of all but the page; Playwright tests of the whole program; BenchmarkDotNet runs of matching |
 | `tools/`, `version.json`, `product.json`, `notices/`, `site/pages/`, `branding/` | Versions, notices, the web site, who makes PhotoSense, the one icon |
-| `docs/design_handoff_photosense_redesign` | Jamie's design handoff. Leave it alone and out of commits unless asked |
+| `docs/` | Jamie's design handoffs (redesign, mobile, growth), tracked and committed (Jamie, 2026-11-20). Change them only when asked. `docs/registering-cloud-sign-in.md` is Jamie's own and ignored by git |
 
 ## Architecture
 
