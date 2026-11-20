@@ -895,7 +895,7 @@ describe('moving, copying and undoing', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(api.applyOrganize).toHaveBeenCalledExactlyOnceWith({
-      basePath: ROOT, folderName: 'Uptown Butte', direct: false, mode: 'move', companions: true, label: 'Uptown Butte',
+      basePath: ROOT, folderName: 'Uptown Butte', direct: false, mode: 'move', companions: true, label: 'Uptown Butte', suggested: true,
       files: [{ id: 'b1', name: 'b1.JPG', subfolder: '2023' }, { id: 'b2', name: 'b2.JPG', subfolder: '2022' }],
     });
     expect(notify).toHaveBeenLastCalledWith('Moved 2 files (11.6 MB) to Uptown Butte', 'ok', { label: 'Undo', run: expect.any(Function) });
@@ -1070,6 +1070,10 @@ describe('moving, copying and undoing', () => {
     api.applyOrganize.mockRejectedValueOnce('refused');
     await userEvent.click(moveButton());
     await waitFor(() => expect(said()[1]).toEqual(['refused', 'error']));
+    // On the free plan a suggestion is refused as part of Pro, which comes from a paired phone (Jamie, 2026-11-20).
+    api.applyOrganize.mockRejectedValueOnce(Object.assign(new Error('Organizing by place and date is part of Pro.'), { status: 402 }));
+    await userEvent.click(moveButton());
+    await waitFor(() => expect(said()[2]).toEqual(['Organizing by place and date is part of Pro. Pro bought on your phone covers this computer too.', 'error']));
     await userEvent.click(within(preview()).getByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });

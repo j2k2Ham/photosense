@@ -255,6 +255,28 @@ public sealed class OrganizeEndpointsTests : IDisposable
     }
 
     [Test]
+    public async Task One_Of_Organizes_Suggestions_Moves_Only_On_Pro_While_Files_The_Person_Chose_Move_On_Any_Plan(CancellationToken ct)
+    {
+        var a = await _f.IdAsync(_f.Put("IMG_1.JPG"), ct);
+        var b = await _f.IdAsync(_f.Put("IMG_2.JPG"), ct);
+        string Body(string id, bool suggested) => JsonSerializer.Serialize(new { basePath = _f.Root.FullName, folderName = "Butte", files = new[] { new { id } }, suggested });
+
+        // Trips and Organize's suggestions are part of Pro (Jamie, 2026-11-20): refused on the free plan, nothing moved.
+        var refused = await _api.ApplyAsync(Http.Post("organize/apply", Body(a, true)).FromClient(), ct);
+        await Assert.That((refused.StatusCode, refused.Text())).IsEqualTo((HttpStatusCode.PaymentRequired, "Organizing by place and date is part of Pro."));
+        await Assert.That(File.Exists(_f.In("IMG_1.JPG"))).IsTrue();
+        // Files the person chose and named a folder for move on any plan.
+        await Assert.That((await _api.ApplyAsync(Http.Post("organize/apply", Body(b, false)).FromClient(), ct)).StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(File.Exists(_f.In("Butte", "IMG_2.JPG"))).IsTrue();
+
+        // On Pro the suggestion moves.
+        var pro = new OrganizeApi(new TestApi(s => s.AddSingleton(_f.Library).AddSingleton(_f.Planner).AddSingleton(_f.Mover(plan: TestPlans.Pro())).AddSingleton(_f.Batches).AddSingleton(_f.Places)
+            .AddSingleton<IThumbnailStore>(_thumbnails).AddSingleton(_analyzer.Object).AddSingleton(_viewer.Object).AddSingleton<IPhotoFileSystem>(_f.Disk)));
+        await Assert.That((await pro.ApplyAsync(Http.Post("organize/apply", Body(a, true)).FromClient(), ct)).StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(File.Exists(_f.In("Butte", "IMG_1.JPG"))).IsTrue();
+    }
+
+    [Test]
     public async Task A_Request_That_Cannot_Be_Carried_Out_Says_Why(CancellationToken ct)
     {
         async Task<(HttpStatusCode, string)> Ask(string body)

@@ -47,6 +47,8 @@ describe('the Pro sheet', () => {
     expect(contextLine({ reason: 'limit', count: 3 }, plan({ leftToday: null }))).toBe("You have used today's 50 free removals. More are available tomorrow.");
     expect(contextLine({ reason: 'auto' }, p)).toBe('Automatic backup is part of Pro. Sending photos yourself stays free.');
     expect(contextLine({ reason: 'compress' }, p)).toBe('Video compression is part of Pro.');
+    expect(contextLine({ reason: 'organize' }, p)).toBe('Organizing by place and date is part of Pro. Choosing photos yourself in Library and moving them stays free.');
+    expect(contextLine({ reason: 'trips' }, p)).toBe('Trip folders on your computer are part of Pro. Seeing your trips stays free.');
     expect(contextLine({ reason: 'search' }, p)).toBe('Searching for what is in photos is part of Pro. Searching by date and place stays free.');
     expect(contextLine({ reason: 'fix' }, p)).toBe('Fixing dates, places and file names is part of Pro.');
     expect(contextLine({ reason: 'vault' }, p)).toBe('The hidden vault is part of Pro.');

@@ -134,16 +134,11 @@ public static class SelfCheck
               if (done.done !== 1) throw new Error(JSON.stringify(done));
               return { batchId: done.batchId, now: done.items[0].path };
             });
-            const removed = await step('a copy is removed into _PhotoSense_Removed', async () => {
+            await step('a copy is deleted into the bin, naming the original that stays, with nothing to undo', async () => {
               const done = await (await post('photos/bulk/remove-duplicates')).json();
               const waiting = await (await ask('removed?root=' + encodeURIComponent(root))).json();
-              if (done.removed < 1 || waiting.files < 1) throw new Error(JSON.stringify({ done, waiting }));
-              return { batchId: done.batchId, removed: done.removed, waiting: waiting.files, folders: waiting.folders.map(f => f.path) };
-            });
-            await step('the removal is undone', async () => {
-              const undone = await (await post('organize/undo/' + removed.batchId)).json();
-              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
-              return undone.restored;
+              if (done.removed < 1 || done.batchId !== null || done.stays.length < 1 || waiting.files !== 0) throw new Error(JSON.stringify({ done, waiting }));
+              return { removed: done.removed, stays: done.stays, waiting: waiting.files };
             });
             await step('the move is undone', async () => {
               const undone = await (await post('organize/undo/' + moved.batchId)).json();
@@ -155,13 +150,6 @@ public static class SelfCheck
               const stopped = await (await post('send/stop')).json();
               if (offering.stage !== 'waiting' || stopped.stage !== 'idle') throw new Error(JSON.stringify({ offering, stopped }));
               return { offering: offering.stage, total: offering.total, phone: offering.phone, stopped: stopped.stage };
-            });
-            await step('a copy removed again is deleted permanently, into the bin', async () => {
-              await post('photos/bulk/remove-duplicates');
-              const waiting = await (await ask('removed?root=' + encodeURIComponent(root))).json();
-              const erased = await (await post('removed/erase', { folders: waiting.folders.map(f => f.path) })).json();
-              if (erased.erased < 1) throw new Error(JSON.stringify({ waiting, erased }));
-              return erased;
             });
             report.photos = status.totalPhotos;
             report.passed = true;

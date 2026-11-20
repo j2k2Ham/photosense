@@ -93,16 +93,13 @@ public static class SelfCheck
               if (done.done !== 1) throw new Error(JSON.stringify(done));
               return { batchId: done.batchId, now: done.items[0].path };
             });
-            const removed = await step('a copy is removed into the album of removed pictures', async () => {
-              const done = await (await ask('photos/bulk/remove-duplicates', { method: 'POST' })).json();
+            // Deleting goes to Recently Deleted after iOS's own question, which no one answers on the simulator: the copies
+            // are only found here, and nothing waits in the album of removed pictures.
+            await step('copies are there to delete, and nothing waits in the album of removed pictures', async () => {
+              const page = await (await ask('scan/groups?mode=duplicates&page=1&pageSize=50')).json();
               const waiting = await (await ask('removed?root=' + encodeURIComponent(root))).json();
-              if (done.removed < 1 || waiting.files < 1) throw new Error(JSON.stringify({ done, waiting }));
-              return { batchId: done.batchId, removed: done.removed, waiting: waiting.files };
-            });
-            await step('the removal is undone', async () => {
-              const undone = await (await ask('organize/undo/' + removed.batchId, { method: 'POST' })).json();
-              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
-              return undone.restored;
+              if (page.removableCount < 1 || waiting.files !== 0) throw new Error(JSON.stringify({ removable: page.removableCount, waiting }));
+              return { removable: page.removableCount, waiting: waiting.files };
             });
             await step('the move is undone', async () => {
               const undone = await (await ask('organize/undo/' + moved.batchId, { method: 'POST' })).json();

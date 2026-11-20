@@ -10,7 +10,7 @@ vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOrigin
 
 const about: AboutDto = {
   name: 'PhotoSense', version: '0.1.0.76', program: 'server', publisher: 'Jamie Hamman', copyright: '© 2026 Jamie Hamman',
-  supportEmail: 'help@photosense.example', website: 'https://photosense.example', privacyPolicyUrl: null, termsUrl: null, supportUrl: null,
+  supportEmail: 'help@photosense.example', website: 'https://photosense.example', privacyPolicyUrl: null, termsUrl: null, supportUrl: null, downloadUrl: null,
 };
 
 const documents: Record<AboutDocument, string> = {

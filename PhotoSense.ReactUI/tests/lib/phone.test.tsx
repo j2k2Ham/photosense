@@ -6,7 +6,7 @@ import { cleanup } from '@testing-library/react';
 
 import { PHONE_TOAST_MS, TOAST_MS, useToasts } from '../../components/Toaster';
 import { useBackLayer } from '../../lib/backStack';
-import { deviceName, deviceWord, platformOf, TABLET, useForm, usePhone, WORDS } from '../../lib/phone';
+import { deviceName, deviceWord, downloadLine, platformOf, TABLET, useForm, usePhone, WORDS } from '../../lib/phone';
 import { tellSystemBars } from '../../lib/systemBars';
 import { width } from '../components/phone/frame';
 
@@ -14,6 +14,11 @@ describe('where the page is', () => {
   it('names what the person holds: a phone, an iPad, or an Android tablet', () => {
     expect([deviceName('ios', false), deviceName('android', false), deviceName('ios', true), deviceName('android', true)]).toEqual(['phone', 'phone', 'iPad', 'tablet']);
     expect([deviceWord('ios', false), deviceWord('android', false), deviceWord('ios', true), deviceWord('android', true)]).toEqual(['iPhone', 'phone', 'iPad', 'tablet']);
+  });
+
+  it('says where PhotoSense for Mac and PC comes from, or that it is coming before the web site has it', () => {
+    expect(downloadLine('https://photosense.example/download')).toBe('Get PhotoSense for Mac or PC at https://photosense.example/download.');
+    expect([downloadLine(null), downloadLine(undefined)]).toEqual(['PhotoSense for Mac and PC is coming soon.', 'PhotoSense for Mac and PC is coming soon.']);
   });
 
   it('is an iPhone or iPad, an Android phone or tablet, or a computer', () => {

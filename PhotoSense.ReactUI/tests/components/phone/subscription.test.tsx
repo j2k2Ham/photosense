@@ -44,7 +44,8 @@ describe('on the free plan', () => {
     ]);
     expect(within(p).getByRole('button', { name: 'Start 7-day free trial' })).toBeInTheDocument();
     expect(p).toHaveTextContent('Free for 7 days, then $19.99 a year. We remind you 2 days before the trial ends. Cancel any time in Settings.');
-    expect(p).toHaveTextContent('One purchase covers PhotoSense on your phone, tablet and computer when you sign in with the same Apple Account.');
+    // Tied to the store's account; the computer is Pro through a phone paired with it, and comes from the web site (Jamie, 2026-11-20).
+    expect(p).toHaveTextContent('One purchase covers PhotoSense on every iPhone and iPad signed in to the same Apple Account, and on the computers you pair with them. PhotoSense for Mac and PC is coming soon.');
   });
 
   it('buys the plan chosen, saying how it went', async () => {
@@ -172,7 +173,7 @@ describe('every state', () => {
     api.restorePurchases.mockResolvedValueOnce(plan());
     await userEvent.click(screen.getByRole('button', { name: 'Restore purchases' }));
     expect(calls.notify).toHaveBeenLastCalledWith('Checked Google Play. No earlier purchases found for this Google account.', 'info');
-    expect(page()).toHaveTextContent('when you sign in with the same Google account.');
+    expect(page()).toHaveTextContent('on every phone and tablet signed in to the same Google account, and on the computers you pair with them.');
   });
 
   it('opens the terms and the privacy policy, and goes back to Settings by its button or Escape', async () => {

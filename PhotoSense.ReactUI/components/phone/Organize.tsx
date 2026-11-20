@@ -369,6 +369,7 @@ const FIRST_ROWS = 2, MORE_ROWS = 5;
  * there, and its files by year, month or place, any of which can be left where it is. Move moves the rest.
  */
 function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, undoAction, onBack }: PreviewProps) {
+  const gate = usePlanGate();
   const { ios, tablet, words, platform } = usePhone();
   const root = library.root!;
   const [base, setBase] = useState(() => newAlbumBase(root, platform));
@@ -407,7 +408,7 @@ function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, 
     onBusy(true);
     try {
       const result = await applyOrganize({
-        basePath: base, folderName: folderName!, direct: false, mode: 'move', companions: true, label: folderName!,
+        basePath: base, folderName: folderName!, direct: false, mode: 'move', companions: true, label: folderName!, suggested: true,
         files: going.map(f => ({ id: f.id, name: resolved.names[f.id], subfolder: s.subfolderOf(f) })),
       });
       if (result.done > 0) {
@@ -494,7 +495,8 @@ function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, 
         );
       })}
       <StickyFooter>
-        <PhoneButton disabled={busy || !plan || going.length === 0 || folderName === undefined} onClick={() => void move()}>Move {files(going.length)}</PhoneButton>
+        <PhoneButton disabled={busy || !plan || going.length === 0 || folderName === undefined}
+          onClick={() => (gate.plan?.tier === 'free' ? gate.offer('organize', () => void move()) : void move())}>Move {files(going.length)}</PhoneButton>
         <p className="text-center text-[13px] text-t2">Into {goesTo(destination, root, words, platform)}. Undo puts them back.</p>
       </StickyFooter>
 

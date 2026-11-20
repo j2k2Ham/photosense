@@ -292,6 +292,8 @@ test.describe('on a phone', () => {
     phone.tripDays[glacier.id] = { trip: glacier, days: [{ date: '2026-07-18', photos: [picture(1)] }, { date: '2026-07-19', photos: [picture(2)] }] };
     phone.towns = [{ ...home, days: 120 }, { ...home, town: 'Butte', days: 12 }];
     await phone.attach(page);
+    // Trip folders are part of Pro: this phone has it.
+    await page.route(url => url.pathname.endsWith('/api/plan'), route => route.fulfill({ json: { tier: 'pro', kind: 'lifetime', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] } }));
     await page.goto('/');
     await phoneTab(page, 'Library');
     const library = page.getByRole('region', { name: 'Library' });
@@ -686,6 +688,23 @@ test.describe('on a phone', () => {
     await expect(page.getByRole('dialog', { name: 'About PhotoSense' }).getByRole('article')).toContainText(/Version [\d.]+ for iPhone and iPad/);
   });
 
+  test('On the free plan, Organize shows its suggestions with their real counts, and Move opens the Pro sheet, moving nothing @phone', async ({ page, photos }) => {
+    photos.picture('IMG_0001.JPG', { seed: 1, at: PLACES.butte, taken: new Date(2023, 6, 4, 10, 0) });
+    photos.picture('IMG_0002.JPG', { seed: 2, at: PLACES.butte, taken: new Date(2022, 6, 4, 10, 0) });
+    const phone = new Phone();
+    phone.root = photos.root;
+    await phone.attach(page);
+    await page.goto('/');
+    await phoneTab(page, 'Organize');
+    const list = page.getByRole('list', { name: 'Suggestions' });
+    await expect(list.getByRole('button', { name: /^Butte/ })).toContainText('2 files', { timeout: 60_000 });
+    await list.getByRole('button', { name: /^Butte/ }).click();
+    await page.getByRole('main').getByRole('button', { name: 'Move 2 files' }).click();
+    await expect(page.getByRole('dialog', { name: 'PhotoSense Pro' })).toContainText('Organizing by place and date is part of Pro. Choosing photos yourself in Library and moving them stays free.');
+    expect(photos.exists('IMG_0001.JPG')).toBe(true);
+    expect(photos.exists('Butte')).toBe(false);
+  });
+
   test('Organize suggests an album for each place, moves what is in none yet, numbering a name already taken there, and Undo puts it back @phone', async ({ page, photos, isMobile }) => {
     photos.picture('IMG_0001.JPG', { seed: 1, at: PLACES.butte, taken: new Date(2023, 6, 4, 10, 0) });
     photos.picture('IMG_0002.JPG', { seed: 2, at: PLACES.butte, taken: new Date(2022, 6, 4, 10, 0) });
@@ -694,6 +713,10 @@ test.describe('on a phone', () => {
     const phone = new Phone();
     phone.root = photos.root;
     await phone.attach(page);
+    // Organizing by place and date is part of Pro: this phone has it. The program standing in for the phone is a
+    // computer's, on the free plan, so the suggestion goes to it as a move of the person's own.
+    await page.route(url => url.pathname.endsWith('/api/plan'), route => route.fulfill({ json: { tier: 'pro', kind: 'lifetime', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] } }));
+    await page.route(url => url.pathname.endsWith('/api/organize/apply'), route => route.continue({ postData: JSON.stringify({ ...route.request().postDataJSON(), suggested: false }) }));
     await page.goto('/');
     await phoneTab(page, 'Organize');
     const list = page.getByRole('list', { name: 'Suggestions' });

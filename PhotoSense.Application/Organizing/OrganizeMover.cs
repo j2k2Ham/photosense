@@ -1,4 +1,6 @@
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Locations;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Removal;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
@@ -41,6 +43,10 @@ public sealed class OrganizeMover
     private readonly IAuditRepository _audit;
     private readonly IPhotoFileSystem _files;
     private readonly TimeProvider _time;
+    private readonly Subscription _plan;
+
+    /// <summary>What the free plan is told when it moves Organize's suggestions: the Pro sheet says it too.</summary>
+    public const string SuggestionsArePro = "Organizing by place and date is part of Pro.";
 
     /// <summary>Moves the files Organize knows, through the changes that can be undone.</summary>
     /// <param name="library">The files Organize knows, by id.</param>
@@ -49,8 +55,11 @@ public sealed class OrganizeMover
     /// <param name="audit">Where what was done is recorded.</param>
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="time">When each change is started, which orders the list of changes that can be undone.</param>
-    public OrganizeMover(OrganizeLibrary library, ICompanionFileFinder companions, FileChanges changes, IAuditRepository audit, IPhotoFileSystem files, TimeProvider time)
+    /// <param name="plan">Moving Organize's suggestions is part of Pro; moving files the person chose is not.</param>
+    public OrganizeMover(OrganizeLibrary library, ICompanionFileFinder companions, FileChanges changes, IAuditRepository audit, IPhotoFileSystem files, TimeProvider time,
+        Subscription plan)
     {
+        _plan = plan;
         _library = library;
         _companions = companions;
         _changes = changes;
@@ -71,6 +80,19 @@ public sealed class OrganizeMover
         IReadOnlyList<(string Id, string? Name)> files, IReadOnlyList<string?>? subfolders, CancellationToken ct)
         => CarryOutAsync(new OrganizeBatch { UtcTicks = Now(), Label = label, Copy = copy }, files, bringCompanions,
             (file, i) => destination.FolderFor(file, subfolders?.ElementAtOrDefault(i)), copy ? "OrganizeCopy" : "OrganizeMove", destination.Folder, ct);
+
+    /// <summary>
+    /// Moves or copies the files of one of Organize's suggestions, by place or by date, which is part of Pro (Jamie,
+    /// 2026-11-20): see <see cref="ApplyAsync"/>. Files the person chose and named a folder for are moved by
+    /// <see cref="ApplyAsync"/> on any plan.
+    /// </summary>
+    /// <exception cref="ProNeededException">The plan is not Pro; nothing has moved.</exception>
+    public async Task<OrganizeResult> ApplySuggestionAsync(OrganizeDestination destination, bool copy, bool bringCompanions, string label,
+        IReadOnlyList<(string Id, string? Name)> files, IReadOnlyList<string?>? subfolders, CancellationToken ct)
+    {
+        if (!(await _plan.CurrentAsync(ct)).Pro) throw new ProNeededException(SuggestionsArePro);
+        return await ApplyAsync(destination, copy, bringCompanions, label, files, subfolders, ct);
+    }
 
     /// <summary>
     /// Takes files out of their folders, with the Live Photo videos and edit files that belong to them and to

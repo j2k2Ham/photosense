@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { organizeThumbnailUrl, pauseBackup, removeSafe, saveBackupSettings, startBackup } from '../../lib/apiClient';
+import { organizeThumbnailUrl, pauseBackup, removeSafe, saveBackupSettings, startBackup, useAbout } from '../../lib/apiClient';
 import { automaticNote, backupButton, backupLine, backupPercent, backupTitle, checkedAt, gigabytes, ofStorage, storageBar, whenSaid } from '../../lib/backup';
 import { progressLine } from '../../lib/locations';
 import { items } from '../../lib/library';
 import { limitLine } from '../../lib/plan';
-import { deviceWord, usePhone } from '../../lib/phone';
+import { deviceWord, downloadLine, usePhone } from '../../lib/phone';
 import type { ResultCard } from '../../lib/shareCard';
 import type { BackupSettingsDto, BackupStateDto, LocationsDto, OrganizeFileDto, SafeRemovalDto, SafeReviewDto } from '../../types';
 import type { ToastKind } from '../Toaster';
@@ -62,6 +62,7 @@ type Pane = { readonly kind: 'location'; readonly id: string } | { readonly kind
  */
 export function BackupScreen({ state, notify, onChoose, onPair, locations, onSettings, files, onSend, sent }: BackupProps) {
   const { platform, tablet } = usePhone();
+  const download = useAbout().data?.downloadUrl;
   const gate = usePlanGate();
   const [busy, setBusy] = useState(false);
   const [pane, setPane] = useState<Pane>();
@@ -110,6 +111,7 @@ export function BackupScreen({ state, notify, onChoose, onPair, locations, onSet
                 <span className="text-[16px] font-semibold">No computer yet</span>
               </span>
               <p className="text-[15px] leading-[1.4] text-t2">Pair this {device} with PhotoSense on your Mac or PC. {items(state.waiting)} can then be backed up over Wi-Fi.</p>
+              <p className="text-[14px] leading-[1.4] text-t2">{downloadLine(download)}</p>
               <PhoneButton onClick={onPair}>Connect your computer</PhoneButton>
             </section>
           ) : (

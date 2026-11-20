@@ -43,7 +43,7 @@ public sealed class PhotosNotOnDiskTests
         _cleanUp = new DuplicateRemovalService(new DuplicateAnalysisService(_repo), _repo, new CompanionFileFinder(_files, new LivePhotoIdCache(_files).ReadAsync), _changes, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
         _library = new OrganizeLibrary(_repo, new ExifMediaDetailsReader(_files), hashing, new MemoryMediaDetailsStore(), _files);
         var companions = new CompanionFileFinder(_files, _library.LivePhotoIds(new LivePhotoIdCache(_files).ReadAsync));
-        _organize = new OrganizeMover(_library, companions, _changes, audit, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)));
+        _organize = new OrganizeMover(_library, companions, _changes, audit, _files, new TestClock(TestClock.Day, TimeSpan.FromSeconds(1)), TestPlans.Subscription());
         _removed = new RemovedFiles(_repo, _batches, audit, _files, TestPlans.Removals());
     }
 

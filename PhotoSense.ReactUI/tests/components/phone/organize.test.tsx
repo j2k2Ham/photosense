@@ -312,12 +312,23 @@ describe('a suggestion\'s preview', () => {
 });
 
 describe('moving', () => {
+  it('on the free plan opens the Pro sheet first, as organizing by place and date is part of Pro, and moves once Pro is bought', async () => {
+    planGate = gate({ plan: plan() });
+    show();
+    await userEvent.click(row('Anaconda'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Move 4 files' }));
+    expect(planGate.offer).toHaveBeenCalledExactlyOnceWith('organize', expect.any(Function));
+    expect(api.applyOrganize).not.toHaveBeenCalled();
+    await act(async () => (vi.mocked(planGate.offer).mock.calls[0][1] as () => void)());
+    expect(api.applyOrganize).toHaveBeenCalledWith(expect.objectContaining({ folderName: 'Anaconda', suggested: true }));
+  });
+
   it('moves the files that go, says so with Undo, and shows the suggestion as moved; Undo puts them back', async () => {
     const { notify } = show();
     await userEvent.click(row('Anaconda'));
     await userEvent.click(await screen.findByRole('button', { name: 'Move 4 files' }));
     expect(api.applyOrganize).toHaveBeenCalledWith({
-      basePath: ROOT, folderName: 'Anaconda', direct: false, mode: 'move', companions: true, label: 'Anaconda',
+      basePath: ROOT, folderName: 'Anaconda', direct: false, mode: 'move', companions: true, label: 'Anaconda', suggested: true,
       files: [{ id: 'a1', name: 'a1.JPG', subfolder: '2022' }, { id: 'a2', name: 'a2.JPG', subfolder: '2023' }, { id: 'a3', name: 'a3.JPG', subfolder: '2023' }, { id: 'a4', name: 'a4.JPG', subfolder: '2023' }],
     });
     expect(notify).toHaveBeenLastCalledWith('Moved 4 files to Anaconda.', 'ok', expect.objectContaining({ label: 'Undo' }));

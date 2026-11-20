@@ -237,6 +237,9 @@ export const GUIDE: GuideTopic[] = [
           'For places, **Nearby places** decides whether places within 1, 5, 15, 25 or 50 miles of each other share a folder, and **Folder names** how a place’s folder is named. Choose kilometers instead under **Distances** in Settings.',
           'Each card is a folder that would be made. Click a card to see its files alone.',
         ],
+        tips: [
+          'Moving a suggested folder is part of Pro, which comes to this computer from a phone that bought it. On the free plan the suggestions and their previews show all the same.',
+        ],
       },
       {
         heading: 'The map',
@@ -466,6 +469,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'Pro has no daily limit. It is bought in PhotoSense on an iPhone, iPad or Android phone, not on a computer.',
           'One purchase covers PhotoSense on your phone, tablet and computer. This computer learns of it from the phone the next time the phone backs up here, and the plan beside the menu then says **PhotoSense Pro**.',
+          'Moving Organize’s suggested folders, by place or by date, is part of Pro. On the free plan you can still see every suggestion and preview it; **Move** says it is part of Pro. Folders of your own, from files you choose, move on any plan.',
         ],
       },
     ],
@@ -723,6 +727,7 @@ export const GUIDE: GuideTopic[] = [
           '**List** shows each trip with its dates and how many photos and videos it has. **Map** shows each trip as a pin with its count, beside **Home**; tap a pin to open the trip. The map is drawn on your phone, and where your photos were taken never leaves it.',
           'Tap a trip to see its cover, its dates and what you took each day. Tap a photo to view it.',
           'Once you have paired a computer, **Make a folder on** your computer puts the trip’s copies there in a folder of their own, named by the month and the place, such as **Pictures/PhotoSense/2026-07 Glacier National Park**. Anything of the trip the computer does not have yet is sent first. Nothing changes on your phone. When it is done, PhotoSense says where the folder is, and the trip says **Folder created**.',
+          'Seeing your trips, the map and each trip’s photos is free. Making a trip’s folder on your computer is part of Pro: on the free plan, **Make a folder on** opens **PhotoSense Pro** first.',
         ],
       },
       {
@@ -1002,6 +1007,7 @@ export const GUIDE: GuideTopic[] = [
       {
         text: [
           '**Organize** suggests where to put what is not sorted yet, by **Place** or by **Date**. What you move drops out of the suggestions.',
+          'Organize is part of Pro. On the free plan you can still see every suggestion, the map and each preview with their real counts; **Move** opens **PhotoSense Pro** first. Choosing photos yourself in **Library** and putting them somewhere stays free.',
         ],
       },
       {
@@ -1309,7 +1315,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'PhotoSense Pro',
         tips: [
-          'Pro removes as many as you like each day, and backs up automatically. One purchase covers your phone, tablet and computer; a computer learns of it the next time this device backs up to it.',
+          'Pro removes as many as you like each day, backs up automatically, and organizes by place and date, with trip folders on your computer. One purchase covers every device signed in to the same store account, and the computers you pair with them; a computer learns of it the next time this device backs up to it.',
           'The plans: **Yearly**, with a 7-day free trial; **Monthly**; and **Lifetime**, paid once. **Family** covers up to 6 people. Prices are the store’s own, in your currency.',
           '**Settings** shows your plan at the top; tap it for **Subscription**, with what each plan includes, the free removals left today, and the plans.',
           'Starting the free trial turns on its reminder, a notification two days before it ends, and the phone asks first whether PhotoSense may send one. **Remind me 2 days before it ends**, in Subscription, turns it off or on again.',

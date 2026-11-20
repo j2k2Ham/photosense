@@ -13,8 +13,9 @@ namespace PhotoSense.Api.About;
 /// <param name="TermsUrl">Where the terms of use are published; null until set.</param>
 /// <param name="SupportUrl">Where the support page is published; null until set.</param>
 /// <param name="GoverningLaw">The place whose law the terms are under; null until set.</param>
+/// <param name="DownloadUrl">Where PhotoSense for Mac and PC is downloaded from, which the phones point to; null until the web site has it.</param>
 public sealed record ProductInfo(string Name, string Publisher, string Copyright, string? SupportEmail, string? Website,
-    string? PrivacyPolicyUrl, string? TermsUrl, string? SupportUrl, string? GoverningLaw)
+    string? PrivacyPolicyUrl, string? TermsUrl, string? SupportUrl, string? GoverningLaw, string? DownloadUrl)
 {
     /// <summary>product.json as it was built into this program.</summary>
     public static ProductInfo Bundled { get; } = Read(Bundle.Open("product.json"));
@@ -27,7 +28,7 @@ public sealed record ProductInfo(string Name, string Publisher, string Copyright
         string? Given(string name) => root.TryGetProperty(name, out var value) && !string.IsNullOrWhiteSpace(value.GetString()) ? value.GetString()!.Trim() : null;
         string Needed(string name) => Given(name) ?? throw new InvalidDataException($"product.json has no {name}.");
         return new ProductInfo(Needed("name"), Needed("publisher"), Needed("copyright"), Given("supportEmail"), Given("website"),
-            Given("privacyPolicyUrl"), Given("termsUrl"), Given("supportUrl"), Given("governingLaw"));
+            Given("privacyPolicyUrl"), Given("termsUrl"), Given("supportUrl"), Given("governingLaw"), Given("downloadUrl"));
     }
 }
 

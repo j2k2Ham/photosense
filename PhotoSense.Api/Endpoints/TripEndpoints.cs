@@ -3,6 +3,7 @@ using System.Net;
 using System.Text.Json;
 using PhotoSense.Api.Http;
 using PhotoSense.Api.Scanning;
+using PhotoSense.Application.Locations;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Contracts.Organize;
@@ -89,6 +90,7 @@ internal sealed class TripEndpoints
             await _backup!.MakeFolderAsync(trip.Folder, [.. trip.Photos.Select(p => p.SourcePath)], ct);
             return req.CreateResponse(HttpStatusCode.Accepted);
         }
+        catch (ProNeededException ex) { return await Answers.RefuseAsync(req, HttpStatusCode.PaymentRequired, ex.Message, ct); }
         catch (InvalidOperationException ex) { return await Answers.RefuseAsync(req, HttpStatusCode.Conflict, ex.Message, ct); }
     }
 

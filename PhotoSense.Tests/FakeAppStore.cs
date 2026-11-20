@@ -97,11 +97,17 @@ internal static class TestPlans
     }
 
     /// <summary>Removals with no limit: a store that says Pro was bought once.</summary>
-    public static DailyRemovals Unlimited()
+    public static DailyRemovals Unlimited() => Removals(ProParts());
+
+    /// <summary>Pro, bought once for good.</summary>
+    public static Subscription Pro() => Subscription(ProParts());
+
+    // A phone's store that says Pro was bought once.
+    private static PlanParts ProParts()
     {
         var app = new FakeAppStore();
         app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
-        return Removals(new PlanParts { App = app });
+        return new PlanParts { App = app };
     }
 }
 

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { appIconUrl } from '../../lib/apiBase';
 import {
-  askForPhotos, buyPlan, confirmPairing, enterPairingCode, libraryRoot, openPhotoSettings, scanPairing, startScan, stopPairing, useFound, usePairing, usePhotoAccess, usePlan,
+  askForPhotos, buyPlan, confirmPairing, enterPairingCode, libraryRoot, openPhotoSettings, scanPairing, startScan, stopPairing, useAbout, useFound, usePairing, usePhotoAccess, usePlan,
 } from '../../lib/apiClient';
 import { formatBytes } from '../../lib/format';
 import { saveLastScan } from '../../lib/lastScan';
 import { offeredPlans } from '../../lib/plan';
-import { usePhone } from '../../lib/phone';
+import { downloadLine, usePhone } from '../../lib/phone';
 import type { FindingsDto, PlanKind, ScanProgressSnapshotDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { PhoneButton } from './Controls';
@@ -213,6 +213,7 @@ export function Pair({ notify, onNext, later }: { readonly notify: Notify; onNex
   const step = later ? undefined : 2;
   const device = useDevice();
   const state = usePairing(true).data;
+  const download = useAbout().data?.downloadUrl;
   const [typing, setTyping] = useState(false);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -269,6 +270,7 @@ export function Pair({ notify, onNext, later }: { readonly notify: Notify; onNex
             </li>
           ))}
         </ol>
+        <p className="text-[14px] leading-[1.4] text-t2">{downloadLine(download)}</p>
         {typing ? (
           <label className="flex flex-col gap-2 pt-2 text-[14px] text-t2">
             The six digits under Or enter this code on the phone

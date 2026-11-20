@@ -10,6 +10,7 @@ import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, Radio, Segmented } from './Controls';
 import { CollectionTile } from './CollectionTile';
 import { HomeIcon, MapIcon, VideoIcon } from './Icons';
+import { usePlanGate } from './ProSheet';
 import { PhotoGrid } from './PhotoGrid';
 import { LayerScreen, PushedHeader, RootHeader, SplitView } from './Screens';
 import { Sheet } from './Sheet';
@@ -303,6 +304,7 @@ interface FooterProps {
 /** Making a trip's folder on the computer: what its button says, whether it can be pressed, and pressing it; nothing with no computer. */
 function useMakeFolder(trip: TripDto, trips: TripsDto, notify: Notify) {
   const [asking, setAsking] = useState(false);
+  const gate = usePlanGate();
   if (!trips.computer) return undefined;
   const running = trips.folder?.id === trip.id && trips.folder.stage === 'running';
 
@@ -318,7 +320,9 @@ function useMakeFolder(trip: TripDto, trips: TripsDto, notify: Notify) {
   }
 
   const label = trip.folderMade ? 'Folder created' : running || asking ? 'Making the folder…' : `Make a folder on ${trips.computer}`;
-  return { label, made: trip.folderMade, disabled: trip.folderMade || running || asking, make: () => void make(), computer: trips.computer };
+  // Trip folders are part of Pro (Jamie, 2026-11-20): the free plan sees its trips, and the Pro sheet first.
+  const go = () => (gate.plan?.tier === 'free' ? gate.offer('trips', () => void make()) : void make());
+  return { label, made: trip.folderMade, disabled: trip.folderMade || running || asking, make: go, computer: trips.computer };
 }
 
 /** Make a folder on the computer, or why it cannot yet, with where the folder goes and that the phone keeps its photos. */

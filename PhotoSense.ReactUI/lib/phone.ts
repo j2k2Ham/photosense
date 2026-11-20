@@ -95,6 +95,12 @@ export function deviceName(platform: Platform, tablet: boolean): string {
   return !tablet ? 'phone' : platform === 'ios' ? 'iPad' : 'tablet';
 }
 
+/**
+ * Where to get PhotoSense for Mac and PC, wherever a phone points to it: the web site's address once it has one
+ * (product.json's downloadUrl, Jamie, 2026-11-20), and until then that it is coming.
+ */
+export const downloadLine = (url: string | null | undefined) => (url ? `Get PhotoSense for Mac or PC at ${url}.` : 'PhotoSense for Mac and PC is coming soon.');
+
 /** What the person is holding, as the growth screens name it: "iPhone" or "iPad", or an Android "phone" or "tablet". */
 export function deviceWord(platform: Platform, tablet: boolean): string {
   return platform === 'ios' ? (tablet ? 'iPad' : 'iPhone') : deviceName(platform, tablet);

@@ -42,6 +42,8 @@ const REMOVED_FOLDER = '_PhotoSense_Removed';
 const PHONES = new Set(['iphone', 'android']);
 
 const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the PhotoSense server.' : e instanceof Error ? e.message : String(e));
+// The computer sells no plan: Pro comes from a paired phone that bought it.
+const proFromPhone = (e: unknown) => ((e as { status?: number }).status === 402 ? `${messageOf(e)} Pro bought on your phone covers this computer too.` : messageOf(e));
 const without = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(Object.entries(map).filter(([k]) => !keys.includes(k)));
 const only = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(keys.filter(k => map[k]).map(k => [k, map[k]]));
 const NO_FILES: OrganizeFileDto[] = [];
@@ -267,7 +269,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
       }
       if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} left where ${result.skipped === 1 ? 'it is' : 'they are'}. ${result.problems[0] ?? ''}`.trim(), 'error');
     } catch (e) {
-      notify(messageOf(e), 'error');
+      notify(proFromPhone(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -386,7 +388,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
         <MovePreview key={`${preview!.kind}:${preview!.key}`} kind={previewed ? 'Suggested folder' : 'Your folder'} root={root} files={previewed?.files ?? previewedOwn!.files} places={places}
           name={previewed?.name ?? previewedOwn!.name} base={ownPreviewed?.base} direct={ownPreviewed?.direct} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={onPhone ? 'move' : mode} canCopy={!onPhone} companions={companions} busy={busy} asking={deleting !== undefined}
           placeOf={id => { const f = files.find(x => x.id === id); return f?.place == null ? undefined : `${places[f.place].town}, ${places[f.place].state}`; }}
-          onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move(request, going)}
+          onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move({ ...request, suggested: previewed !== undefined }, going)}
           onDelete={(file, stays) => askDelete({ files: [file], stays })} onClose={() => setPreview(undefined)} />
       )}
       {limited && (

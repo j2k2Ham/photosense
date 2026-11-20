@@ -578,6 +578,8 @@ public sealed class BackupTests : IDisposable
     {
         Library();
         var id = await TripAsync(ct);
+        // Trip folders are part of Pro (Jamie, 2026-11-20).
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
         await PairedAsync(ct);
 
         var trips = await PhoneAsync("GET", "trips", ct);
@@ -628,6 +630,7 @@ public sealed class BackupTests : IDisposable
     {
         Library();
         var id = await TripAsync(ct);
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
         await PairedAsync(ct);
         await BackedUpAsync(ct);
         var phoneId = (await NotedOnComputerAsync("14 items backed up and checked", ct)).GetProperty("id").GetString()!;
@@ -751,6 +754,9 @@ public sealed class BackupTests : IDisposable
     {
         Library();
         var id = await TripAsync(ct);
+        // On the free plan a trip folder is refused before anything else: it is part of Pro (Jamie, 2026-11-20).
+        await Assert.That(await AskAsync("POST", $"trips/{id}/folder", ct)).IsEqualTo((HttpStatusCode.PaymentRequired, "Trip folders on your computer are part of Pro."));
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Lifetime, TestClock.Day, null, Trial: false));
         await Assert.That(await AskAsync("POST", $"trips/{id}/folder", ct)).IsEqualTo((HttpStatusCode.Conflict, "Pair with a computer first: in Settings, choose Computer."));
         await Assert.That((await PhoneAsync("GET", "trips", ct)).GetProperty("computer").ValueKind).IsEqualTo(JsonValueKind.Null);
         foreach (var (method, path) in new[] { ("GET", "trips/nope"), ("POST", "trips/nope/folder") })

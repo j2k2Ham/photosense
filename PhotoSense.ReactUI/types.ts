@@ -255,6 +255,8 @@ export interface OrganizeApplyRequest extends OrganizeDestination {
   companions: boolean;
   /** What the folder is called in the record of what was done. */
   label: string;
+  /** One of Organize's suggestions, by place or by date, which only Pro moves; files the person chose move on any plan. */
+  suggested?: boolean;
   files: { id: string; name: string; subfolder?: string }[];
 }
 
@@ -330,6 +332,8 @@ export interface AboutDto {
   privacyPolicyUrl: string | null;
   termsUrl: string | null;
   supportUrl: string | null;
+  /** Where PhotoSense for Mac and PC is downloaded from; null until the web site has it. */
+  downloadUrl: string | null;
 }
 
 /** The documents About shows: the privacy policy, terms of use and support page in Markdown, and the third-party notices. */

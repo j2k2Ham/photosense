@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TripsCard, TripsScreen, TripsTile } from '../../../components/phone/Trips';
 import type { Platform } from '../../../lib/phone';
 import type { PhotoDto, TownDto, TripDetailDto, TripDto, TripsDto } from '../../../types';
-import { organizeFile, photo } from '../../fixtures';
+import { organizeFile, photo, plan } from '../../fixtures';
 import { deferred } from '../../deferred';
-import { frame, inFrame } from './frame';
+import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({ useTrips: vi.fn(), useTrip: vi.fn(), useTowns: vi.fn(), chooseHome: vi.fn(), makeTripFolder: vi.fn(), renameTrip: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
@@ -41,12 +41,15 @@ beforeEach(() => {
   api.chooseHome.mockReset().mockResolvedValue(undefined);
   api.makeTripFolder.mockReset().mockResolvedValue(undefined);
   api.renameTrip.mockReset().mockResolvedValue(undefined);
+  planGate = gate();
 });
+
+let planGate = gate();
 
 function show(platform: Platform = 'ios', more: { frozen?: boolean; tablet?: boolean } = {}) {
   const onOpen = vi.fn(), notify = vi.fn(), onClose = vi.fn();
   const ui = (frozen = more.frozen) => <TripsScreen files={files} frozen={frozen} onOpen={onOpen} notify={notify} onClose={onClose} />;
-  const view = inFrame(ui(), frame(platform, { tablet: more.tablet }));
+  const view = inFrame(ui(), frame(platform, { tablet: more.tablet }), planGate);
   return { onOpen, notify, onClose, again: (frozen?: boolean) => view.again(ui(frozen)), layer: () => screen.getByRole('dialog') };
 }
 
@@ -146,6 +149,16 @@ describe('Make a folder on the computer', () => {
     if (tablet) await userEvent.click(within(shown.layer()).getByRole('button', { name: 'Open trip' }));
     return shown;
   }
+
+  it('on the free plan opens the Pro sheet first, as trip folders are part of Pro, and makes the folder once Pro is bought', async () => {
+    planGate = gate({ plan: plan() });
+    const { layer } = await opened();
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Make a folder on Studio iMac' }));
+    expect(planGate.offer).toHaveBeenCalledExactlyOnceWith('trips', expect.any(Function));
+    expect(api.makeTripFolder).not.toHaveBeenCalled();
+    (vi.mocked(planGate.offer).mock.calls[0][1] as () => void)();
+    expect(api.makeTripFolder).toHaveBeenCalledWith('gla');
+  });
 
   it('makes the folder, says it is being made, and says where once it is; then shows Folder created', async () => {
     const { layer, notify, again } = await opened();

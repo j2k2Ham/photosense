@@ -4,7 +4,7 @@ import type { PlanDto, PlanKind, PlanOfferDto } from '../types';
 export const PLAN_KINDS: readonly PlanKind[] = ['yearly', 'monthly', 'lifetime', 'family'];
 
 /** What opened the Pro sheet, which says why it is there. */
-export type ProReason = 'limit' | 'auto' | 'compress' | 'search' | 'fix' | 'vault' | 'location' | 'server' | 'none';
+export type ProReason = 'limit' | 'auto' | 'compress' | 'search' | 'fix' | 'vault' | 'location' | 'server' | 'organize' | 'trips' | 'none';
 
 /** What Pro adds, as the Pro sheet lists it. */
 export const PRO_FEATURES: readonly string[] = ['Unlimited removals every day', 'Automatic backup to your computer', 'Video compression'];
@@ -115,6 +115,8 @@ export function contextLine(ask: ProAsk, plan: Pick<PlanDto, 'leftToday' | 'remo
       ? `The free plan backs up to your computer and one other location, and your backups are on ${ask.current}. Pro adds as many as you like.`
       : `The free plan backs up to your computer and one other location, and ${ask.current} is on. Pro adds as many as you like.`;
     case 'server': return 'Connecting your own server, like Amazon S3, Azure or a home NAS, is part of Pro.';
+    case 'organize': return 'Organizing by place and date is part of Pro. Choosing photos yourself in Library and moving them stays free.';
+    case 'trips': return 'Trip folders on your computer are part of Pro. Seeing your trips stays free.';
     default: return undefined;
   }
 }

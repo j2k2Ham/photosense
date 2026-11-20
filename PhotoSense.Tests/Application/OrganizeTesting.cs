@@ -1,6 +1,7 @@
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -105,8 +106,8 @@ internal sealed class OrganizeFixture : IDisposable
     /// <summary>The clock changes are stamped with.</summary>
     public TestClock Clock { get; } = new(TestClock.Day, TimeSpan.FromSeconds(1));
 
-    /// <summary>Moves files for Organize, with the finder given or the fixture's own.</summary>
-    public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Changes, _audit.Object, Disk, Clock);
+    /// <summary>Moves files for Organize, with the finder given or the fixture's own, on the plan given or the free one.</summary>
+    public OrganizeMover Mover(ICompanionFileFinder? finder = null, Subscription? plan = null) => new(Library, finder ?? Finder, Changes, _audit.Object, Disk, Clock, plan ?? TestPlans.Subscription());
 
     /// <param name="files">The file system it erases through; the fixture's own disk when not given.</param>
     public PhotoSense.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null) => new(Repo, Batches, _audit.Object, files ?? Disk, TestPlans.Removals());

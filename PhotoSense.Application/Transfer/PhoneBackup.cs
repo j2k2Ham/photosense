@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using PhotoSense.Application.Locations;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Application.Plans;
 using PhotoSense.Application.Vault;
@@ -322,8 +323,10 @@ public sealed class PhoneBackup
     /// <param name="paths">The trip's pictures and videos, by their paths; what goes with each goes too.</param>
     /// <param name="ct">Stops it before it starts.</param>
     /// <exception cref="InvalidOperationException">The phone has been paired with no computer, or a backup is running.</exception>
+    /// <exception cref="ProNeededException">The plan is not Pro: trip folders are part of Pro (Jamie, 2026-11-20).</exception>
     public async Task MakeFolderAsync(string folder, IReadOnlyCollection<string> paths, CancellationToken ct)
     {
+        if (!(await _plan.CurrentAsync(ct)).Pro) throw new ProNeededException(TripsArePro);
         var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException(PairFirst);
         var wanted = paths.ToHashSet(PhotoPath.Comparer);
         var ids = PhotoItem.Of(await _library.ListAsync(_root, ct)).Where(i => i.Files.Any(f => wanted.Contains(f.Path))).Select(i => i.Main.Id).ToList();
@@ -406,6 +409,9 @@ public sealed class PhoneBackup
     public Task<IReadOnlySet<string>> FoldersMadeAsync(CancellationToken ct) => _ledger.FoldersMadeAsync(ct);
 
     private const string PairFirst = "Pair with a computer first: in Settings, choose Computer.";
+
+    /// <summary>What the free plan is told when it asks for a trip folder: the Pro sheet says it too.</summary>
+    public const string TripsArePro = "Trip folders on your computer are part of Pro.";
 
     // Called holding the lock.
     private void Start(Run run, BackupComputer computer, IReadOnlyCollection<string>? only)

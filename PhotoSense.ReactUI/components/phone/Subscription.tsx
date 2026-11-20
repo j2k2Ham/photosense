@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { appIconUrl, buyPlan, manageSubscription, restorePurchases } from '../../lib/apiClient';
+import { appIconUrl, buyPlan, manageSubscription, restorePurchases, useAbout } from '../../lib/apiClient';
 import { comparison, daysLeft, offeredPlans, planDate, planDay, planName, priceOf, theStore, TRIAL_FEATURES, type OfferedPlan } from '../../lib/plan';
-import { usePhone } from '../../lib/phone';
+import { downloadLine, usePhone } from '../../lib/phone';
 import type { PlanDto, PlanKind } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, PhoneButton, PhoneSwitch } from './Controls';
@@ -28,8 +28,9 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * Family: the plan, when it renews and where it is billed, and the other plans to change to.
  */
 export function SubscriptionScreen({ plan, remind, onRemind, notify, onTerms, onPrivacy, onBack }: Props) {
-  const { words } = usePhone();
+  const { words, ios } = usePhone();
   const inPlace = useInPlace();
+  const download = useAbout().data?.downloadUrl;
   const store = plan.store ?? words.store;
   const plans = offeredPlans(plan.offers, true);
   const current: PlanKind | undefined = plan.tier === 'family' ? 'family' : plan.tier === 'pro' ? plan.kind ?? undefined : undefined;
@@ -62,7 +63,12 @@ export function SubscriptionScreen({ plan, remind, onRemind, notify, onTerms, on
       <button type="button" onClick={onPrivacy} className="py-1">Privacy policy</button>
     </div>
   );
-  const covers = <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">One purchase covers PhotoSense on your phone, tablet and computer when you sign in with the same {words.account}.</p>;
+  // Tied to the store's account (Jamie, 2026-11-20); the computer has no store, and is Pro through a phone paired with it.
+  const covers = (
+    <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">
+      One purchase covers PhotoSense on every {ios ? 'iPhone and iPad' : 'phone and tablet'} signed in to the same {words.account}, and on the computers you pair with them. {downloadLine(download)}
+    </p>
+  );
   if (plan.tier === 'free') {
     body = <FreePlan plan={plan} plans={plans} chosen={selected?.kind} onChoose={setChosen} />;
     footer = selected && (
