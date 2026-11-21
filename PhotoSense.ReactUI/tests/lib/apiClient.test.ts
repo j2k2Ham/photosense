@@ -447,7 +447,7 @@ describe('removed files', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
 
   it('are counted in and around the folders the page knows of', async () => {
-    const found = { folders: [{ path: 'C:\\photos\\_PhotoSense_Removed', files: 3, bytes: 900 }], files: 3, bytes: 900 };
+    const found = { folders: [{ path: 'C:\\photos\\_PhotoSense_Removed', files: 3, bytes: 900, recyclable: true }], files: 3, bytes: 900 };
     answering(found);
     const api = await load();
     await expect(api.fetchRemoved(['C:\\photos', 'D:\\Trips & days'])).resolves.toEqual(found);

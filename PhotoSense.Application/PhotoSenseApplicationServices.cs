@@ -42,7 +42,9 @@ public static class PhotoSenseApplicationServices
         s.AddSingleton<PlaceLookup>();
         s.AddSingleton<OrganizePlanner>();
         s.AddSingleton<OrganizeMover>();
-        s.AddSingleton<RemovedFiles>();
+        // The computer's Recycle Bin, or the Trash, where there is one; a phone has its own bin.
+        s.AddSingleton(sp => new RemovedFiles(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IOrganizeBatchStore>(), sp.GetRequiredService<IAuditRepository>(),
+            sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<DailyRemovals>(), sp.GetService<IRecycleBin>()));
         // Clean up's categories; a phone's storage where there is a phone.
         s.AddSingleton(sp => new CleanUpCategories(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IPhotoFileSystem>(), sp.GetRequiredService<ICompanionFileFinder>(),
             sp.GetRequiredService<IDuplicateRemovalService>(), sp.GetRequiredService<IDuplicateAnalysisService>(), sp.GetRequiredService<DailyRemovals>(), sp.GetService<IDeviceStatus>()));

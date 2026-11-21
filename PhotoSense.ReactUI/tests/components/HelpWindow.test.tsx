@@ -26,7 +26,7 @@ describe('the guide itself', () => {
   it('has a topic for each part of PhotoSense on a computer, each told from the others, and says where its buttons go', () => {
     expect(COMPUTER.map(t => t.title)).toEqual([
       'Getting started', 'Scanning for duplicates', 'Reviewing duplicates', 'Similar shots', 'Large videos, screenshots, bursts and blurry shots', 'Organize: suggested folders', 'Organize: folders of your own',
-      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Backing up a phone to a computer', 'Removed files and deleting permanently', 'The free plan and Pro', 'Settings, theme, errors and About', 'If something looks wrong',
+      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Backing up a phone to a computer', 'Removed files and the Recycle Bin', 'The free plan and Pro', 'Settings, theme, errors and About', 'If something looks wrong',
     ]);
     expect(new Set(GUIDE.map(t => t.id)).size).toBe(GUIDE.length);
     expect(GUIDE.filter(t => t.go).map(t => [t.id, t.go!.place])).toEqual([
@@ -200,7 +200,7 @@ describe('the help window', () => {
     const { onGo } = open();
     await userEvent.click(topic('Scanning for duplicates'));
     await userEvent.click(within(page()).getByRole('button', { name: 'Go to the scan screen' }));
-    await userEvent.click(topic('Removed files and deleting permanently'));
+    await userEvent.click(topic('Removed files and the Recycle Bin'));
     await userEvent.click(within(page()).getByRole('button', { name: 'Open Settings' }));
     expect(onGo.mock.calls).toEqual([['scan'], ['settings']]);
   });

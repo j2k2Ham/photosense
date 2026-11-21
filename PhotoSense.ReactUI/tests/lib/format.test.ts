@@ -1,6 +1,19 @@
-import { describe, expect, it } from 'vitest';
-import { compareRows, differences, groupSummary, leaf, matchMeaning, sameFolder, timeLeft, formatBytes, formatCoordinates, formatDimensions, formatDuration, formatFile, formatPlace, formatTaken, hasCoordinates, linkedFiles, mapUrl, matchLabel } from '../../lib/format';
+import { describe, expect, it, vi } from 'vitest';
+import { binName, compareRows, differences, groupSummary, leaf, matchMeaning, sameFolder, timeLeft, formatBytes, formatCoordinates, formatDimensions, formatDuration, formatFile, formatPlace, formatTaken, hasCoordinates, linkedFiles, mapUrl, matchLabel } from '../../lib/format';
 import { group, member, photo, video } from '../fixtures';
+
+describe('binName', () => {
+  it('calls the bin the Trash on a Mac and the Recycle Bin elsewhere, as the browser on this computer says', () => {
+    expect(binName('Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) AppleWebKit/605.1.15')).toBe('Trash');
+    expect(binName('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0')).toBe('Recycle Bin');
+    // The browser the tests run in is neither a Mac nor said to be one.
+    expect(binName()).toBe('Recycle Bin');
+    // Made ahead with no browser at all, as when the page is built.
+    vi.stubGlobal('navigator', undefined);
+    expect(binName()).toBe('Recycle Bin');
+    vi.unstubAllGlobals();
+  });
+});
 
 describe('formatBytes', () => {
   it.each([

@@ -1,5 +1,6 @@
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Entities;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests.Application;
@@ -112,8 +113,74 @@ public sealed class RemovedFilesTests : IDisposable
         await Assert.That((result.Erased, result.Bytes, result.Skipped, result.Problems.Count)).IsEqualTo((3, 7L, 0, 0));
         await Assert.That((Directory.Exists(_f.In("Phone", Held)), File.Exists(kept), _f.Files("Other", Held).Single())).IsEqualTo((false, true, "IMG_3.JPG"));
         var entry = _f.Audited.Single();
-        await Assert.That((entry.Action, entry.Details)).IsEqualTo(("EraseRemoved", "3 files erased from 1 folders, 0 left"));
+        await Assert.That((entry.Action, entry.Details)).IsEqualTo(("EraseRemoved", "3 files gone from 1 folders, 0 of them to a bin, 0 left"));
         await Assert.That(await FoundAsync(ct, _f.In("Phone"), _f.In("Other"))).IsEquivalentTo(new[] { (_f.In("Other", Held), 1, 4L) }, CollectionOrdering.Matching);
+    }
+
+    [Test]
+    public async Task Sends_What_Waits_To_The_Computers_Recycle_Bin_And_Erases_For_Good_Only_Where_A_Drive_Has_None(CancellationToken ct)
+    {
+        _f.Put($"Phone/{Held}/IMG_1.JPG", "aaaa");
+        _f.Put($"Phone/{Held}/2022/IMG_2.JPG", "bb");
+        _f.Put($"Card/{Held}/IMG_3.JPG", "ccc");
+        // The computer's own drive has a Recycle Bin; the card has none (Jamie, 2026-11-20).
+        var bin = new StandInBin(_f.In("Phone"));
+
+        var found = await _f.Removed(bin: bin).FindAsync([_f.In("Phone"), _f.In("Card")], ct);
+        await Assert.That(found.Select(h => (Path.GetFileName(Path.GetDirectoryName(h.Path))!, h.Files, h.Recyclable))).IsEquivalentTo(new[] { ("Card", 1, false), ("Phone", 2, true) }, CollectionOrdering.Any);
+
+        var result = await _f.Removed(bin: bin).EraseAsync([_f.In("Phone", Held), _f.In("Card", Held)], ct);
+        await Assert.That((result.Erased, result.Recycled, result.Bytes, result.Skipped, result.Problems.Count)).IsEqualTo((3, 2, 9L, 0, 0));
+        await Assert.That(bin.Taken.Select(p => Path.GetFileName(p))).IsEquivalentTo(["IMG_1.JPG", "IMG_2.JPG"], CollectionOrdering.Any);
+        await Assert.That((Directory.Exists(_f.In("Phone", Held)), Directory.Exists(_f.In("Card", Held)))).IsEqualTo((false, false));
+        await Assert.That(_f.Audited.Single().Details).IsEqualTo("3 files gone from 2 folders, 2 of them to a bin, 0 left");
+    }
+
+    [Test]
+    public async Task Leaves_What_The_Recycle_Bin_Would_Not_Take_And_Says_Why(CancellationToken ct)
+    {
+        _f.Put($"Phone/{Held}/IMG_1.JPG", "aaaa");
+        _f.Put($"Phone/{Held}/IMG_2.JPG", "bb");
+
+        // Refused whole: every file stays, with the system's own words.
+        var refusing = new StandInBin(_f.In("Phone")) { Refusal = "Windows would not move them to the Recycle Bin (error 5)." };
+        var refused = await _f.Removed(bin: refusing).EraseAsync([_f.In("Phone", Held)], ct);
+        await Assert.That((refused.Erased, refused.Recycled, refused.Skipped, refused.Problems.Single())).IsEqualTo((0, 0, 2, "Windows would not move them to the Recycle Bin (error 5)."));
+        await Assert.That(_f.Files("Phone", Held).Count).IsEqualTo(2);
+
+        // One taken and one left without a word: what is left is said.
+        var partly = new StandInBin(_f.In("Phone")) { Leave = "IMG_2.JPG" };
+        var some = await _f.Removed(bin: partly).EraseAsync([_f.In("Phone", Held)], ct);
+        await Assert.That((some.Erased, some.Recycled, some.Bytes, some.Skipped, some.Problems.Single())).IsEqualTo((1, 1, 4L, 1, "1 could not be moved to the Recycle Bin."));
+        await Assert.That(_f.Files("Phone", Held).Single()).IsEqualTo("IMG_2.JPG");
+    }
+
+    /// <summary>A Recycle Bin that holds the folders under one place, takes what it is given unless told otherwise, and keeps a list.</summary>
+    private sealed class StandInBin(string holds) : IRecycleBin
+    {
+        /// <summary>What the system says when it refuses everything; null when it takes it.</summary>
+        public string? Refusal { get; init; }
+        /// <summary>A file it leaves where it is, saying nothing.</summary>
+        public string? Leave { get; init; }
+        /// <summary>The files it took.</summary>
+        public List<string> Taken { get; } = [];
+
+        /// <inheritdoc />
+        public string Name => "Recycle Bin";
+
+        /// <inheritdoc />
+        public bool Holds(string folder) => folder.StartsWith(holds, StringComparison.Ordinal);
+
+        /// <inheritdoc />
+        public void Recycle(IReadOnlyList<string> paths)
+        {
+            if (Refusal is not null) throw new IOException(Refusal);
+            foreach (var path in paths.Where(p => Path.GetFileName(p) != Leave))
+            {
+                File.Delete(path);
+                Taken.Add(path);
+            }
+        }
     }
 
     [Test]
@@ -132,7 +199,7 @@ public sealed class RemovedFilesTests : IDisposable
         await Assert.That(result.Problems).IsEquivalentTo(new[] { "IMG_2.JPG: The file is in use.", "IMG_3.JPG: Access is denied." }, CollectionOrdering.Any);
         await Assert.That((_f.Files("Phone", Held).Count, _f.Files("Phone", Held, "2022").Single(), _f.Files("Phone", Held, "2023").Single(), Directory.Exists(_f.In("Phone", Held, "2024"))))
             .IsEqualTo((0, "IMG_2.JPG", "IMG_3.JPG", false));
-        await Assert.That(_f.Audited.Single().Details).IsEqualTo("2 files erased from 1 folders, 2 left");
+        await Assert.That(_f.Audited.Single().Details).IsEqualTo("2 files gone from 1 folders, 0 of them to a bin, 2 left");
     }
 
     [Test]
@@ -212,7 +279,7 @@ public sealed class RemovedFilesTests : IDisposable
         var result = await _f.Removed().EraseAsync([_f.In("Gone", Held), _f.In("Phone", Held)], ct);
 
         await Assert.That((result.Erased, result.Bytes, result.Skipped, File.Exists(real))).IsEqualTo((0, 0L, 0, true));
-        await Assert.That(_f.Audited.Single().Details).IsEqualTo("0 files erased from 0 folders, 0 left");
+        await Assert.That(_f.Audited.Single().Details).IsEqualTo("0 files gone from 0 folders, 0 of them to a bin, 0 left");
     }
 
     [Test]

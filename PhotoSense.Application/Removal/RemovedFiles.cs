@@ -12,18 +12,24 @@ namespace PhotoSense.Application.Removal;
 /// <param name="Path">The folder's full path.</param>
 /// <param name="Files">How many files it holds, in every folder inside it.</param>
 /// <param name="Bytes">How much they take up.</param>
-public sealed record HeldFolder(string Path, int Files, long Bytes);
+/// <param name="Recyclable">
+/// Its files go to a bin they can be got back from: the computer's Recycle Bin or Trash, or a phone's own. Otherwise,
+/// on a network share or a drive with no Recycle Bin, they are erased for good, after a warning naming the folder.
+/// </param>
+public sealed record HeldFolder(string Path, int Files, long Bytes, bool Recyclable);
 
-/// <summary>What erasing did.</summary>
-/// <param name="Erased">Files erased for good.</param>
+/// <summary>What emptying the folders of removed files did.</summary>
+/// <param name="Erased">Files that went: to a bin, or erased for good.</param>
 /// <param name="Bytes">How much they took up.</param>
-/// <param name="Skipped">Files that could not be erased and are still there.</param>
-/// <param name="Problems">Why each of those could not be, naming the file where there is one to name.</param>
-public sealed record EraseResult(int Erased, long Bytes, int Skipped, IReadOnlyList<string> Problems);
+/// <param name="Skipped">Files that could not go and are still there.</param>
+/// <param name="Problems">Why each of those could not, naming the file where there is one to name.</param>
+/// <param name="Recycled">Of the files that went, those that went to a bin they can be got back from.</param>
+public sealed record EraseResult(int Erased, long Bytes, int Skipped, IReadOnlyList<string> Problems, int Recycled = 0);
 
 /// <summary>
 /// The files Clean up and Organize have removed. They wait in a folder of their own inside the folder they
-/// were removed from, where they can be put back; this is the one place they are erased for good.
+/// were removed from, where they can be put back; this is the one place they leave it: to the computer's Recycle Bin or
+/// Trash (Jamie, 2026-11-20), or to a phone's own bin, and erased for good only where there is no bin.
 /// </summary>
 public sealed class RemovedFiles
 {
@@ -32,6 +38,7 @@ public sealed class RemovedFiles
     private readonly IAuditRepository _audit;
     private readonly IPhotoFileSystem _files;
     private readonly DailyRemovals _removals;
+    private readonly IRecycleBin? _bin;
 
     /// <summary>The removed files where the photos are kept, with the records of what scans and changes did.</summary>
     /// <param name="repo">What the scans recorded.</param>
@@ -39,8 +46,10 @@ public sealed class RemovedFiles
     /// <param name="audit">The record of what was done.</param>
     /// <param name="files">Where the photos are.</param>
     /// <param name="removals">Where the bytes erased are noted, for Year in review.</param>
-    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals)
+    /// <param name="bin">The computer's Recycle Bin or Trash; null on a phone, which has its own, and where there is none.</param>
+    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals, IRecycleBin? bin)
     {
+        _bin = bin;
         _repo = repo;
         _batches = batches;
         _audit = audit;
@@ -69,8 +78,9 @@ public sealed class RemovedFiles
     }
 
     /// <summary>
-    /// Erases everything in the folders given, and the folders with it. This cannot be taken back. A file
-    /// that cannot be erased is left, with the folders it is in.
+    /// Empties the folders given, and takes them away: on a computer into its Recycle Bin or Trash, where the files can
+    /// be got back until it is emptied, or, for a folder whose drive has none, erased for good (the page has warned of
+    /// it, naming the folder); on a phone into its own bin. A file that cannot go is left, with the folders it is in.
     /// </summary>
     /// <param name="folders">The folders of removed files to empty.</param>
     /// <param name="ct">
@@ -88,7 +98,7 @@ public sealed class RemovedFiles
         ct.ThrowIfCancellationRequested();
 
         var problems = new List<string>();
-        int erased = 0, skipped = 0, emptied = 0;
+        int erased = 0, skipped = 0, emptied = 0, recycled = 0;
         long bytes = 0;
         foreach (var path in asked.Select(f => Path.TrimEndingDirectorySeparator(Path.GetFullPath(f!))).Distinct(PhotoPath.Comparer))
         {
@@ -104,6 +114,7 @@ public sealed class RemovedFiles
                 {
                     together.EraseAll([.. files.Select(f => f.Path)]);
                     erased += files.Count;
+                    recycled += files.Count;
                     bytes += files.Sum(f => f.Bytes);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -111,6 +122,22 @@ public sealed class RemovedFiles
                     skipped += files.Count;
                     problems.Add(ex.Message);
                 }
+            }
+            else if (_bin is { } bin && bin.Holds(path))
+            {
+                try { bin.Recycle([.. files.Select(f => f.Path)]); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) { problems.Add(ex.Message); }
+                // What went is what is no longer there: the bin can take some files and refuse the rest.
+                var left = 0;
+                foreach (var (file, size) in files)
+                {
+                    if (_files.FileExists(file)) { left++; continue; }
+                    erased++;
+                    recycled++;
+                    bytes += size;
+                }
+                skipped += left;
+                if (left > 0 && problems.Count == 0) problems.Add($"{left:N0} could not be moved to the {bin.Name}.");
             }
             else
             {
@@ -136,9 +163,9 @@ public sealed class RemovedFiles
         // A removal whose files are all gone can no longer be undone, and is no longer offered to be.
         foreach (var batch in await RemovalsAsync(CancellationToken.None))
             if (!batch.Items.Exists(i => _files.FileExists(i.To))) await _batches.MarkUndoneAsync(batch.Id, CancellationToken.None);
-        await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files erased from {emptied} folders, {skipped} left" }, CancellationToken.None);
+        await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files gone from {emptied} folders, {recycled} of them to a bin, {skipped} left" }, CancellationToken.None);
         await _removals.FreedAsync(bytes, CancellationToken.None);
-        return new EraseResult(erased, bytes, skipped, problems);
+        return new EraseResult(erased, bytes, skipped, problems, recycled);
     }
 
     /// <summary>The removals on record, undone or not.</summary>
@@ -198,6 +225,6 @@ public sealed class RemovedFiles
     private HeldFolder Measure(string folder)
     {
         var files = FilesIn(Throughout(folder)).ToList();
-        return new HeldFolder(folder, files.Count, files.Sum(f => f.Bytes));
+        return new HeldFolder(folder, files.Count, files.Sum(f => f.Bytes), _files is IPhotoChangesTogether || (_bin?.Holds(folder) ?? false));
     }
 }

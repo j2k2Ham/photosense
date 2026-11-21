@@ -675,7 +675,7 @@ describe('deleting files', () => {
     await userEvent.click(bin(2));
     expect(question()).toHaveAccessibleName('Delete 2 files?');
     expect(question()).toHaveTextContent('2 files taking 11.6 MB will be removed from Phone Pictures, along with any Live Photo videos and edit files that belong only to them.');
-    expect(question()).toHaveTextContent('Nothing is erased. The files are moved to _PhotoSense_Removed inside Phone Pictures, where Clean up puts what it removes. Undo this from Recently moved, or use Delete permanently in the menu to free the space.');
+    expect(question()).toHaveTextContent('Nothing is erased. The files are moved to _PhotoSense_Removed inside Phone Pictures, where Clean up puts what it removes. Undo this from Recently moved, or use Move to Recycle Bin in the menu to free the space.');
     // Nothing goes until it is confirmed, and nothing at all on Cancel.
     expect(api.removeOrganize).not.toHaveBeenCalled();
     await userEvent.click(within(question()).getByRole('button', { name: 'Cancel' }));
@@ -786,7 +786,7 @@ describe('deleting files', () => {
       expect(question()).toHaveAccessibleName('Delete a1.JPG?');
       expect(question()).toHaveTextContent('a1.JPG (2.0 MB) in Anaconda will be removed, along with any Live Photo video and edit files that belong only to it.');
       expect(question()).toHaveTextContent('a1.JPG in Top level stays.');
-      expect(question()).toHaveTextContent('Undo this from Recently moved, or use Delete permanently in the menu to free the space.');
+      expect(question()).toHaveTextContent('Undo this from Recently moved, or use Move to Recycle Bin in the menu to free the space.');
       // Esc answers the question and nothing else: both windows behind it stay.
       api.usePlan.mockReturnValue({ data: plan({ leftToday: 0, removedToday: 50 }) });
       fireEvent.keyDown(window, { key: 'Escape' });

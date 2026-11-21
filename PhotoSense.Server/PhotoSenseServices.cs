@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using PhotoSense.Api.About;
 using PhotoSense.Desktop.Browsing;
 using PhotoSense.Desktop.Imaging;
+using PhotoSense.Desktop.Removal;
 using PhotoSense.Desktop.Viewing;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Services;
@@ -31,6 +32,9 @@ internal static class PhotoSenseServices
         s.AddSingleton<IPhotoFileSystem, DiskFileSystem>();
         s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
+        // The computer's Recycle Bin or Trash; turned off, as by the end-to-end tests, none at all.
+        s.AddSingleton<IRecycleBin>(sp => sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.UseRecycleBin
+            ? new ComputerRecycleBin() : new ComputerRecycleBin(_ => false, () => [], _ => { }));
         s.AddSingleton<IFolderBrowser, FileSystemFolderBrowser>();
         s.AddSingleton<IPhotoAccess, FolderAccess>();
         s.AddSingleton(ProgramInfo.From(typeof(PhotoSenseServices).Assembly, "server"));

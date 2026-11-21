@@ -226,7 +226,7 @@ public sealed class ChangesTogetherTests
         var removed = In("_PhotoSense_Removed");
         _files.Put(Path.Combine(removed, "IMG_1.JPG"), "one");
         _files.Put(Path.Combine(removed, "Trips", "IMG_2.JPG"), "two!");
-        var erasing = new RemovedFiles(new InMemoryPhotoRepository(), _batches, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals());
+        var erasing = new RemovedFiles(new InMemoryPhotoRepository(), _batches, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals(), null);
 
         _files.FailErasing = true;
         var refused = await erasing.EraseAsync([removed], ct);

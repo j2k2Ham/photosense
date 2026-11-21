@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles, usePlan } from '../../lib/apiClient';
 import { largest, limitLine, overLimit } from '../../lib/plan';
-import { formatBytes, leaf, sameFolder } from '../../lib/format';
+import { binName, formatBytes, leaf, sameFolder } from '../../lib/format';
 import type { DistanceUnit } from '../../lib/distance';
 import {
   GALLERY_PAGE, defaultSettings, fileTag, joinPath, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
@@ -397,7 +397,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
       )}
       {deleting && (
         <ConfirmDialog busy={busy} title={deleting.files.length === 1 ? `Delete ${deleting.files[0].name}?` : `Delete ${countFiles(deleting.files.length)}?`} confirmLabel={`Delete ${countFiles(deleting.files.length)}`}
-          note={<>Nothing is erased. The files are moved to <span className="font-mono">{REMOVED_FOLDER}</span> inside {leaf(root!)}, where Clean up puts what it removes. Undo this from Recently moved, or use Delete permanently in the menu to free the space.{limitLine(plan) && ` ${limitLine(plan)}`}</>}
+          note={<>Nothing is erased. The files are moved to <span className="font-mono">{REMOVED_FOLDER}</span> inside {leaf(root!)}, where Clean up puts what it removes. Undo this from Recently moved, or use Move to {binName()} in the menu to free the space.{limitLine(plan) && ` ${limitLine(plan)}`}</>}
           onCancel={() => setDeleting(undefined)} onConfirm={() => void remove(deleting.files)}>
           {deleting.stays ? (
             <>

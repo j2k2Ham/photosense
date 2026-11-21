@@ -26,7 +26,7 @@ import {
 } from '../lib/apiClient';
 import { originalsStay, someGroups } from '../lib/cleanup';
 import { fromScanned } from '../lib/organize';
-import { formatBytes, linkedFiles } from '../lib/format';
+import { binName, formatBytes, linkedFiles } from '../lib/format';
 import { limitLine, overLimit } from '../lib/plan';
 import type { GuidePlace } from '../lib/guide';
 import { loadLastScan, loadOrganizeRoot, useLastScan } from '../lib/lastScan';
@@ -126,6 +126,8 @@ export default function HomePage() {
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
   // What is waiting to be erased, once the service has said; and the wish, made while being asked, not to be asked twice again.
   const [held, setHeld] = useState<RemovedFilesDto>();
+  // Where Move to Recycle Bin sends them: the Trash on a Mac.
+  const bin = binName();
   const [askOnce, setAskOnce] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
 
@@ -327,9 +329,11 @@ export default function HomePage() {
     if (askOnce) changeSettings({ eraseAskTwice: false });
     const result = await eraseRemoved(held!.folders.map(f => f.path));
     setPending(undefined);
-    if (result.erased > 0) push(`Deleted ${files(result.erased)} (${formatBytes(result.bytes)}) permanently.`, 'ok');
-    if (result.skipped > 0) push(`${files(result.skipped)} could not be deleted. ${result.problems[0] ?? ''}`.trim(), 'error');
-    if (result.erased + result.skipped === 0) push('There was nothing left to delete.', 'info');
+    const gone = result.erased - result.recycled;
+    if (result.recycled > 0) push(`Moved ${files(result.recycled)}${gone === 0 ? ` (${formatBytes(result.bytes)})` : ''} to the ${bin}.`, 'ok');
+    if (gone > 0) push(`Erased ${files(gone)} for good, as their drive has no ${bin}.`, 'ok');
+    if (result.skipped > 0) push(`${files(result.skipped)} could not be moved. ${result.problems[0] ?? ''}`.trim(), 'error');
+    if (result.erased + result.skipped === 0) push('There was nothing left to move.', 'info');
   });
 
   const started = useCallback((id: string) => {
@@ -350,7 +354,7 @@ export default function HomePage() {
   const offline = !!(groups.error || status.error);
   const cancel = () => setPending(undefined);
   const limit = limitLine(plan);
-  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.{limit && ` ${limit}`}</>;
+  const note = <>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Move to {binName()}, in the menu, empties it.{limit && ` ${limit}`}</>;
   const best = mode === 'similar' ? 'best shot' : 'original';
   // Once there is no group left to review, a narrow screen goes back to the list.
   const showReview = reviewing && selected !== undefined;
@@ -517,14 +521,19 @@ export default function HomePage() {
       )}
 
       {pending?.scope === 'erase' && !pending.sure && (
-        <ConfirmDialog busy={busy} ready={!!held && held.files > 0} title="Delete removed files permanently?" confirmLabel="Delete permanently" onCancel={cancel}
+        <ConfirmDialog busy={busy} ready={!!held && held.files > 0} title={`Move removed files to the ${bin}?`} confirmLabel={`Move to ${bin}`} onCancel={cancel}
           onConfirm={() => (settings.eraseAskTwice ? setPending({ scope: 'erase', sure: true }) : erase())}
-          note={<>This cannot be undone. The files are erased, not moved: they do not go to the Recycle Bin, and Undo can no longer bring them back.</>}>
+          note={<>You can get them back from the {bin} until it is emptied. Undo in PhotoSense can no longer bring them back.</>}>
           {!held ? <p role="status">Looking for removed files…</p> : held.files === 0 ? (
-            <p>There is nothing to delete: no <span className="font-mono text-t1">{REMOVED_FOLDER}</span> folder holds any files.</p>
+            <p>There is nothing to move: no <span className="font-mono text-t1">{REMOVED_FOLDER}</span> folder holds any files.</p>
           ) : (
             <>
-              <p><Name>{files(held.files)}</Name> taking {formatBytes(held.bytes)} will be erased: everything Clean up and Organize have removed that is still waiting in {held.folders.length === 1 ? 'this folder' : `these ${held.folders.length} folders`}.</p>
+              <p>{goingSaid(held, bin)}</p>
+              {erasedFolders(held).length > 0 && (
+                <p className="font-semibold text-rose-t">
+                  {erasedFolders(held).length === 1 ? 'This folder is' : 'These folders are'} on a drive with no {bin}: {erasedFolders(held).map(f => f.path).join(', ')}. Its files are erased for good, and cannot be got back.
+                </p>
+              )}
               <ul aria-label="Folders that will be emptied" className="space-y-1 pt-1">
                 {held.folders.slice(0, NAMED).map(f => (
                   <li key={f.path} className="flex gap-3 text-[13px]"><span className="min-w-0 flex-1 font-mono text-t1 [overflow-wrap:anywhere]">{f.path}</span><span className="shrink-0">{files(f.files)}</span></li>
@@ -536,8 +545,8 @@ export default function HomePage() {
         </ConfirmDialog>
       )}
       {pending?.scope === 'erase' && pending.sure && (
-        <ConfirmDialog small busy={busy} title="Are you sure?" confirmLabel="Delete permanently" onCancel={cancel} onConfirm={erase}>
-          <p>{files(held!.files)} ({formatBytes(held!.bytes)}) will be erased for good.</p>
+        <ConfirmDialog small busy={busy} title="Are you sure?" confirmLabel={`Move to ${bin}`} onCancel={cancel} onConfirm={erase}>
+          <p>{goingSaid(held!, bin)}</p>
           <label className="flex cursor-pointer select-none items-center gap-2.5 pt-2 text-[13.5px] text-t1">
             <input type="checkbox" role="switch" checked={askOnce} onChange={e => setAskOnce(e.target.checked)} className="peer sr-only" />
             <span aria-hidden className="relative h-[18px] w-8 shrink-0 rounded-full bg-s3 transition after:absolute after:left-0.5 after:top-0.5 after:h-3.5 after:w-3.5 after:rounded-full after:bg-t1 after:transition peer-checked:bg-brand peer-checked:after:translate-x-3.5 peer-checked:after:bg-on-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand" />
@@ -560,6 +569,21 @@ export default function HomePage() {
 interface GroupConfirmProps { readonly group: DuplicateGroupDto; readonly similar: boolean; readonly busy: boolean; readonly note: React.ReactNode; onCancel(): void; onConfirm(): void; }
 
 const Name = ({ children }: { readonly children: string }) => <span className="font-semibold text-t1 [overflow-wrap:anywhere]">{children}</span>;
+
+/** The folders of removed files on a drive with no Recycle Bin, whose files are erased for good. */
+const erasedFolders = (held: RemovedFilesDto) => held.folders.filter(f => !f.recyclable);
+
+/**
+ * "312 files taking 1.2 GB go to the Recycle Bin.", and, of those on a drive with none, how many are erased for good:
+ * what Move to Recycle Bin is about to do.
+ */
+function goingSaid(held: RemovedFilesDto, bin: string): string {
+  const erased = erasedFolders(held).reduce((n, f) => n + f.files, 0), recycled = held.files - erased;
+  const go = (n: number) => (n === 1 ? 'goes' : 'go'), are = (n: number) => (n === 1 ? 'is' : 'are');
+  if (erased === 0) return `${files(held.files)} taking ${formatBytes(held.bytes)} ${go(held.files)} to the ${bin}: everything Clean up and Organize have removed that is still waiting.`;
+  if (recycled === 0) return `${files(erased)} taking ${formatBytes(held.bytes)} ${are(erased)} erased for good.`;
+  return `${files(recycled)} ${go(recycled)} to the ${bin}, and ${files(erased)} ${are(erased)} erased for good.`;
+}
 
 /** The other half of every removal: the file that is not going anywhere, by name and by folder. */
 function Stays({ what, photo }: { readonly what: string; readonly photo: PhotoDto }) {

@@ -252,7 +252,7 @@ describe('Settings on a tablet (T5)', () => {
 });
 
 describe('Settings', () => {
-  const removed = (files: number, bytes = 212 * 1024 ** 2) => ({ files, bytes, folders: files ? [{ path: '/Photo Library/_PhotoSense_Removed', files, bytes }] : [] });
+  const removed = (files: number, bytes = 212 * 1024 ** 2) => ({ files, bytes, folders: files ? [{ path: '/Photo Library/_PhotoSense_Removed', files, bytes, recyclable: true }] : [] });
   function show(platform: Platform = 'ios', more = {}) {
     const calls = {
       onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onMoveRemoved: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
@@ -367,7 +367,7 @@ function noCalls() {
 }
 
 describe('What waits in PhotoSense Removed from before', () => {
-  const waiting = { files: 37, bytes: 212 * 1024 ** 2, folders: [{ path: '/Photo Library/_PhotoSense_Removed', files: 37, bytes: 212 * 1024 ** 2 }] };
+  const waiting = { files: 37, bytes: 212 * 1024 ** 2, folders: [{ path: '/Photo Library/_PhotoSense_Removed', files: 37, bytes: 212 * 1024 ** 2, recyclable: true }] };
   const question = () => screen.getByRole('dialog');
 
   it('offers to move it to Recently Deleted, saying nothing new goes there, or to leave it for now', async () => {
@@ -650,13 +650,13 @@ describe('PhotoSense on a phone', () => {
 
   describe('from Settings', () => {
     const MB = 1024 ** 2;
-    const waiting = { files: 37, bytes: 212 * MB, folders: [{ path: '/Photo Library/_PhotoSense_Removed', files: 30, bytes: 200 * MB }, { path: '/Photo Library/Trips/_PhotoSense_Removed', files: 7, bytes: 12 * MB }] };
+    const waiting = { files: 37, bytes: 212 * MB, folders: [{ path: '/Photo Library/_PhotoSense_Removed', files: 30, bytes: 200 * MB, recyclable: true }, { path: '/Photo Library/Trips/_PhotoSense_Removed', files: 7, bytes: 12 * MB, recyclable: true }] };
     const gear = async () => { await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]); return screen.getByRole('dialog', { name: 'Settings' }); };
     const question = () => screen.getByRole('dialog');
     beforeEach(() => {
       width(false);
       api.useRemoved.mockImplementation((roots: string[] | null) => ({ data: roots ? waiting : undefined }));
-      api.eraseRemoved.mockResolvedValue({ erased: 37, bytes: 212 * MB, skipped: 0, problems: [] });
+      api.eraseRemoved.mockResolvedValue({ erased: 37, bytes: 212 * MB, skipped: 0, problems: [], recycled: 37 });
       // Offered already at an earlier launch: Settings offers it from here.
       localStorage.setItem('photosense-removed-offered', 'later');
     });
@@ -703,7 +703,7 @@ describe('PhotoSense on a phone', () => {
 
     it('says what could not be moved, that nothing was left, or what went wrong, and Not now moves nothing', async () => {
       api.eraseRemoved.mockClear();
-      api.eraseRemoved.mockResolvedValueOnce({ erased: 35, bytes: 1, skipped: 2, problems: ['You chose not to delete them.'] });
+      api.eraseRemoved.mockResolvedValueOnce({ erased: 35, bytes: 1, skipped: 2, problems: ['You chose not to delete them.'], recycled: 35 });
       render(<App platform="android" />);
       const once = async () => {
         await userEvent.click(within(await gear()).getByRole('button', { name: 'Move to the bin…' }));
@@ -711,10 +711,10 @@ describe('PhotoSense on a phone', () => {
       };
       await once();
       expect(notify.mock.calls).toEqual([['35 items deleted. They wait in the bin for 30 days.', 'ok'], ['2 items could not be deleted. You chose not to delete them.', 'error']]);
-      api.eraseRemoved.mockResolvedValueOnce({ erased: 0, bytes: 0, skipped: 1, problems: [] });
+      api.eraseRemoved.mockResolvedValueOnce({ erased: 0, bytes: 0, skipped: 1, problems: [], recycled: 0 });
       await once();
       expect(notify).toHaveBeenLastCalledWith('1 item could not be deleted.', 'error');
-      api.eraseRemoved.mockResolvedValueOnce({ erased: 0, bytes: 0, skipped: 0, problems: [] });
+      api.eraseRemoved.mockResolvedValueOnce({ erased: 0, bytes: 0, skipped: 0, problems: [], recycled: 0 });
       await once();
       expect(notify).toHaveBeenLastCalledWith('There was nothing left to delete.', 'info');
       api.eraseRemoved.mockRejectedValueOnce(new Error('Photo access was taken away.'));

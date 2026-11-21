@@ -587,7 +587,7 @@ describe('the free plan on a computer', () => {
     expect(screen.getByText('PhotoSense Free')).toHaveAttribute('title', '38 of 50 free removals left today');
     expect(screen.getByText('PhotoSense Free')).toHaveTextContent('PhotoSense Free · 38 left today');
     await userEvent.click(button('Delete all duplicates'));
-    expect(question()).toHaveTextContent('Delete permanently, in the menu, erases them. Free plan: 38 removals left today.');
+    expect(question()).toHaveTextContent('Move to Recycle Bin, in the menu, empties it. Free plan: 38 removals left today.');
   });
 
   it('shows a plan a phone shared, with no limit', () => {
@@ -682,7 +682,7 @@ describe('deleting', () => {
     await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
     expect(screen.getByRole('alertdialog', { name: 'Delete IMG_4198 (1).JPG?' })).toBeInTheDocument();
     expect(question()).toHaveTextContent('IMG_4198 (1).JPG (5.8 MB) will be removed.The original, IMG_4198.JPG, stays in C:\\photos\\2024.');
-    expect(question()).toHaveTextContent('Files go to _PhotoSense_Removed inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.');
+    expect(question()).toHaveTextContent('Files go to _PhotoSense_Removed inside the scanned folder, and Undo puts them back. Move to Recycle Bin, in the menu, empties it.');
     await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
     expect(api.removePhoto).toHaveBeenCalledExactlyOnceWith('a1');
     expect(await toast('Moved IMG_4198 (1).JPG to _PhotoSense_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
@@ -1124,20 +1124,21 @@ describe('clearing the results', () => {
 
 describe('deleting permanently', () => {
   const PHONE = 'C:\\Users\\jamie\\Phone Pictures', HELD = `${PHONE}\\_PhotoSense_Removed`;
-  const found = (...folders: [path: string, files: number, bytes: number][]): RemovedFilesDto => ({
-    folders: folders.map(([path, files, bytes]) => ({ path, files, bytes })), files: folders.reduce((n, f) => n + f[1], 0), bytes: folders.reduce((n, f) => n + f[2], 0),
+  const found = (...folders: [path: string, files: number, bytes: number, recyclable?: boolean][]): RemovedFilesDto => ({
+    folders: folders.map(([path, files, bytes, recyclable = true]) => ({ path, files, bytes, recyclable })), files: folders.reduce((n, f) => n + f[1], 0), bytes: folders.reduce((n, f) => n + f[2], 0),
   });
-  const erased = (changes: Partial<EraseRemovedDto> = {}): EraseRemovedDto => ({ erased: 0, bytes: 0, skipped: 0, problems: [], ...changes });
-  const warning = () => screen.getByRole('alertdialog', { name: 'Delete removed files permanently?' });
+  // What went went to the Recycle Bin unless the test says otherwise.
+  const erased = (changes: Partial<EraseRemovedDto> = {}): EraseRemovedDto => ({ erased: 0, bytes: 0, skipped: 0, problems: [], recycled: changes.erased ?? 0, ...changes });
+  const warning = () => screen.getByRole('alertdialog', { name: 'Move removed files to the Recycle Bin?' });
   const sure = () => screen.getByRole('alertdialog', { name: 'Are you sure?' });
   const ask = async () => {
     await click('Menu');
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' }));
     return warning();
   };
   /** Says yes to the warning, once what would be erased has been found. */
   const confirm = async () => {
-    const go = within(await ask()).getByRole('button', { name: 'Delete permanently' });
+    const go = within(await ask()).getByRole('button', { name: 'Move to Recycle Bin' });
     await waitFor(() => expect(go).toBeEnabled());
     await userEvent.click(go);
   };
@@ -1155,21 +1156,21 @@ describe('deleting permanently', () => {
     // A folder that is both scanned and organized is named once.
     expect(api.fetchRemoved).toHaveBeenCalledExactlyOnceWith([PHONE, 'D:\\Backup']);
     expect(within(warning()).getByRole('status')).toHaveTextContent('Looking for removed files…');
-    expect(within(warning()).getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+    expect(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' })).toBeDisabled();
     await act(async () => looking.resolve(found([HELD, 1234, 6_012_954_214])));
-    expect(warning()).toHaveTextContent('1,234 files taking 5.60 GB will be erased: everything Clean up and Organize have removed that is still waiting in this folder.');
+    expect(warning()).toHaveTextContent('1,234 files taking 5.60 GB go to the Recycle Bin: everything Clean up and Organize have removed that is still waiting.');
     expect(within(warning()).getAllByRole('listitem').map(i => i.textContent)).toEqual([`${HELD}1,234 files`]);
-    expect(warning()).toHaveTextContent('This cannot be undone. The files are erased, not moved: they do not go to the Recycle Bin, and Undo can no longer bring them back.');
+    expect(warning()).toHaveTextContent('You can get them back from the Recycle Bin until it is emptied. Undo in PhotoSense can no longer bring them back.');
 
-    await userEvent.click(within(warning()).getByRole('button', { name: 'Delete permanently' }));
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' }));
     expect(api.eraseRemoved).not.toHaveBeenCalled();
     expect(sure()).toHaveClass('w-[400px]');
-    expect(sure()).toHaveTextContent('1,234 files (5.60 GB) will be erased for good.');
+    expect(sure()).toHaveTextContent('1,234 files taking 5.60 GB go to the Recycle Bin');
     expect(within(sure()).getByRole('switch', { name: 'Do not ask me this second time again' })).not.toBeChecked();
     expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
-    await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Move to Recycle Bin' }));
     expect(api.eraseRemoved).toHaveBeenCalledExactlyOnceWith([HELD]);
-    expect(await toast('Deleted 1,234 files (5.60 GB) permanently.')).toBeInTheDocument();
+    expect(await toast('Moved 1,234 files (5.60 GB) to the Recycle Bin.')).toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
     // Nothing was said about not asking again, so the next time it is asked twice again; and no at the second question erases nothing.
@@ -1186,8 +1187,8 @@ describe('deleting permanently', () => {
     await confirm();
     await userEvent.click(within(sure()).getByRole('switch', { name: 'Do not ask me this second time again' }));
     expect(sure()).toHaveTextContent('It can be turned back on under Settings in the menu.');
-    await userEvent.click(within(sure()).getByRole('button', { name: 'Delete permanently' }));
-    expect(await toast('Deleted 2 files (2 KB) permanently.')).toBeInTheDocument();
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Move to Recycle Bin' }));
+    expect(await toast('Moved 2 files (2 KB) to the Recycle Bin.')).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('photosense-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
 
     // Now the warning is all there is.
@@ -1211,12 +1212,37 @@ describe('deleting permanently', () => {
     expect(api.eraseRemoved).toHaveBeenCalledTimes(2);
   });
 
+  it('names a folder on a drive with no Recycle Bin, whose files are erased for good, in both questions', async () => {
+    api.fetchRemoved.mockResolvedValue(found([HELD, 3, 3072], ['E:\\DCIM\\_PhotoSense_Removed', 2, 2048, false]));
+    open();
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('3 files go to the Recycle Bin, and 2 files are erased for good.'));
+    expect(warning()).toHaveTextContent('This folder is on a drive with no Recycle Bin: E:\\DCIM\\_PhotoSense_Removed. Its files are erased for good, and cannot be got back.');
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' }));
+    expect(sure()).toHaveTextContent('3 files go to the Recycle Bin, and 2 files are erased for good.');
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Cancel' }));
+    // Every folder on such drives: all of it is erased.
+    api.fetchRemoved.mockResolvedValue(found(['E:\\DCIM\\_PhotoSense_Removed', 2, 2048, false], ['F:\\_PhotoSense_Removed', 1, 1024, false]));
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('3 files taking 3 KB are erased for good.'));
+    expect(warning()).toHaveTextContent('These folders are on a drive with no Recycle Bin: E:\\DCIM\\_PhotoSense_Removed, F:\\_PhotoSense_Removed.');
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
+    // One of each, said of one.
+    api.fetchRemoved.mockResolvedValue(found([HELD, 1, 1024], ['F:\\_PhotoSense_Removed', 1, 1024, false]));
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('1 file goes to the Recycle Bin, and 1 file is erased for good.'));
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
+    api.fetchRemoved.mockResolvedValue(found([HELD, 1, 1024]));
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('1 file taking 1 KB goes to the Recycle Bin'));
+  });
+
   it('names the first few of the folders when there are many', async () => {
     api.fetchRemoved.mockResolvedValue(found(...[1, 2, 3, 4, 5, 6].map((n): [string, number, number] => [`D:\\Trip ${n}\\_PhotoSense_Removed`, n, 1024 * n])));
     open();
     await ask();
     expect(await within(warning()).findAllByRole('listitem')).toHaveLength(4);
-    expect(warning()).toHaveTextContent('21 files taking 21 KB will be erased: everything Clean up and Organize have removed that is still waiting in these 6 folders.');
+    expect(warning()).toHaveTextContent('21 files taking 21 KB go to the Recycle Bin: everything Clean up and Organize have removed that is still waiting.');
     expect(within(warning()).getAllByRole('listitem')[0]).toHaveTextContent('D:\\Trip 1\\_PhotoSense_Removed1 file');
     expect(warning()).toHaveTextContent('and 2 more');
   });
@@ -1225,8 +1251,8 @@ describe('deleting permanently', () => {
     api.fetchRemoved.mockResolvedValue(found());
     open();
     await ask();
-    expect(await within(warning()).findByText(/^There is nothing to delete/)).toHaveTextContent('There is nothing to delete: no _PhotoSense_Removed folder holds any files.');
-    expect(within(warning()).getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+    expect(await within(warning()).findByText(/^There is nothing to move/)).toHaveTextContent('There is nothing to move: no _PhotoSense_Removed folder holds any files.');
+    expect(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' })).toBeDisabled();
     // This browser knew of no folder, so the service had only what is on record to go by.
     expect(api.fetchRemoved).toHaveBeenCalledExactlyOnceWith([]);
     await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
@@ -1234,17 +1260,19 @@ describe('deleting permanently', () => {
   });
 
   it.each([
-    [erased({ erased: 3, bytes: 3072, skipped: 2, problems: ['IMG_1.JPG: The file is in use.'] }), ['Deleted 3 files (3 KB) permanently.', '2 files could not be deleted. IMG_1.JPG: The file is in use.']],
-    [erased({ skipped: 1 }), ['1 file could not be deleted.']],
-    [erased(), ['There was nothing left to delete.']],
-  ])('says what was erased and what could not be: %#', async (result, messages) => {
+    [erased({ erased: 3, bytes: 3072, skipped: 2, problems: ['IMG_1.JPG: The file is in use.'] }), ['Moved 3 files (3 KB) to the Recycle Bin.', '2 files could not be moved. IMG_1.JPG: The file is in use.']],
+    [erased({ erased: 3, recycled: 2, bytes: 3072 }), ['Moved 2 files to the Recycle Bin.', 'Erased 1 file for good, as their drive has no Recycle Bin.']],
+    [erased({ erased: 1, recycled: 0, bytes: 1024 }), ['Erased 1 file for good, as their drive has no Recycle Bin.']],
+    [erased({ skipped: 1 }), ['1 file could not be moved.']],
+    [erased(), ['There was nothing left to move.']],
+  ])('says what went to the Recycle Bin, what was erased for good, and what could not go: %#', async (result, messages) => {
     askOnce();
     api.fetchRemoved.mockResolvedValue(found([HELD, 5, 5120]));
     api.eraseRemoved.mockResolvedValue(result);
     open();
     await confirm();
     for (const message of messages) expect(await toast(message)).toBeInTheDocument();
-    expect([...screen.getByRole('log', { name: 'Messages' }).children].filter(e => /Deleted|could not|nothing left/.test(e.textContent!))).toHaveLength(messages.length);
+    expect([...screen.getByRole('log', { name: 'Messages' }).children].filter(e => /Moved|Erased|could not|nothing left/.test(e.textContent!))).toHaveLength(messages.length);
   });
 
   it('says why when the removed files cannot be looked for, or cannot be erased', async () => {
@@ -1252,7 +1280,7 @@ describe('deleting permanently', () => {
     api.fetchRemoved.mockRejectedValueOnce(new Error('The service is busy'));
     open();
     await click('Menu');
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete permanently' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' }));
     expect(await toast('The service is busy')).toBeInTheDocument();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 
@@ -1269,7 +1297,7 @@ describe('deleting permanently', () => {
     api.eraseRemoved.mockRejectedValue(new Error('Not a folder of removed files: C:\\photos'));
     await confirm();
     expect(await toast('Not a folder of removed files: C:\\photos')).toBeInTheDocument();
-    expect(within(warning()).getByRole('button', { name: 'Delete permanently' })).toBeEnabled();
+    expect(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' })).toBeEnabled();
   });
 });
 

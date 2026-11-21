@@ -299,6 +299,8 @@ export interface RemovedFolderDto {
   path: string;
   files: number;
   bytes: number;
+  /** Its files go to a bin they can be got back from; otherwise, on a drive with none, they are erased for good. */
+  recyclable: boolean;
 }
 
 /** Everything that has been removed and not yet erased. */
@@ -316,6 +318,8 @@ export interface EraseRemovedDto {
   /** Files that could not be erased and are still there. */
   skipped: number;
   problems: string[];
+  /** Of the files that went, those that went to a bin they can be got back from. */
+  recycled: number;
 }
 /** What PhotoSense says about itself under About in the menu (PhotoSense.Contracts.About.AboutDto). */
 export interface AboutDto {

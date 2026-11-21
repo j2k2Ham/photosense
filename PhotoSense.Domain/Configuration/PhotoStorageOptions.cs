@@ -30,6 +30,11 @@ public class PhotoStorageOptions
     public string BackupPath { get; set; } = string.Empty;
     /// <summary>Set to CameraOriginal (PhotoStorage__KeepFormat) to keep HEIC originals instead of their JPEG conversions.</summary>
     public FormatPreference KeepFormat { get; set; } = FormatPreference.WidelyCompatible;
+    /// <summary>
+    /// Whether Move to Recycle Bin uses the computer's Recycle Bin or Trash. On unless turned off, as the end-to-end tests
+    /// do, so that their photos never land in the person's own bin; off, every folder is treated as one with no bin.
+    /// </summary>
+    public bool UseRecycleBin { get; set; } = true;
 
     /// <summary>
     /// Where the database and the thumbnail cache are kept unless an absolute path says otherwise: a folder

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { deleteChosen, undoChange, useBursts, useCategories, useCategoryPhotos } from '../lib/apiClient';
 import { bytesOf, FIND_LABELS, findRows, largestIds, namesOf, resolution, rowLine, sizeOf, type FindId } from '../lib/categories';
-import { formatBytes } from '../lib/format';
+import { binName, formatBytes } from '../lib/format';
 import { shortDate } from '../lib/organize';
 import { limitLine } from '../lib/plan';
 import type { BurstDto, PhotoDto, PlanDto } from '../types';
@@ -109,7 +109,7 @@ function useDeleting(plan: PlanDto | undefined, notify: Props['notify']) {
     return (
       <ConfirmDialog busy={busy} title={`Delete ${n === 1 ? asked.going[0].fileName : `${n.toLocaleString()} files`}?`} confirmLabel={`Delete ${n.toLocaleString()} ${n === 1 ? 'file' : 'files'}`}
         onCancel={cancel} onConfirm={() => go(asked.going, asked.staying, after)}
-        note={<>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Delete permanently, in the menu, erases them.{limit && ` ${limit}`}</>}>
+        note={<>Files go to <span className="font-mono text-t1">{REMOVED_FOLDER}</span> inside the scanned folder, and Undo puts them back. Move to {binName()}, in the menu, empties it.{limit && ` ${limit}`}</>}>
         <p>{n === 1 ? `${asked.going[0].fileName} goes` : `${namesOf(asked.going)} go`}, {formatBytes(bytesOf(asked.going))} in all.</p>
         {asked.staying.length === 1 && <p>{asked.staying[0].fileName} stays.</p>}
         {asked.staying.length > 1 && <p>The shot kept of each of the {asked.staying.length.toLocaleString()} bursts stays.</p>}

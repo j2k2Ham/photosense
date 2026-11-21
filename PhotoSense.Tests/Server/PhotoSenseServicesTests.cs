@@ -48,4 +48,14 @@ public sealed class PhotoSenseServicesTests : IDisposable
         await Assert.That(new[] { heic, jpeg }.OrderBy(p => p, ranking.BestFirst).First()).IsSameReferenceAs(jpeg);
         await Assert.That(_f.Services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()).IsEqualTo(_f.ThumbnailPath);
     }
+
+    [Test]
+    public async Task Move_To_Recycle_Bin_Uses_The_Computers_Own_Bin_Unless_Turned_Off_As_The_End_To_End_Tests_Do(CancellationToken ct)
+    {
+        // This computer's temporary folder is on a drive of its own: it has a bin on Windows and a Mac, none on Linux.
+        var temp = Path.GetTempPath();
+        await Assert.That(_f.Services.GetRequiredService<IRecycleBin>().Holds(temp)).IsEqualTo(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS());
+        using var off = new ServerFixture("--PhotoStorage:UseRecycleBin=false");
+        await Assert.That(off.Services.GetRequiredService<IRecycleBin>().Holds(temp)).IsFalse();
+    }
 }

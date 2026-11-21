@@ -55,7 +55,7 @@ export const GUIDE: GuideTopic[] = [
         text: [
           'PhotoSense tidies a folder of pictures and videos. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken. **Phones** is where phones and tablets with PhotoSense back up to this computer.',
           'Everything happens on this computer. Nothing is uploaded.',
-          'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Delete permanently**.',
+          'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Move to Recycle Bin** (**Move to Trash** on a Mac).',
           'A move, copy or deletion happens in full or not at all. Should one file not go, the files that had gone go back, and the message says which file stopped it. One cut short because PhotoSense stopped is put back the next time it starts.',
         ],
       },
@@ -63,7 +63,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Finding your way',
         tips: [
           'The switch at the top left, **Clean up | Organize | Phones**, moves between the three areas. Each keeps what you were doing in it. A dot on **Phones** says it is new, until you first open it.',
-          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help**, **About PhotoSense** and **Delete permanently**.',
+          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help**, **About PhotoSense** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
           'Beside the menu, your plan: **PhotoSense Free**, with how many free removals are left today, or **PhotoSense Pro**. Point at it for more.',
           'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
           'In a narrow window the screen rearranges itself to fit. In **Clean up**, click a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and clicking a folder shows its files. Make the window wider and the two sit side by side again.',
@@ -77,7 +77,7 @@ export const GUIDE: GuideTopic[] = [
           'Look through the **Similar** shots, a group at a time.',
           'Look through **Categories**: large videos, screenshots, bursts and blurry shots.',
           'Switch to **Organize** and sort what is left into folders.',
-          'When you are sure nothing is missed, use **Delete permanently** to free the space.',
+          'When you are sure nothing is missed, use **Move to Recycle Bin** in the menu to send them to the computer’s Recycle Bin, and empty it there to free the space.',
         ],
       },
     ],
@@ -410,10 +410,10 @@ export const GUIDE: GuideTopic[] = [
   {
     id: 'removed',
     only: COMPUTER,
-    title: 'Removed files and deleting permanently',
-    summary: 'Where deleted files wait, how to put one back, and how to erase them for good.',
+    title: 'Removed files and the Recycle Bin',
+    summary: 'Where deleted files wait, how to put one back, and sending them to the Recycle Bin or the Trash.',
     go: { label: 'Open Settings', place: 'settings' },
-    keywords: ['trash', 'recycle bin', 'bin', 'deleted', 'restore', 'recover', 'get back', 'undelete', 'erase', 'free space', 'empty'],
+    keywords: ['trash', 'recycle bin', 'bin', 'deleted', 'restore', 'recover', 'get back', 'undelete', 'erase', 'free space', 'empty', 'delete permanently'],
     sections: [
       {
         text: [
@@ -429,17 +429,18 @@ export const GUIDE: GuideTopic[] = [
         ],
       },
       {
-        heading: 'Deleting permanently',
+        heading: 'Moving them to the Recycle Bin',
         steps: [
-          'Choose **Delete permanently** in the menu.',
-          'A warning lists every **_PhotoSense_Removed** folder that holds files, with how many and how much. Nothing has been erased yet.',
-          'Press **Delete permanently**. A second, small question asks **Are you sure?**',
-          'Press **Delete permanently** there. Only now are the files erased.',
+          'Choose **Move to Recycle Bin** in the menu (**Move to Trash** on a Mac).',
+          'A question says how many files go to the Recycle Bin and lists every **_PhotoSense_Removed** folder that holds files. Nothing has gone yet.',
+          'Press **Move to Recycle Bin**. A second, small question asks **Are you sure?**',
+          'Press **Move to Recycle Bin** there. Only now do the files go.',
         ],
         tips: [
-          'This cannot be undone. The files do not go to the Recycle Bin, and Undo can no longer bring them back.',
+          'You can get them back from the Recycle Bin, or the Trash, until it is emptied. Undo in PhotoSense can no longer bring them back.',
+          'A folder on a drive with no Recycle Bin, such as a network share or, on Windows, a USB stick or memory card, is named in the first question in red: its files are erased for good, and cannot be got back.',
           'The second question has a switch, **Do not ask me this second time again**. **Settings**, in the menu, turns the question back on.',
-          'A file that cannot be erased, one that is open in another program for instance, is left, and the message says so.',
+          'A file that cannot be moved, one that is open in another program for instance, is left, and the message says so.',
         ],
       },
     ],
@@ -486,7 +487,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           '**Theme** switches between dark and light.',
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
-          '**Settings** has the switch for the second question before deleting permanently, and **Distances**: miles, or kilometers, for Organize and its map. Settings are kept in this browser.',
+          '**Settings** has the switch for the second question before moving files to the Recycle Bin, and **Distances**: miles, or kilometers, for Organize and its map. Settings are kept in this browser.',
           '**Help** opens this guide.',
           '**About PhotoSense** shows the version of PhotoSense you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that PhotoSense uses.',
         ],

@@ -169,11 +169,11 @@ describe('AppMenu', () => {
     await userEvent.keyboard('{ArrowDown}');
     expect(names()).toBe('Errors2');
     await userEvent.keyboard('{End}');
-    expect(names()).toBe('Delete permanently');
+    expect(names()).toBe('Move to Recycle Bin…');
     await userEvent.keyboard('{ArrowDown}');
     expect(names()).toBe('Dark');
     await userEvent.keyboard('{ArrowUp}');
-    expect(names()).toBe('Delete permanently');
+    expect(names()).toBe('Move to Recycle Bin…');
     await userEvent.keyboard('{Home}');
     expect(names()).toBe('Dark');
     await userEvent.keyboard('{ArrowLeft}');
@@ -181,12 +181,12 @@ describe('AppMenu', () => {
     // From nowhere in the menu, up is its last item.
     (document.activeElement as HTMLElement).blur();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowUp' });
-    expect(names()).toBe('Delete permanently');
+    expect(names()).toBe('Move to Recycle Bin…');
     expect(screen.getAllByRole('separator')).toHaveLength(2);
   });
 
   it.each([
-    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['About PhotoSense', 'onAbout'], ['Delete permanently', 'onDeletePermanently'],
+    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['About PhotoSense', 'onAbout'], ['Move to Recycle Bin…', 'onDeletePermanently'],
   ] as const)('does what is chosen and closes', async (name, handler) => {
     const handlers = show();
     await userEvent.click(screen.getByRole('menuitem', { name }));
@@ -194,13 +194,13 @@ describe('AppMenu', () => {
     expect(handlers.onClose).toHaveBeenCalledOnce();
   });
 
-  it('shows the error count, and says on hovering Delete permanently where removed files wait', () => {
+  it('shows the error count, and says on hovering Move to Recycle Bin where removed files wait', () => {
     show();
     expect(screen.getByRole('menuitem', { name: /^Errors/ })).toHaveTextContent('Errors2');
-    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Help', 'About PhotoSense', 'Delete permanently']);
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Help', 'About PhotoSense', 'Move to Recycle Bin…']);
     // The one thing in the menu that erases files is marked as such.
-    expect(screen.getByRole('menuitem', { name: 'Delete permanently' })).toHaveClass('text-rose-t');
-    expect(screen.getByRole('menuitem', { name: 'Delete permanently' })).toHaveAttribute('title', 'Removed files wait in _PhotoSense_Removed inside each folder they were removed from. Delete permanently erases them.');
+    expect(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' })).toHaveClass('text-rose-t');
+    expect(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' })).toHaveAttribute('title', 'Removed files wait in _PhotoSense_Removed inside each folder they were removed from. Move to Recycle Bin sends them there.');
     // It is said there and nowhere else in the menu.
     expect(screen.getByRole('menu')).not.toHaveTextContent('Removed files wait');
   });
@@ -322,9 +322,9 @@ describe('the settings window', () => {
     const onChange = vi.fn(), onClose = vi.fn();
     const { container, rerender, unmount } = render(<SettingsWindow settings={{ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true }} onChange={onChange} onClose={onClose} />);
     const dialog = screen.getByRole('dialog', { name: 'Settings' });
-    expect(dialog).toHaveTextContent('After the warning, Delete permanently asks “Are you sure?” once more. Turned off, the files are erased as soon as the warning is confirmed.');
+    expect(dialog).toHaveTextContent('After the first question, Move to Recycle Bin asks “Are you sure?” once more. Turned off, the files go as soon as the first question is confirmed.');
     expect(dialog).toHaveTextContent('Settings are kept in this browser.');
-    const ask = within(dialog).getByRole('switch', { name: /^Ask a second time before deleting permanently/ });
+    const ask = within(dialog).getByRole('switch', { name: /^Ask a second time before moving to the Recycle Bin/ });
     expect(ask).toBeChecked();
     await userEvent.click(ask);
     expect(onChange).toHaveBeenLastCalledWith({ eraseAskTwice: false });

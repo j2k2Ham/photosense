@@ -134,16 +134,16 @@ public static class SelfCheck
               if (done.done !== 1) throw new Error(JSON.stringify(done));
               return { batchId: done.batchId, now: done.items[0].path };
             });
+            await step('the move is undone', async () => {
+              const undone = await (await post('organize/undo/' + moved.batchId)).json();
+              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
+              return undone.restored;
+            });
             await step('a copy is deleted into the bin, naming the original that stays, with nothing to undo', async () => {
               const done = await (await post('photos/bulk/remove-duplicates')).json();
               const waiting = await (await ask('removed?root=' + encodeURIComponent(root))).json();
               if (done.removed < 1 || done.batchId !== null || done.stays.length < 1 || waiting.files !== 0) throw new Error(JSON.stringify({ done, waiting }));
               return { removed: done.removed, stays: done.stays, waiting: waiting.files };
-            });
-            await step('the move is undone', async () => {
-              const undone = await (await post('organize/undo/' + moved.batchId)).json();
-              if (undone.restored < 1) throw new Error(JSON.stringify(undone));
-              return undone.restored;
             });
             await step('a photo is offered to a computer, and no longer once stopped', async () => {
               const offering = await (await post('send/start', { files: [files[0].id] })).json();
