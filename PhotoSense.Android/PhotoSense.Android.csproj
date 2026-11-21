@@ -20,10 +20,9 @@
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- Every package the app ships, those its packages bring among them, is listed in packages.lock.json, from which
-         its third-party notices are written where the app cannot be restored (tools/notices.mjs). GitHub restores it
-         locked (PhotoSenseLockedRestore), so a list left out of date by a package's change fails there. -->
+         its third-party notices are written where the app cannot be restored (tools/notices.mjs). android.yml fails
+         when its restore writes a different list. -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(PhotoSenseLockedRestore)' == 'true'">true</RestoreLockedMode>
     <!-- The page built for the app; a build elsewhere, without this computer's own settings in it, can be named instead. -->
     <PhotoSensePage Condition="'$(PhotoSensePage)' == ''">..\PhotoSense.ReactUI\out</PhotoSensePage>
   </PropertyGroup>
