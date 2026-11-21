@@ -163,7 +163,7 @@ export function BackupScreen({ state, notify, onChoose, onPair, locations, onSet
               {state.computer && <ListRow detail={state.folder} onClick={() => notify(`To change the folder, open Phones in PhotoSense on ${state.computer}.`, 'info')}>Folder</ListRow>}
             </ListGroup>
             <p className="px-1 text-[13px] leading-[1.45] text-t2">
-              {automaticNote(platform, state.computer, state.settings.onlyWhileCharging)}
+              {automaticNote(platform, state.computer, state.settings.onlyWhileCharging, device)}
             </p>
           </section>
         )}

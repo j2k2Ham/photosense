@@ -1,10 +1,15 @@
+using CoreFoundation;
 using Microsoft.Extensions.DependencyInjection;
+using Network;
 using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Locations;
 using PhotoSense.Application.Plans;
 using PhotoSense.Application.Scanning.Interfaces;
+using PhotoSense.Application.Transfer;
+using PhotoSense.Domain.Repositories;
 using PhotoSense.Infrastructure.Library;
 
 namespace PhotoSense.iOS;
@@ -60,6 +65,63 @@ public static class PhoneApp
         await Ready;
         // Nothing stops it part way: it reads what PhotoSense knows and writes one small file.
         await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(CancellationToken.None);
+    }
+
+    /// <summary>How the phone backs up by itself, once the app is ready: whether iOS is to be asked to wake it to back up, and whether only while charging.</summary>
+    public static async Task<BackupSettings> BackupSettingsAsync()
+    {
+        await Ready;
+        // Answered at once from what the phone keeps.
+        return await Services.GetRequiredService<IBackupLedger>().SettingsAsync(CancellationToken.None);
+    }
+
+    /// <summary>
+    /// What iOS's background processing task runs, as Android's hourly work does: a backup to the computer when one is
+    /// due, then to the other locations, unless the phone is on mobile data or a hotspot; then the storage check and the
+    /// widgets. Stopped when iOS's time is up, a backup going on pauses, and carries on the next time.
+    /// </summary>
+    public static async Task BackUpInBackgroundAsync(CancellationToken stop)
+    {
+        try
+        {
+            await Ready;
+            if (await OnWifiAsync(stop))
+            {
+                var backup = Services.GetRequiredService<PhoneBackup>();
+                using (stop.Register(backup.Pause)) if (await backup.AutomaticAsync(stop)) await backup.Running;
+                // Then the other locations: cloud storage and those Connect to server added.
+                var locations = Services.GetRequiredService<BackupLocations>();
+                using (stop.Register(locations.Pause)) if (await locations.AutomaticAsync(stop)) await locations.Running;
+            }
+            else Say.Line("automatic backup waits for Wi-Fi");
+            await Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(stop);
+            await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(stop);
+        }
+        // Stopped by iOS, no network to be had, or the backup could not start: it is tried again next time, and the app shows why.
+        catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or IOException or InvalidOperationException)
+        {
+            Say.Line($"automatic backup did not run: {ex.Message}");
+        }
+    }
+
+    // Whether the phone is on a network not charged by use: backups with the app closed go over Wi-Fi only, as on Android.
+    private static async Task<bool> OnWifiAsync(CancellationToken ct)
+    {
+        var monitor = new NWPathMonitor();
+        var now = new TaskCompletionSource<NWPath>(TaskCreationOptions.RunContinuationsAsynchronously);
+        monitor.SnapshotHandler = path => now.TrySetResult(path);
+        monitor.SetQueue(DispatchQueue.DefaultGlobalQueue);
+        monitor.Start();
+        try
+        {
+            // The monitor says how the network is as soon as it starts.
+            var path = await now.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+            return path.Status == NWPathStatus.Satisfied && !path.IsExpensive;
+        }
+        finally
+        {
+            monitor.Cancel();
+        }
     }
 
     private static string Folder(NSSearchPathDirectory which) => NSFileManager.DefaultManager.GetUrls(which, NSSearchPathDomain.User)[0].Path!;

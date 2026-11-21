@@ -46,10 +46,12 @@
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
       <string>com.j2k2ham.photosense.storage-check</string>
+      <string>com.j2k2ham.photosense.backup</string>
     </array>
     <key>UIBackgroundModes</key>
     <array>
       <string>fetch</string>
+      <string>processing</string>
     </array>
     <!-- The home screen widgets open PhotoSense with photosense://opens/backup, /swipe or /free-up-space. -->
     <key>CFBundleURLTypes</key>

@@ -105,7 +105,7 @@ describe('Backup', () => {
     ]);
     await userEvent.click(within(section).getByRole('button', { name: "Folder Pictures/PhotoSense/Alex's iPhone" }));
     expect(notify).toHaveBeenCalledWith('To change the folder, open Phones in PhotoSense on Studio iMac.', 'info');
-    expect(section).toHaveTextContent('A backup runs whenever PhotoSense is open and Studio iMac is on the same Wi-Fi.');
+    expect(section).toHaveTextContent('iOS decides when background backups run. They usually happen while this iPhone is charging on Wi-Fi. A backup also runs whenever PhotoSense is open and Studio iMac is on the same Wi-Fi.');
   });
 });
 
@@ -239,7 +239,7 @@ describe('Backup with locations', () => {
     inFrame(<BackupScreen state={backupState({ stage: 'unpaired', computer: null, folder: null })} notify={vi.fn()} onChoose={vi.fn()} onPair={vi.fn()}
       locations={locations({ locations: [location({ id: 'computer', kind: 'computer', name: 'Computer' }), drive] })} onSettings={vi.fn()} />);
     expect(within(screen.getByRole('region', { name: 'Locations' })).getByText('Google Drive')).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Automatic backup' })).toHaveTextContent('A backup runs whenever PhotoSense is open and on Wi-Fi.');
+    expect(screen.getByRole('region', { name: 'Automatic backup' })).toHaveTextContent('A backup also runs whenever PhotoSense is open and on Wi-Fi.');
     expect(screen.queryByRole('button', { name: /^Folder/ })).not.toBeInTheDocument();
   });
 

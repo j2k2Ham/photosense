@@ -1111,7 +1111,8 @@ export const GUIDE: GuideTopic[] = [
       {
         only: IOS,
         tips: [
-          'An iPhone or iPad backs up by itself whenever PhotoSense is open and the computer is on the same Wi-Fi.',
+          'An iPhone or iPad backs up by itself whenever PhotoSense is open and the computer is on the same Wi-Fi, and with PhotoSense closed when iOS chooses to wake it: usually while it is charging on Wi-Fi, often at night. iOS gives it a few minutes each time; what is left goes the next time.',
+          'With PhotoSense closed it backs up only on Wi-Fi, never over mobile data or a hotspot. If you swipe PhotoSense away in the app switcher, iOS stops waking it until you open it again.',
         ],
       },
       {
