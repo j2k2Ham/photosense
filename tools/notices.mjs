@@ -12,7 +12,7 @@ const DOTNET = 'Copyright (c) .NET Foundation and Contributors';
 export const PROGRAMS = {
   server: { title: 'PhotoSense for Windows and Mac', projects: ['PhotoSense.Server', 'PhotoSense.Desktop', 'PhotoSense.Infrastructure', 'PhotoSense.Api'], platform: ['dotnet', 'aspnetcore'] },
   iphone: { title: 'PhotoSense for iPhone and iPad', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], references: 'PhotoSense.iOS/PhotoSense.iOS.csproj', platform: ['dotnet', 'ios'] },
-  android: { title: 'PhotoSense for Android', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], references: 'PhotoSense.Android/PhotoSense.Android.csproj', platform: ['dotnet', 'android'] },
+  android: { title: 'PhotoSense for Android', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], locked: 'PhotoSense.Android/packages.lock.json', platform: ['dotnet', 'android'] },
 };
 
 const PLATFORM = {
@@ -25,6 +25,9 @@ const PLATFORM = {
 // Packages that name their licence without carrying its text, or carry a text that names no copyright holder.
 const NAMED_ONLY = {
   xmpcore: { license: 'BSD-3-Clause', copyright: 'Copyright 2006-2007 Adobe Systems Incorporated (the XMP library it is ported from); copyright 2015-2021 Drew Noakes (the port)' },
+  // Its licence is a link to the MIT licence of Xamarin's components (github.com/xamarin/XamarinComponents); Guava's
+  // own is in its third-party notices.
+  'xamarin.google.guava.listenablefuture': { license: 'MIT', copyright: 'Copyright (c) .NET Foundation Contributors' },
 };
 const isMicrosoft = id => /^microsoft\./i.test(id);
 
@@ -32,7 +35,8 @@ const isMicrosoft = id => /^microsoft\./i.test(id);
 const SHIPPED_FROM_BUILD = ['tailwindcss'];
 
 const LICENCE_FILE = /^(licen[cs]e|copying)(\.(md|txt))?$/i;
-const NOTICE_FILE = /^notice(\.(md|txt))?$/i;
+// A binding of a Java library (Xamarin.*) gives the library's own licence in its third-party notices, not in its LICENSE.
+const NOTICE_FILE = /^(third-party-)?notices?(\.(md|txt))?$/i;
 
 const read = path => readFileSync(path, 'utf8').replace(/\r\n/g, '\n').trim();
 const fileIn = (dir, pattern) => (existsSync(dir) ? readdirSync(dir).find(f => pattern.test(f)) : undefined);
@@ -58,6 +62,25 @@ export function referencedPackages(csproj) {
   return [...csproj.matchAll(/<PackageReference Include="([^"]+)" Version="([^"]+)"/g)].map(([, id, version]) => ({ id, version }));
 }
 
+/** Every package a project's lock file lists, those its packages bring among them, but not the projects it builds on. */
+export function lockedPackages(lock) {
+  const [, packages] = Object.entries(lock.dependencies).find(([target]) => !target.includes('/'));
+  return Object.entries(packages).filter(([, p]) => p.type !== 'Project').map(([id, p]) => ({ id, version: p.resolved }));
+}
+
+/**
+ * Whether a package puts anything into an app for a phone's system ('android'): Java code (an .aar or .jar), or an
+ * assembly that is not a placeholder (_._), for that system where the package has one. A build tool puts in neither.
+ */
+export function shipsOn(dir, system) {
+  if (!existsSync(dir)) throw new Error(`${dir} is not in the NuGet folder: restore the app, or fetch its packages as ci.yml does.`);
+  const files = readdirSync(dir, { recursive: true }).map(f => f.replaceAll('\\', '/'));
+  if (files.some(f => /\.(aar|jar)$/i.test(f))) return true;
+  const assemblies = files.filter(f => /^(lib|runtimes)\/[^/]+\/./i.test(f));
+  const own = assemblies.filter(f => f.split('/')[1].toLowerCase().includes(system));
+  return (own.length ? own : assemblies).some(f => !f.endsWith('_._'));
+}
+
 /**
  * What the page ships: its packages and theirs, but none of the tools that only build it, and the styles Tailwind
  * writes. A package of PhotoSense's own, kept in the page's folder and linked in (stubs/sharp), is no one else's.
@@ -78,16 +101,22 @@ function nugetEntry({ id, version }, nugetRoot, templates) {
   const copyright = own?.copyright ?? (isMicrosoft(id) ? DOTNET : /<copyright>([^<]*)</.exec(nuspec)?.[1]);
   // Microsoft's packages carry the .NET notices again; they are named once, under .NET.
   const text = isMicrosoft(id) || own ? templates[license].replace('{{copyright}}', copyright) : licenceText({ dir, license, copyright, templates });
-  const notice = isMicrosoft(id) ? undefined : fileIn(dir, NOTICE_FILE);
+  // So do the System packages, which only Microsoft may publish on nuget.org, though their licences name their own holders.
+  const notice = isMicrosoft(id) || /^system\./i.test(id) ? undefined : fileIn(dir, NOTICE_FILE);
   return { name: `${id} ${version}`, license, copyright, text, notice: notice && read(join(dir, notice)) };
 }
 
 /** Every notice of one program, as plain text. */
 export function noticesFor(program, { root, nugetRoot, templates }) {
-  const { title, projects, references, platform } = PROGRAMS[program];
+  const { title, projects, references, locked, platform } = PROGRAMS[program];
   const packages = new Map();
   for (const project of projects) for (const p of nugetPackages(JSON.parse(read(join(root, project, 'obj', 'project.assets.json'))))) packages.set(`${p.id}/${p.version}`.toLowerCase(), p);
   if (references) for (const p of referencedPackages(read(join(root, references)))) packages.set(`${p.id}/${p.version}`.toLowerCase(), p);
+  if (locked) {
+    for (const p of lockedPackages(JSON.parse(read(join(root, locked))))) {
+      if (shipsOn(join(nugetRoot, p.id.toLowerCase(), p.version), platform.at(-1))) packages.set(`${p.id}/${p.version}`.toLowerCase(), p);
+    }
+  }
   const reactRoot = join(root, 'PhotoSense.ReactUI');
   const entries = [
     ...platform.map(key => ({ ...PLATFORM[key], name: PLATFORM[key].name, text: templates[PLATFORM[key].license].replace('{{copyright}}', PLATFORM[key].copyright) })),
@@ -99,6 +128,14 @@ export function noticesFor(program, { root, nugetRoot, templates }) {
   const fontsDir = join(root, 'tools', 'fonts');
   const fonts = readdirSync(fontsDir).sort().map(f => ({ name: f.replace(/\.txt$/, ''), text: read(join(fontsDir, f)) }));
   const rule = '-'.repeat(72);
+  // Many packages carry the same text word for word (the bindings of Google's libraries over a hundred times): it is
+  // given in full once, and pointed to after.
+  const givenFor = new Map();
+  const once = (text, name, said) => {
+    if (givenFor.has(text)) return [said(givenFor.get(text))];
+    givenFor.set(text, name);
+    return [text];
+  };
   return [
     `Third-party notices for ${title}`,
     '',
@@ -123,7 +160,8 @@ export function noticesFor(program, { root, nugetRoot, templates }) {
       // A licence such as Apache 2.0 has no line for the copyright, which the package gives elsewhere.
       ...(e.copyright && !e.text.includes(e.copyright) ? [e.copyright] : []),
       ...(e.more ? [`Its own third-party notices: ${e.more}`] : []),
-      rule, '', e.text, ...(e.notice ? ['', e.notice] : []),
+      rule, '', ...once(e.text, e.name, first => `Its licence is word for word that of ${first}, above.`),
+      ...(e.notice ? ['', ...once(e.notice, e.name, first => `Its third-party notices are word for word those of ${first}, above.`)] : []),
     ]),
     '',
   ].join('\n');

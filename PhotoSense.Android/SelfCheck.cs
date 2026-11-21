@@ -146,7 +146,8 @@ public static class SelfCheck
               return { removed: done.removed, stays: done.stays, waiting: waiting.files };
             });
             await step('a photo is offered to a computer, and no longer once stopped', async () => {
-              const offering = await (await post('send/start', { files: [files[0].id] })).json();
+              // IMG_0003.png has no copy, so it is still there whichever copy of the other two went to the bin.
+              const offering = await (await post('send/start', { files: [files.find(f => f.name === 'IMG_0003.png').id] })).json();
               const stopped = await (await post('send/stop')).json();
               if (offering.stage !== 'waiting' || stopped.stage !== 'idle') throw new Error(JSON.stringify({ offering, stopped }));
               return { offering: offering.stage, total: offering.total, phone: offering.phone, stopped: stopped.stage };
