@@ -36,10 +36,9 @@ public sealed class ComputerRecycleBin : IRecycleBin
     /// <inheritdoc />
     public bool Holds(string folder)
     {
-        if (!_windows && !_mac) return false;
         // The drive a folder is on is the one whose start is the longest part of its path: on a Mac /Volumes/Card, not /.
         var drive = _drives().Where(d => Inside(folder, d.Root)).OrderByDescending(d => d.Root.Length).FirstOrDefault();
-        return drive.Type == DriveType.Fixed || (_mac && drive.Type == DriveType.Removable);
+        return drive.Type == DriveType.Fixed ? _windows || _mac : _mac && drive.Type == DriveType.Removable;
     }
 
     /// <inheritdoc />

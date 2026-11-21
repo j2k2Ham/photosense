@@ -1,16 +1,31 @@
 using System.Diagnostics.CodeAnalysis;
 using ImageMagick;
 using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Desktop.Imaging;
 
 /// <summary>Decodes pictures with Magick.NET on a computer, HEIC among them, and measures them the way every decoder does.</summary>
 public sealed class MagickImageAnalyzer : IImageAnalyzer
 {
+    /// <summary>The widest or tallest picture decoded, in pixels: wider than any phone's panorama.</summary>
+    public const uint MaxEdge = 32_768;
+
+    /// <summary>The most frames a picture is read with: only the first is ever used.</summary>
+    public const uint MaxFrames = 16;
+
+    /// <summary>The most disk Magick may use for a picture too large for memory: beyond it the picture is unreadable.</summary>
+    public const ulong MaxDisk = 2UL * 1024 * 1024 * 1024;
+
     static MagickImageAnalyzer()
     {
         // Files are processed in parallel, one image per thread.
         ResourceLimits.Thread = 1;
+        // A crafted file, one claiming to be enormous or to hold endless frames, can only be unreadable.
+        ResourceLimits.Width = MaxEdge;
+        ResourceLimits.Height = MaxEdge;
+        ResourceLimits.ListLength = MaxFrames;
+        ResourceLimits.Disk = MaxDisk;
     }
 
     /// <inheritdoc />
@@ -72,8 +87,16 @@ public sealed class MagickImageAnalyzer : IImageAnalyzer
     {
         // An empty file is a transfer that never finished; Magick would refuse it as a mistake of the caller's.
         if (imageStream.Length == 0) throw new UnreadableImageException("The file is empty.");
+        // Read as the format its first bytes say, never one Magick guesses: a script, a vector drawing or PostScript
+        // named .jpg is never handed to their readers.
         imageStream.Position = 0;
-        var settings = new MagickReadSettings { FrameIndex = 0, FrameCount = 1 };
+        var head = new byte[PictureSignature.Needed];
+        var read = imageStream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+        imageStream.Position = 0;
+        var format = PictureSignature.Of(head.AsSpan(0, read))
+            ?? throw new UnreadableImageException("It is not a picture PhotoSense reads: JPEG, PNG, GIF, BMP, TIFF, WebP or HEIC.");
+        // Each format has a coder of the same name.
+        var settings = new MagickReadSettings { FrameIndex = 0, FrameCount = 1, Format = Enum.Parse<MagickFormat>(format.ToString()) };
         // Lets the JPEG decoder skip detail it would only throw away. It picks the nearest reduction it
         // supports, which can land below the size asked for, so ask for double what is needed.
         settings.SetDefine(MagickFormat.Jpeg, "size", $"{neededEdge * 2}x{neededEdge * 2}");
