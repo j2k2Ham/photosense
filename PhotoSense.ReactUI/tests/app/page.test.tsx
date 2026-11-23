@@ -1390,8 +1390,8 @@ describe('on a phone or tablet', () => {
     await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Similar shots/ }));
     expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
     // Back, as the phone's own, goes back to Clean up's first screen; tapping the tab already showing keeps it there.
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument());
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
   });
@@ -1428,8 +1428,8 @@ describe('on a phone or tablet', () => {
     await userEvent.click(row());
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 1, name: 'Duplicates' })).not.toBeInTheDocument();
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument());
 
     await userEvent.click(row());
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();

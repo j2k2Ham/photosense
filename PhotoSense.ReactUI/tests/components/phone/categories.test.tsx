@@ -299,8 +299,8 @@ describe('Large videos (21) and Compress (22)', () => {
     expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument();
     // The phone's own Back, or a swipe from the edge, closes it too.
     await userEvent.click(row(/^Anaconda/));
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('list', { name: 'Large videos' })).toBeInTheDocument());
   });
 
   it('on the free plan says compressing is part of Pro and opens the Pro sheet, and says why it could not start', async () => {

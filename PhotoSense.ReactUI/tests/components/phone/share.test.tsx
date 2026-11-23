@@ -111,8 +111,8 @@ describe('Year in review (41–44)', () => {
     await userEvent.click(within(stories).getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(2);
     // The phone's own Back closes it too.
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(onClose).toHaveBeenCalledTimes(3);
+    act(() => history.back());
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(3));
   });
 
   it("shares the card showing, drawn as a story, and says why it could not", async () => {

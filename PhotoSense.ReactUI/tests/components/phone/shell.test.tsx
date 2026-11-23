@@ -459,8 +459,8 @@ describe('PhotoSense on a phone', () => {
     // Back, with something marked: the summary, which closes to Clean up.
     today = swipeState({ set: [swipeCard('a', { delete: true }), swipeCard('b')] });
     await userEvent.click(screen.getByRole('button', { name: 'Start' }));
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('dialog', { name: 'Swipe summary' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('dialog', { name: 'Swipe summary' })).toBeInTheDocument());
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Swipe summary' })).getByRole('button', { name: 'Close' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
@@ -643,8 +643,8 @@ describe('PhotoSense on a phone', () => {
     expect(screen.queryByRole('region', { name: 'Connect your computer' })).not.toBeInTheDocument();
     // Back puts it away too.
     await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.queryByRole('region', { name: 'Connect your computer' })).not.toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Connect your computer' })).not.toBeInTheDocument());
     api.useBackup.mockReturnValue({});
   });
 
@@ -677,8 +677,8 @@ describe('PhotoSense on a phone', () => {
       expect(onAbout.mock.calls).toEqual([['terms'], ['privacy']]);
       await userEvent.click(within(page).getByRole('button', { name: 'Back' }));
       expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
-      await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      act(() => history.back());
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
       api.usePlan.mockReturnValue({});
     });
 
@@ -805,10 +805,10 @@ describe('PhotoSense on a phone', () => {
     await userEvent.click(within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: /IMG_4299\.JPG/ }));
     expect(screen.getByRole('region', { name: 'Review' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Duplicates' })).not.toBeInTheDocument();
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { name: 'Duplicates' })).toBeInTheDocument();
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Duplicates' })).toBeInTheDocument());
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument());
     expect(screen.getByRole('navigation', { name: 'Tabs' })).toBeInTheDocument();
   });
 
@@ -840,8 +840,8 @@ describe('PhotoSense on a phone', () => {
     await open();
     expect(screen.getByRole('region', { name: 'Preview' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument());
     await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
     expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
   });
@@ -1024,8 +1024,8 @@ describe('PhotoSense on a phone', () => {
     await screenshots();
     expect(screen.getByRole('heading', { level: 1, name: 'Screenshots' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
-    await act(async () => { history.back(); await new Promise(r => setTimeout(r, 20)); });
-    expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Clean up' })).toBeInTheDocument());
     unmount();
     width(true);
     render(<App start="cleanup" />);

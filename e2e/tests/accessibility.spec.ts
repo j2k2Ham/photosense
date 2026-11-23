@@ -8,9 +8,13 @@ import type { Page } from '@playwright/test';
 // roles, landmarks. A person still has to try what no checker can, as with the keyboard and a screen reader.
 async function accessible(page: Page, what: string) {
   for (const theme of ['dark', 'light'] as const) {
-    await page.evaluate(light => document.documentElement.classList.toggle('light', light), theme === 'light');
-    // The theme's colours settle before they are measured.
-    await page.waitForTimeout(400);
+    // The theme's colours change through transitions, which are measured once they have all ended, never part way.
+    await page.evaluate(async light => {
+      document.documentElement.classList.toggle('light', light);
+      // Reading a style makes the browser start the transitions the new theme sets off, so they can be waited for.
+      void getComputedStyle(document.documentElement).color;
+      await Promise.allSettled(document.getAnimations().filter(a => a instanceof CSSTransition).map(a => a.finished));
+    }, theme === 'light');
     const found = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     const said = found.violations.map(v => `${v.id} (${v.impact}): ${v.help}\n${v.nodes.slice(0, 3).map(n => `  ${n.target.join(' ')}: ${n.failureSummary?.split('\n')[1]?.trim() ?? ''}`).join('\n')}`);
     expect(said, `${what}, ${theme} theme`).toEqual([]);
