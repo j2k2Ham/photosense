@@ -10,6 +10,7 @@ import { offeredPlans } from '../../lib/plan';
 import { downloadLine, usePhone } from '../../lib/phone';
 import type { FindingsDto, PlanKind, ScanProgressSnapshotDto } from '../../types';
 import type { ToastKind } from '../Toaster';
+import { TrovolveWordmark } from '../TrovolveBrand';
 import { PhoneButton } from './Controls';
 import { BackupIcon, CheckIcon, CleanUpIcon, CloseIcon, DoneIcon, LibraryIcon } from './Icons';
 import { boughtSaid, PlanCard } from './ProSheet';
@@ -200,7 +201,7 @@ function Welcome({ onStart }: { onStart(): void }) {
     <Cover label="Welcome" step={0} foot={<PhoneButton onClick={onStart}>Get started</PhoneButton>}>
       <div className="flex flex-1 flex-col justify-center gap-5">
         <img src={appIconUrl} alt="" className="h-[92px] w-[92px] rounded-[22px]" />
-        <Title>Trovolve</Title>
+        <Title><span aria-hidden className="flex"><TrovolveWordmark height={34} /></span><span className="sr-only">Trovolve</span></Title>
         <Lead>Free up space, back up to your own computer and keep your library tidy. Everything runs on your devices.</Lead>
         <ul className="flex flex-col gap-3">
           {perks.map(([Icon, text]) => (

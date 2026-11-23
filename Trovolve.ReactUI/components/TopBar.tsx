@@ -3,6 +3,7 @@ import { appIconUrl } from '../lib/apiClient';
 import { leaf } from '../lib/format';
 import { ModeSwitch, type Area } from './ModeSwitch';
 import { PlanPill } from './LimitDialog';
+import { TrovolveWordmark } from './TrovolveBrand';
 import type { PlanDto } from '../types';
 
 interface Props {
@@ -38,7 +39,8 @@ export function TopBar({ plan, area, fresh, onArea, showScan, folders, files, sc
       <div className="flex items-center gap-[11px]">
         <img src={appIconUrl} alt="" className="h-[26px] w-[26px] rounded-lg" />
 
-        <h1 className="text-[17px] font-semibold max-sm:sr-only">Trovolve</h1>
+        {/* The wordmark is a picture of the name, so the heading says it in words for a screen reader. */}
+        <h1 className="flex items-center text-t1"><span aria-hidden className="flex max-sm:hidden"><TrovolveWordmark height={17} /></span><span className="sr-only">Trovolve</span></h1>
       </div>
       <ModeSwitch area={area} fresh={fresh} onArea={onArea} />
 

@@ -14,7 +14,7 @@ The mark is direction 2a, the strata gem: five layers of a library forming one g
 Drawn in code from these masters, so they follow the theme:
 
 - `Trovolve.ReactUI/components/FeatureIcons.tsx`: the twelve feature icons (`svg/feature-icons`), used by the phone and tablet layouts through `components/phone/Icons.tsx`.
-- `Trovolve.ReactUI/components/TrovolveBrand.tsx`: the mark (`svg/mark`), the wordmark (`svg/lockups`) and the launch animation.
+- `Trovolve.ReactUI/components/TrovolveBrand.tsx`: the mark (`svg/mark`), the wordmark (`svg/lockups`), shown in the computer's bar and on a phone's Welcome, and the launch animation, played as the phone app opens (`components/phone/Launch.tsx`).
 - `Trovolve.Android/Resources`: the adaptive icon (`mipmap-anydpi-v26/appicon.xml`, `drawable/appicon_foreground.xml`, `drawable/appicon_monochrome.xml`, `values/appicon_colors.xml`, from `svg/app-icon/android-*.svg`), the notification icon (`drawable/notice_icon.xml`, from `svg/mark/trovolve-mark-small-mono.svg`) and the icon menu's shortcuts (`drawable/shortcut_*.xml`, from `android/feature-icons`).
 
 ## Kept for later

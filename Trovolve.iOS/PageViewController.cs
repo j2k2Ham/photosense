@@ -27,6 +27,11 @@ public sealed class PageViewController : UIViewController
         {
             AutoresizingMask = UIViewAutoresizing.FlexibleDimensions, NavigationDelegate = new Loading(), UIDelegate = new NewWindows(),
         };
+        // Teal black shows through until the page draws, as on the launch screen, so the page's launch runs on from it.
+        View.BackgroundColor = UIColor.FromRGB(0x06, 0x14, 0x15);
+        _web.Opaque = false;
+        _web.BackgroundColor = UIColor.Clear;
+        _web.ScrollView.BackgroundColor = UIColor.Clear;
         // A swipe from the left edge goes back in the page's history, closing the screen, sheet or view it opened last.
         _web.AllowsBackForwardNavigationGestures = true;
         // The page draws under the status bar and round the screen's corners itself (viewport-fit=cover, env()).

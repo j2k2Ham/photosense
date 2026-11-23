@@ -18,7 +18,7 @@ namespace Trovolve.AndroidApp;
 /// <summary>The one screen: the page, the whole of it, under the phone's own bars, which the page keeps clear of.</summary>
 // The app icon's menu (36): Search photos, Start swipe, Back up now.
 [MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
-[Activity(Name = "com.j2k2ham.trovolve.MainActivity", Label = "Trovolve", MainLauncher = true, Exported = true, Theme = "@android:style/Theme.DeviceDefault.NoActionBar",
+[Activity(Name = "com.j2k2ham.trovolve.MainActivity", Label = "Trovolve", MainLauncher = true, Exported = true, Theme = "@style/Trovolve.Launch",
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.UiMode)]
 public sealed class MainActivity : Activity
 {
@@ -60,6 +60,8 @@ public sealed class MainActivity : Activity
         page.SetWebViewClient(new PageClient(ApplicationContext!));
         page.AddJavascriptInterface(new BodyBridge(), BodyBridge.Name);
         page.AddJavascriptInterface(new SystemBars(), SystemBars.Name);
+        // Teal black until the page draws, as on the launch screen, so the page's launch runs on from it.
+        page.SetBackgroundColor(Color.Rgb(0x06, 0x14, 0x15));
         // The page fills the screen, under the status bar and the bar of buttons, painting what shows through them
         // itself; it is told how tall they are, as the web view does not say.
 #pragma warning disable CA1422 // Before Android 15 the page is not drawn under the bars, and they have colours of their own that would hide it.

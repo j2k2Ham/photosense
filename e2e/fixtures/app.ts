@@ -135,6 +135,9 @@ export const test = base.extend<{ program: Program; photos: Photos; service: Ser
   page: async ({ page, noteAccepted, service }, use) => {
     if (noteAccepted) await service.post('terms/accept');
     await use(page);
+    // A stand-in answer still being fetched as the test ends (the page asking again in the background) is dropped, not
+    // counted as the test failing.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   },
   program: async ({}, use, testInfo) => {
     const port = await freePort();

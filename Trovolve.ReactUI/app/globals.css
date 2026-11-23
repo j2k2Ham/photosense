@@ -15,6 +15,8 @@
   --ident: #80dbeb; --ident-bg: rgba(62, 187, 211, .16);
   --same: #d8dfe4; --same-bg: rgba(245, 255, 255, .10);
   --shadow: rgba(0, 0, 0, .5); --scrim: rgba(0, 1, 1, .72);
+  /* The brand's teal black, in both themes: the phone apps' launch screens and the launch played on them. */
+  --launch: #061415;
   color-scheme: dark;
 }
 .light {
@@ -78,6 +80,8 @@
    Should the program never answer, it shows after three seconds all the same, with whatever it can say. */
 html[data-app] { background: #000; }
 html[data-app].light { background: #fff; }
+/* Until the phone's skin is known the page is hidden, on the launch screens' teal black, which the launch plays on. */
+html[data-app]:not([data-skin]) { background: var(--launch); }
 html[data-app]:not([data-skin]) body { visibility: hidden; animation: shown 0s 3s forwards; }
 @keyframes shown { to { visibility: visible; } }
 
