@@ -49,12 +49,13 @@ export const GUIDE: GuideTopic[] = [
     only: COMPUTER,
     title: 'Getting started',
     summary: 'What PhotoSense does, and how to find your way around it.',
-    keywords: ['overview', 'introduction', 'how to', 'first time', 'begin', 'windows', 'mac', 'pc'],
+    keywords: ['overview', 'introduction', 'how to', 'first time', 'begin', 'windows', 'mac', 'pc', 'terms of use', 'keep a backup', 'accept'],
     sections: [
       {
         text: [
           'PhotoSense tidies a folder of pictures and videos. **Clean up** finds the copies of each picture or video and helps you remove all but the best one. **Organize** sorts the files of a folder into folders by where and when they were taken. **Phones** is where phones and tablets with PhotoSense back up to this computer.',
           'Everything happens on this computer. Nothing is uploaded.',
+          'The first time PhotoSense opens in a browser, it asks you to **Keep a backup of photos you care about**: PhotoSense asks before it removes or moves anything, but a mistake can still lose a photo or video. **Read the terms of use** shows them; **Accept and continue** accepts them and carries on, and it is not asked again in that browser.',
           'Nothing you delete is erased there and then. A deleted file is moved to a folder called **_PhotoSense_Removed**, where it waits, and can be put back, until you choose **Move to Recycle Bin** (**Move to Trash** on a Mac).',
           'A move, copy or deletion happens in full or not at all. Should one file not go, the files that had gone go back, and the message says which file stopped it. One cut short because PhotoSense stopped is put back the next time it starts.',
         ],
@@ -553,7 +554,7 @@ export const GUIDE: GuideTopic[] = [
     title: 'Getting started',
     summary: 'The first launch, the four tabs, Settings, finding your way back, and the home screen widgets.',
     keywords: ['overview', 'introduction', 'welcome', 'first time', 'begin', 'setup', 'tabs', 'back', 'tablet', 'sidebar', 'rail', 'collections', 'side by side', 'widget', 'home screen',
-      'shortcut', 'quick action', 'long press', 'press and hold'],
+      'shortcut', 'quick action', 'long press', 'press and hold', 'terms of use', 'keep a backup', 'accept'],
     sections: [
       {
         text: [
@@ -565,6 +566,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'The first launch',
         steps: [
           '**Get started**, on the welcome screen.',
+          '**Keep a backup of photos you care about**: PhotoSense asks before it removes or moves anything, but a mistake can still lose a photo or video. **Read the terms of use** shows them; **Accept and continue** accepts them and carries on. It is asked once; on a device that had PhotoSense before, it is asked the next time PhotoSense opens.',
           '**Continue** asks the phone’s own question of which photos PhotoSense may see. Allow them all: with only some, PhotoSense checks only those, so most of Clean up and Safe to delete cannot work. If you said no, **Open Settings** goes to where access is turned on; come back, and PhotoSense carries on.',
           '**Connect your computer** pairs this device with PhotoSense on your Mac or PC, for backups. **Skip for now** leaves it for later, from **Backup** or **Settings**.',
           'PhotoSense then reads your library, saying how many photos and videos it has read and what it has found so far. **Stop** ends the scan, keeping what it read.',

@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -61,10 +61,13 @@ interface AppProps {
   onStop?(): void;
   notify?(message: string, kind: string): void;
   onTab?(tab: TabId): void;
+  onAbout?(topic?: string): void;
+  /** About is open over the layout. */
+  reading?: boolean;
 }
 
 /** The phone layout, with what the page would give it. */
-function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn(), onStop = vi.fn(), notify = vi.fn(), onTab = vi.fn() }: AppProps) {
+function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn(), onStop = vi.fn(), notify = vi.fn(), onTab = vi.fn(), onAbout = vi.fn(), reading }: AppProps) {
   const [tab, setTab] = React.useState<TabId>('library');
   // A scan started runs, as the page has it, until the test says otherwise.
   const [started, setStarted] = React.useState(false);
@@ -72,7 +75,7 @@ function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn()
     <PhoneApp platform={platform} tab={tab}
       toasts={[]} theme="dark" errorCount={0} settings={{ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true }} onSettings={vi.fn()} scanning={scanning || started} progress={progress}
       onStarted={id => { setStarted(true); onStarted(id); }} onStopScan={onStop} notify={notify}
-      onTab={next => { onTab(next); setTab(next); }} removeToast={vi.fn()} onTheme={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} />
+      onTab={next => { onTab(next); setTab(next); }} removeToast={vi.fn()} onTheme={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={onAbout} reading={reading} />
   );
 }
 
@@ -159,8 +162,46 @@ describe('first launch: Welcome and photo access', () => {
     try {
       render(<App />);
       await userEvent.click(screen.getByRole('button', { name: 'Get started' }));
+      // Accepted for this visit only, so it is asked again next time.
+      await userEvent.click(within(cover('Keep a backup of photos you care about')).getByRole('button', { name: 'Accept and continue' }));
       expect(cover('Photo access')).toBeInTheDocument();
     } finally { vi.unstubAllGlobals(); }
+  });
+});
+
+describe('the note asking for a backup', () => {
+  const NOTE = 'Keep a backup of photos you care about';
+  beforeEach(() => localStorage.clear());
+
+  it('comes after Welcome, reads the terms of use over it, and is put away only by accepting it, which is remembered', async () => {
+    const onAbout = vi.fn();
+    const view = render(<App onAbout={onAbout} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Get started' }));
+    const note = cover(NOTE);
+    expect(note).toHaveTextContent('PhotoSense asks before it removes or moves anything, and what it removes can be got back for a while. Even so, a mistake can lose a photo or video.');
+    expect(note).toHaveTextContent('Before you use PhotoSense, keep a backup of the photos and videos you care about, and keep it up to date.');
+    expect(note).toHaveTextContent('Using PhotoSense means you accept its terms of use.');
+    await userEvent.click(within(note).getByRole('button', { name: 'Read the terms of use' }));
+    expect(onAbout).toHaveBeenCalledWith('terms');
+    // While About shows the terms the note waits, hidden, and still nothing behind it starts.
+    view.rerender(<App onAbout={onAbout} reading />);
+    expect(screen.queryByRole('region', { name: NOTE })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Photo access' })).not.toBeInTheDocument();
+    expect(api.libraryRoot).not.toHaveBeenCalled();
+    view.rerender(<App onAbout={onAbout} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await userEvent.click(within(cover(NOTE)).getByRole('button', { name: 'Accept and continue' }));
+    expect(localStorage.getItem('photosense-backup-note')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(cover('Photo access')).toBeInTheDocument();
+  });
+
+  it('comes at the next launch on a phone past its first launch that has not accepted it, and then the tabs', async () => {
+    localStorage.setItem('photosense-first-run', 'done');
+    access = 'everything';
+    render(<App />);
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    await userEvent.click(within(cover(NOTE)).getByRole('button', { name: 'Accept and continue' }));
+    expect(screen.queryByRole('region', { name: NOTE })).not.toBeInTheDocument();
   });
 });
 

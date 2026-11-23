@@ -23,6 +23,10 @@ Object.defineProperty(window, 'matchMedia', {
 class NoIntersections { observe() {} disconnect() {} }
 Object.defineProperty(window, 'IntersectionObserver', { configurable: true, writable: true, value: NoIntersections });
 
+// Every test starts with the note asking for a backup accepted, as nearly all are of what comes after it; its own tests take it back.
+const accepted = () => localStorage.setItem('photosense-backup-note', '2026-11-22');
+accepted();
+
 afterEach(() => {
   localStorage.clear();
   cleanup();
@@ -30,4 +34,5 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  accepted();
 });

@@ -1012,6 +1012,41 @@ describe('about', () => {
   });
 });
 
+describe('the note asking for a backup', () => {
+  const NOTE = 'Keep a backup of photos you care about';
+  const note = () => screen.queryByRole('alertdialog', { name: NOTE });
+  beforeEach(() => localStorage.clear());
+
+  it('waits until the page knows it is on a computer, then reads the terms of use over it and goes only once accepted, for good', async () => {
+    const view = open();
+    // Not yet known to be a computer: a phone says what it is a moment after the page opens.
+    expect(note()).not.toBeInTheDocument();
+    api.useAbout.mockReturnValue({ data: { program: 'server', version: '1.4.0' } } as never);
+    view.refresh();
+    expect(note()).toHaveTextContent('Before you use PhotoSense, keep a backup of the photos and videos you care about, and keep it up to date.');
+    // Neither Escape nor a press outside it puts it away.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.mouseDown(note()!.parentElement!);
+    expect(note()).toBeInTheDocument();
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Read the terms of use' }));
+    const about = screen.getByRole('dialog', { name: 'About PhotoSense' });
+    expect(within(about).getByRole('button', { name: 'Terms of use' })).toHaveAttribute('aria-current', 'page');
+    expect(note()).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Accept and continue' }));
+    expect(note()).not.toBeInTheDocument();
+    view.unmount();
+    open();
+    expect(note()).not.toBeInTheDocument();
+  });
+
+  it('is not the computer\'s on a phone, which has its own', () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    open();
+    expect(note()).not.toBeInTheDocument();
+  });
+});
+
 describe('phones', () => {
   it('opens on a computer from the area switch, its dot going once it has been opened, and pairs a phone from there', async () => {
     open();

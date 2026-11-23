@@ -1,6 +1,7 @@
 "use client";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppMenu } from '../components/AppMenu';
+import { BackupNoteDialog } from '../components/BackupNoteDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ErrorsPanel } from '../components/ErrorsPanel';
 import { GroupList } from '../components/GroupList';
@@ -24,6 +25,7 @@ import {
   clearResults, connectLogStream, eraseRemoved, fetchGroupTotals, fetchRemoved, openInViewer, prefetchGroups, removeDuplicates, removeGroups, removePhoto, retryNow, setKept, stopScan, undoChange, useGroups,
   useAbout, useCategories, usePlan, useScanProgress, useScanStatus,
 } from '../lib/apiClient';
+import { useBackupNote } from '../lib/backupNote';
 import { originalsStay, someGroups } from '../lib/cleanup';
 import { fromScanned } from '../lib/organize';
 import { binName, formatBytes, linkedFiles } from '../lib/format';
@@ -121,6 +123,8 @@ export default function HomePage() {
   const [helpOpen, setHelpOpen] = useState(false);
   // About, open at the topic it was opened for.
   const [aboutOpen, setAboutOpen] = useState<AboutTopic>();
+  // Keep a backup of the photos you care about: asked once, and put away only by accepting it; hidden while its terms are read.
+  const backupNote = useBackupNote();
   const [pairOpen, setPairOpen] = useState(false);
   // The groups that are ticked, on whichever page each was: as it was when ticked, for when its page is not the one showing.
   const [ticked, setTicked] = useState<ReadonlyMap<string, DuplicateGroupDto>>(new Map());
@@ -453,7 +457,7 @@ export default function HomePage() {
           notice={offlineNotice} toasts={toasts} removeToast={remove}
           theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} settings={settings} onSettings={changeSettings} onTab={turnToTab}
           scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}
-          onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} />
+          onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} reading={aboutOpen !== undefined} />
       ) : (
         <>
         <TopBar plan={plan} area={area} fresh={settings.phonesSeen ? [] : ['phones']} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
@@ -556,6 +560,8 @@ export default function HomePage() {
         </ConfirmDialog>
       )}
 
+      {/* Only once the page knows it is on a computer, as a phone says so a moment after it opens. */}
+      {about && !platform && backupNote.due && !aboutOpen && <BackupNoteDialog onTerms={() => setAboutOpen('terms')} onAccept={backupNote.accept} />}
       {helpOpen && <HelpWindow platform={platform ?? 'computer'} onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {aboutOpen && <AboutWindow start={aboutOpen} onClose={() => setAboutOpen(undefined)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}

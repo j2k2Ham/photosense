@@ -128,7 +128,13 @@ export class Service {
   }
 }
 
-export const test = base.extend<{ program: Program; photos: Photos; service: Service }>({
+export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean }>({
+  // Nearly every test is of what comes after the note asking for a backup; the note's own tests leave it to be asked.
+  noteAccepted: [true, { option: true }],
+  page: async ({ page, noteAccepted }, use) => {
+    if (noteAccepted) await page.addInitScript(() => localStorage.setItem('photosense-backup-note', '2026-11-22'));
+    await use(page);
+  },
   program: async ({}, use, testInfo) => {
     const port = await freePort();
     const data = mkdtempSync(join(tmpdir(), 'photosense-e2e-data-'));

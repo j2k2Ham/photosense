@@ -82,3 +82,13 @@ test.describe('every screen can be used with assistive technology and read in ei
     await accessible(page, 'About');
   });
 });
+
+test.describe('the note asking for a backup', () => {
+  test.use({ noteAccepted: false });
+
+  test('can be read and accepted with assistive technology @phone', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Accept and continue' })).toBeVisible();
+    await accessible(page, 'The note asking for a backup');
+  });
+});

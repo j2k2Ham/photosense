@@ -731,6 +731,7 @@ describe('PhotoSense on a phone', () => {
 
     it('offers it once at the first launch after the update; Not now leaves it for Settings, and moving it is not offered again', async () => {
       localStorage.clear();
+      localStorage.setItem('photosense-backup-note', '2026-11-22');
       localStorage.setItem('photosense-first-run', 'done');
       api.eraseRemoved.mockClear();
       const first = render(<App />);
@@ -749,6 +750,7 @@ describe('PhotoSense on a phone', () => {
 
     it('moves it from the offer at launch, and offers nothing when nothing waits', async () => {
       localStorage.clear();
+      localStorage.setItem('photosense-backup-note', '2026-11-22');
       localStorage.setItem('photosense-first-run', 'done');
       api.eraseRemoved.mockClear();
       const first = render(<App />);
@@ -757,6 +759,7 @@ describe('PhotoSense on a phone', () => {
       expect(localStorage.getItem('photosense-removed-offered')).toBe('asked');
       first.unmount();
       localStorage.clear();
+      localStorage.setItem('photosense-backup-note', '2026-11-22');
       localStorage.setItem('photosense-first-run', 'done');
       api.useRemoved.mockImplementation((roots: string[] | null) => ({ data: roots ? { files: 0, bytes: 0, folders: [] } : undefined }));
       render(<App />);

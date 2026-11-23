@@ -60,6 +60,8 @@ interface Props {
   onHelp(): void;
   /** Opens About, at PhotoSense itself or at one of its documents. */
   onAbout(topic?: AboutTopic): void;
+  /** About is open, over whatever the page shows. */
+  readonly reading?: boolean;
 }
 
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -73,7 +75,8 @@ const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function PhoneApp(props: Props) {
   const { platform, tab, status, notice, toasts, theme, version, errorCount, removeToast, notify } = props;
   const { starting, scan } = usePhoneScan(props.onStarted, notify);
-  const cover = useFirstRun({ scanning: props.scanning, progress: props.progress, starting, scan, onStop: props.onStopScan, onCleanUp: () => props.onTab('cleanup'), notify });
+  const cover = useFirstRun({ scanning: props.scanning, progress: props.progress, starting, scan, onStop: props.onStopScan, onCleanUp: () => props.onTab('cleanup'), notify,
+    reading: props.reading ?? false, onTerms: () => props.onAbout('terms') });
   // The library is read once the first run is through, and again after each scan; Library keeps whether it is choosing.
   const library = useLibrary(!cover);
   const [selecting, setSelecting] = useState(false);

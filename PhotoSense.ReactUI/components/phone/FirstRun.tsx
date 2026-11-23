@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { appIconUrl } from '../../lib/apiBase';
+import { BACKUP_NOTE, useBackupNote } from '../../lib/backupNote';
 import {
   askForPhotos, buyPlan, confirmPairing, enterPairingCode, libraryRoot, openPhotoSettings, scanPairing, startScan, stopPairing, useAbout, useFound, usePairing, usePhotoAccess, usePlan,
 } from '../../lib/apiClient';
@@ -10,7 +11,7 @@ import { downloadLine, usePhone } from '../../lib/phone';
 import type { FindingsDto, PlanKind, ScanProgressSnapshotDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { PhoneButton } from './Controls';
-import { CheckIcon, CleanUpIcon, CloseIcon, DoneIcon, LibraryIcon, SendIcon } from './Icons';
+import { BackupIcon, CheckIcon, CleanUpIcon, CloseIcon, DoneIcon, LibraryIcon, SendIcon } from './Icons';
 import { boughtSaid, PlanCard } from './ProSheet';
 
 type Notify = (message: string, kind: ToastKind) => void;
@@ -72,15 +73,21 @@ interface FirstRunProps {
   /** Goes to Clean up, where the first launch ends. */
   onCleanUp(): void;
   notify: Notify;
+  /** About is open over everything, as when the terms of use are read from the note asking for a backup. */
+  readonly reading: boolean;
+  /** Opens About at the terms of use. */
+  onTerms(): void;
 }
 
 /**
- * What covers the tabs until they can be used, or nothing. The first time: Welcome, why PhotoSense needs the photos
- * and the phone's own question, pairing a computer (or not, for now), the first scan, what it found, and the offer of
- * Pro, once; it ends on Clean up. After that, Scanning whenever a scan runs.
+ * What covers the tabs until they can be used, or nothing. The first time: Welcome, the note asking for a backup, why
+ * PhotoSense needs the photos and the phone's own question, pairing a computer (or not, for now), the first scan, what
+ * it found, and the offer of Pro, once; it ends on Clean up. After that, Scanning whenever a scan runs. The note comes
+ * at the next launch too on a phone past its first launch that has not accepted it.
  */
-export function useFirstRun({ scanning, progress, starting, scan, onStop, onCleanUp, notify }: FirstRunProps): React.ReactElement | null {
+export function useFirstRun({ scanning, progress, starting, scan, onStop, onCleanUp, notify, reading, onTerms }: FirstRunProps): React.ReactElement | null {
   const access = usePhotoAccess().data?.access;
+  const note = useBackupNote();
   const [stage, go] = useState(loadStage);
   const [asking, setAsking] = useState(false);
   const [begun, setBegun] = useState(false);
@@ -128,6 +135,7 @@ export function useFirstRun({ scanning, progress, starting, scan, onStop, onClea
   }
 
   if (stage === 'new') return <Welcome onStart={() => go('access')} />;
+  if (note.due) return <BackupNote hidden={reading} onTerms={onTerms} onAccept={note.accept} />;
   if (stage === 'access' || stage === 'refused') return <Access busy={asking} refused={stage === 'refused'} onContinue={() => void ask()} onSettings={() => void settings()} />;
   if (stage === 'pair') return <Pair notify={notify} onNext={startFirstScan} />;
   if (stage === 'result') return <Result onOffer={() => go('offer')} onDone={finish} />;
@@ -137,9 +145,9 @@ export function useFirstRun({ scanning, progress, starting, scan, onStop, onClea
 }
 
 /** A screen of its own over the tabs: progress dots at the top, its content, and its buttons at the foot. */
-function Cover({ label, step, children, foot }: { readonly label: string; readonly step?: number; readonly children: React.ReactNode; readonly foot: React.ReactNode }) {
+function Cover({ label, step, hidden, children, foot }: { readonly label: string; readonly step?: number; readonly hidden?: boolean; readonly children: React.ReactNode; readonly foot: React.ReactNode }) {
   return (
-    <section aria-label={label}
+    <section aria-label={label} hidden={hidden}
       className="fixed inset-0 z-40 flex animate-fade-in justify-center overflow-y-auto bg-bg px-6 pb-[calc(var(--safe-b)+16px)] pt-[calc(var(--safe-t)+16px)] font-ui text-t1">
       <div className="flex w-full max-w-[440px] flex-col">
         {step !== undefined && (
@@ -182,6 +190,25 @@ function Welcome({ onStart }: { onStart(): void }) {
             </li>
           ))}
         </ul>
+      </div>
+    </Cover>
+  );
+}
+
+/**
+ * Keep a backup of the photos you care about, as the terms of use ask, and accept them. Kept covering the tabs, hidden,
+ * while About shows the terms over it, so nothing behind it starts.
+ */
+function BackupNote({ hidden, onTerms, onAccept }: { readonly hidden: boolean; onTerms(): void; onAccept(): void }) {
+  return (
+    <Cover label={BACKUP_NOTE.title} hidden={hidden} foot={<>
+      <PhoneButton onClick={onAccept}>{BACKUP_NOTE.accept}</PhoneButton>
+      <PhoneButton kind="text" onClick={onTerms}>{BACKUP_NOTE.terms}</PhoneButton>
+    </>}>
+      <div className="flex flex-1 flex-col justify-center gap-4">
+        <span className="grid h-[72px] w-[72px] place-items-center rounded-[20px] bg-acc-soft text-acc"><BackupIcon size={30} /></span>
+        <Title>{BACKUP_NOTE.title}</Title>
+        {BACKUP_NOTE.lines.map(line => <Lead key={line}>{line}</Lead>)}
       </div>
     </Cover>
   );
