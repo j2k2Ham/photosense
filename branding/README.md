@@ -1,21 +1,21 @@
 # The brand
 
-The mark is direction 2a, the strata gem: five layers of a library forming one gem. The wordmark is lowercase Sora 600, outlined, so it needs no font. Its colours are the page's tokens in `PhotoSense.ReactUI/app/globals.css`. `brand-kit.html` shows the whole kit in one offline page.
+The mark is direction 2a, the strata gem: five layers of a library forming one gem. The wordmark is lowercase Sora 600, outlined, so it needs no font. Its colours are the page's tokens in `Trovolve.ReactUI/app/globals.css`. `brand-kit.html` shows the whole kit in one offline page.
 
 ## In use
 
 | File | Where it is used |
 |---|---|
-| `app-icon.png` | The icon, 1024 × 1024 and opaque: the only copy. `PhotoSense.Api` builds it in for `/api/about/icon` (the page's tab, header, About, Welcome, Settings, the Pro sheet and the share cards); the iPhone app takes it as its single-size icon; Android links it as `mipmap/appicon.png`; `tools/site.mjs` copies it into the web site. |
+| `app-icon.png` | The icon, 1024 × 1024 and opaque: the only copy. `Trovolve.Api` builds it in for `/api/about/icon` (the page's tab, header, About, Welcome, Settings, the Pro sheet and the share cards); the iPhone app takes it as its single-size icon; Android links it as `mipmap/appicon.png`; `tools/site.mjs` copies it into the web site. |
 | `app-icon.svg` | The icon's vector source. |
-| `trovolve.ico` | The Windows program's icon, 16 to 256 pixels: `ApplicationIcon` in `PhotoSense.Server.csproj`. |
+| `trovolve.ico` | The Windows program's icon, 16 to 256 pixels: `ApplicationIcon` in `Trovolve.Server.csproj`. |
 | `png/app-icons/ios/AppIcon-dark-1024.png` | The iPhone's dark home-screen icon (iOS 18), linked into `AppIcon.appiconset`. |
 
 Drawn in code from these masters, so they follow the theme:
 
-- `PhotoSense.ReactUI/components/FeatureIcons.tsx`: the twelve feature icons (`svg/feature-icons`), used by the phone and tablet layouts through `components/phone/Icons.tsx`.
-- `PhotoSense.ReactUI/components/TrovolveBrand.tsx`: the mark (`svg/mark`), the wordmark (`svg/lockups`) and the launch animation.
-- `PhotoSense.Android/Resources`: the adaptive icon (`mipmap-anydpi-v26/appicon.xml`, `drawable/appicon_foreground.xml`, `drawable/appicon_monochrome.xml`, `values/appicon_colors.xml`, from `svg/app-icon/android-*.svg`), the notification icon (`drawable/notice_icon.xml`, from `svg/mark/trovolve-mark-small-mono.svg`) and the icon menu's shortcuts (`drawable/shortcut_*.xml`, from `android/feature-icons`).
+- `Trovolve.ReactUI/components/FeatureIcons.tsx`: the twelve feature icons (`svg/feature-icons`), used by the phone and tablet layouts through `components/phone/Icons.tsx`.
+- `Trovolve.ReactUI/components/TrovolveBrand.tsx`: the mark (`svg/mark`), the wordmark (`svg/lockups`) and the launch animation.
+- `Trovolve.Android/Resources`: the adaptive icon (`mipmap-anydpi-v26/appicon.xml`, `drawable/appicon_foreground.xml`, `drawable/appicon_monochrome.xml`, `values/appicon_colors.xml`, from `svg/app-icon/android-*.svg`), the notification icon (`drawable/notice_icon.xml`, from `svg/mark/trovolve-mark-small-mono.svg`) and the icon menu's shortcuts (`drawable/shortcut_*.xml`, from `android/feature-icons`).
 
 ## Kept for later
 

@@ -18,7 +18,7 @@ async function library(photos: Photos, service: Service, page: Page) {
 const categories = (page: Page) => page.getByRole('navigation', { name: 'Categories' });
 
 test.describe('Clean up\'s categories on a computer', () => {
-  test('screenshots are deleted into _PhotoSense_Removed after a question naming them, and Undo puts them back', async ({ page, photos, service }) => {
+  test('screenshots are deleted into _Trovolve_Removed after a question naming them, and Undo puts them back', async ({ page, photos, service }) => {
     await library(photos, service, page);
     await expect(categories(page).getByRole('button', { name: /^Screenshots/ })).toContainText('2 items');
     await expect(categories(page).getByRole('button', { name: /^Bursts/ })).toContainText('2 extra shots');
@@ -30,8 +30,8 @@ test.describe('Clean up\'s categories on a computer', () => {
     await expect(question(page)).toHaveAccessibleName('Delete 2 files?');
     await expect(question(page)).toContainText(/Screenshot 2024-01-0\d at .+\.png and Screenshot 2024-01-0\d at .+\.png go/);
     await question(page).getByRole('button', { name: 'Delete 2 files' }).click();
-    await expect(message(page, /^Moved 2 files \(.+\) to _PhotoSense_Removed\.$/)).toBeVisible();
-    expect(photos.exists('_PhotoSense_Removed/Screenshots/Screenshot 2024-01-02 at 09.15.00.png')).toBe(true);
+    await expect(message(page, /^Moved 2 files \(.+\) to _Trovolve_Removed\.$/)).toBeVisible();
+    expect(photos.exists('_Trovolve_Removed/Screenshots/Screenshot 2024-01-02 at 09.15.00.png')).toBe(true);
     expect(photos.exists('Screenshots/Screenshot 2024-01-03 at 18.40.00.png')).toBe(false);
     await expect(pane.getByText('Nothing left to review.')).toBeVisible();
 
@@ -55,7 +55,7 @@ test.describe('Clean up\'s categories on a computer', () => {
     await expect(question(page)).toContainText(/IMG_000[12]\.JPG and IMG_000[12]\.JPG go/);
     await expect(question(page)).toContainText('IMG_0003.JPG stays.');
     await question(page).getByRole('button', { name: 'Delete 2 files' }).click();
-    await expect(message(page, /^Moved 2 files \(.+\) to _PhotoSense_Removed\. IMG_0003\.JPG stays where it is\.$/)).toBeVisible();
+    await expect(message(page, /^Moved 2 files \(.+\) to _Trovolve_Removed\. IMG_0003\.JPG stays where it is\.$/)).toBeVisible();
     expect(photoFiles(photos).filter(f => f.startsWith('Trip/'))).toEqual(['Trip/IMG_0003.JPG', 'Trip/IMG_0009.JPG']);
   });
 });

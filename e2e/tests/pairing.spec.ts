@@ -8,7 +8,7 @@ test.describe('phones and pairing', () => {
     await areas.getByRole('button', { name: /^Phones/ }).click();
     // Asked of the program itself, which keeps the phones' backups.
     const none = page.getByRole('region', { name: 'No phones yet' });
-    await expect(none).toContainText('Pair a phone with PhotoSense on it, and it backs up its photos and videos to this computer over Wi-Fi.');
+    await expect(none).toContainText('Pair a phone with Trovolve on it, and it backs up its photos and videos to this computer over Wi-Fi.');
     await expect(areas.getByRole('img', { name: 'New' })).toBeHidden();
     await none.getByRole('button', { name: 'Pair a phone' }).click();
     const pairing = page.getByRole('dialog', { name: 'Pair a phone' });
@@ -22,9 +22,9 @@ test.describe('phones and pairing', () => {
 
   test('Rename by date shows the first names now and after, and renames a phone\u2019s copies on this computer', async ({ page }) => {
     let phone = {
-      id: 'p', name: "Jamie's iPhone", kind: 'iPhone', folder: "Pictures/PhotoSense/Jamie's iPhone", path: '/Pictures/PhotoSense/Jamie', paused: false,
+      id: 'p', name: "Jamie's iPhone", kind: 'iPhone', folder: "Pictures/Trovolve/Jamie's iPhone", path: '/Pictures/Trovolve/Jamie', paused: false,
       paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 2, heldBytes: 2, safe: 0, safeBytes: 0, tripFolders: 0,
-      tripsFolder: 'Pictures/PhotoSense', tripsPath: '/Pictures/PhotoSense', names: 'asOnPhone', arriving: null, events: [],
+      tripsFolder: 'Pictures/Trovolve', tripsPath: '/Pictures/Trovolve', names: 'asOnPhone', arriving: null, events: [],
     };
     const asked: string[] = [];
     // A paired phone, which only a phone could make, stood in for; renaming answered as the program would.

@@ -19,7 +19,7 @@ test.describe('similar shots', () => {
     await review.getByRole('button', { name: /^Delete this copy/ }).click();
     await expect(question(page)).toHaveAccessibleName(`Delete ${other}?`);
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
-    await expect(message(page, `Moved ${other} to _PhotoSense_Removed. ${best} stays where it is.`)).toBeVisible();
+    await expect(message(page, `Moved ${other} to _Trovolve_Removed. ${best} stays where it is.`)).toBeVisible();
     expect(photoFiles(photos)).toEqual([`Burst/${best}`, 'Other/IMG_0020.JPG']);
     await expect(page.getByRole('tab', { name: 'Similar 0' })).toBeVisible();
   });

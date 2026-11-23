@@ -43,10 +43,10 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: none
-          # The coverage report TUnit writes is its own page, not PhotoSense's code.
+          # The coverage report TUnit writes is its own page, not Trovolve's code.
           config: |
             paths-ignore:
-              - PhotoSense.Tests/coverage
+              - Trovolve.Tests/coverage
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4

@@ -17,11 +17,11 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Restore
-        run: dotnet restore PhotoSense.sln
+        run: dotnet restore Trovolve.sln
       - name: Run Benchmarks
-        run: dotnet run -c Release --project PhotoSense.Benchmarks/PhotoSense.Benchmarks.csproj -- --join
+        run: dotnet run -c Release --project Trovolve.Benchmarks/Trovolve.Benchmarks.csproj -- --join
       - name: Upload Benchmark Results
         uses: actions/upload-artifact@v7
         with:
           name: benchmark-results
-          path: PhotoSense.Benchmarks/BenchmarkDotNet.Artifacts/results/**
+          path: Trovolve.Benchmarks/BenchmarkDotNet.Artifacts/results/**

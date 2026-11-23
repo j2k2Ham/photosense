@@ -111,8 +111,8 @@ describe('the command', () => {
   });
 
   it('says what is wrong and fails, for a format it does not know or a mistake in version.json', () => {
-    assert.deepEqual(call(['--format', 'xml']), { code: 1, said: [], failed: ['PhotoSense\'s version: --format must be msbuild, json or text, not "xml".'] });
-    assert.deepEqual(call([], { read: () => '{"linked": 1}' }).failed, ['PhotoSense\'s version: version.json: "linked" must be true or false.']);
+    assert.deepEqual(call(['--format', 'xml']), { code: 1, said: [], failed: ['Trovolve\'s version: --format must be msbuild, json or text, not "xml".'] });
+    assert.deepEqual(call([], { read: () => '{"linked": 1}' }).failed, ['Trovolve\'s version: version.json: "linked" must be true or false.']);
   });
 
   it('reads this repository\'s version.json and history, and writes to the console, unless told otherwise', t => {

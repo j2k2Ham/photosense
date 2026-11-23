@@ -1,0 +1,233 @@
+using Trovolve.Application.Changes;
+using Trovolve.Application.Removal;
+using Trovolve.Application.Scanning.Interfaces;
+using Trovolve.Domain.Entities;
+using Trovolve.Domain.Repositories;
+using Trovolve.Domain.Services;
+using Trovolve.Domain.ValueObjects;
+
+namespace Trovolve.Application.Scanning.Services;
+
+/// <summary>
+/// Removes copies and look-alikes found by a scan. Each request is one change: every file it takes moves
+/// into the folder that holds removed files, with the sidecars and Live Photo videos that belong to it alone,
+/// or none does; and the whole of it can be undone.
+/// </summary>
+public class DuplicateRemovalService : IDuplicateRemovalService
+{
+    private readonly IDuplicateAnalysisService _analysis;
+    private readonly IPhotoRepository _repo;
+    private readonly ICompanionFileFinder _companions;
+    private readonly FileChanges _changes;
+    private readonly IPhotoFileSystem _files;
+    private readonly TimeProvider _time;
+
+    /// <summary>Removes the photos of the groups <paramref name="analysis"/> finds.</summary>
+    /// <param name="analysis">Finds the groups.</param>
+    /// <param name="repo">What scans recorded.</param>
+    /// <param name="companions">Finds the sidecars and Live Photo videos that go with a file.</param>
+    /// <param name="changes">Carries out each removal as one change that can be undone.</param>
+    /// <param name="files">Where the photos are kept.</param>
+    /// <param name="time">When each removal is started, which orders the list of changes that can be undone.</param>
+    public DuplicateRemovalService(IDuplicateAnalysisService analysis, IPhotoRepository repo, ICompanionFileFinder companions, FileChanges changes, IPhotoFileSystem files, TimeProvider time)
+    {
+        _analysis = analysis;
+        _repo = repo;
+        _companions = companions;
+        _changes = changes;
+        _files = files;
+        _time = time;
+    }
+
+    /// <inheritdoc />
+    public Task<BulkRemovalResult> RemoveDuplicatesAsync(string? groupKey, bool similar, CancellationToken ct)
+        => RemoveFromAsync(groupKey is null ? null : [groupKey], similar, ct);
+
+    /// <inheritdoc />
+    public Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar, CancellationToken ct)
+        => RemoveFromAsync(groupKeys, similar, ct);
+
+    /// <summary>Removes the copies, or look-alikes, of the groups named; with no groups named, every duplicate group, and no group of similar shots at all.</summary>
+    private async Task<BulkRemovalResult> RemoveFromAsync(IReadOnlyCollection<string>? groupKeys, bool similar, CancellationToken ct)
+    {
+        var analysis = await _analysis.GetAsync(ct);
+        // A photo can head a group of each kind under the one key, so the kind is asked for, never guessed.
+        var groups = similar ? analysis.Similar : analysis.Duplicates;
+        var named = groupKeys ?? (similar ? [] : null);
+        if (named is not null) groups = groups.Where(g => named.Contains(g.Key)).ToList();
+        // Pictures first: a picture takes its Live Photo video with it, and a video going that way must be
+        // seen to be going before any copy of it is judged redundant.
+        groups = groups.OrderBy(g => g.Keeper.IsVideo).ToList();
+
+        var removal = new Removal(this);
+        var skipped = 0;
+        var problems = new List<string>();
+        foreach (var group in groups)
+        {
+            var removable = group.Removable.ToList();
+            // Copies are only redundant while the photo they are copies of is still there, unchanged, and stays.
+            if (!removal.Stays(group.Keeper))
+            {
+                skipped += removable.Count;
+                problems.Add($"Kept photo is missing or has changed, so its copies were left alone: {group.Keeper.SourcePath}");
+                continue;
+            }
+            foreach (var photo in removable)
+            {
+                ct.ThrowIfCancellationRequested();
+                // The photo kept was seen to stay, and what goes along with a copy (its Live Photo video, its sidecars)
+                // is never a file of the copy's own group, so a copy here is never the last one: having changed since
+                // the scan is the one reason to leave it.
+                if (await removal.AddAsync(photo, [group.Keeper], ct) != RemovalOutcome.Changed) continue;
+                skipped++;
+                problems.Add($"Changed since the scan, left alone: {photo.SourcePath}");
+            }
+        }
+
+        var done = await removal.CarryOutAsync(ct);
+        if (!done.Done) return new BulkRemovalResult(0, 0, skipped + removal.Asked, [done.Problem!, .. problems]);
+        foreach (var photo in removal.LetGo)
+        {
+            skipped++;
+            problems.Add($"The same file as the photo kept, under another path, so it was left alone: {photo.SourcePath}");
+        }
+        var removed = removal.Removed.Concat(removal.Forgotten).ToList();
+        return new BulkRemovalResult(removed.Count, removed.Sum(p => p.FileSizeBytes), skipped, problems, removal.Companions.Count, removal.BatchId, removal.Kept);
+    }
+
+    /// <inheritdoc />
+    public async Task<BulkRemovalResult> RemovePhotosAsync(IReadOnlyCollection<PhotoId> ids, CancellationToken ct)
+    {
+        var removal = new Removal(this);
+        var skipped = 0;
+        var problems = new List<string>();
+        var photos = new List<Photo>();
+        foreach (var id in ids)
+            if (await _repo.GetAsync(id, ct) is { } photo) photos.Add(photo);
+        // Pictures first: a picture takes its Live Photo video with it.
+        foreach (var photo in photos.OrderBy(p => p.IsVideo))
+        {
+            if (await removal.AddAsync(photo, null, ct) != RemovalOutcome.Changed) continue;
+            skipped++;
+            problems.Add($"Changed since the scan, left alone: {photo.SourcePath}");
+        }
+        var done = await removal.CarryOutAsync(ct);
+        if (!done.Done) return new BulkRemovalResult(0, 0, skipped + removal.Asked, [done.Problem!, .. problems]);
+        var removed = removal.Removed.Concat(removal.Forgotten).ToList();
+        return new BulkRemovalResult(removed.Count, removed.Sum(p => p.FileSizeBytes), skipped, problems, removal.Companions.Count, removal.BatchId);
+    }
+
+    /// <inheritdoc />
+    public async Task<RemovalResult> RemoveAsync(PhotoId id, bool deleteFile, CancellationToken ct)
+    {
+        if (await _repo.GetAsync(id, ct) is not { } photo) return new RemovalResult(RemovalOutcome.NotFound);
+        // A record whose file is already gone is only forgotten: there is nothing left to be the last copy of.
+        if (!deleteFile || !_files.FileExists(photo.SourcePath))
+        {
+            await _repo.DeleteAsync(photo.Id, ct);
+            return new RemovalResult(RemovalOutcome.Removed);
+        }
+
+        var group = (await _analysis.GetAsync(ct)).Duplicates.FirstOrDefault(g => g.Keeper.Id == id || g.Members.Any(m => m.Photo.Id == id));
+        // A copy is a copy of the photo kept. The photo kept may go too, while one of its copies stays in its
+        // place. A photo in no duplicate group is nobody's copy, and removing it is the user's own decision.
+        IReadOnlyList<Photo>? copyOf = group is null ? null
+            : group.Keeper.Id == id ? group.Members.Select(m => m.Photo).ToList() : [group.Keeper];
+        var removal = new Removal(this);
+        if (await removal.AddAsync(photo, copyOf, ct) is var refused and not RemovalOutcome.Removed) return new RemovalResult(refused);
+
+        var done = await removal.CarryOutAsync(ct);
+        if (!done.Done) return new RemovalResult(RemovalOutcome.Failed, Error: done.Problem);
+        if (removal.LetGo.Count > 0) return new RemovalResult(RemovalOutcome.LastCopy);
+        return new RemovalResult(RemovalOutcome.Removed, removal.HeldAt) { Companions = removal.Companions.Select(c => c.From).ToList(), BatchId = removal.BatchId };
+    }
+
+    /// <summary>The files one request takes, worked out in full before any of them moves.</summary>
+    private sealed class Removal(DuplicateRemovalService service)
+    {
+        // Stamped with the moment the request is worked out: the newest change is listed first.
+        private readonly OrganizeBatch _batch = new() { UtcTicks = service._time.GetUtcNow().UtcTicks, Removed = true };
+        private readonly Dictionary<OrganizeBatchItem, (Photo Photo, Photo? Stays)> _of = [];
+        private readonly HashSet<string> _going = new(PhotoPath.Comparer);
+        private readonly HashSet<string> _taken = new(PhotoPath.Comparer);
+        private readonly List<Photo> _missing = [];
+        private List<OrganizeBatchItem> _left = [];
+        private bool _erased;
+
+        /// <summary>Photos whose files are no longer there: only what was recorded of them goes.</summary>
+        public IReadOnlyList<Photo> Forgotten => _missing;
+        /// <summary>Photos whose files moved.</summary>
+        public IEnumerable<Photo> Removed => _batch.Items.Where(i => !i.Companion).Select(i => _of[i].Photo);
+        /// <summary>Photos that turned out, once moved, to have taken the file kept with them, and were put straight back.</summary>
+        public IReadOnlyList<Photo> LetGo => _left.Where(i => !i.Companion).Select(i => _of[i].Photo).ToList();
+        /// <summary>The photos kept in place of the copies whose files went, by path, each once.</summary>
+        public IReadOnlyList<string> Kept => _batch.Items.Select(i => _of[i].Stays?.SourcePath).OfType<string>().Distinct(PhotoPath.Comparer).ToList();
+        /// <summary>The sidecars and Live Photo videos going with the photos.</summary>
+        public IReadOnlyList<OrganizeBatchItem> Companions => _batch.Items.Where(i => i.Companion).ToList();
+        /// <summary>Photos asked for that were to go.</summary>
+        public int Asked => _batch.Items.Count(i => !i.Companion) + _missing.Count;
+        /// <summary>What to undo the removal by; absent when no file is to move, or when they went to a phone's bin, which has no undo.</summary>
+        public Guid? BatchId => _batch.Items.Count > 0 && !_erased ? _batch.Id : null;
+        /// <summary>Where the photo of a request for one is held now; null when it went to a phone's bin.</summary>
+        public string? HeldAt => _erased ? null : _batch.Items.First(i => !i.Companion).To;
+
+        /// <summary>A photo stays while its file is there as it was scanned and this request is not taking it.</summary>
+        public bool Stays(Photo photo) => ScannedFile.IsIntact(photo, service._files) && !_going.Contains(photo.SourcePath);
+
+        /// <summary>Adds a photo to the request, with what goes along with it, unless it is to be left.</summary>
+        /// <param name="photo">The photo.</param>
+        /// <param name="copyOf">The files it is a copy of, when it is being removed as one: it goes only while one of them stays.</param>
+        /// <param name="ct">Stops the reading of what goes along with it.</param>
+        /// <returns>Removed when it is to go, or why it is not.</returns>
+        public async Task<RemovalOutcome> AddAsync(Photo photo, IReadOnlyList<Photo>? copyOf, CancellationToken ct)
+        {
+            // Already going, for instance as the Live Photo video of a picture this request takes.
+            if (_going.Contains(photo.SourcePath)) return RemovalOutcome.NotFound;
+            if (service._files.Describe(photo.SourcePath) is not { } file)
+            {
+                _missing.Add(photo);
+                return RemovalOutcome.Removed;
+            }
+            // The decision to remove this file was made from the scan; if the file has changed since, it no longer holds.
+            if (file.Length != photo.FileSizeBytes || (photo.FileModifiedUtc is { } scanned && file.ModifiedUtc != scanned)) return RemovalOutcome.Changed;
+            var stays = copyOf?.FirstOrDefault(Stays);
+            if (copyOf is not null && stays is null) return RemovalOutcome.LastCopy;
+
+            // Worked out while the file is still in place: its sidecars and Live Photo video, if nothing else uses them.
+            var companions = (await service._companions.FindForAsync(photo.SourcePath, ct)).Where(c => !_going.Contains(c)).ToList();
+            _of[Plan(photo.SourcePath, photo.ScanRoot, companion: false)] = (photo, stays);
+            foreach (var companion in companions) _of[Plan(companion, photo.ScanRoot, companion: true)] = (photo, null);
+            return RemovalOutcome.Removed;
+        }
+
+        private OrganizeBatchItem Plan(string path, string? root, bool companion)
+        {
+            var item = new OrganizeBatchItem { From = path, To = service._changes.FreePlace(RemovedPlace.For(path, root), _taken), Companion = companion };
+            service._changes.NeedFolder(_batch.CreatedFolders, Path.GetDirectoryName(item.To)!);
+            _batch.Items.Add(item);
+            _going.Add(path);
+            return item;
+        }
+
+        /// <summary>Moves every file of the request, as one change, and forgets the photos whose files had already gone.</summary>
+        public async Task<ChangeResult> CarryOutAsync(CancellationToken ct)
+        {
+            if (_batch.Items.Count > 0)
+            {
+                var first = _of[_batch.Items[0]].Photo;
+                _batch.Label = first.ScanRoot is { Length: > 0 } root ? Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) : Path.GetDirectoryName(first.SourcePath)!;
+                // Two records can be one file reached by two paths: through a linked folder, or a drive letter
+                // standing for the same folder. Moving the "copy" then takes the file that was to stay with it,
+                // so it goes straight back.
+                var done = await service._changes.CarryOutAsync(_batch, item => _of[item].Stays is not { } stays || service._files.FileExists(stays.SourcePath), ct);
+                if (!done.Done) return done;
+                _left = done.Left.ToList();
+                _erased = done.Erased;
+                // The files have gone: forgetting the records of those already gone is finished too.
+                ct = CancellationToken.None;
+            }
+            foreach (var photo in _missing) await service._repo.DeleteAsync(photo.Id, ct);
+            return new ChangeResult(true, null, _left);
+        }
+    }
+}

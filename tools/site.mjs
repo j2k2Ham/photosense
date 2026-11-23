@@ -4,7 +4,7 @@
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { parse } from '../PhotoSense.ReactUI/lib/markdown.ts';
+import { parse } from '../Trovolve.ReactUI/lib/markdown.ts';
 
 export const PAGES = [
   { file: 'support.html', source: 'support.md', title: 'Support' },
@@ -14,7 +14,7 @@ export const PAGES = [
 
 const escape = text => text.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-/** As PhotoSense.Api's AboutDocuments.Fill does for the app. */
+/** As Trovolve.Api's AboutDocuments.Fill does for the app. */
 export function fill(text, product) {
   return text
     .replaceAll('{{name}}', product.name)

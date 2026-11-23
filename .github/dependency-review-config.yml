@@ -3,7 +3,7 @@
 # A change fails when it brings in a package under the GPL, LGPL or AGPL, in any version or form, alone or beside
 # another licence ("MIT AND GPL-2.0-only"), with an exception or not (Jamie, 2026-11-17). That includes the old
 # names that stand for one of them with an exception (eCos-2.0, wxWindows, the GPL-2.0-with-… ids) and SMAIL-GPL.
-# A package offered under a choice ("MIT OR GPL-3.0-only") passes, as PhotoSense takes the other.
+# A package offered under a choice ("MIT OR GPL-3.0-only") passes, as Trovolve takes the other.
 #
 # The action's deny-licenses would say this in a few words, but it lets "MIT AND GPL" through and is deprecated, so
 # this allows every licence but those instead: SPDX's list as in spdx-license-ids 3.0.23, which the action reads,

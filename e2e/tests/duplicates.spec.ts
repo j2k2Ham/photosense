@@ -18,7 +18,7 @@ async function twoCopies(photos: Photos, service: Service, page: Page) {
 }
 
 test.describe('duplicates', () => {
-  test('a copy is deleted into _PhotoSense_Removed after a question that names it and the original, and Undo puts it back @phone', async ({ page, photos, service, isMobile }) => {
+  test('a copy is deleted into _Trovolve_Removed after a question that names it and the original, and Undo puts it back @phone', async ({ page, photos, service, isMobile }) => {
     await twoCopies(photos, service, page);
     await groups(page).getByRole('button', { name: /IMG_0001\.JPG/ }).click();
     await expect(review(page).getByRole('heading', { name: 'IMG_0001.JPG', level: 2 })).toBeVisible();
@@ -27,8 +27,8 @@ test.describe('duplicates', () => {
     await expect(question(page)).toContainText(`The original, IMG_0001.JPG, stays in ${photos.path('Trips')}.`);
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
 
-    await expect(message(page, 'Moved IMG_0001 (1).JPG (23 KB) to _PhotoSense_Removed. IMG_0001.JPG stays where it is.')).toBeVisible();
-    expect(photos.exists('_PhotoSense_Removed/Trips/Backup/IMG_0001 (1).JPG')).toBe(true);
+    await expect(message(page, 'Moved IMG_0001 (1).JPG (23 KB) to _Trovolve_Removed. IMG_0001.JPG stays where it is.')).toBeVisible();
+    expect(photos.exists('_Trovolve_Removed/Trips/Backup/IMG_0001 (1).JPG')).toBe(true);
     expect(photos.exists('Trips/Backup/IMG_0001 (1).JPG')).toBe(false);
     await allGroups(page, isMobile);
     await expect(groups(page).getByRole('listitem')).toHaveCount(1);
@@ -59,7 +59,7 @@ test.describe('duplicates', () => {
     await page.getByRole('button', { name: 'Delete all duplicates' }).click();
     await expect(question(page)).toHaveAccessibleName('Delete all duplicates?');
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
-    await expect(message(page, 'Moved 1 duplicate (23 KB) to _PhotoSense_Removed')).toBeVisible();
+    await expect(message(page, 'Moved 1 duplicate (23 KB) to _Trovolve_Removed')).toBeVisible();
     expect(photoFiles(photos)).toEqual(['Trips/Backup/IMG_0002 (1).JPG', 'Trips/IMG_0001.JPG', 'Trips/IMG_0002.JPG', 'Trips/IMG_0003.JPG']);
   });
 
@@ -105,16 +105,16 @@ test.describe('duplicates', () => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Delete all duplicates' }).click();
     await question(page).getByRole('button', { name: /^Delete \d+ files?$/ }).click();
-    await expect(message(page, 'Moved 1 duplicate (23 KB) and 2 linked files to _PhotoSense_Removed')).toBeVisible();
+    await expect(message(page, 'Moved 1 duplicate (23 KB) and 2 linked files to _Trovolve_Removed')).toBeVisible();
     // One whole Live Photo went, picture, video and edit file together, and the other is left whole.
-    const went = photos.files('_PhotoSense_Removed');
+    const went = photos.files('_Trovolve_Removed');
     expect(went.map(f => f.replace(/\.\w+$/, ''))).toEqual(Array(3).fill(went[0].replace(/\.\w+$/, '')));
     expect(photoFiles(photos)).toHaveLength(3);
 
     await page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' }).click();
     await expect(message(page, /back where (it was|they were)/)).toBeVisible();
     expect(photoFiles(photos)).toHaveLength(6);
-    expect(photos.files('_PhotoSense_Removed')).toEqual([]);
+    expect(photos.files('_Trovolve_Removed')).toEqual([]);
   });
 
   test('the same picture saved again in another format is a duplicate, and what differs between them is shown', async ({ page, photos, service }) => {

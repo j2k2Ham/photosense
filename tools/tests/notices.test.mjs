@@ -29,13 +29,13 @@ const androidLock = JSON.stringify({ version: 1, dependencies: {
     'Portable': { type: 'Transitive', resolved: '1.0.0' },
     'Elsewhere.Only': { type: 'Transitive', resolved: '1.0.0' },
     'Build.Tool': { type: 'Direct', resolved: '1.0.0' },
-    'photosense.api': { type: 'Project' },
+    'trovolve.api': { type: 'Project' },
   },
 } });
 
 /** A repository and NuGet folder of made-up packages, one for each way a package can give its licence. */
 function fixture({ unknownLicence = false } = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'photosense-notices-'));
+  const root = mkdtempSync(join(tmpdir(), 'trovolve-notices-'));
   made.push(root);
   const nuget = join(root, 'nuget');
   cpSync(join(repo, 'tools', 'licenses'), join(root, 'tools', 'licenses'), { recursive: true });
@@ -50,14 +50,14 @@ function fixture({ unknownLicence = false } = {}) {
     'Linked/1.0.0': dll,
     'Refs.Only/1.0.0': { type: 'package', runtime: { 'lib/net10.0/_._': {} } },
     'Build.Only/1.0.0': { type: 'package' },
-    'PhotoSense.Domain/1.0.0': { type: 'project' },
+    'Trovolve.Domain/1.0.0': { type: 'project' },
     'System.Delta/1.0.0': dll,
     ...(unknownLicence ? { 'Odd/1.0.0': dll } : {}),
   };
-  for (const project of ['PhotoSense.Server', 'PhotoSense.Desktop']) write(join(root, project, 'obj', 'project.assets.json'), assets(server));
-  for (const project of ['PhotoSense.Infrastructure', 'PhotoSense.Api']) write(join(root, project, 'obj', 'project.assets.json'), assets({ 'Alpha/1.0.0': dll }));
-  write(join(root, 'PhotoSense.iOS', 'PhotoSense.iOS.csproj'), '<PackageReference Include="Microsoft.Missing" Version="1.0.0" />');
-  write(join(root, 'PhotoSense.Android', 'packages.lock.json'), androidLock);
+  for (const project of ['Trovolve.Server', 'Trovolve.Desktop']) write(join(root, project, 'obj', 'project.assets.json'), assets(server));
+  for (const project of ['Trovolve.Infrastructure', 'Trovolve.Api']) write(join(root, project, 'obj', 'project.assets.json'), assets({ 'Alpha/1.0.0': dll }));
+  write(join(root, 'Trovolve.iOS', 'Trovolve.iOS.csproj'), '<PackageReference Include="Microsoft.Missing" Version="1.0.0" />');
+  write(join(root, 'Trovolve.Android', 'packages.lock.json'), androidLock);
   write(join(nuget, 'alpha', '1.0.0', 'alpha.nuspec'), '<license type="expression">MIT</license><copyright>Copyright Alpha</copyright>');
   write(join(nuget, 'beta', '2.0.0', 'beta.nuspec'), '<license type="expression">Apache-2.0</license><copyright>Copyright Beta</copyright>');
   write(join(nuget, 'beta', '2.0.0', 'LICENSE.txt'), 'The Beta licence.\r\n');
@@ -85,7 +85,7 @@ function fixture({ unknownLicence = false } = {}) {
   write(join(nuget, 'elsewhere.only', '1.0.0', 'lib', 'net46', 'Elsewhere.dll'), '');
   write(join(nuget, 'build.tool', '1.0.0', 'build', 'Build.Tool.targets'), '');
   write(join(nuget, 'build.tool', '1.0.0', 'tools', 'Tool.dll'), '');
-  const page = join(root, 'PhotoSense.ReactUI');
+  const page = join(root, 'Trovolve.ReactUI');
   write(join(page, 'package-lock.json'), JSON.stringify({ packages: {
     '': { name: 'page' },
     'node_modules/react': { version: '19.0.0', license: 'MIT' },
@@ -106,7 +106,7 @@ const quiet = () => {};
 describe('the packages a program ships', () => {
   it('are those with files that run, not reference-only packages, build tools or the projects themselves', () => {
     const { root } = fixture();
-    const listed = nugetPackages(JSON.parse(readFileSync(join(root, 'PhotoSense.Server', 'obj', 'project.assets.json'), 'utf8')));
+    const listed = nugetPackages(JSON.parse(readFileSync(join(root, 'Trovolve.Server', 'obj', 'project.assets.json'), 'utf8')));
     assert.deepEqual(listed.map(p => p.id), ['Alpha', 'Beta', 'Microsoft.Gamma', 'XmpCore', 'Native.Thing', 'Linked', 'System.Delta']);
   });
 
@@ -133,7 +133,7 @@ describe('the packages a program ships', () => {
 
   it('for the page, are its own and theirs, and the styles Tailwind writes, but no tool that only builds or tests it, nor a stand-in of its own', () => {
     const { root } = fixture();
-    const names = pagePackages(JSON.parse(readFileSync(join(root, 'PhotoSense.ReactUI', 'package-lock.json'), 'utf8'))).map(p => p.name);
+    const names = pagePackages(JSON.parse(readFileSync(join(root, 'Trovolve.ReactUI', 'package-lock.json'), 'utf8'))).map(p => p.name);
     assert.deepEqual(names, ['react', 'postcss', 'tailwindcss']);
   });
 });
@@ -161,7 +161,7 @@ describe('the notices', () => {
     assert.deepEqual(said, [`Wrote ${join(root, 'notices', 'server.txt')}`, `Wrote ${join(root, 'notices', 'iphone.txt')}`, `Wrote ${join(root, 'notices', 'android.txt')}`]);
 
     const server = readFileSync(join(root, 'notices', 'server.txt'), 'utf8');
-    assert.match(server, /^Third-party notices for PhotoSense for Windows and Mac\n/);
+    assert.match(server, /^Third-party notices for Trovolve for Windows and Mac\n/);
     assert.match(server, /GeoNames \(https:\/\/www\.geonames\.org\/\)/);
     assert.match(server, /\nFONTS\n\nMono \(SIL Open Font License 1\.1\)\nSans \(SIL Open Font License 1\.1\)\n/);
     assert.match(server, /\nSans \(SIL Open Font License 1\.1\)\n-+\n\nCopyright the Sans authors\./);
@@ -183,13 +183,13 @@ describe('the notices', () => {
     assert.match(server, /Its own third-party notices: https:\/\/github\.com\/dotnet\/runtime/);
 
     const iphone = readFileSync(join(root, 'notices', 'iphone.txt'), 'utf8');
-    assert.match(iphone, /^Third-party notices for PhotoSense for iPhone and iPad\n/);
+    assert.match(iphone, /^Third-party notices for Trovolve for iPhone and iPad\n/);
     assert.match(iphone, /\n\.NET for iOS \(MIT\)\n/);
     assert.match(iphone, /\nMicrosoft\.Missing 1\.0\.0 \(MIT\)\n/);
     assert.doesNotMatch(iphone, /Beta|ASP\.NET/);
 
     const android = readFileSync(join(root, 'notices', 'android.txt'), 'utf8');
-    assert.match(android, /^Third-party notices for PhotoSense for Android\n/);
+    assert.match(android, /^Third-party notices for Trovolve for Android\n/);
     assert.match(android, /\n\.NET for Android \(MIT\)\n/);
     // A binding gives its Java library's licence in its third-party notices; a second, word for word the same, points to them.
     assert.match(android, /\nDroid\.Binding 1\.0\.0 \(its own licence\)\n-+\n\nThe binding licence\.\n\nThe Java library licence\.\n/);
@@ -197,7 +197,7 @@ describe('the notices', () => {
     assert.match(android, /\nDroid\.Java 2\.0\.0 \(MIT\)\n/);
     assert.match(android, /\nPortable 1\.0\.0 \(MIT\)\n/);
     assert.match(android, /\nAlpha 1\.0\.0 \(MIT\)\n/);
-    assert.doesNotMatch(android, /Beta|ASP\.NET|iOS|Elsewhere|Build\.Tool|Runtime\.Only|photosense\.api/);
+    assert.doesNotMatch(android, /Beta|ASP\.NET|iOS|Elsewhere|Build\.Tool|Runtime\.Only|trovolve\.api/);
   });
 
   it('are found up to date by --check once written, and out of date when one is changed or missing', () => {
@@ -236,7 +236,7 @@ describe('the notices', () => {
   });
 
   it('name every font the page uses, as app/layout.tsx asks Next for them', () => {
-    const layout = readFileSync(join(repo, 'PhotoSense.ReactUI', 'app', 'layout.tsx'), 'utf8');
+    const layout = readFileSync(join(repo, 'Trovolve.ReactUI', 'app', 'layout.tsx'), 'utf8');
     const used = /import \{([^}]+)\} from 'next\/font\/google'/.exec(layout)[1].split(',').map(name => name.trim().replace(/_/g, ' ')).sort();
     assert.deepEqual(readdirSync(join(repo, 'tools', 'fonts')).map(f => f.replace(/\.txt$/, '')).sort(), used);
   });

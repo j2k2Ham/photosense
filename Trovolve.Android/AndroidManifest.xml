@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application android:label="Trovolve" android:icon="@mipmap/appicon" android:allowBackup="true" android:supportsRtl="true">
+    <!-- The cards and the copies of photos handed to the share sheet, readable by the app the person picks for as long as it needs. -->
+    <provider android:name="androidx.core.content.FileProvider" android:authorities="com.j2k2ham.trovolve.files" android:exported="false" android:grantUriPermissions="true">
+      <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths" />
+    </provider>
+    <!-- Google Play services fetches its labelling model as the app is installed, so search can name what is in photos from the first scan. -->
+    <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ica" />
+  </application>
+  <!-- Waiting for a computer on the Wi-Fi, to send it photos. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <!-- The photos and videos: all of them, or those the person picks (Android 14); before Android 13, the storage. -->
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+  <!-- Where each photo was taken, which Android otherwise leaves out of what it hands an app, and Organize goes by. -->
+  <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+  <!-- Low-storage alerts and the trial's reminder, once the person turns them on (Android 13 asks). -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+</manifest>

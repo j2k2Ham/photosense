@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- TUnit tests are a program of their own: built as an executable and run on Microsoft.Testing.Platform. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- An assertion that is not awaited is never checked, so a forgotten await stops the build. -->
+    <WarningsAsErrors>$(WarningsAsErrors);CS4014</WarningsAsErrors>
+    <!-- A test's name is the sentence that documents it, so test methods carry no XML comment of their own. Test
+         classes, fixtures, fakes and helpers are documented all the same (CLAUDE.md). -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="TUnit" Version="1.83.8" />
+    <PackageReference Include="coverlet.MTP" Version="10.1.0" />
+    <PackageReference Include="Moq" Version="4.21.0" />
+    <PackageReference Include="Castle.Core" Version="5.2.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Trovolve.Domain\Trovolve.Domain.csproj" />
+    <ProjectReference Include="..\Trovolve.Application\Trovolve.Application.csproj" />
+    <ProjectReference Include="..\Trovolve.Infrastructure\Trovolve.Infrastructure.csproj" />
+    <ProjectReference Include="..\Trovolve.Api\Trovolve.Api.csproj" />
+    <ProjectReference Include="..\Trovolve.Server\Trovolve.Server.csproj" />
+    <ProjectReference Include="..\Trovolve.Contracts\Trovolve.Contracts.csproj" />
+    <ProjectReference Include="..\Trovolve.Desktop\Trovolve.Desktop.csproj" />
+  </ItemGroup>
+</Project>

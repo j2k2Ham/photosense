@@ -78,7 +78,7 @@ test.describe('every screen can be used with assistive technology and read in ei
     await menu(page, 'Help');
     await accessible(page, 'Help');
     await page.keyboard.press('Escape');
-    await menu(page, 'About PhotoSense');
+    await menu(page, 'About Trovolve');
     await accessible(page, 'About');
   });
 });

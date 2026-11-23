@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Trovolve.Domain\Trovolve.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Its services register themselves (AddTrovolveApplication), with the settings they read. -->
+    <PackageReference Include="Microsoft.Extensions.Options" Version="11.0.0" />
+  </ItemGroup>
+</Project>

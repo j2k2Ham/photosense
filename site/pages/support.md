@@ -6,7 +6,7 @@
 
 ### Where do the files I delete go?
 
-Into a folder named `_PhotoSense_Removed`, inside the folder they came from, keeping their place within it. Nothing is erased. Undo, in the message that appears, puts them back.
+Into a folder named `_Trovolve_Removed`, inside the folder they came from, keeping their place within it. Nothing is erased. Undo, in the message that appears, puts them back.
 
 ### How do I erase them for good?
 
@@ -26,7 +26,7 @@ Duplicates are copies of the same file. Similar shots are different pictures tha
 
 ### How do I remove {{name}} and everything it keeps?
 
-On an iPhone or iPad, delete the app. On a computer, delete the program and {{name}}'s data folder for your user account. Files you removed but have not erased are still in the `_PhotoSense_Removed` folders.
+On an iPhone or iPad, delete the app. On a computer, delete the program and {{name}}'s data folder for your user account. Files you removed but have not erased are still in the `_Trovolve_Removed` folders.
 
 ## Writing to us
 

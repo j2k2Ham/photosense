@@ -24,7 +24,7 @@ test.describe('looking at a file before deciding', () => {
     await expect(compare).toBeHidden();
   });
 
-  test('a video PhotoSense cannot play here says so and offers the computer\'s own player', async ({ page, photos, service }) => {
+  test('a video Trovolve cannot play here says so and offers the computer\'s own player', async ({ page, photos, service }) => {
     photos.movie('Clips/IMG_0100.MOV', { seconds: 4 });
     photos.copy('Clips/IMG_0100.MOV', 'Backup/IMG_0100.MOV');
     await service.scan(photos.root);

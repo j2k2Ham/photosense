@@ -23,7 +23,7 @@ test.describe('the menu', () => {
     photos.copy('IMG_0001.JPG', 'Backup/IMG_0001.JPG');
     await service.scan(photos.root);
     await page.goto('/');
-    // A copy deleted behind PhotoSense's back can no longer be removed: it says so.
+    // A copy deleted behind Trovolve's back can no longer be removed: it says so.
     for (const file of photos.files()) photos.remove(file);
     await page.getByRole('button', { name: /^Delete this duplicate/ }).click();
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
@@ -78,8 +78,8 @@ test.describe('Help', () => {
 test.describe('About', () => {
   test('says which program is running, answers common questions one at a time, and holds the policies and acknowledgements', async ({ page }) => {
     await page.goto('/');
-    await menu(page, 'About PhotoSense');
-    const about = page.getByRole('dialog', { name: 'About PhotoSense' });
+    await menu(page, 'About Trovolve');
+    const about = page.getByRole('dialog', { name: 'About Trovolve' });
     await expect(about.getByRole('article')).toContainText(/Version [\d.]+ for Windows and Mac/);
 
     await about.getByRole('navigation', { name: 'About' }).getByRole('button', { name: 'Support' }).click();
@@ -87,7 +87,7 @@ test.describe('About', () => {
     await expect(faq).not.toHaveAttribute('open', '');
     await faq.locator('summary').click();
     await expect(faq).toHaveAttribute('open', '');
-    await expect(faq).toContainText('_PhotoSense_Removed');
+    await expect(faq).toContainText('_Trovolve_Removed');
     await faq.locator('summary').click();
     await expect(faq).not.toHaveAttribute('open', '');
 

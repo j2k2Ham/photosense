@@ -1,4 +1,4 @@
-// Works out a PhotoSense program's version from version.json and the repository's history: the release it is
+// Works out a Trovolve program's version from version.json and the repository's history: the release it is
 // heading for (the last one, raised as version.json says), and the number of commits so far as its build number.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -93,7 +93,7 @@ export function main(argv, { root, read = path => readFileSync(path, 'utf8'), ru
     print(format(versionOf({ config, part: values.part || null, release: values.release ?? false, ...readRepository(run) })));
     return 0;
   } catch (error) {
-    fail(`PhotoSense's version: ${error.message}`);
+    fail(`Trovolve's version: ${error.message}`);
     return 1;
   }
 }

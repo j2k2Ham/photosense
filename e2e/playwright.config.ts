@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// The Chrome installed on this computer, when PHOTOSENSE_E2E_CHROME is set, instead of Playwright's own download.
-const chrome = process.env.PHOTOSENSE_E2E_CHROME ? { channel: 'chrome' } : {};
+// The Chrome installed on this computer, when TROVOLVE_E2E_CHROME is set, instead of Playwright's own download.
+const chrome = process.env.TROVOLVE_E2E_CHROME ? { channel: 'chrome' } : {};
 
 export default defineConfig({
   testDir: './tests',

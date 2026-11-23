@@ -64,16 +64,16 @@ test.describe('Organize: the files', () => {
     await expect(bar).toBeHidden();
   });
 
-  test('selected files are deleted into _PhotoSense_Removed after a question, and Undo in Recently moved puts them back @phone', async ({ page, photos }) => {
+  test('selected files are deleted into _Trovolve_Removed after a question, and Undo in Recently moved puts them back @phone', async ({ page, photos }) => {
     mixed(photos);
     await openOrganize(page, photos.root);
     await tile(page, 'IMG_0003.JPG').click();
     await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Delete the 1 selected file' }).click();
     await expect(question(page)).toHaveAccessibleName('Delete IMG_0003.JPG?');
-    await expect(question(page)).toContainText('_PhotoSense_Removed');
+    await expect(question(page)).toContainText('_Trovolve_Removed');
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
     await expect(message(page, /IMG_0003\.JPG|1 file/)).toBeVisible();
-    expect(photos.files('_PhotoSense_Removed')).toEqual(['_PhotoSense_Removed/Trips/IMG_0003.JPG']);
+    expect(photos.files('_Trovolve_Removed')).toEqual(['_Trovolve_Removed/Trips/IMG_0003.JPG']);
     await expect(tile(page, 'IMG_0003.JPG')).toBeHidden();
 
     await pane(page, 'Folders');

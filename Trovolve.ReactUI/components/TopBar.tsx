@@ -1,0 +1,79 @@
+import React from 'react';
+import { appIconUrl } from '../lib/apiClient';
+import { leaf } from '../lib/format';
+import { ModeSwitch, type Area } from './ModeSwitch';
+import { PlanPill } from './LimitDialog';
+import type { PlanDto } from '../types';
+
+interface Props {
+  /** The plan, once the service has said: on the free plan, with the removals left today. */
+  readonly plan?: PlanDto;
+  /** Which of the two areas is showing. */
+  readonly area: Area;
+  /** The areas that are new to this browser, each with a dot until first opened. */
+  readonly fresh?: readonly Area[];
+  onArea(area: Area): void;
+  /** There are results: the chip that names them, with the way back to the folders, is shown. */
+  readonly showScan: boolean;
+  /** The folders that were scanned, when this browser remembers them. */
+  readonly folders: string[];
+  readonly files?: number;
+  /** When the last scan finished, if the service still knows. */
+  readonly scanned?: string | null;
+  readonly errorCount: number;
+  readonly menuOpen: boolean;
+  onChangeFolders(): void;
+  onToggleErrors(): void;
+  onToggleMenu(): void;
+  /** What opens from the header (the menu, the errors), so that it belongs to the header. */
+  readonly children?: React.ReactNode;
+}
+
+/** The bar along the top: Clean up, Organize or Phones, the folders scanned, the error count and the menu. */
+export function TopBar({ plan, area, fresh, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu, children }: Props) {
+  return (
+    // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)
+    // and the note that nothing leaves the device.
+    <header className="flex h-16 shrink-0 items-center gap-2.5 border-b border-line px-3 sm:gap-4 sm:px-6">
+      <div className="flex items-center gap-[11px]">
+        <img src={appIconUrl} alt="" className="h-[26px] w-[26px] rounded-lg" />
+
+        <h1 className="text-[17px] font-semibold max-sm:sr-only">Trovolve</h1>
+      </div>
+      <ModeSwitch area={area} fresh={fresh} onArea={onArea} />
+
+      {showScan && (
+        <div className="hidden h-10 min-w-0 items-center gap-3 rounded-full border border-line pl-4 pr-[5px] text-[13px] text-t2 md:flex">
+          <span className="truncate" aria-label="Scanned folders">
+            {folders.map((f, i) => (
+              <React.Fragment key={f}>{i > 0 && ' + '}<span className="font-medium text-t1" title={f}>{leaf(f)}</span></React.Fragment>
+            ))}
+            {files !== undefined && <>{folders.length > 0 && ' · '}{files.toLocaleString()} {files === 1 ? 'file' : 'files'}</>}
+            {scanned && <> · scanned {new Date(scanned).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</>}
+          </span>
+          <button type="button" onClick={onChangeFolders} className="pill-quiet h-[30px] shrink-0 px-3.5 text-[13px]">Change or rescan</button>
+        </div>
+      )}
+
+      <span className="flex-1" />
+
+      <span className="hidden h-9 shrink-0 items-center gap-2 rounded-full bg-s2 px-3.5 text-[13px] text-t2 xl:flex">
+        <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-keep" />Runs on this device. Nothing is uploaded.
+      </span>
+
+      {errorCount > 0 && (
+        <button type="button" onClick={onToggleErrors} className="pill h-9 shrink-0 gap-2 border border-rose-line bg-rose-bg px-3.5 text-[13px] text-rose-t">
+          <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-rose" />{errorCount} {errorCount === 1 ? 'error' : 'errors'}
+        </button>
+      )}
+
+      {plan && <PlanPill plan={plan} />}
+
+      <button type="button" aria-label="Menu" aria-haspopup="menu" aria-expanded={menuOpen} onClick={onToggleMenu}
+        className={`flex h-10 w-10 shrink-0 flex-col items-center justify-center gap-1 rounded-full border border-line ${menuOpen ? 'bg-s3' : 'bg-s1 hover:bg-s2'}`}>
+        <span className="h-0.5 w-4 bg-t1" /><span className="h-0.5 w-4 bg-t1" /><span className="h-0.5 w-4 bg-t1" />
+      </button>
+      {children}
+    </header>
+  );
+}

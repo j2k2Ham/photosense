@@ -16,7 +16,7 @@ test.describe('on a phone', () => {
     await phone.attach(page);
     await page.goto('/');
     const welcome = page.getByRole('region', { name: 'Welcome' });
-    await expect(welcome.getByRole('heading', { name: 'PhotoSense' })).toBeVisible();
+    await expect(welcome.getByRole('heading', { name: 'Trovolve' })).toBeVisible();
     await expect(welcome).toContainText('Back up to your own computer over Wi-Fi');
     await welcome.getByRole('button', { name: 'Get started' }).click();
     const access = page.getByRole('region', { name: 'Photo access' });
@@ -26,7 +26,7 @@ test.describe('on a phone', () => {
     expect(phone.asked).toContain('library/ask');
 
     const pair = page.getByRole('region', { name: 'Connect your computer' });
-    await expect(pair).toContainText('Backups and Safe to delete need PhotoSense on your Mac or PC.');
+    await expect(pair).toContainText('Backups and Safe to delete need Trovolve on your Mac or PC.');
     await pair.getByRole('button', { name: 'Skip for now' }).click();
 
     const result = page.getByRole('region', { name: 'Scan complete' });
@@ -35,7 +35,7 @@ test.describe('on a phone', () => {
     await expect(message(page, 'Found 1 duplicate and no similar shots.')).toBeHidden();
     await result.getByRole('button', { name: 'Continue' }).click();
     // This computer stands in for the phone: it has no store, so the offer has no plans to show.
-    const offer = page.getByRole('region', { name: 'PhotoSense Pro' });
+    const offer = page.getByRole('region', { name: 'Trovolve Pro' });
     await expect(offer.getByRole('heading', { name: /^Free all .+ with Pro$/ })).toBeVisible();
     await offer.getByRole('button', { name: 'Continue with Free' }).click();
 
@@ -53,7 +53,7 @@ test.describe('on a phone', () => {
     await page.getByRole('button', { name: 'Get started' }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
     const refused = page.getByRole('region', { name: 'Photo access' });
-    await expect(message(page, 'PhotoSense needs photo access to work. You can allow it later in Settings.')).toBeVisible();
+    await expect(message(page, 'Trovolve needs photo access to work. You can allow it later in Settings.')).toBeVisible();
     await refused.getByRole('button', { name: 'Open Settings' }).click();
     expect(phone.asked).toContain('library/open-settings');
 
@@ -71,9 +71,9 @@ test.describe('on a phone', () => {
     await page.goto('/');
     await phoneTab(page, 'Library');
     const note = page.getByRole('note');
-    await expect(note).toContainText('PhotoSense can see only the 1 photos you chose.', { timeout: 60_000 });
+    await expect(note).toContainText('Trovolve can see only the 1 photos you chose.', { timeout: 60_000 });
     await note.getByRole('button', { name: 'Choose more' }).click();
-    await expect(message(page, 'PhotoSense can now see all your photos.')).toBeVisible();
+    await expect(message(page, 'Trovolve can now see all your photos.')).toBeVisible();
     await expect(note).toBeHidden();
     expect(phone.asked).toContain('library/choose-more');
   });
@@ -92,7 +92,7 @@ test.describe('on a phone', () => {
     const groups = page.getByRole('list', { name: 'Groups' });
     await expect(page.getByRole('region', { name: 'Duplicates to delete' })).toContainText('2 duplicates');
     await expect(groups.getByRole('listitem')).toHaveCount(2);
-    // Which of the two is kept is PhotoSense's choice: each set keeps one whole.
+    // Which of the two is kept is Trovolve's choice: each set keeps one whole.
     const one = () => [photos.exists('IMG_0001.JPG'), photos.exists('Saved again/IMG_0001.JPG')].filter(Boolean).length;
 
     await groups.getByRole('button', { name: /^IMG_0001\.JPG/ }).click();
@@ -112,12 +112,12 @@ test.describe('on a phone', () => {
     await expect(asked).toContainText(/IMG_0001\.JPG stays, in Photo Library/);
     await expect(asked).toContainText(/IMG_0001\.JPG, in Photo Library.*, goes to Recently Deleted for 30 days\./);
     await asked.getByRole('button', { name: 'Delete IMG_0001.JPG' }).click();
-    // A phone's Recently Deleted has no Undo of PhotoSense's. The program standing in for the phone is a computer's,
-    // which holds the copy in _PhotoSense_Removed.
+    // A phone's Recently Deleted has no Undo of Trovolve's. The program standing in for the phone is a computer's,
+    // which holds the copy in _Trovolve_Removed.
     await expect(message(page, /^IMG_0001\.JPG, in Photo Library.*, deleted\. The one in Photo Library.* stays\. The copy waits in Recently Deleted for 30 days\.$/)).toBeVisible();
     await expect(page.getByRole('log', { name: 'Messages' }).getByRole('button', { name: 'Undo' })).toHaveCount(0);
     expect(one()).toBe(1);
-    expect(photos.files('_PhotoSense_Removed').length).toBe(1);
+    expect(photos.files('_Trovolve_Removed').length).toBe(1);
     await expect(groups.getByRole('listitem')).toHaveCount(1);
 
     await page.getByRole('button', { name: 'Delete all duplicates' }).click();
@@ -146,7 +146,7 @@ test.describe('on a phone', () => {
     await expect(page.getByText('selected from 2 screenshots')).toBeVisible();
     await page.getByRole('button', { name: 'Delete 2 items' }).click();
     await expect(message(page, '2 items deleted. They wait in Recently Deleted for 30 days.')).toBeVisible();
-    // The program answering is a computer's, which removes into _PhotoSense_Removed where a phone uses its own bin.
+    // The program answering is a computer's, which removes into _Trovolve_Removed where a phone uses its own bin.
     expect(photos.exists('Screenshots/Screenshot 2024-01-02 at 09.15.00.png')).toBe(false);
     await expect(page.getByText('Nothing left to review.')).toBeVisible();
     // Pushed over Clean up on a phone; beside its list on a tablet.
@@ -269,7 +269,7 @@ test.describe('on a phone', () => {
     await expect(stories.getByRole('heading', { level: 2 })).toHaveText('July');
     await expect(stories).toContainText('1,402 photos. 512 of them are from West Glacier.');
     await stories.getByRole('button', { name: 'Share' }).click();
-    await expect.poll(() => phone.shared).toEqual([{ name: 'PhotoSense 2026.png', png: true }]);
+    await expect.poll(() => phone.shared).toEqual([{ name: 'Trovolve 2026.png', png: true }]);
     await stories.getByRole('button', { name: 'Close' }).click();
     await expect(stories).toBeHidden();
   });
@@ -288,7 +288,7 @@ test.describe('on a phone', () => {
       latitude: 48.68, longitude: -113.8, cover: picture(1), folderMade: false, suggested: 'Glacier National Park',
     };
     const bigSky = { ...glacier, id: '20260301090000', name: 'Big Sky, Montana', folder: '2026-03 Big Sky', start: '2026-03-01', end: '2026-03-04', photos: 214, latitude: 45.28, longitude: -111.37 };
-    phone.trips = { home, homeChosen: false, trips: [glacier, bigSky], computer: 'Studio iMac', tripsFolder: 'Pictures/PhotoSense', folder: null };
+    phone.trips = { home, homeChosen: false, trips: [glacier, bigSky], computer: 'Studio iMac', tripsFolder: 'Pictures/Trovolve', folder: null };
     phone.tripDays[glacier.id] = { trip: glacier, days: [{ date: '2026-07-18', photos: [picture(1)] }, { date: '2026-07-19', photos: [picture(2)] }] };
     phone.towns = [{ ...home, days: 120 }, { ...home, town: 'Butte', days: 12 }];
     await phone.attach(page);
@@ -313,7 +313,7 @@ test.describe('on a phone', () => {
     const trip = layer('Glacier National Park');
     await expect(trip.getByRole('region', { name: 'Day 2 · Jul 19' })).toBeVisible();
     // An iPad at a computer's width.
-    await expect(trip).toContainText(/Puts this trip’s copies in Pictures\/PhotoSense\/2026-07 Glacier National Park\. Nothing changes on this (iPhone|iPad)\./);
+    await expect(trip).toContainText(/Puts this trip’s copies in Pictures\/Trovolve\/2026-07 Glacier National Park\. Nothing changes on this (iPhone|iPad)\./);
     await trip.getByRole('region', { name: 'Day 1 · Jul 18' }).getByRole('button', { name: 'IMG_0001.JPG' }).click();
     const viewer = page.getByRole('dialog', { name: 'IMG_0001.JPG' });
     await expect(viewer).toBeVisible();
@@ -321,7 +321,7 @@ test.describe('on a phone', () => {
     await expect(viewer).toBeHidden();
 
     await trip.getByRole('button', { name: 'Make a folder on Studio iMac' }).click();
-    await expect(message(page, 'Created Pictures/PhotoSense/2026-07 Glacier National Park on Studio iMac.')).toBeVisible();
+    await expect(message(page, 'Created Pictures/Trovolve/2026-07 Glacier National Park on Studio iMac.')).toBeVisible();
     await expect(trip.getByRole('button', { name: 'Folder created' })).toBeDisabled();
     expect(phone.asked).toContain(`trips/folder ${glacier.id}`);
 
@@ -530,7 +530,7 @@ test.describe('on a phone', () => {
     await phoneTab(page, 'Library');
     const tapped = async (opens: string) => {
       phone.opens = opens;
-      await page.evaluate(() => window.dispatchEvent(new Event('photosense-notice')));
+      await page.evaluate(() => window.dispatchEvent(new Event('trovolve-notice')));
     };
     await tapped('search');
     const search = page.getByRole('dialog', { name: 'Search' });
@@ -623,7 +623,7 @@ test.describe('on a phone', () => {
     await expect(asked).toContainText('IMG_0002.JPG goes to Recently Deleted for 30 days.');
     await asked.getByRole('button', { name: 'Delete 1 item' }).click();
     await expect(message(page, '1 item deleted. It waits in Recently Deleted for 30 days.')).toBeVisible();
-    // The program standing in for the phone is a computer's, which holds it in _PhotoSense_Removed.
+    // The program standing in for the phone is a computer's, which holds it in _Trovolve_Removed.
     expect(photos.exists('IMG_0002.JPG')).toBe(false);
   });
 
@@ -637,46 +637,46 @@ test.describe('on a phone', () => {
     await expect(topics).toHaveCount(10);
     await expect(help.getByRole('article')).toHaveAccessibleName('Getting started');
     await expect(help.getByRole('article')).toContainText('The first launch');
-    // An iPhone's words: albums, PhotoSense Removed and Recently Deleted; nothing of a computer's screens.
+    // An iPhone's words: albums, Trovolve Removed and Recently Deleted; nothing of a computer's screens.
     await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /^Deleted photos/ }).click();
-    await expect(help.getByRole('article')).toContainText('the album PhotoSense Removed');
+    await expect(help.getByRole('article')).toContainText('the album Trovolve Removed');
     await expect(help.getByRole('article')).toContainText('Recently Deleted');
-    await expect(help.getByRole('article')).not.toContainText('_PhotoSense_Removed');
+    await expect(help.getByRole('article')).not.toContainText('_Trovolve_Removed');
     await help.getByRole('textbox', { name: 'Search the guide' }).fill('cancel subscription');
     await expect(topics).toHaveCount(1);
     await expect(help.getByRole('article')).toHaveAccessibleName('The free plan and Pro');
     await expect(help.getByRole('article')).toContainText('Manage in App Store');
   });
 
-  test('What waits in PhotoSense Removed from before is offered once at launch, and Settings moves it to Recently Deleted @phone', async ({ page, photos }) => {
+  test('What waits in Trovolve Removed from before is offered once at launch, and Settings moves it to Recently Deleted @phone', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
-    photos.picture('_PhotoSense_Removed/IMG_0002.JPG', { seed: 2 });
+    photos.picture('_Trovolve_Removed/IMG_0002.JPG', { seed: 2 });
     const phone = new Phone();
     phone.root = photos.root;
     await phone.attach(page);
     await page.goto('/');
-    const offer = page.getByRole('dialog', { name: '1 item waits in PhotoSense Removed' });
+    const offer = page.getByRole('dialog', { name: '1 item waits in Trovolve Removed' });
     await expect(offer).toContainText('Move it to Recently Deleted');
-    await expect(offer).toContainText('PhotoSense now deletes straight to Recently Deleted, so nothing new goes to PhotoSense Removed.');
+    await expect(offer).toContainText('Trovolve now deletes straight to Recently Deleted, so nothing new goes to Trovolve Removed.');
     await offer.getByRole('button', { name: 'Not now' }).click();
     await expect(offer).toBeHidden();
-    expect(photos.exists('_PhotoSense_Removed/IMG_0002.JPG')).toBe(true);
+    expect(photos.exists('_Trovolve_Removed/IMG_0002.JPG')).toBe(true);
 
     // Offered once only: Settings offers it from then on.
     await page.reload();
     let settings = await phoneSettings(page);
-    await expect(page.getByRole('dialog', { name: /waits? in PhotoSense Removed$/ })).toHaveCount(0);
-    await expect(settings.getByText('PhotoSense Removed').locator('xpath=ancestor::li')).toContainText(/1 item · \d+ KB/);
+    await expect(page.getByRole('dialog', { name: /waits? in Trovolve Removed$/ })).toHaveCount(0);
+    await expect(settings.getByText('Trovolve Removed').locator('xpath=ancestor::li')).toContainText(/1 item · \d+ KB/);
     await expect(settings.getByRole('button', { name: /^Photo access\s*Full access$/ })).toBeVisible();
     await settings.getByRole('button', { name: 'Move to Recently Deleted…' }).click();
-    await page.getByRole('dialog', { name: '1 item waits in PhotoSense Removed' }).getByRole('button', { name: 'Move 1 item' }).click();
+    await page.getByRole('dialog', { name: '1 item waits in Trovolve Removed' }).getByRole('button', { name: 'Move 1 item' }).click();
     await expect(message(page, '1 item deleted. They wait in Recently Deleted for 30 days.')).toBeVisible();
-    expect(photos.exists('_PhotoSense_Removed/IMG_0002.JPG')).toBe(false);
+    expect(photos.exists('_Trovolve_Removed/IMG_0002.JPG')).toBe(false);
     expect(photos.exists('IMG_0001.JPG')).toBe(true);
 
     settings = await phoneSettings(page);
     await expect(settings.getByRole('button', { name: /^Recently moved/ })).toBeVisible();
-    await expect(settings.getByText('PhotoSense Removed')).toHaveCount(0);
+    await expect(settings.getByText('Trovolve Removed')).toHaveCount(0);
   });
 
   test('About, from Settings, names the phone app, which has no menu @phone', async ({ page }) => {
@@ -684,8 +684,8 @@ test.describe('on a phone', () => {
     await page.goto('/');
     const settings = await phoneSettings(page);
     await expect(page.getByRole('button', { name: 'Menu' })).toBeHidden();
-    await settings.getByRole('button', { name: /^About PhotoSense/ }).click();
-    await expect(page.getByRole('dialog', { name: 'About PhotoSense' }).getByRole('article')).toContainText(/Version [\d.]+ for iPhone and iPad/);
+    await settings.getByRole('button', { name: /^About Trovolve/ }).click();
+    await expect(page.getByRole('dialog', { name: 'About Trovolve' }).getByRole('article')).toContainText(/Version [\d.]+ for iPhone and iPad/);
   });
 
   test('On the free plan, Organize shows its suggestions with their real counts, and Move opens the Pro sheet, moving nothing @phone', async ({ page, photos }) => {
@@ -700,7 +700,7 @@ test.describe('on a phone', () => {
     await expect(list.getByRole('button', { name: /^Butte/ })).toContainText('2 files', { timeout: 60_000 });
     await list.getByRole('button', { name: /^Butte/ }).click();
     await page.getByRole('main').getByRole('button', { name: 'Move 2 files' }).click();
-    await expect(page.getByRole('dialog', { name: 'PhotoSense Pro' })).toContainText('Organizing by place and date is part of Pro. Choosing photos yourself in Library and moving them stays free.');
+    await expect(page.getByRole('dialog', { name: 'Trovolve Pro' })).toContainText('Organizing by place and date is part of Pro. Choosing photos yourself in Library and moving them stays free.');
     expect(photos.exists('IMG_0001.JPG')).toBe(true);
     expect(photos.exists('Butte')).toBe(false);
   });
@@ -775,7 +775,7 @@ test.describe('on a phone', () => {
 
     // Automatic backup is part of Pro: turning it on opens the Pro sheet, and nothing is kept.
     await backup.getByText('Back up automatically').click();
-    await expect(page.getByRole('dialog', { name: 'PhotoSense Pro' })).toContainText('Automatic backup is part of Pro. Sending photos yourself stays free.');
+    await expect(page.getByRole('dialog', { name: 'Trovolve Pro' })).toContainText('Automatic backup is part of Pro. Sending photos yourself stays free.');
     await page.keyboard.press('Escape');
     expect(phone.asked.filter(a => a.startsWith('settings'))).toHaveLength(0);
     await backup.getByText('Include videos').click();
@@ -817,7 +817,7 @@ test.describe('on a phone', () => {
     await safe.getByRole('button', { name: `Remove ${SAFE.removable.count} items` }).click();
     const freed = page.getByRole('dialog', { name: 'Space freed' });
     await expect(freed.getByRole('heading', { name: '6.0 GB freed' })).toBeVisible();
-    await expect(freed).toContainText(/2 items removed from this (iPhone|iPad)\. The copies are on DESKTOP-1 in Pictures\/PhotoSense\/Jamie's iPhone\./);
+    await expect(freed).toContainText(/2 items removed from this (iPhone|iPad)\. The copies are on DESKTOP-1 in Pictures\/Trovolve\/Jamie's iPhone\./);
     await expect(freed).toContainText('Before112 of 128 GB');
     await expect(freed).toContainText('Now106 of 128 GB');
     expect(phone.asked).toContain('remove');

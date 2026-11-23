@@ -1,6 +1,6 @@
 <#!
 .SYNOPSIS
-  Builds PhotoSense as one program for a computer: the service, with the page inside it.
+  Builds Trovolve as one program for a computer: the service, with the page inside it.
 
 .DESCRIPTION
   Builds the page as plain files, publishes the service for the system named, with .NET included so that
@@ -36,7 +36,7 @@ if(-not $Runtime){
 if(-not $Output){ $Output = Join-Path $root (Join-Path 'publish' $Runtime) }
 
 Write-Host "=== Building the page ===" -ForegroundColor Cyan
-$reactDir = Join-Path $root 'PhotoSense.ReactUI'
+$reactDir = Join-Path $root 'Trovolve.ReactUI'
 Push-Location $reactDir
 try {
   if(!(Test-Path 'node_modules')){ npm ci; if($LASTEXITCODE -ne 0){ throw 'npm ci failed.' } }
@@ -50,15 +50,15 @@ try {
 }
 
 Write-Host "=== Publishing the service for $Runtime ===" -ForegroundColor Cyan
-dotnet publish (Join-Path $root (Join-Path 'PhotoSense.Server' 'PhotoSense.Server.csproj')) -c Release -r $Runtime --self-contained -o $Output -nodeReuse:false
+dotnet publish (Join-Path $root (Join-Path 'Trovolve.Server' 'Trovolve.Server.csproj')) -c Release -r $Runtime --self-contained -o $Output -nodeReuse:false
 if($LASTEXITCODE -ne 0){ throw 'The service did not publish.' }
 
 $site = Join-Path $Output 'wwwroot'
 if(Test-Path $site){ Remove-Item -LiteralPath $site -Recurse -Force }
 Copy-Item -Recurse (Join-Path $reactDir 'out') $site
 
-$program = if($Runtime -like 'win-*'){ 'PhotoSense.Server.exe' } else { './PhotoSense.Server' }
-Write-Host "`nPhotoSense is in $Output" -ForegroundColor Green
+$program = if($Runtime -like 'win-*'){ 'Trovolve.Server.exe' } else { './Trovolve.Server' }
+Write-Host "`nTrovolve is in $Output" -ForegroundColor Green
 Write-Host "Start it with $program there, then open http://localhost:7071" -ForegroundColor Green
 if($Runtime -like 'osx-*'){
   Write-Host 'On the Mac, the first time: the program is not signed, so macOS asks before it runs. Open it from Finder with Control-click > Open, or run: xattr -dr com.apple.quarantine <the folder>' -ForegroundColor DarkYellow
