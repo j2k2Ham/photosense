@@ -561,7 +561,11 @@ export default function HomePage() {
       )}
 
       {/* Only once the page knows it is on a computer, as a phone says so a moment after it opens. */}
-      {about && !platform && backupNote.due && !aboutOpen && <BackupNoteDialog onTerms={() => setAboutOpen('terms')} onAccept={backupNote.accept} />}
+      {/* Pairing a phone that accepted it puts it away: that phone says so as it pairs. */}
+      {about && !platform && backupNote.due && !aboutOpen && !pairOpen && (
+        <BackupNoteDialog onTerms={() => setAboutOpen('terms')} onPair={() => setPairOpen(true)}
+          onAccept={() => void backupNote.accept().catch((e: Error) => push(`PhotoSense could not keep your answer: ${e.message}`, 'error'))} />
+      )}
       {helpOpen && <HelpWindow platform={platform ?? 'computer'} onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {aboutOpen && <AboutWindow start={aboutOpen} onClose={() => setAboutOpen(undefined)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}

@@ -23,8 +23,11 @@ Object.defineProperty(window, 'matchMedia', {
 class NoIntersections { observe() {} disconnect() {} }
 Object.defineProperty(window, 'IntersectionObserver', { configurable: true, writable: true, value: NoIntersections });
 
-// Every test starts with the note asking for a backup accepted, as nearly all are of what comes after it; its own tests take it back.
-const accepted = () => localStorage.setItem('photosense-backup-note', '2026-11-22');
+// Every test starts with the service saying the note asking for a backup was accepted, as nearly all are of what comes
+// after it; its own tests stand in their own answer through the API client. Every other request goes as before.
+const realFetch = globalThis.fetch;
+const terms = { ok: true, json: async () => ({ accepted: '2026-11-22' }) } as Response;
+const accepted = () => vi.stubGlobal('fetch', (url: RequestInfo | URL, init?: RequestInit) => (String(url).endsWith('/terms') ? Promise.resolve(terms) : realFetch(url, init)));
 accepted();
 
 afterEach(() => {

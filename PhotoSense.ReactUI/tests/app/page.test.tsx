@@ -17,6 +17,8 @@ const api = vi.hoisted(() => ({
   usePlan: vi.fn((): { data?: PlanDto } => ({ data: undefined })),
   useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
   useCategoryPhotos: vi.fn(() => ({ data: [] })),
+  // Accepted already, as nearly every test is of what comes after the note; the note's own tests say otherwise.
+  useTerms: vi.fn((): { data?: { accepted: string | null } } => ({ data: { accepted: '2026-11-22' } })), acceptTerms: vi.fn(), termsNow: vi.fn(async () => ({ accepted: '2026-11-22' })),
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
@@ -1015,7 +1017,15 @@ describe('about', () => {
 describe('the note asking for a backup', () => {
   const NOTE = 'Keep a backup of photos you care about';
   const note = () => screen.queryByRole('alertdialog', { name: NOTE });
-  beforeEach(() => localStorage.clear());
+  /** The day the service says it was accepted, or null; the page is drawn again when it changes, as SWR would. */
+  let accepted: string | null;
+  const hearing = new Set<() => void>();
+  const acceptedOn = (day: string | null) => { accepted = day; act(() => hearing.forEach(l => l())); };
+  beforeEach(() => {
+    accepted = null;
+    api.useTerms.mockImplementation(() => ({ data: { accepted: React.useSyncExternalStore(l => { hearing.add(l); return () => hearing.delete(l); }, () => accepted) } }));
+    api.acceptTerms.mockImplementation(async () => { acceptedOn('2026-11-23'); return { accepted }; });
+  });
 
   it('waits until the page knows it is on a computer, then reads the terms of use over it and goes only once accepted, for good', async () => {
     const view = open();
@@ -1034,9 +1044,28 @@ describe('the note asking for a backup', () => {
     expect(note()).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
     await userEvent.click(within(note()!).getByRole('button', { name: 'Accept and continue' }));
+    expect(api.acceptTerms).toHaveBeenCalledOnce();
     expect(note()).not.toBeInTheDocument();
     view.unmount();
     open();
+    expect(note()).not.toBeInTheDocument();
+  });
+
+  it('goes once a phone that accepted it pairs, and says so when the answer cannot be kept', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'server', version: '1.4.0' } } as never);
+    api.acceptTerms.mockRejectedValueOnce(new Error('The disk is full.'));
+    open();
+    expect(note()).toHaveTextContent('Accepted it on your phone already? Pair the phone with this computer, and PhotoSense does not ask here.');
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Accept and continue' }));
+    expect(await screen.findByText('PhotoSense could not keep your answer: The disk is full.')).toBeInTheDocument();
+    expect(note()).toBeInTheDocument();
+
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Pair a phone' }));
+    expect(screen.getByRole('dialog', { name: 'Pair a phone' })).toBeInTheDocument();
+    expect(note()).not.toBeInTheDocument();
+    // The phone says it was accepted there as it pairs.
+    acceptedOn('2026-11-20');
+    await userEvent.click(screen.getByRole('button', { name: 'Close pairing' }));
     expect(note()).not.toBeInTheDocument();
   });
 

@@ -14,7 +14,14 @@ const api = vi.hoisted(() => ({
   openedNotice: vi.fn(async (): Promise<{ opens: string | null }> => ({ opens: null })), useNotices: vi.fn((): { data?: unknown } => ({})), changeNotices: vi.fn(), useCompression: vi.fn(() => ({})),
   usePhotoAccess: vi.fn(), askForPhotos: vi.fn(), openPhotoSettings: vi.fn(), libraryRoot: vi.fn(), startScan: vi.fn(), useGroupsThrough: vi.fn(),
   usePairing: vi.fn(), scanPairing: vi.fn(), enterPairingCode: vi.fn(), confirmPairing: vi.fn(), stopPairing: vi.fn(), useFound: vi.fn(), usePlan: vi.fn(), buyPlan: vi.fn(),
+  useTerms: vi.fn(), acceptTerms: vi.fn(), termsNow: vi.fn(),
 }));
+
+/** The day the service says the note was accepted, or null; the layout is drawn again when it changes, as SWR would. */
+let accepted: string | null;
+const hearing = new Set<() => void>();
+const acceptedOn = (day: string | null) => { accepted = day; hearing.forEach(l => l()); };
+const useAccepted = () => React.useSyncExternalStore(l => { hearing.add(l); return () => hearing.delete(l); }, () => accepted);
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 type Access = 'everything' | 'selected' | 'nothing';
@@ -50,6 +57,10 @@ beforeEach(() => {
   api.stopPairing.mockResolvedValue(undefined);
   api.useFound.mockImplementation(() => ({ data: found }));
   api.usePlan.mockImplementation(() => ({ data: currentPlan }));
+  accepted = '2026-11-22';
+  api.useTerms.mockImplementation(() => ({ data: { accepted: useAccepted() } }));
+  api.acceptTerms.mockImplementation(async () => { acceptedOn('2026-11-23'); return { accepted }; });
+  api.termsNow.mockImplementation(async () => ({ accepted }));
   width(false);
 });
 
@@ -162,8 +173,6 @@ describe('first launch: Welcome and photo access', () => {
     try {
       render(<App />);
       await userEvent.click(screen.getByRole('button', { name: 'Get started' }));
-      // Accepted for this visit only, so it is asked again next time.
-      await userEvent.click(within(cover('Keep a backup of photos you care about')).getByRole('button', { name: 'Accept and continue' }));
       expect(cover('Photo access')).toBeInTheDocument();
     } finally { vi.unstubAllGlobals(); }
   });
@@ -171,12 +180,16 @@ describe('first launch: Welcome and photo access', () => {
 
 describe('the note asking for a backup', () => {
   const NOTE = 'Keep a backup of photos you care about';
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => {
+    localStorage.setItem('photosense-first-run', 'pair');
+    accepted = null;
+  });
 
-  it('comes after Welcome, reads the terms of use over it, and is put away only by accepting it, which is remembered', async () => {
+  it('comes after Connect your computer, reads the terms of use over it, and accepting it starts the first scan', async () => {
     const onAbout = vi.fn();
-    const view = render(<App onAbout={onAbout} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Get started' }));
+    const started = vi.fn();
+    const view = render(<App onAbout={onAbout} onStarted={started} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
     const note = cover(NOTE);
     expect(note).toHaveTextContent('PhotoSense asks before it removes or moves anything, and what it removes can be got back for a while. Even so, a mistake can lose a photo or video.');
     expect(note).toHaveTextContent('Before you use PhotoSense, keep a backup of the photos and videos you care about, and keep it up to date.');
@@ -184,15 +197,39 @@ describe('the note asking for a backup', () => {
     await userEvent.click(within(note).getByRole('button', { name: 'Read the terms of use' }));
     expect(onAbout).toHaveBeenCalledWith('terms');
     // While About shows the terms the note waits, hidden, and still nothing behind it starts.
-    view.rerender(<App onAbout={onAbout} reading />);
+    view.rerender(<App onAbout={onAbout} onStarted={started} reading />);
     expect(screen.queryByRole('region', { name: NOTE })).not.toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Photo access' })).not.toBeInTheDocument();
     expect(api.libraryRoot).not.toHaveBeenCalled();
-    view.rerender(<App onAbout={onAbout} />);
+    view.rerender(<App onAbout={onAbout} onStarted={started} />);
     fireEvent.keyDown(window, { key: 'Escape' });
     await userEvent.click(within(cover(NOTE)).getByRole('button', { name: 'Accept and continue' }));
-    expect(localStorage.getItem('photosense-backup-note')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(cover('Photo access')).toBeInTheDocument();
+    expect(api.acceptTerms).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('region', { name: NOTE })).not.toBeInTheDocument();
+    await vi.waitFor(() => expect(started).toHaveBeenCalledWith('scan-1'));
+  });
+
+  it('is not asked when the computer just paired with says it was accepted there', async () => {
+    const started = vi.fn();
+    // Pairing tells the phone; the page asks the service again before going on.
+    api.scanPairing.mockImplementation(async () => { accepted = '2026-11-20'; return (pairing = pairingAt({ stage: 'paired', other: 'Studio iMac', folder: 'Pictures/PhotoSense' })); });
+    render(<App onStarted={started} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Scan the code' }));
+    await userEvent.click(within(cover('Paired')).getByRole('button', { name: 'Continue' }));
+    await vi.waitFor(() => expect(started).toHaveBeenCalledWith('scan-1'));
+    expect(screen.queryByRole('region', { name: NOTE })).not.toBeInTheDocument();
+    expect(api.termsNow).toHaveBeenCalledOnce();
+  });
+
+  it('is asked when the service cannot be asked again, and says so when the answer cannot be kept', async () => {
+    const notify = vi.fn();
+    api.termsNow.mockRejectedValueOnce(new Error('gone'));
+    api.acceptTerms.mockRejectedValueOnce(new Error('The disk is full.'));
+    render(<App notify={notify} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    await userEvent.click(within(cover(NOTE)).getByRole('button', { name: 'Accept and continue' }));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledWith('PhotoSense could not keep your answer: The disk is full.', 'error'));
+    expect(cover(NOTE)).toBeInTheDocument();
+    expect(api.libraryRoot).not.toHaveBeenCalled();
   });
 
   it('comes at the next launch on a phone past its first launch that has not accepted it, and then the tabs', async () => {
@@ -202,6 +239,16 @@ describe('the note asking for a backup', () => {
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     await userEvent.click(within(cover(NOTE)).getByRole('button', { name: 'Accept and continue' }));
     expect(screen.queryByRole('region', { name: NOTE })).not.toBeInTheDocument();
+    // Past its first launch, accepting starts no scan.
+    expect(api.startScan).not.toHaveBeenCalled();
+  });
+
+  it('accepted while a first scan already runs, starts no second', async () => {
+    localStorage.setItem('photosense-first-run', 'scan');
+    render(<App scanning progress={snapshot()} />);
+    await userEvent.click(within(cover(NOTE)).getByRole('button', { name: 'Accept and continue' }));
+    expect(screen.getByRole('region', { name: 'Scanning' })).toBeInTheDocument();
+    expect(api.libraryRoot).not.toHaveBeenCalled();
   });
 });
 

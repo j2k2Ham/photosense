@@ -138,12 +138,13 @@ public static class PhotoSensePhoneServices
         s.AddSingleton(sp => new PhoneSending(listener ?? new TcpTransferListener(), advertiser, sp.GetRequiredService<IPairingStore>(), photos,
             sp.GetRequiredService<ICompanionFileFinder>(), sp.GetRequiredService<OrganizeLibrary>(), sp.GetRequiredService<Subscription>(), name, sp.GetRequiredService<TimeProvider>()));
         // Pairing with a computer: by its QR code, or by its code typed, found on the Wi-Fi.
-        s.AddSingleton(sp => new PhonePairing(scanner, computers, new TcpComputerConnector(), sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<IBackupLedger>(), name, sp.GetRequiredService<TimeProvider>()));
+        s.AddSingleton(sp => new PhonePairing(scanner, computers, new TcpComputerConnector(), sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<IBackupLedger>(), name, sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<TermsAcceptance>()));
         // Backing up to that computer, and what is then safe to delete from the phone.
         s.AddSingleton(device);
         s.AddSingleton(sp => new PhoneBackup(sp.GetRequiredService<IBackupLedger>(), computers, sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos,
             sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>(), vault,
-            sp.GetRequiredService<ILocationStore>()));
+            sp.GetRequiredService<ILocationStore>(), sp.GetRequiredService<TermsAcceptance>()));
         // The other places it backs up to: cloud services and those Connect to server adds.
         s.AddSingleton(sp => new BackupLocations(sp.GetRequiredService<ILocationStore>(), sp.GetRequiredService<ILocationSecrets>(), sp.GetRequiredService<IRemoteFolders>(),
             sp.GetRequiredService<ICloudAccounts>(), sp.GetRequiredService<IWebSignIn>(), sp.GetRequiredService<PhoneBackup>(), sp.GetRequiredService<IBackupLedger>(),

@@ -55,3 +55,10 @@ public sealed class PlanBuyResultDto
     /// <summary>The plan once the store has answered.</summary>
     [JsonPropertyName("plan")] public PlanDto Plan { get; init; } = new();
 }
+
+/// <summary>Whether the person has accepted the note asking them to keep a backup, and with it the terms of use.</summary>
+public sealed class TermsDto
+{
+    /// <summary>The day it was accepted ("2026-11-23"), here or on a device paired with this one; null when it has not been.</summary>
+    [JsonPropertyName("accepted")] public string? Accepted { get; init; }
+}

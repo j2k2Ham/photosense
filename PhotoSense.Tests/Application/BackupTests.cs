@@ -7,6 +7,7 @@ using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Hosting;
 using PhotoSense.Api.Http;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Desktop.Imaging;
 using PhotoSense.Domain.Entities;
@@ -35,6 +36,7 @@ public sealed class BackupTests : IDisposable
     private readonly ApiRouter _router;
     private readonly MemoryPairs _computerPairs = new("computer-1");
     private readonly MemoryBackupStore _kept = new();
+    private readonly TermsAcceptance _computerTerms = TestPlans.Terms();
     private readonly FakeAdvertiser _telling = new();
     private readonly ComputerBackup _backups;
     private readonly ComputerPairing _door;
@@ -55,7 +57,7 @@ public sealed class BackupTests : IDisposable
             .AddSingleton<TimeProvider>(new TestClock())
             .BuildServiceProvider();
         _router = _phone.GetRequiredService<PhotoSenseRoutes>().Router;
-        _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "PhotoSense"), _kept, home: In("Home"));
+        _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "PhotoSense"), _kept, home: In("Home"), terms: _computerTerms);
         _door = new ComputerPairing(new TcpTransferListener(0), _telling, _computerPairs, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System);
         _computer = new BackupApi(new TestApi(s => s.AddSingleton(_backups)));
     }
@@ -309,6 +311,55 @@ public sealed class BackupTests : IDisposable
     }
 
     [Test]
+    public async Task The_Note_Accepted_On_The_Phone_Reaches_The_Computer_With_A_Backup(CancellationToken ct)
+    {
+        Library();
+        await PairedAsync(ct);
+        await _phone.GetRequiredService<TermsAcceptance>().HeardAsync(new DateOnly(2026, 10, 3), ct);
+
+        await BackedUpAsync(ct);
+
+        await Assert.That(await _computerTerms.AcceptedAsync(ct)).IsEqualTo(new DateOnly(2026, 10, 3));
+    }
+
+    [Test]
+    public async Task The_Note_Accepted_On_The_Computer_Reaches_The_Phone_With_A_Backup(CancellationToken ct)
+    {
+        Library();
+        await PairedAsync(ct);
+        await _computerTerms.HeardAsync(new DateOnly(2026, 10, 2), ct);
+        await Assert.That((await PhoneAsync("GET", "terms", ct)).GetProperty("accepted").ValueKind).IsEqualTo(JsonValueKind.Null);
+
+        await BackedUpAsync(ct);
+
+        await Assert.That((await PhoneAsync("GET", "terms", ct)).GetProperty("accepted").GetString()).IsEqualTo("2026-10-02");
+    }
+
+    [Test]
+    public async Task Accepting_On_A_Paired_Phone_Tells_The_Computer_At_Once_Or_With_The_Next_Backup_When_It_Is_Not_Found(CancellationToken ct)
+    {
+        Library();
+        await PairedAsync(ct);
+        var found = _computers.Computers.ToList();
+        _computers.Computers.Clear();
+
+        var today = (await PhoneAsync("POST", "terms/accept", ct)).GetProperty("accepted").GetString();
+
+        await Assert.That(await Backup.Telling).IsFalse();
+        await Assert.That(await _computerTerms.AcceptedAsync(ct)).IsNull();
+        _computers.Computers.AddRange(found);
+        // Accepted again, as by a second press before the first answered, the computer is told now.
+        await Assert.That((await PhoneAsync("POST", "terms/accept", ct)).GetProperty("accepted").GetString()).IsEqualTo(today);
+        await Assert.That(await Backup.Telling).IsTrue();
+        for (var waited = 0; await _computerTerms.AcceptedAsync(ct) is null; waited++)
+        {
+            if (waited == 400) throw new TimeoutException("Not accepted on the computer within 20 seconds.");
+            await Task.Delay(50, ct);
+        }
+        await Assert.That(TermsAcceptance.Write(await _computerTerms.AcceptedAsync(ct))).IsEqualTo(today);
+    }
+
+    [Test]
     public async Task Paused_On_The_Computer_The_Phone_Is_Told_Where_To_Resume_And_Backups_Can_Go_To_Another_Folder(CancellationToken ct)
     {
         Library();
@@ -543,7 +594,7 @@ public sealed class BackupTests : IDisposable
     {
         var services = new TestApi().Services;
         var computer = new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<PhotoSense.Application.Organizing.OrganizeLibrary>(),
-            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore());
+            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(), TestPlans.Terms());
         var refused = await new BackupApi(new TestApi(s => s.AddSingleton(computer))).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);
         await Assert.That((refused.StatusCode, refused.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is on its computer."));
         var neither = await new BackupApi(new TestApi()).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);

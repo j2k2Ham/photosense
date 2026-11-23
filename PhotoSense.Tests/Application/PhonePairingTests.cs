@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure.Transfer;
@@ -18,20 +19,22 @@ public sealed class PhonePairingTests : IDisposable
     private readonly List<ComputerPairing> _computers = [];
     private readonly PhonePairing _phone;
     private readonly MemoryBackupLedger _ledger = new();
+    private readonly TermsAcceptance _phoneTerms = TestPlans.Terms();
     // The person's own folder on the computer: only names are worked out from it, and nothing is written there.
     private readonly string _home = Path.Combine(Path.GetTempPath(), "photosense-home");
 
     public PhonePairingTests()
     {
-        _phone = new PhonePairing(_scanner, _finder, new TcpComputerConnector(TimeSpan.FromMilliseconds(300)), _phonePairs, _ledger, "Jamie's iPhone", TimeProvider.System);
+        _phone = new PhonePairing(_scanner, _finder, new TcpComputerConnector(TimeSpan.FromMilliseconds(300)), _phonePairs, _ledger, "Jamie's iPhone", TimeProvider.System, _phoneTerms);
     }
 
     public void Dispose() => _computers.ForEach(c => c.StopListening());
 
     // A computer on this one's own network: unreachable and unreadable addresses first, as a QR code may list them.
-    private ComputerPairing Computer(string name = "Studio iMac", MemoryPairs? pairs = null)
+    private ComputerPairing Computer(string name = "Studio iMac", MemoryPairs? pairs = null, TermsAcceptance? terms = null)
     {
-        var computer = new ComputerPairing(new TcpTransferListener(0), _advertiser, pairs ?? _computerPairs, name, () => ["not-an-address", "203.0.113.7", "127.0.0.1"], TestBackups.Computer(Path.Combine(_home, "Pictures", "PhotoSense"), home: _home), _clock);
+        var computer = new ComputerPairing(new TcpTransferListener(0), _advertiser, pairs ?? _computerPairs, name, () => ["not-an-address", "203.0.113.7", "127.0.0.1"],
+            TestBackups.Computer(Path.Combine(_home, "Pictures", "PhotoSense"), home: _home, terms: terms), _clock);
         _computers.Add(computer);
         return computer;
     }
@@ -95,6 +98,41 @@ public sealed class PhonePairingTests : IDisposable
         var phoneKept = await _phonePairs.GetAsync("computer-1", ct);
         var computerKept = await _computerPairs.GetAsync("phone-1", ct);
         await Assert.That(Convert.ToHexString(phoneKept!.Key)).IsEqualTo(Convert.ToHexString(computerKept!.Key));
+    }
+
+    [Test]
+    public async Task The_Note_Accepted_On_The_Computer_Is_Accepted_On_The_Phone_It_Pairs_With(CancellationToken ct)
+    {
+        var computerTerms = TestPlans.Terms();
+        await computerTerms.HeardAsync(new DateOnly(2026, 10, 2), ct);
+        var computer = Computer(terms: computerTerms);
+        _scanner.Sees = (await computer.OpenAsync(ct)).Link;
+
+        await _phone.ScanAsync(ct);
+        await _phone.Running;
+
+        await Assert.That(_phone.State.Stage).IsEqualTo(PhonePairingStage.Paired);
+        await Assert.That(await _phoneTerms.AcceptedAsync(ct)).IsEqualTo(new DateOnly(2026, 10, 2));
+    }
+
+    [Test]
+    public async Task The_Note_Accepted_On_The_Phone_Is_Accepted_On_The_Computer_It_Pairs_With(CancellationToken ct)
+    {
+        await _phoneTerms.HeardAsync(new DateOnly(2026, 10, 3), ct);
+        var computerTerms = TestPlans.Terms();
+        var computer = Computer(terms: computerTerms);
+        _scanner.Sees = (await computer.OpenAsync(ct)).Link;
+
+        await _phone.ScanAsync(ct);
+        await _phone.Running;
+
+        // The phone says it as it says goodbye, which the computer reads after showing it is paired.
+        for (var waited = 0; await computerTerms.AcceptedAsync(ct) is null; waited++)
+        {
+            if (waited == 400) throw new TimeoutException("Not accepted on the computer within 20 seconds.");
+            await Task.Delay(50, ct);
+        }
+        await Assert.That(await computerTerms.AcceptedAsync(ct)).IsEqualTo(new DateOnly(2026, 10, 3));
     }
 
     [Test]

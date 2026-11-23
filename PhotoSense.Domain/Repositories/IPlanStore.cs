@@ -2,7 +2,10 @@ using PhotoSense.Domain.Entities;
 
 namespace PhotoSense.Domain.Repositories;
 
-/// <summary>What this device keeps of the plan: how many photos it has removed each day, and a plan a paired phone shared with it.</summary>
+/// <summary>
+/// What this device keeps of the plan: how many photos it has removed each day, a plan a paired phone shared with it,
+/// and the day the person accepted the terms of use.
+/// </summary>
 public interface IPlanStore
 {
     /// <summary>How many photos and videos were removed on <paramref name="day"/>, by this device's own calendar.</summary>
@@ -28,6 +31,15 @@ public interface IPlanStore
 
     /// <summary>What was cleaned up on each day of <paramref name="year"/> that has a record, first to last.</summary>
     Task<IReadOnlyList<CleanedDay>> CleanedInAsync(int year, CancellationToken ct);
+
+    /// <summary>
+    /// The day the person accepted the note asking them to keep a backup, and with it the terms of use, on this device
+    /// or one paired with it; null when they have not.
+    /// </summary>
+    Task<DateOnly?> AcceptedAsync(CancellationToken ct);
+
+    /// <summary>Keeps the day the note was accepted, in place of any before it.</summary>
+    Task KeepAcceptedAsync(DateOnly day, CancellationToken ct);
 }
 
 /// <summary>What was cleaned up on a day.</summary>

@@ -1,7 +1,7 @@
 import useSWR, { mutate } from 'swr';
 import type {
   AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, TermsDto, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
   CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
   TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto, LocationsDto, LocationDetailsDto, ServerConnectionDto,
 } from '../types';
@@ -345,6 +345,32 @@ export async function restorePurchases(): Promise<PlanDto> {
 /** Opens the store's own page for changing or cancelling the subscription. */
 export async function manageSubscription() {
   await send(`${planUrl}/manage`, 'POST');
+}
+
+// ---- The note asking for a backup, accepted once per person
+
+const termsUrl = `${API_BASE}/terms`;
+
+/**
+ * Whether the person has accepted the note asking for a backup, here or on a device paired with this one: asked again
+ * every three seconds while it is not, as a phone paired with this computer may say so meanwhile.
+ */
+export function useTerms() {
+  return useSWR<TermsDto>(termsUrl, json, { refreshInterval: latest => (latest?.accepted === null ? 3000 : 0) });
+}
+
+/** The person accepts the note, and with it the terms of use; a phone tells the computer it was paired with. */
+export async function acceptTerms(): Promise<TermsDto> {
+  const terms = await json<TermsDto>(`${termsUrl}/accept`, { method: 'POST' });
+  await mutate(termsUrl, terms, { revalidate: false });
+  return terms;
+}
+
+/** Asks the service again whether the note was accepted, as pairing may just have told it, and keeps the answer. */
+export async function termsNow(): Promise<TermsDto> {
+  const terms = await json<TermsDto>(termsUrl);
+  await mutate(termsUrl, terms, { revalidate: false });
+  return terms;
 }
 
 // ---- Pairing a phone with a computer

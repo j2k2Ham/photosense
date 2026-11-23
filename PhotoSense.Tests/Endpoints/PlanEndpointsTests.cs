@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Transfer;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -136,5 +138,36 @@ public class PlanEndpointsTests
         await Assert.That((await _phone.ManageAsync(Http.Post("plan/manage"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
         await Assert.That(_app.Bought).IsEmpty();
         await Assert.That(_app.Managed).IsEqualTo(0);
+    }
+
+    [Test]
+    public async Task The_Terms_Are_Accepted_Only_From_The_Page_And_Then_Stay_Accepted(CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(new TestClock().GetLocalNow().DateTime).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        await Assert.That((await _computer.TermsAsync(Http.Get("terms"), ct)).Json().GetProperty("accepted").ValueKind).IsEqualTo(JsonValueKind.Null);
+
+        await Assert.That((await _computer.AcceptAsync(Http.Post("terms/accept"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+        await Assert.That((await _computer.TermsAsync(Http.Get("terms"), ct)).Json().GetProperty("accepted").ValueKind).IsEqualTo(JsonValueKind.Null);
+
+        var accepted = await _computer.AcceptAsync(Http.Post("terms/accept").FromClient(), ct);
+        await Assert.That(accepted.Json().GetProperty("accepted").GetString()).IsEqualTo(today);
+        await Assert.That((await _computer.TermsAsync(Http.Get("terms"), ct)).Json().GetProperty("accepted").GetString()).IsEqualTo(today);
+    }
+
+    [Test]
+    public async Task A_Phone_Accepting_The_Terms_Tells_The_Computer_It_Was_Paired_With(CancellationToken ct)
+    {
+        var services = new TestApi().Services;
+        var backup = new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("phone"), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
+            TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "Jamie's iPhone", Path.GetTempPath(), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(),
+            TestPlans.Terms());
+        var before = backup.Telling;
+
+        var accepted = await new PlanApi(new TestApi(s => s.AddSingleton(backup))).AcceptAsync(Http.Post("terms/accept").FromClient(), ct);
+
+        await Assert.That(accepted.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(ReferenceEquals(backup.Telling, before)).IsFalse();
+        // Paired with no computer yet, there is none to tell: pairing tells it.
+        await Assert.That(await backup.Telling).IsFalse();
     }
 }

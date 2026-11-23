@@ -129,6 +129,8 @@ public sealed class PhotoSenseRoutes
             .Post("plan/buy", (r, _, ct) => plan.BuyAsync(r, ct))
             .Post("plan/restore", (r, _, ct) => plan.RestoreAsync(r, ct))
             .Post("plan/manage", (r, _, ct) => plan.ManageAsync(r, ct))
+            .Get("terms", (r, _, ct) => plan.TermsAsync(r, ct))
+            .Post("terms/accept", (r, _, ct) => plan.AcceptAsync(r, ct))
             .Post("pairing/open", (r, _, ct) => pairing.OpenAsync(r, ct))
             .Post("pairing/close", (r, _, ct) => pairing.CloseAsync(r, ct))
             .Post("pairing/name", (r, _, ct) => pairing.NameAsync(r, ct))

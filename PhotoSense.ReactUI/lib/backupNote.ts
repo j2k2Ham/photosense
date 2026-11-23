@@ -1,7 +1,4 @@
-import { useStored } from './stored';
-
-/** Where this browser keeps the day the person accepted the note asking them to keep a backup. */
-export const BACKUP_NOTE_KEY = 'photosense-backup-note';
+import { acceptTerms, termsNow, useTerms } from './apiClient';
 
 /** What the note says, the same on a computer and a phone, as the terms of use say it. */
 export const BACKUP_NOTE = {
@@ -13,13 +10,17 @@ export const BACKUP_NOTE = {
   ],
   terms: 'Read the terms of use',
   accept: 'Accept and continue',
+  /** On a computer, for someone who accepted on their phone already. */
+  paired: 'Accepted it on your phone already? Pair the phone with this computer, and PhotoSense does not ask here.',
+  pair: 'Pair a phone',
 } as const;
 
 /**
- * Whether the note asking the person to keep a backup is due, as it is until they accept it on this device (Jamie,
- * 2026-11-22: a click to accept), and accepting it. Not due until the browser's storage has been read.
+ * Whether the note asking the person to keep a backup is due, as it is until they accept it once, on any of their
+ * devices (Jamie, 2026-11-23: once per person): the service keeps the day, and a phone and its computer tell each other.
+ * Not due until the service has answered. `check` asks the service again, as pairing may just have told it.
  */
-export function useBackupNote(): { readonly due: boolean; accept(): void } {
-  const [accepted, keep] = useStored(BACKUP_NOTE_KEY);
-  return { due: accepted === null, accept: () => keep(() => new Date().toISOString().slice(0, 10)) };
+export function useBackupNote(): { readonly due: boolean; accept(): Promise<unknown>; check(): Promise<boolean> } {
+  const accepted = useTerms().data?.accepted;
+  return { due: accepted === null, accept: acceptTerms, check: async () => (await termsNow()).accepted !== null };
 }

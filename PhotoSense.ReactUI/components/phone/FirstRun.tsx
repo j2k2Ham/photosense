@@ -80,10 +80,11 @@ interface FirstRunProps {
 }
 
 /**
- * What covers the tabs until they can be used, or nothing. The first time: Welcome, the note asking for a backup, why
- * PhotoSense needs the photos and the phone's own question, pairing a computer (or not, for now), the first scan, what
- * it found, and the offer of Pro, once; it ends on Clean up. After that, Scanning whenever a scan runs. The note comes
- * at the next launch too on a phone past its first launch that has not accepted it.
+ * What covers the tabs until they can be used, or nothing. The first time: Welcome, why PhotoSense needs the photos and
+ * the phone's own question, pairing a computer (or not, for now), the note asking for a backup unless that computer
+ * says it was accepted there, the first scan, what it found, and the offer of Pro, once; it ends on Clean up. After
+ * that, Scanning whenever a scan runs. The note comes at the next launch too on a phone past its first launch that has
+ * not accepted it, nor heard from its computer that it was.
  */
 export function useFirstRun({ scanning, progress, starting, scan, onStop, onCleanUp, notify, reading, onTerms }: FirstRunProps): React.ReactElement | null {
   const access = usePhotoAccess().data?.access;
@@ -124,9 +125,27 @@ export function useFirstRun({ scanning, progress, starting, scan, onStop, onClea
     try { await openPhotoSettings(); } catch (e) { notify(`Settings could not be opened: ${said(e)}`, 'error'); }
   }
 
+  // Marked begun as it starts: a scan that starts and ends before the screen is drawn again still ends in its result.
   function startFirstScan() {
-    go('scan');
+    setBegun(true);
     void scan();
+  }
+
+  // After pairing, or not for now: the note first, unless the computer just said it was accepted there; then the first scan.
+  async function afterPair() {
+    const accepted = await note.check().catch(() => false);
+    go('scan');
+    if (accepted) startFirstScan();
+  }
+
+  async function accept() {
+    try {
+      await note.accept();
+      // The first scan waited for the note.
+      if (stage === 'scan' && !begun) startFirstScan();
+    } catch (e) {
+      notify(`PhotoSense could not keep your answer: ${said(e)}`, 'error');
+    }
   }
 
   function finish() {
@@ -135,9 +154,9 @@ export function useFirstRun({ scanning, progress, starting, scan, onStop, onClea
   }
 
   if (stage === 'new') return <Welcome onStart={() => go('access')} />;
-  if (note.due) return <BackupNote hidden={reading} onTerms={onTerms} onAccept={note.accept} />;
   if (stage === 'access' || stage === 'refused') return <Access busy={asking} refused={stage === 'refused'} onContinue={() => void ask()} onSettings={() => void settings()} />;
-  if (stage === 'pair') return <Pair notify={notify} onNext={startFirstScan} />;
+  if (stage === 'pair') return <Pair notify={notify} onNext={() => void afterPair()} />;
+  if (note.due) return <BackupNote hidden={reading} onTerms={onTerms} onAccept={() => void accept()} />;
   if (stage === 'result') return <Result onOffer={() => go('offer')} onDone={finish} />;
   if (stage === 'offer') return <Offer notify={notify} onDone={finish} />;
   if (stage === 'scan' || scanning || starting) return <Scanning progress={scanning ? progress : undefined} first={stage === 'scan'} onStop={scanning ? onStop : undefined} />;

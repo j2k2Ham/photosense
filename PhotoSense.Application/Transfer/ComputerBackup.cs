@@ -56,6 +56,7 @@ public sealed class ComputerBackup
     private readonly TimeProvider _clock;
     private readonly IMediaDetailsReader _reader;
     private readonly IPlaceNameResolver _places;
+    private readonly TermsAcceptance _terms;
     private readonly object _lock = new();
     private readonly Dictionary<string, ArrivingBackup> _arriving = [];
     private readonly SemaphoreSlim _changing = new(1, 1);
@@ -70,9 +71,11 @@ public sealed class ComputerBackup
     /// <param name="clock">When things happen, and how long a phone may stay silent.</param>
     /// <param name="reader">When and where each copy was taken, as its file says, for naming it by date.</param>
     /// <param name="places">The towns and landmarks places are at, for naming a copy by where it was taken.</param>
+    /// <param name="terms">Whether the person accepted the note asking for a backup: a phone and this computer tell each other.</param>
     public ComputerBackup(IBackupStore store, IPhotoFileSystem files, FileChanges changes, Subscription plan, string root, string home, TimeProvider clock,
-        IMediaDetailsReader reader, IPlaceNameResolver places)
+        IMediaDetailsReader reader, IPlaceNameResolver places, TermsAcceptance terms)
     {
+        _terms = terms;
         _reader = reader;
         _places = places;
         _store = store;
@@ -223,6 +226,9 @@ public sealed class ComputerBackup
         return PhotoPath.Comparer.Equals(to, path) ? null : to;
     }
 
+    /// <summary>The day the person accepted the note asking for a backup, as this computer knows it, which pairing tells a phone.</summary>
+    public Task<DateOnly?> AcceptedAsync(CancellationToken ct) => _terms.AcceptedAsync(ct);
+
     /// <summary>Where a phone's trip folders are made: where the person chose, or beside the phones' folders.</summary>
     public string TripsIn(BackupPhone phone) => phone.TripsFolder ?? _root;
 
@@ -242,6 +248,8 @@ public sealed class ComputerBackup
     public async Task ServeAsync(SecureChannel channel, Device phone, CancellationToken ct)
     {
         var asked = await channel.ReceiveAsync(ct, "backup", "bye");
+        // Until Family, every phone paired with this computer is its owner's: accepted there, it is accepted here.
+        await _terms.HeardAsync(TermsAcceptance.Read(asked["accepted"]), ct);
         if (Wire.Text(asked, "t") == "bye") return;
         var known = await PhoneAsync(phone.Id, ct);
         // A phone paired before backups came keeps the folder it would have had.
@@ -258,7 +266,7 @@ public sealed class ComputerBackup
         var held = await CheckAsync(channel, record, ct);
         if (!_files.FolderExists(record.Folder)) _files.MakeFolder(record.Folder);
         record = await ChangePhoneAsync(phone.Id, p => p with { LastChecked = _clock.GetUtcNow() }, ct);
-        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)), ["names"] = record.Names.ToString() }, ct);
+        await Lists.SendAsync(channel, "held", "sha256", [.. held.Keys], new JsonObject { ["folder"] = Named(record.Folder), ["trips"] = Named(TripsIn(record)), ["names"] = record.Names.ToString(), ["accepted"] = TermsAcceptance.Write(await _terms.AcceptedAsync(ct)) }, ct);
 
         var offered = await Lists.ReceiveAsync(channel, "offer", "files", null, null, ct);
         var files = offered.OfType<JsonObject>()
