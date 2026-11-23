@@ -435,6 +435,11 @@ export interface PlanBuyResultDto {
   outcome: 'bought' | 'cancelled' | 'pending';
   plan: PlanDto;
 }
+/** Whether the person accepted the note asking for a backup, here or on a device paired with this one (PhotoSense.Contracts.Plans.TermsDto). */
+export interface TermsDto {
+  /** The day it was accepted ("2026-11-23"); null when it has not been. */
+  accepted: string | null;
+}
 
 /** Where pairing a phone with a computer has got to (PhotoSense.Contracts.Transfer.PairingStateDto). */
 export interface PairingStateDto {

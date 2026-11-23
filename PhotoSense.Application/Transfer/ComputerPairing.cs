@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 
@@ -223,8 +224,8 @@ public sealed class ComputerPairing
             {
                 var folder = await _backup.PairedAsync(linked.Other, ct);
                 lock (_lock) _state = new ComputerPairingState(ComputerPairingStage.Paired, null, null, null, null, linked.Other.Name, null);
-                // The phone shows where its backups go; the pairing is done whether it hears or not.
-                await channel.SendAsync(new JsonObject { ["t"] = "paired", ["folder"] = folder }, ct);
+                // The phone shows where its backups go, and does not ask for the note accepted here; the pairing is done whether it hears or not.
+                await channel.SendAsync(new JsonObject { ["t"] = "paired", ["folder"] = folder, ["accepted"] = TermsAcceptance.Write(await _backup.AcceptedAsync(ct)) }, ct);
             }
             await _backup.ServeAsync(channel, linked.Other, ct);
         }

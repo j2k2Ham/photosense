@@ -137,6 +137,7 @@ public sealed class PhoneBackup
     private readonly object _lock = new();
     private readonly IVaultFiles _vault;
     private readonly ILocationStore _locations;
+    private readonly TermsAcceptance _terms;
     private Run? _run;
     private CancellationTokenSource? _stop;
 
@@ -176,9 +177,11 @@ public sealed class PhoneBackup
     /// <param name="clock">How long the computer may stay silent, and when things happen.</param>
     /// <param name="vault">The hidden vault's files, which a backup sends as they are kept, sealed.</param>
     /// <param name="locations">The other places the phone backs up to, whose checked copies count toward Safe to delete too, and whether the computer is on.</param>
+    /// <param name="terms">Whether the person accepted the note asking for a backup, which the phone and the computer tell each other.</param>
     public PhoneBackup(IBackupLedger ledger, IComputerFinder finder, IPairingStore pairs, OrganizeLibrary library, IPhotoFileSystem files, Subscription plan, DailyRemovals removals,
-        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault, ILocationStore locations)
+        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault, ILocationStore locations, TermsAcceptance terms)
     {
+        _terms = terms;
         _vault = vault;
         _locations = locations;
         _ledger = ledger;
@@ -454,32 +457,31 @@ public sealed class PhoneBackup
     {
         try
         {
-            var self = await _pairs.SelfIdAsync(stop);
-            if (await _pairs.GetAsync(computer.ComputerId, stop) is null)
-                throw new TransferException($"This phone no longer knows {computer.Name}. Pair them again: in Settings, choose Computer.");
-            var found = (await _finder.FindAsync(stop)).FirstOrDefault(c => c.Id == computer.ComputerId)
-                ?? throw new TransferException($"{computer.Name} was not found on this Wi-Fi. Check that PhotoSense is open on it, and that both are on the same Wi-Fi.");
-            await using var connection = await TimedConnection.WithinAsync(found.Connect, _clock, stop);
-            var stream = new TimedConnection(connection, _clock);
-            // Both know each other: the pairing is proved, and no number is ever compared here.
-            var linked = await Pairing.PhoneAsync(stream, new Device(self, _name), _pairs, (_, _, _) => Task.FromResult(false), ticket: null, stop);
+            var (connection, linked) = await LinkAsync(computer, stop);
+            await using var connected = connection;
             using var channel = linked.Channel;
             // The computer may have been named again since.
             computer = computer with { Name = linked.Other.Name };
-            await channel.SendAsync(new JsonObject { ["t"] = "backup", ["kind"] = _device.Kind, ["plan"] = PlanMessage.Write(await _plan.CurrentAsync(stop)) }, stop);
+            await channel.SendAsync(new JsonObject
+            {
+                ["t"] = "backup", ["kind"] = _device.Kind, ["plan"] = PlanMessage.Write(await _plan.CurrentAsync(stop)), ["accepted"] = TermsAcceptance.Write(await _terms.AcceptedAsync(stop)),
+            }, stop);
             var first = await channel.ReceiveAsync(stop, "held", "paused");
             if (Wire.Text(first, "t") == "paused") throw new TransferException(Wire.Text(first, "why"));
             var folder = computer.Folder;
             var trips = computer.Trips;
             var names = computer.Names;
+            DateOnly? accepted = null;
             var held = (await Lists.ReceiveAsync(channel, "held", "sha256", first, last =>
                 {
                     folder = Wire.Text(last, "folder");
                     // A computer from before trip folders does not say where it makes them, nor how it names copies.
                     trips = last["trips"] is JsonValue said ? said.GetValue<string>() : trips;
                     if (last["names"] is JsonValue naming && Enum.TryParse<FileNaming>(naming.GetValue<string>(), out var known)) names = known;
+                    accepted = TermsAcceptance.Read(last["accepted"]);
                 }, stop))
                 .Select(n => n?.GetValue<string>()).OfType<string>().ToHashSet(StringComparer.Ordinal);
+            await _terms.HeardAsync(accepted, stop);
             await _ledger.KeepOnComputerAsync(held, all: true, stop);
             computer = computer with { Folder = folder, Trips = trips, Names = names, LastChecked = _clock.GetUtcNow() };
             await _ledger.SaveComputerAsync(computer, stop);
@@ -565,6 +567,60 @@ public sealed class PhoneBackup
                 run.Stage = BackupStage.Failed;
                 run.Problem = ex is TransferException ? ex.Message : $"The backup stopped: {ex.Message}";
             }
+        }
+    }
+
+    /// <summary>The telling started by <see cref="TellAccepted"/>, for whoever waits for it: true when the computer heard.</summary>
+    public Task<bool> Telling { get; private set; } = Task.FromResult(false);
+
+    /// <summary>
+    /// Tells the computer this phone was paired with that the person accepted the note asking for a backup, so that it
+    /// does not ask there too. It goes on by itself; a computer not reached now hears it with the next backup, which
+    /// always says it.
+    /// </summary>
+    public void TellAccepted()
+    {
+        // The page has its answer already, and nothing it does later stops the telling: it ends by itself, within the minute's limit.
+        Telling = Task.Run(() => TellAsync(CancellationToken.None), CancellationToken.None);
+    }
+
+    private async Task<bool> TellAsync(CancellationToken ct)
+    {
+        if (await _ledger.ComputerAsync(ct) is not { } computer) return false;
+        try
+        {
+            var (connection, linked) = await LinkAsync(computer, ct);
+            await using var connected = connection;
+            using var channel = linked.Channel;
+            await channel.SendAsync(new JsonObject { ["t"] = "bye", ["accepted"] = TermsAcceptance.Write(await _terms.AcceptedAsync(ct)) }, ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    // Finds the computer on the Wi-Fi and proves the pairing; the connection is the caller's to close once it has it.
+    private async Task<(Stream Connection, Linked Linked)> LinkAsync(BackupComputer computer, CancellationToken stop)
+    {
+        var self = await _pairs.SelfIdAsync(stop);
+        if (await _pairs.GetAsync(computer.ComputerId, stop) is null)
+            throw new TransferException($"This phone no longer knows {computer.Name}. Pair them again: in Settings, choose Computer.");
+        var found = (await _finder.FindAsync(stop)).FirstOrDefault(c => c.Id == computer.ComputerId)
+            ?? throw new TransferException($"{computer.Name} was not found on this Wi-Fi. Check that PhotoSense is open on it, and that both are on the same Wi-Fi.");
+        var connection = await TimedConnection.WithinAsync(found.Connect, _clock, stop);
+        var handed = false;
+        try
+        {
+            // Both know each other: the pairing is proved, and no number is ever compared here.
+            var linked = await Pairing.PhoneAsync(new TimedConnection(connection, _clock), new Device(self, _name), _pairs, (_, _, _) => Task.FromResult(false), ticket: null, stop);
+            handed = true;
+            return (connection, linked);
+        }
+        finally
+        {
+            if (!handed) await connection.DisposeAsync();
         }
     }
 

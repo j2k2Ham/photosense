@@ -49,6 +49,23 @@ public class LiteDbPlanStoreTests
     }
 
     [Test]
+    public async Task The_Day_The_Terms_Were_Accepted_Is_Kept_And_Read_Back(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        var plan = db.Plan();
+        await Assert.That(await plan.AcceptedAsync(ct)).IsNull();
+
+        await plan.KeepAcceptedAsync(Day, ct);
+
+        await Assert.That(await db.Plan().AcceptedAsync(ct)).IsEqualTo(Day);
+        await Assert.That(db.GetCollection("terms_accepted").FindById("accepted")["Day"].AsString).IsEqualTo("2026-11-13");
+        var gone = new CancellationToken(canceled: true);
+        await Assert.ThrowsAsync<OperationCanceledException>(() => plan.AcceptedAsync(gone));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => plan.KeepAcceptedAsync(Day.AddDays(1), gone));
+        await Assert.That(await plan.AcceptedAsync(ct)).IsEqualTo(Day);
+    }
+
+    [Test]
     public async Task Nothing_Is_Answered_Or_Kept_For_A_Caller_That_Has_Gone(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());

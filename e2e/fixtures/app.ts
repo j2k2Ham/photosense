@@ -131,8 +131,9 @@ export class Service {
 export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean }>({
   // Nearly every test is of what comes after the note asking for a backup; the note's own tests leave it to be asked.
   noteAccepted: [true, { option: true }],
-  page: async ({ page, noteAccepted }, use) => {
-    if (noteAccepted) await page.addInitScript(() => localStorage.setItem('photosense-backup-note', '2026-11-22'));
+  // Accepted through the program, which keeps it, as the page would.
+  page: async ({ page, noteAccepted, service }, use) => {
+    if (noteAccepted) await service.post('terms/accept');
     await use(page);
   },
   program: async ({}, use, testInfo) => {

@@ -35,6 +35,8 @@ public static class PhotoSenseApplicationServices
         // A phone registers its store; a computer has none, and learns the plan from a paired phone.
         s.AddSingleton(sp => new Subscription(sp.GetRequiredService<IPlanStore>(), sp.GetRequiredService<TimeProvider>(), sp.GetService<IAppStore>()));
         s.AddSingleton<DailyRemovals>();
+        // The note asking for a backup is accepted once per person; a phone and its computer tell each other.
+        s.AddSingleton<TermsAcceptance>();
         // Every move, copy and removal of files goes through the one journal, one at a time.
         s.AddSingleton<FileChanges>();
         s.AddSingleton(sp => new OrganizeLibrary(sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<IMediaDetailsReader>(), sp.GetRequiredService<IImageHashingService>(),

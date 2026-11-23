@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Transfer;
 using PhotoSense.Infrastructure.Transfer;
 
@@ -21,7 +22,7 @@ public sealed class PairingEndpointsTests : IDisposable
     {
         _computerPairing = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "photosense-home", "Pictures", "PhotoSense")), new TestClock());
         _computer = new PairingApi(new TestApi(s => s.AddSingleton(_computerPairing)));
-        var phone = new PhonePairing(_scanner, new FakeComputerFinder(), new TcpComputerConnector(), new MemoryPairs("phone-1"), new MemoryBackupLedger(), "Jamie's iPhone", new TestClock());
+        var phone = new PhonePairing(_scanner, new FakeComputerFinder(), new TcpComputerConnector(), new MemoryPairs("phone-1"), new MemoryBackupLedger(), "Jamie's iPhone", new TestClock(), TestPlans.Terms());
         _phone = new PairingApi(new TestApi(s => s.AddSingleton(phone)));
         _neither = new PairingApi(new TestApi());
     }

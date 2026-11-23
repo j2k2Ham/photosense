@@ -190,6 +190,10 @@ internal sealed class PlanApi(TestApi api)
     public Task<ApiResponse> RestoreAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "plan/restore");
     /// <summary>POST /plan/manage.</summary>
     public Task<ApiResponse> ManageAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "plan/manage");
+    /// <summary>GET /terms.</summary>
+    public Task<ApiResponse> TermsAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "terms");
+    /// <summary>POST /terms/accept.</summary>
+    public Task<ApiResponse> AcceptAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "terms/accept");
 }
 
 /// <summary>The addresses of pairing a phone with a computer, and of what a scan found, by the names of the endpoints behind them.</summary>

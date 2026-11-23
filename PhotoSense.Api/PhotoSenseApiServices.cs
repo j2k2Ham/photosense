@@ -40,7 +40,8 @@ public static class PhotoSenseApiServices
         s.AddSingleton<ScanLogsEndpoints>();
         s.AddSingleton<OrganizeEndpoints>();
         s.AddSingleton<RemovedEndpoints>();
-        s.AddSingleton<PlanEndpoints>();
+        // A phone tells the computer it was paired with when the person accepts the terms; a computer has no phone's backup.
+        s.AddSingleton(sp => new PlanEndpoints(sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), sp.GetRequiredService<TermsAcceptance>(), sp.GetService<PhoneBackup>()));
         // A computer pairs by showing a code, a phone by scanning or typing it: each program has the one half.
         s.AddSingleton(sp => new PairingEndpoints(sp.GetService<ComputerPairing>(), sp.GetService<PhonePairing>()));
         // A phone backs up and a computer keeps the backups: each program has the one half.

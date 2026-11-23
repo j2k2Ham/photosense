@@ -955,6 +955,31 @@ describe('the plan', () => {
   });
 });
 
+describe('the note asking for a backup', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('is asked for every three seconds only while it is not accepted', async () => {
+    const api = await load();
+    api.useTerms();
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/terms`, expect.any(Function), { refreshInterval: expect.any(Function) });
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { accepted: string | null }): number }).refreshInterval;
+    expect([every(undefined), every({ accepted: null }), every({ accepted: '2026-11-23' })]).toEqual([0, 3000, 0]);
+  });
+
+  it('is accepted, or asked again, and the answer is kept at once', async () => {
+    const api = await load();
+    answering({ accepted: '2026-11-23' });
+    await expect(api.acceptTerms()).resolves.toEqual({ accepted: '2026-11-23' });
+    expect(lastRequest()).toEqual({ url: `${API}/terms/accept`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/terms`, { accepted: '2026-11-23' }, { revalidate: false });
+
+    answering({ accepted: null });
+    await expect(api.termsNow()).resolves.toEqual({ accepted: null });
+    expect(lastRequest().url).toBe(`${API}/terms`);
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/terms`, { accepted: null }, { revalidate: false });
+  });
+});
+
 describe('pairing and what a scan found', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
   const state = { stage: 'waiting', link: 'photosense:pair', code: '482913', expires: null, check: null, other: null, folder: null, problem: null };

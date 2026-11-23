@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 
@@ -44,6 +46,7 @@ public sealed class PhonePairing
     private readonly IBackupLedger _ledger;
     private readonly string _name;
     private readonly TimeProvider _clock;
+    private readonly TermsAcceptance _terms;
     private readonly object _lock = new();
     private PhonePairingState _state = new(PhonePairingStage.Idle, null, null, null, null);
     private CancellationTokenSource? _stop;
@@ -57,8 +60,10 @@ public sealed class PhonePairing
     /// <param name="ledger">Keeps the computer paired with as the one backups go to.</param>
     /// <param name="name">What this phone is called, as the computer shows it.</param>
     /// <param name="clock">How long a computer may stay silent.</param>
-    public PhonePairing(ICodeScanner scanner, IComputerFinder finder, IComputerConnector connector, IPairingStore pairs, IBackupLedger ledger, string name, TimeProvider clock)
+    /// <param name="terms">Whether the person accepted the note asking for a backup: the phone and the computer tell each other as they pair.</param>
+    public PhonePairing(ICodeScanner scanner, IComputerFinder finder, IComputerConnector connector, IPairingStore pairs, IBackupLedger ledger, string name, TimeProvider clock, TermsAcceptance terms)
     {
+        _terms = terms;
         _ledger = ledger;
         _scanner = scanner;
         _finder = finder;
@@ -168,10 +173,13 @@ public sealed class PhonePairing
         await using var stream = new TimedConnection(connection, _clock);
         var linked = await Pairing.PhoneAsync(stream, new Device(await _pairs.SelfIdAsync(ct), _name), _pairs, AskAsync, ticket, ct);
         using var channel = linked.Channel;
-        var folder = Wire.Text(await channel.ReceiveAsync(ct, "paired"), "folder");
+        var paired = await channel.ReceiveAsync(ct, "paired");
+        var folder = Wire.Text(paired, "folder");
         await _ledger.SaveComputerAsync(new BackupComputer(linked.Other.Id, linked.Other.Name, folder, null, null), ct);
+        // Accepted on either, the note is not asked on the other.
+        await _terms.HeardAsync(TermsAcceptance.Read(paired["accepted"]), ct);
         // Paired only, for now: backing up comes after.
-        await channel.SendAsync(new System.Text.Json.Nodes.JsonObject { ["t"] = "bye" }, ct);
+        await channel.SendAsync(new JsonObject { ["t"] = "bye", ["accepted"] = TermsAcceptance.Write(await _terms.AcceptedAsync(ct)) }, ct);
         Set(new PhonePairingState(PhonePairingStage.Paired, linked.Other.Name, null, folder, null));
     }
 

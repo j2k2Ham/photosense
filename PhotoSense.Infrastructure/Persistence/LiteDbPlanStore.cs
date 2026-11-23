@@ -4,13 +4,14 @@ using PhotoSense.Domain.Repositories;
 
 namespace PhotoSense.Infrastructure.Persistence;
 
-/// <summary>Each day's count of removals, and the plan a paired phone shared, kept in the database with everything else.</summary>
+/// <summary>Each day's count of removals, the plan a paired phone shared, and the day the terms of use were accepted, kept in the database with everything else.</summary>
 /// <remarks>Each method answers at once; its token is checked first, as nothing it does takes long enough to stop part way.</remarks>
 internal sealed class LiteDbPlanStore : IPlanStore
 {
     private readonly ILiteCollection<RemovedDocument> _removed;
     private readonly ILiteCollection<SharedDocument> _shared;
     private readonly ILiteCollection<CleanedDocument> _cleaned;
+    private readonly ILiteCollection<AcceptedDocument> _accepted;
 
     /// <summary>Uses a database that other stores share; the caller disposes it.</summary>
     /// <param name="db">The shared database.</param>
@@ -22,6 +23,23 @@ internal sealed class LiteDbPlanStore : IPlanStore
         _shared = db.GetCollection<SharedDocument>("shared_plan");
         LiteDbMapping.Prepare<CleanedDocument>();
         _cleaned = db.GetCollection<CleanedDocument>("cleaned_by_day");
+        LiteDbMapping.Prepare<AcceptedDocument>();
+        _accepted = db.GetCollection<AcceptedDocument>("terms_accepted");
+    }
+
+    /// <inheritdoc />
+    public Task<DateOnly?> AcceptedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_accepted.FindById("accepted") is { } d ? Day(d.Day) : (DateOnly?)null);
+    }
+
+    /// <inheritdoc />
+    public Task KeepAcceptedAsync(DateOnly day, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _accepted.Upsert(new AcceptedDocument { Id = "accepted", Day = Key(day) });
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -120,6 +138,14 @@ internal sealed class LiteDbPlanStore : IPlanStore
         public int Removed { get; set; }
         /// <summary>Bytes freed from the device that day.</summary>
         public long Freed { get; set; }
+    }
+
+    private sealed class AcceptedDocument
+    {
+        /// <summary>The one record of it: "accepted".</summary>
+        [BsonId] public string Id { get; set; } = string.Empty;
+        /// <summary>The day the terms of use were accepted: "2026-11-23".</summary>
+        public string Day { get; set; } = string.Empty;
     }
 
     private sealed class SharedDocument

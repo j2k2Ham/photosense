@@ -3,24 +3,55 @@ using System.Net;
 using System.Text.Json;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Plans;
+using PhotoSense.Application.Transfer;
 using PhotoSense.Contracts.Plans;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Services;
 
 namespace PhotoSense.Api.Endpoints;
 
-/// <summary>The plan the person has, the removals left today, and buying, restoring and managing a plan through the phone's store.</summary>
+/// <summary>
+/// The plan the person has, the removals left today, and buying, restoring and managing a plan through the phone's store;
+/// and whether the person has accepted the terms of use.
+/// </summary>
 internal sealed class PlanEndpoints
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
     private readonly Subscription _subscription;
     private readonly DailyRemovals _removals;
+    private readonly TermsAcceptance _terms;
+    private readonly PhoneBackup? _phone;
 
     /// <summary>The plan <paramref name="subscription"/> holds, with the removals <paramref name="removals"/> counts.</summary>
-    public PlanEndpoints(Subscription subscription, DailyRemovals removals)
+    /// <param name="subscription">The plan.</param>
+    /// <param name="removals">Today's removals.</param>
+    /// <param name="terms">Whether the person accepted the note asking for a backup.</param>
+    /// <param name="phone">On a phone, tells the computer it was paired with when the person accepts; null on a computer.</param>
+    public PlanEndpoints(Subscription subscription, DailyRemovals removals, TermsAcceptance terms, PhoneBackup? phone)
     {
         _subscription = subscription;
         _removals = removals;
+        _terms = terms;
+        _phone = phone;
+    }
+
+    /// <summary>GET /api/terms: the day the person accepted the note asking for a backup, here or on a device paired with this one.</summary>
+    public async Task<ApiResponse> TermsAsync(ApiRequest req, CancellationToken ct)
+    {
+        var resp = req.CreateResponse();
+        await resp.WriteAsJsonAsync(new TermsDto { Accepted = TermsAcceptance.Write(await _terms.AcceptedAsync(ct)) }, ct);
+        return resp;
+    }
+
+    /// <summary>POST /api/terms/accept: the person accepts; a phone tells the computer it was paired with, so that it does not ask there.</summary>
+    public async Task<ApiResponse> AcceptAsync(ApiRequest req, CancellationToken ct)
+    {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
+        var day = await _terms.AcceptAsync(ct);
+        _phone?.TellAccepted();
+        var resp = req.CreateResponse();
+        await resp.WriteAsJsonAsync(new TermsDto { Accepted = TermsAcceptance.Write(day) }, ct);
+        return resp;
     }
 
     /// <summary>GET /api/plan: the plan, today's removals, and the plans for sale.</summary>

@@ -38,7 +38,7 @@ npm run typecheck
 - **Selectors:** by role and accessible name, as a screen reader reads them. To find a name, print `await page.getByRole('main').ariaSnapshot()` in a throwaway test.
 - **What to check:** what the person sees, and what is on the disk afterwards (`photos.files()`, `photos.exists()`). A removal checks `_PhotoSense_Removed`; an undo checks that every file is back.
 - **What only a phone or another device answers:** stand in for it with `fixtures/phone.ts` (`Phone`, `PhoneNearby`). Everything else stays the program's own.
-- **The note asking for a backup** is accepted before every test (`noteAccepted`, on by default in `fixtures/app.ts`); a test of the note itself says `test.use({ noteAccepted: false })`.
+- **The note asking for a backup** is accepted through the program before every test (`noteAccepted`, on by default in `fixtures/app.ts`, which posts `terms/accept`); a test of the note itself says `test.use({ noteAccepted: false })`.
 - **`@phone`:** add it to a test's name when it must also work at a phone's size and in WebKit.
 
 ## Traps already met

@@ -161,10 +161,26 @@ internal sealed class MemoryAudit(TimeProvider time) : IAuditRepository
     }
 }
 
-/// <summary>Each day's count of removals and a shared plan, in memory.</summary>
+/// <summary>Each day's count of removals, a shared plan and the day the terms of use were accepted, in memory.</summary>
 internal sealed class MemoryPlanStore : IPlanStore
 {
     private readonly Dictionary<DateOnly, int> _removed = [];
+    private DateOnly? _accepted;
+
+    /// <inheritdoc />
+    public Task<DateOnly?> AcceptedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_accepted);
+    }
+
+    /// <inheritdoc />
+    public Task KeepAcceptedAsync(DateOnly day, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _accepted = day;
+        return Task.CompletedTask;
+    }
     private Entitlement? _shared;
 
     /// <inheritdoc />
