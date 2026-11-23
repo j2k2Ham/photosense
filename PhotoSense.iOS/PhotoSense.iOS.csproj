@@ -41,6 +41,8 @@
     <BundleResource Include="PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
     <!-- The app's icon is kept once, for every program, in branding/; Xcode makes every size the phone needs from it. -->
     <ImageAsset Include="..\branding\app-icon.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon.png" />
+    <!-- iOS 18's dark home screen: the mark alone, on no background. -->
+    <ImageAsset Include="..\branding\png\app-icons\ios\AppIcon-dark-1024.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon-dark.png" />
   </ItemGroup>
   <ItemGroup>
     <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->

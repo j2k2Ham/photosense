@@ -2,23 +2,23 @@ import React, { useMemo, useState } from 'react';
 import { appIconUrl } from '../../lib/apiClient';
 import { PhoneContext, useForm, WORDS, type Collection, type Foot, type PhoneFrame, type Place, type Platform, type TabId } from '../../lib/phone';
 import type { Toast } from '../Toaster';
-import { BackupIcon, CalendarIcon, CleanUpIcon, FolderIcon, GearIcon, LibraryIcon, LockIcon, PinIcon, SidebarIcon } from './Icons';
+import { BackupIcon, CalendarIcon, CleanUpIcon, GearIcon, OrganizeIcon, PlacesIcon, SidebarIcon, TimelineIcon, VaultIcon } from './Icons';
 import { PlaceContext } from './Screens';
 import { PhoneToaster } from './PhoneToaster';
 
 /** The four tabs, in their order, with their names and icons. */
 export const TABS: readonly { readonly id: TabId; readonly name: string; readonly Icon: (p: { size?: number }) => React.ReactElement }[] = [
-  { id: 'library', name: 'Library', Icon: LibraryIcon },
+  { id: 'library', name: 'Library', Icon: TimelineIcon },
   { id: 'cleanup', name: 'Clean up', Icon: CleanUpIcon },
-  { id: 'organize', name: 'Organize', Icon: FolderIcon },
+  { id: 'organize', name: 'Organize', Icon: OrganizeIcon },
   { id: 'backup', name: 'Backup', Icon: BackupIcon },
 ];
 
 /** Library's collections, listed on a tablet under the tabs, with their names and icons. */
 export const COLLECTIONS: readonly { readonly id: Collection; readonly name: string; readonly Icon: (p: { size?: number }) => React.ReactElement }[] = [
-  { id: 'trips', name: 'Trips', Icon: PinIcon },
+  { id: 'trips', name: 'Trips', Icon: PlacesIcon },
   { id: 'fixes', name: 'Needs fixing', Icon: CalendarIcon },
-  { id: 'hidden', name: 'Hidden', Icon: LockIcon },
+  { id: 'hidden', name: 'Hidden', Icon: VaultIcon },
 ];
 
 interface Props {

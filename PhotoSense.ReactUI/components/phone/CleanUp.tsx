@@ -14,7 +14,7 @@ import { usePhone } from '../../lib/phone';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton, PhoneSwitch, StickyFooter } from './Controls';
-import { BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ImageIcon, ScreenshotIcon, VideoIcon } from './Icons';
+import { BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ScreenshotIcon, SimilarIcon, VideoIcon } from './Icons';
 import { BurstsScreen, CategoryGrid, FreeUpSpace, LargeVideosScreen } from './Categories';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
 import { usePlanGate } from './ProSheet';
@@ -242,7 +242,7 @@ function FreeRow() {
 const similarRow = (page: GroupsPageDto | undefined) => page && { count: page.removableCount, bytes: page.reclaimableBytes };
 
 const FIND_ICONS: Record<FindId, typeof CleanUpIcon> = {
-  largeVideos: VideoIcon, similar: ImageIcon, messaging: ChatIcon, duplicates: CleanUpIcon, bursts: BurstIcon, screenshots: ScreenshotIcon, blurry: BlurryIcon,
+  largeVideos: VideoIcon, similar: SimilarIcon, messaging: ChatIcon, duplicates: CleanUpIcon, bursts: BurstIcon, screenshots: ScreenshotIcon, blurry: BlurryIcon,
 };
 
 /**

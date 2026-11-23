@@ -9,7 +9,7 @@ import type { OrganizeFileDto, PhotoDto, TownDto, TripDto, TripsDto } from '../.
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, Radio, Segmented } from './Controls';
 import { CollectionTile } from './CollectionTile';
-import { HomeIcon, MapIcon, VideoIcon } from './Icons';
+import { HomeIcon, PlacesIcon, VideoIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { PhotoGrid } from './PhotoGrid';
 import { LayerScreen, PushedHeader, RootHeader, SplitView } from './Screens';
@@ -36,7 +36,7 @@ export function TripsTile({ trips, onOpen }: { readonly trips: TripsDto | undefi
   const count = tripsSaid(trips);
   return (
     <CollectionTile label="Trips" line={count} onOpen={onOpen}>
-      {latest ? <Cover photo={latest.cover} /> : <span className="text-t2"><MapIcon /></span>}
+      {latest ? <Cover photo={latest.cover} /> : <span className="text-t2"><PlacesIcon /></span>}
     </CollectionTile>
   );
 }
@@ -47,7 +47,7 @@ export function TripsCard({ trips, onOpen }: { readonly trips: TripsDto | undefi
   const line = latest ? `${tripsSaid(trips)} · ${latest.name} last` : tripsSaid(trips);
   return (
     <button type="button" onClick={onOpen} aria-label={`Trips, ${line}`} className="relative flex min-h-[150px] min-w-0 flex-1 overflow-hidden rounded-[20px] bg-fill text-left">
-      {latest ? <Cover photo={latest.cover} /> : <span className="absolute right-4 top-4 text-t2"><MapIcon /></span>}
+      {latest ? <Cover photo={latest.cover} /> : <span className="absolute right-4 top-4 text-t2"><PlacesIcon /></span>}
       <span className={`relative mt-auto flex w-full flex-col gap-0.5 px-4 pb-3.5 pt-10 ${latest ? 'bg-[linear-gradient(rgba(0,0,0,0),rgba(0,0,0,.72))] text-white' : ''}`}>
         <span className="text-[17px] font-semibold">Trips</span>
         <span className="text-[13px]">{line}</span>

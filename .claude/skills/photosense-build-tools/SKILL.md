@@ -13,7 +13,7 @@ description: Use before changing or relying on PhotoSense's build tools and rele
 | `tools/site.mjs` | Makes the web site from `site/pages/*.md`. It refuses without `supportEmail` and `governingLaw` in `product.json`. |
 | `product.json` | Who makes PhotoSense and how to reach them, built into `PhotoSense.Api` and shown by About. |
 | `site/pages/` | The privacy policy, terms and support page. About shows them; a `###` heading ending in `?` is a question in the accordion. |
-| `branding/app-icon.png` | The one copy of the icon. Every program links it; nothing copies it. |
+| `branding/app-icon.png` | The one copy of the icon. Every program links it; nothing copies it. `branding/` also holds its SVG source, the Windows `.ico` (`PhotoSense.Server`'s `ApplicationIcon`) and the brand's masters; its `README.md` says what is used where. |
 
 ## After adding or updating a package
 

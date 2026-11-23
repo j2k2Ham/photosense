@@ -11,7 +11,7 @@ import { downloadLine, usePhone } from '../../lib/phone';
 import type { FindingsDto, PlanKind, ScanProgressSnapshotDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { PhoneButton } from './Controls';
-import { BackupIcon, CheckIcon, CleanUpIcon, CloseIcon, DoneIcon, LibraryIcon, SendIcon } from './Icons';
+import { BackupIcon, CheckIcon, CleanUpIcon, CloseIcon, DoneIcon, LibraryIcon } from './Icons';
 import { boughtSaid, PlanCard } from './ProSheet';
 
 type Notify = (message: string, kind: ToastKind) => void;
@@ -194,7 +194,7 @@ const Lead = ({ children }: { readonly children: React.ReactNode }) => <p classN
 /** 01: what PhotoSense does, and Get started. */
 function Welcome({ onStart }: { onStart(): void }) {
   const perks: [typeof LibraryIcon, string][] = [
-    [CleanUpIcon, 'Find duplicates, screenshots and blurry shots'], [SendIcon, 'Back up to your own computer over Wi-Fi'], [CheckIcon, 'Delete only what is already backed up'],
+    [CleanUpIcon, 'Find duplicates, screenshots and blurry shots'], [BackupIcon, 'Back up to your own computer over Wi-Fi'], [CheckIcon, 'Delete only what is already backed up'],
   ];
   return (
     <Cover label="Welcome" step={0} foot={<PhoneButton onClick={onStart}>Get started</PhoneButton>}>

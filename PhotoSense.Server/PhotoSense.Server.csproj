@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <!-- Its version comes from version.json (Directory.Build.targets). -->
     <PhotoSensePart>server</PhotoSensePart>
+    <!-- The program's icon on Windows (16 to 256 pixels), drawn from branding/app-icon.svg. -->
+    <ApplicationIcon>..\branding\trovolve.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\PhotoSense.Api\PhotoSense.Api.csproj" />

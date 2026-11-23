@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The mark's three-layer drawing in one colour, as Android draws a notification's small icon from its shape alone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="72" android:viewportHeight="72">
+  <group android:translateX="-14" android:translateY="-15">
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.8" android:strokeLineJoin="round" android:pathData="M35,23L22.26,37.33L77.74,37.33L65,23Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.8" android:strokeLineJoin="round" android:pathData="M21.31,43.83L33,58.17L67,58.17L78.69,43.83Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.8" android:strokeLineJoin="round" android:pathData="M38.31,64.67L50,79L61.69,64.67Z" />
+  </group>
+</vector>

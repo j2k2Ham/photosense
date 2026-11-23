@@ -55,7 +55,8 @@ public sealed class AndroidNotifier(Context context) : INotifier
             Manager.CreateNotificationChannel(new NotificationChannel(Channel, "PhotoSense", NotificationImportance.Default) { Description = "Low storage, and the end of a free trial." });
         var number = Number(notice.Id);
         var open = Open(notice, number);
-        var icon = Icon.CreateWithResource(context, Resource.Mipmap.appicon);
+        // Android draws a notification's small icon from its shape alone, so the full-colour app icon would be a white square.
+        var icon = Icon.CreateWithResource(context, Resource.Drawable.notice_icon);
         var builder = new Notification.Builder(context, Channel).SetSmallIcon(icon).SetContentTitle(notice.Title).SetContentText(notice.Body).SetAutoCancel(true).SetContentIntent(open);
         if (notice.Id == Notices.LowStorage)
         {

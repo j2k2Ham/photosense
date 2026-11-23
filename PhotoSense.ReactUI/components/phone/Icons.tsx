@@ -1,4 +1,5 @@
 import React from 'react';
+import { FeatureIcon, type FeatureIconName } from '../FeatureIcons';
 
 interface IconProps {
   /** The width and height, in pixels. */
@@ -15,14 +16,35 @@ function Line({ size = 24, stroke = 1.9, children }: IconProps & { readonly chil
   );
 }
 
+/** One of the brand's feature icons, taking a size as the line icons do, so a list or bar can hold either. */
+const feature = (name: FeatureIconName) => function Feature({ size }: IconProps) {
+  return <FeatureIcon name={name} size={size} />;
+};
+
+/** The Library tab: the brand's Timeline, the library by month. */
+export const TimelineIcon = feature('timeline');
+
+/** Clean up, and its duplicates: the brand's Duplicates, two copies of one photo. */
+export const CleanUpIcon = feature('duplicates');
+
+/** Similar shots: the brand's Similar, three shots fanned. */
+export const SimilarIcon = feature('similar');
+
+/** The Organize tab: the brand's Organize, a folder. */
+export const OrganizeIcon = feature('organize');
+
+/** Backup: the brand's Backup, an arrow up from a drive. */
+export const BackupIcon = feature('backup');
+
+/** Trips: the brand's Places, a pin. */
+export const PlacesIcon = feature('places');
+
+/** The hidden vault: the brand's Vault, a padlock with the mark's gem. */
+export const VaultIcon = feature('vault');
+
 /** Library: a grid of four rounded squares. */
 export const LibraryIcon = (p: IconProps) => (
   <Line {...p}><rect x="3.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.6" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.6" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.6" /></Line>
-);
-
-/** Clean up: two rounded squares, one over the other. */
-export const CleanUpIcon = (p: IconProps) => (
-  <Line {...p}><rect x="8.5" y="8.5" width="12" height="12" rx="2.5" /><path d="M15.5 8.5V6a2.5 2.5 0 0 0-2.5-2.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5" /></Line>
 );
 
 /** Organize, and a folder anywhere: a folder. */
@@ -33,11 +55,6 @@ export const FolderIcon = (p: IconProps) => (
 /** Putting files in an album or folder: a folder with a plus. */
 export const AddToFolderIcon = (p: IconProps) => (
   <Line {...p}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /><path d="M12 11.5v5M9.5 14h5" /></Line>
-);
-
-/** Backup: a laptop with an arrow going up into it. */
-export const BackupIcon = (p: IconProps) => (
-  <Line {...p}><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5M2.5 18.5h19M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2" /></Line>
 );
 
 /** Send: a laptop with an arrow going up. */
@@ -141,9 +158,6 @@ export const SearchIcon = (p: IconProps) => <Line size={19} {...p}><circle cx="1
 
 /** A past search: a clock. */
 export const ClockIcon = (p: IconProps) => <Line size={18} {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Line>;
-
-/** The hidden vault: a padlock. */
-export const LockIcon = (p: IconProps) => <Line size={20} {...p}><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></Line>;
 
 /** A date: a calendar's page. */
 export const CalendarIcon = (p: IconProps) => <Line size={18} {...p}><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></Line>;

@@ -9,7 +9,7 @@ import type { OrganizeFileDto, VaultDto, VaultItemDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { CollectionTile } from './CollectionTile';
 import { PhoneButton, StickyFooter } from './Controls';
-import { LockIcon, VideoIcon } from './Icons';
+import { VaultIcon, VideoIcon } from './Icons';
 import { PhotoGrid } from './PhotoGrid';
 import { usePlanGate } from './ProSheet';
 import { LayerScreen, PushedHeader, useInPlace } from './Screens';
@@ -19,12 +19,12 @@ type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-/** 26: Library's Hidden tile, with a lock, and how many it holds, or "Pro" on the free plan before it is on. */
+/** 26: Library's Hidden tile, with the vault's padlock, and how many it holds, or "Pro" on the free plan before it is on. */
 export function HiddenTile({ vault, free, onOpen }: { readonly vault: VaultDto | undefined; readonly free: boolean; onOpen(): void }) {
   const line = hiddenTile(vault, free);
   return (
     <CollectionTile label="Hidden" line={line} tone="fill2" onOpen={onOpen}>
-      <LockIcon />
+      <VaultIcon />
     </CollectionTile>
   );
 }
@@ -33,7 +33,7 @@ export function HiddenTile({ vault, free, onOpen }: { readonly vault: VaultDto |
 function Closed({ title, line }: { readonly title: string; readonly line: string }) {
   return (
     <div className="flex flex-1 flex-col items-center gap-3 px-8 pt-16 text-center">
-      <span aria-hidden className="grid h-[72px] w-[72px] place-items-center rounded-full bg-fill2"><LockIcon size={28} /></span>
+      <span aria-hidden className="grid h-[72px] w-[72px] place-items-center rounded-full bg-fill2"><VaultIcon size={28} /></span>
       <h2 className="font-title text-[24px] font-bold">{title}</h2>
       <p className="max-w-[320px] text-[15px] leading-[1.45] text-t2">{line}</p>
     </div>

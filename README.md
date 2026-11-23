@@ -24,7 +24,7 @@ Beside them:
 |---|---|
 | `version.json` | Which kind of release comes next, and whether the programs share one version (see *Versions*) |
 | `product.json` | Who makes PhotoSense and how to reach them: the publisher, the copyright line, the support address, the web addresses, the law that governs the terms |
-| `branding/app-icon.png` | The icon, the one copy every program uses |
+| `branding/` | The brand: the icon (`app-icon.png`, the one copy every program uses), its vector source, the Windows icon, and the masters of the mark, feature icons and marketing pictures (see *The icon*) |
 | `site/pages/` | The privacy policy, the terms of use and the support page, which the About window shows and `tools/site.mjs` makes into the web site |
 | `notices/` | Each program's third-party notices, written by `tools/notices.mjs` |
 | `tools/` | What the build runs: `version.mjs`, `notices.mjs`, `site.mjs`, with their tests in `tools/tests` |
@@ -736,7 +736,14 @@ On an iPhone the version people see is the three numbers (`1.3.0`), and the buil
 
 ## The icon
 
-`branding/app-icon.png` (1024 by 1024, no transparency) is the only copy of the icon. The iPhone app takes it as Apple's single-size icon, from which Xcode makes every size; `PhotoSense.Api` builds it in and hands it out at `/about/icon`, which the page shows as its tab icon, in its header and under About. To change the icon, replace that file.
+`branding/app-icon.png` (1024 by 1024, no transparency) is the only copy of the icon, drawn from `branding/app-icon.svg`: the mark, five layers of teal forming one gem, on teal black. To change the icon, replace that file; each program links it, and none copies it.
+
+- **The page:** `PhotoSense.Api` builds it in and hands it out at `/about/icon`, which the page shows as its tab icon, in its header and under About, on Welcome, in Settings, on the Pro sheet and on the share cards.
+- **iPhone and iPad:** Apple's single-size icon, from which Xcode makes every size, with `branding/png/app-icons/ios/AppIcon-dark-1024.png`, the mark alone, for iOS 18's dark home screen.
+- **Android:** every supported version (8 and later) draws the adaptive icon (`Resources/mipmap-anydpi-v26/appicon.xml`: the mark in `drawable/appicon_foreground.xml` on teal black, and `appicon_monochrome.xml` for Android 13's themed icons), each launcher giving it its own shape; `mipmap/appicon.png` is linked from `branding/app-icon.png` behind it. A notification's small icon is the mark's three-layer drawing in one colour (`drawable/notice_icon.xml`), as Android draws it from its shape alone. The icon menu's Search photos, Start swipe and Back up now use the brand's feature icons (`drawable/shortcut_*.xml`).
+- **Windows:** `branding/trovolve.ico` (16 to 256 pixels) is `PhotoSense.Server`'s `ApplicationIcon`, shown on the program's file and in the taskbar.
+- **The feature icons:** `PhotoSense.ReactUI/components/FeatureIcons.tsx` draws the brand's twelve, in the text colour so they follow the theme. The phone and tablet layouts use them for the tabs (Library's Timeline, Clean up's Duplicates, Organize, Backup), the collections (Trips' Places, Hidden's Vault), Find's Duplicates and Similar shots, the Hidden tile and screen, the Trips tile with no trip yet, and Welcome's backup line. `components/TrovolveBrand.tsx` draws the mark, the wordmark and the launch animation.
+- **Kept for later, in `branding/`:** the macOS icon set and menu-bar template (for a Mac app bundle), the Windows tiles, the web favicons and PWA icons, the Play Store icon, the Android 12 splash icon, the feature icons as PNGs and Android vectors, the lockups, and the marketing pictures (web site, Google Play, Open Graph, social, launch screen). `branding/brand-kit.html` shows them all.
 
 ## Accessibility
 
