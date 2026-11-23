@@ -7,6 +7,8 @@ public interface IThumbnailStore
     Task SaveAsync(string contentHash, byte[] jpeg, CancellationToken ct);
     /// <summary>The preview of the file with this hash, or null when there is none.</summary>
     Task<byte[]?> GetAsync(string contentHash, CancellationToken ct);
+    /// <summary>Discards the previews of the files with these hashes, as of photos put in the hidden vault.</summary>
+    Task RemoveAsync(IReadOnlyCollection<string> contentHashes, CancellationToken ct);
     /// <summary>Discards every preview; they are made again by the next scan.</summary>
     Task ClearAsync(CancellationToken ct);
 }

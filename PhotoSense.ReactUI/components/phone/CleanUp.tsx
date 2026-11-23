@@ -1,26 +1,35 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { imageUrl, removeDuplicates, removePhoto, setKept, thumbnailUrl, undoChange } from '../../lib/apiClient';
+import { imageUrl, removeDuplicates, removeGroups, removePhoto, setKept, thumbnailUrl, useCategories, useGroups } from '../../lib/apiClient';
+import { amountOf, FIND_HUES, FIND_LABELS, findRows, freeable, percentFull, rowLine, type FindId, type FindRow } from '../../lib/categories';
+import { ofStorage } from '../../lib/backup';
 import { useBackLayer } from '../../lib/backStack';
 import {
-  allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, whereOf, type CleanUp, type DetailRow, type Question,
+  allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, someGroups, whereOf, type CleanUp, type DetailRow, type Question,
 } from '../../lib/cleanup';
-import { formatBytes, groupSummary, matchLabel } from '../../lib/format';
+import { limitLine } from '../../lib/plan';
+import { formatBytes, groupSummary, leaf, matchLabel } from '../../lib/format';
+import { whereIs, type Library } from '../../lib/library';
 import { usePhone } from '../../lib/phone';
-import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, ScanStatusDto } from '../../types';
+import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
-import { Chip, PhoneButton, Segmented, StickyFooter } from './Controls';
-import { ChevronBackIcon, ChevronIcon, CloseIcon } from './Icons';
+import { Chip, ListGroup, ListRow, PhoneButton, PhoneSwitch, StickyFooter } from './Controls';
+import { BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ImageIcon, ScreenshotIcon, VideoIcon } from './Icons';
+import { BurstsScreen, CategoryGrid, FreeUpSpace, LargeVideosScreen } from './Categories';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
+import { usePlanGate } from './ProSheet';
 import { ConfirmSheet } from './Sheet';
+import { SwipePanel } from './Swipe';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
-const KINDS: readonly { readonly id: GroupMode; readonly label: string }[] = [{ id: 'duplicates', label: 'Duplicates' }, { id: 'similar', label: 'Similar' }];
+/** What Find lists, by kind, as its rows and the lists they open name them. */
+const KINDS: Record<GroupMode, string> = { duplicates: 'Duplicates', similar: 'Similar shots' };
 
-/** What is waiting for a yes or no: one copy, or every duplicate. */
-type Asked = { readonly kind: 'copy'; readonly group: DuplicateGroupDto; readonly member: GroupMemberDto } | { readonly kind: 'all'; readonly count: number; readonly bytes: number };
+/** What is waiting for a yes or no: one copy, every duplicate, or the duplicates of some groups, as many as the free plan has left today. */
+type Asked = { readonly kind: 'copy'; readonly group: DuplicateGroupDto; readonly member: GroupMemberDto } | { readonly kind: 'all'; readonly count: number; readonly bytes: number }
+  | { readonly kind: 'some'; readonly keys: string[]; readonly count: number; readonly bytes: number };
 
 interface Props {
   readonly cleanUp: CleanUp;
@@ -29,20 +38,38 @@ interface Props {
   readonly status?: ScanStatusDto;
   notify: Notify;
   onScanAgain(): void;
+  /** How Swipe to clean stands today, once the service has said. */
+  readonly swipe?: SwipeStateDto;
+  /** The library, for the swipe card's pictures. */
+  readonly library: Library;
+  /** Opens swiping, or its summary. */
+  onSwipe(where: 'cards' | 'summary'): void;
+  /** Whether low-storage alerts are on, once the phone has said. */
+  readonly lowStorage?: boolean;
+  /** Turns low-storage alerts on or off; on asks the phone first. */
+  onLowStorage?(on: boolean): void;
 }
 
 /**
- * Clean up on a phone or tablet: what deleting the duplicates would free, the groups of duplicates or similar shots,
+ * Clean up on a phone or tablet. Its first screen (12): on the free plan the removals left today, Swipe to clean, and
+ * Find, whose Duplicates and Similar shots each open their list: what deleting the duplicates would free, the groups,
  * and a group's review, pushed over the list on a phone and beside it on a tablet, with the picture full screen to flip
  * between the original and its copy.
  */
-export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Props) {
-  const { tablet, words } = usePhone();
+export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain, swipe, library, onSwipe, lowStorage, onLowStorage }: Props) {
+  const { tablet, words, platform } = usePhone();
   const { mode, data, items, group, copy } = cleanUp;
   const [asked, setAsked] = useState<Asked>();
   const [comparing, setComparing] = useState<'original' | 'copy'>();
   const [busy, setBusy] = useState(false);
+  const gate = usePlanGate();
   const where = (p: PhotoDto) => whereOf(p, root, words);
+  // Each removal asks the plan first: a copy is one, Delete all as many as there are, or as many as are left today.
+  const askCopy = (group: DuplicateGroupDto, member: GroupMemberDto) => gate.remove(1, 'items', () => setAsked({ kind: 'copy', group, member }));
+  const askAll = () => gate.remove(removable, 'duplicates', allowed => {
+    if (allowed >= removable) setAsked({ kind: 'all', count: removable, bytes: data!.reclaimableBytes });
+    else setAsked({ kind: 'some', ...someGroups(items, allowed) });
+  });
   const removable = data?.removableCount ?? 0;
 
   // More groups are read as the end of those listed comes into view.
@@ -62,28 +89,21 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
     finally { setBusy(false); }
   }
 
-  const undo = (batchId: string, what: string, one: boolean) => act(async () => {
-    const result = await undoChange(batchId);
-    if (result.restored > 0) notify(`Put ${what} back where ${one ? 'it was' : 'they were'}.`, 'ok');
-    if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} could not be put back. ${result.problems[0] ?? ''}`.trim(), 'error');
-  });
-  const undoAction = (batchId: string | null | undefined, what: string, one: boolean): ToastAction | undefined =>
-    batchId ? { label: 'Undo', run: () => void undo(batchId, what, one) } : undefined;
-
   const deleteCopy = (from: DuplicateGroupDto, member: GroupMemberDto) => act(async () => {
     const result = await removePhoto(member.photo.id);
     setAsked(undefined);
     setComparing(undefined);
     // The copy after the one deleted takes its place: going through a group's copies does not start again from the first.
     cleanUp.chooseCopy(Math.max(0, Math.min(from.members.indexOf(member), from.members.length - 2)));
-    notify(copyGone(member.photo, from.keeper, result.companions, where), 'ok', undoAction(result.batchId, member.photo.fileName, true));
+    // Gone to the phone's own bin, which PhotoSense cannot take anything back from: there is no Undo (Jamie, 2026-11-20).
+    notify(copyGone(member.photo, from.keeper, result.companions, where, words.bin), 'ok');
   });
 
-  const deleteAll = () => act(async () => {
-    const result = await removeDuplicates(undefined, 'duplicates');
+  const deleteAll = (keys?: string[]) => act(async () => {
+    const result = keys ? await removeGroups(keys, 'duplicates') : await removeDuplicates(undefined, 'duplicates');
     setAsked(undefined);
     cleanUp.review(undefined);
-    if (result.removed > 0) notify(allGone(result.removed, result.companions), 'ok', undoAction(result.batchId, `the ${duplicates(result.removed)}`, false));
+    if (result.removed > 0) notify(allGone(result.removed, result.companions, result.stays, f => (root ? whereIs(f, root, words) : leaf(f)), `The ${result.removed === 1 ? 'copy waits' : 'copies wait'} in ${words.bin} for 30 days.`), 'ok');
     if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} left alone. ${result.problems[0] ?? ''}`.trim(), 'error');
   });
 
@@ -92,26 +112,30 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
     notify(keepSaid(photo, !photo.kept, mode), 'ok');
   });
 
-  const subtitle = mode === 'duplicates' ? 'Copies of the same photo or video' : 'Shots that look alike';
-  const list = (
+  const report = useCategories(true).data;
+  const similar = similarRow(useGroups('similar', '', 1, false).data);
+  const found = freeable(report);
+  const rows = findRows(report, similar, platform === 'android');
+  // T2: on a tablet a kind shows beside the first screen, the largest at first; the duplicates and similar shots keep
+  // their list and review, which take the whole screen.
+  const shown = tablet ? cleanUp.opened ?? rows.find(r => r.id !== 'duplicates' && r.id !== 'similar')?.id as typeof cleanUp.opened : cleanUp.opened;
+  const kind = shown && kindScreen(shown, notify, tablet ? undefined : cleanUp.close);
+  const home = (
     <>
-      <RootHeader title="Clean up" subtitle={subtitle} noGear={tablet} />
+      <RootHeader title="Clean up" subtitle={found > 0 ? `${formatBytes(found)} can be freed` : 'Daily swipes, duplicates and similar shots'} />
       <div className="flex flex-col gap-4 px-4 pb-4">
-        {mode === 'duplicates' && removable > 0 && (
-          <section aria-label="Duplicates to delete" className="flex flex-col gap-1.5 rounded-cell bg-cell p-[18px]">
-            <h2 className="text-[26px] font-bold tabular-nums">{duplicates(removable)}</h2>
-            <p className="text-[15px] leading-[1.4] text-t2">{removable === 1 ? 'It takes' : 'They take'} {formatBytes(data!.reclaimableBytes)}. The best copy of each picture or video is kept.</p>
-            <PhoneButton kind="danger" disabled={busy} className="mt-3" onClick={() => setAsked({ kind: 'all', count: removable, bytes: data!.reclaimableBytes })}>Delete all duplicates</PhoneButton>
-          </section>
+        {report?.storageTotal != null && report.storageFree != null && (
+          <Storage found={found} total={report.storageTotal} free={report.storageFree} onOpen={() => cleanUp.open('free')} />
         )}
-        <Segmented label="Show" options={KINDS} value={mode} onChange={cleanUp.turnTo} />
-        {items.length > 0 && <GroupRows groups={items} mode={mode} selected={tablet ? group?.key : undefined} onOpen={cleanUp.review} />}
-        {data && items.length === 0 && (
-          <p className="px-1 py-6 text-[15px] leading-[1.45] text-t2">
-            {mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.removed} until you delete it permanently.` : 'No similar shots left to review.'}
-          </p>
+        <FreeRow />
+        <SwipePanel state={swipe} library={library} onOpen={onSwipe} />
+        <Find unmeasured={report?.unmeasured ?? 0} rows={rows} current={tablet ? shown : undefined}
+          onOpen={id => (id === 'duplicates' || id === 'similar' ? cleanUp.openList(id) : cleanUp.open(id))} />
+        {lowStorage !== undefined && (
+          <ListGroup header="Alerts">
+            <PhoneSwitch inList label="Low-storage alerts" detail="When less than 10% is free, at most once a week" on={lowStorage} onChange={on => onLowStorage?.(on)} />
+          </ListGroup>
         )}
-        <div ref={end} />
         {status?.completed && (
           <div className="flex flex-col items-start gap-1 px-1">
             <p className="text-[14px] text-t2">{scannedLine(status.totalPhotos, status.completed, new Date())}</p>
@@ -122,39 +146,144 @@ export function CleanUpScreen({ cleanUp, root, status, notify, onScanAgain }: Pr
     </>
   );
 
+  const subtitle = mode === 'duplicates' ? 'Copies of the same photo or video' : 'Shots that look alike';
+  const list = (
+    <>
+      <PushedHeader title={KINDS[mode]} subtitle={subtitle} onBack={cleanUp.closeList} />
+      <div className="flex flex-col gap-4 px-4 pb-4">
+        {mode === 'duplicates' && removable > 0 && (
+          <section aria-label="Duplicates to delete" className="flex flex-col gap-1.5 rounded-cell bg-cell p-[18px]">
+            <h2 className="text-[26px] font-bold tabular-nums">{duplicates(removable)}</h2>
+            <p className="text-[15px] leading-[1.4] text-t2">{removable === 1 ? 'It takes' : 'They take'} {formatBytes(data!.reclaimableBytes)}. The best copy of each picture or video is kept.</p>
+            <PhoneButton kind="danger" disabled={busy} className="mt-3" onClick={askAll}>Delete all duplicates</PhoneButton>
+          </section>
+        )}
+        {items.length > 0 && <GroupRows groups={items} mode={mode} selected={tablet ? group?.key : undefined} onOpen={cleanUp.review} />}
+        {data && items.length === 0 && (
+          <p className="px-1 py-6 text-[15px] leading-[1.45] text-t2">
+            {mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.bin} for 30 days.` : 'No similar shots left to review.'}
+          </p>
+        )}
+        <div ref={end} />
+      </div>
+    </>
+  );
+
   const member = group?.members[copy];
   const review = group && member && (
     <Review group={group} member={member} index={copy} mode={mode} root={root} busy={busy} onBack={tablet ? undefined : () => cleanUp.review(undefined)}
-      onCopy={cleanUp.chooseCopy} onCompare={setComparing} onDelete={() => setAsked({ kind: 'copy', group, member })} onKeep={() => void toggleKeep(member.photo)} />
+      onCopy={cleanUp.chooseCopy} onCompare={setComparing} onDelete={() => askCopy(group, member)} onKeep={() => void toggleKeep(member.photo)} />
   );
-  const question: Question | undefined = asked?.kind === 'copy' ? copyQuestion(asked.member.photo, asked.group.keeper, where, words)
-    : asked && allQuestion(asked.count, asked.bytes, words);
+  const asking: Question | undefined = asked?.kind === 'copy' ? copyQuestion(asked.member.photo, asked.group.keeper, where, words)
+    : asked && allQuestion(asked.count, asked.bytes, words, asked.kind === 'some');
+  // The free plan's removals left today are said beside every number before a removal.
+  const limit = limitLine(gate.plan);
+  const question = asking && limit ? { ...asking, lines: [...asking.lines, limit] } : asking;
 
   return (
     <>
-      {tablet ? (
+      {tablet && !cleanUp.listing ? (
         <Screen label="Clean up" fixed>
-          <SplitView list={list} detail={review ?? (
-            <>
-              <PushedHeader title="Clean up" gear />
-              {data && <p className="px-6 py-16 text-center text-[15px] leading-[1.45] text-t2">{mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.removed} until you delete it permanently.` : 'No similar shots left to review.'}</p>}
-            </>
-          )} />
+          <SplitView narrow list={home} detail={kind && <section aria-label={labelOf(shown!)} className="flex min-h-full flex-col">{kind}</section>} />
         </Screen>
-      ) : review ? <PushedScreen label="Review">{review}</PushedScreen> : <Screen label="Clean up">{list}</Screen>}
+      ) : cleanUp.opened ? <PushedScreen label={labelOf(cleanUp.opened)}>{kind}</PushedScreen>
+      : !cleanUp.listing ? <Screen label="Clean up">{home}</Screen>
+        : tablet ? (
+          <Screen label="Clean up" fixed>
+            <SplitView list={list} detail={review ?? (
+              <>
+                <PushedHeader title={KINDS[mode]} gear />
+                {data && <p className="px-6 py-16 text-center text-[15px] leading-[1.45] text-t2">{mode === 'duplicates' ? `No duplicates left. What you deleted waits in ${words.bin} for 30 days.` : 'No similar shots left to review.'}</p>}
+              </>
+            )} />
+          </Screen>
+        ) : review ? <PushedScreen label="Review">{review}</PushedScreen> : <PushedScreen label={KINDS[mode]}>{list}</PushedScreen>}
       {/* Drawn over the whole page, tabs and all: inside the tab they would be under the shell's bars. */}
       {createPortal(<>
         {comparing && group && member && (
           <Compare group={group} member={member} index={copy} mode={mode} side={comparing} root={root} busy={busy} onSide={setComparing} onClose={() => setComparing(undefined)}
             onStep={by => { cleanUp.chooseCopy((copy + by + group.members.length) % group.members.length); setComparing('copy'); }}
-            onDelete={() => setAsked({ kind: 'copy', group, member })} />
+            onDelete={() => askCopy(group, member)} />
         )}
         {question && (
           <ConfirmSheet title={question.title} lines={question.lines} confirmLabel={question.button} busy={busy} onCancel={() => setAsked(undefined)}
-            onConfirm={() => void (asked!.kind === 'copy' ? deleteCopy(asked!.group, asked!.member) : deleteAll())} />
+            onConfirm={() => void (asked!.kind === 'copy' ? deleteCopy(asked!.group, asked!.member) : deleteAll(asked!.kind === 'some' ? asked!.keys : undefined))} />
         )}
       </>, document.body)}
     </>
+  );
+}
+
+/** What a kind of Clean up, or Free up space, is called. */
+const labelOf = (what: Exclude<FindId, 'duplicates' | 'similar'> | 'free') => (what === 'free' ? 'Free up space' : FIND_LABELS[what]);
+
+/** The screen of a kind of Clean up, or Free up space: with a way back on a phone, beside the list on a tablet. */
+function kindScreen(what: Exclude<FindId, 'duplicates' | 'similar'> | 'free', notify: Notify, onBack?: () => void) {
+  if (what === 'free') return <FreeUpSpace notify={notify} onBack={onBack} />;
+  if (what === 'bursts') return <BurstsScreen notify={notify} onBack={onBack} />;
+  if (what === 'largeVideos') return <LargeVideosScreen notify={notify} onBack={onBack} />;
+  return <CategoryGrid key={what} category={what} title={FIND_LABELS[what]} notify={notify} onBack={onBack} />;
+}
+
+/** On the free plan, how many removals are left today, with Get Pro; nothing on Pro, or before the plan is known. */
+function FreeRow() {
+  const gate = usePlanGate();
+  const plan = gate.plan;
+  if (plan?.leftToday == null) return null;
+  return (
+    <div className="flex items-center gap-3 rounded-cell bg-cell py-2 pl-4 pr-2">
+      <p className="min-w-0 flex-1 text-[14px] text-t2">{plan.leftToday.toLocaleString()} of {plan.removalsPerDay.toLocaleString()} free removals left today</p>
+      <button type="button" onClick={() => gate.offer('none')} className="h-8 shrink-0 rounded-full bg-acc-soft px-3.5 text-[14px] font-semibold text-on-acc-soft">Get Pro</button>
+    </div>
+  );
+}
+
+/** The similar shots as one of Find's rows: how many could go, and what they take. */
+const similarRow = (page: GroupsPageDto | undefined) => page && { count: page.removableCount, bytes: page.reclaimableBytes };
+
+const FIND_ICONS: Record<FindId, typeof CleanUpIcon> = {
+  largeVideos: VideoIcon, similar: ImageIcon, messaging: ChatIcon, duplicates: CleanUpIcon, bursts: BurstIcon, screenshots: ScreenshotIcon, blurry: BlurryIcon,
+};
+
+/**
+ * Find: every category of Clean up and the similar shots, largest first, each with what there is to delete and what it
+ * takes. On an iPhone each has a coloured tile; Android shows the icon alone.
+ */
+function Find({ rows, unmeasured, current, onOpen }: { readonly rows: readonly FindRow[]; readonly unmeasured: number; /** The kind beside the list, on a tablet. */ readonly current?: FindId | 'free'; onOpen(id: FindId): void }) {
+  const { ios } = usePhone();
+  return (
+    <ListGroup header="Find">
+      {rows.map(row => {
+        const Icon = FIND_ICONS[row.id];
+        return (
+          <ListRow key={row.id} chevron current={row.id === current} onClick={() => onOpen(row.id)}>
+            <span className="flex items-center gap-3">
+              {ios
+                ? <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] text-white" style={{ background: `oklch(0.62 0.13 ${FIND_HUES[row.id]})` }}><Icon size={19} /></span>
+                : <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center text-t2"><Icon size={22} /></span>}
+              <span className="min-w-0">
+                <span className="block text-[16px] font-semibold">{FIND_LABELS[row.id]}</span>
+                <span className="block text-[13.5px] text-t2">{rowLine(row, unmeasured)}</span>
+              </span>
+            </span>
+          </ListRow>
+        );
+      })}
+    </ListGroup>
+  );
+}
+
+/** The phone's storage as a bar: what Clean up found, and the rest used. Tapping it opens Free up space. */
+function Storage({ found, total, free, onOpen }: { readonly found: number; readonly total: number; readonly free: number; onOpen(): void }) {
+  const used = total - free;
+  return (
+    <button type="button" onClick={onOpen} aria-label={`Storage ${percentFull(total, free)}% full. Free up space`} className="flex flex-col gap-1.5 text-left">
+      <span aria-hidden className="flex h-2 w-full overflow-hidden rounded-full bg-fill">
+        <span className="bg-acc" style={{ width: `${(Math.min(found, used) / total) * 100}%` }} />
+        <span className="bg-t3" style={{ width: `${(Math.max(0, used - found) / total) * 100}%` }} />
+      </span>
+      <span className="flex justify-between text-[12.5px] text-t2"><span>{amountOf(found)} found</span><span>{ofStorage(used, total)} used</span></span>
+    </button>
   );
 }
 

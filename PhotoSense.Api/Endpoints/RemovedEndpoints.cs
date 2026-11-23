@@ -25,7 +25,7 @@ internal sealed class RemovedEndpoints
         var resp = req.CreateResponse();
         await resp.WriteAsJsonAsync(new RemovedFilesDto
         {
-            Folders = folders.Select(f => new RemovedFolderDto { Path = f.Path, Files = f.Files, Bytes = f.Bytes }).ToList(),
+            Folders = folders.Select(f => new RemovedFolderDto { Path = f.Path, Files = f.Files, Bytes = f.Bytes, Recyclable = f.Recyclable }).ToList(),
             Files = folders.Sum(f => f.Files), Bytes = folders.Sum(f => f.Bytes),
         }, ct);
         return resp;
@@ -44,7 +44,7 @@ internal sealed class RemovedEndpoints
         {
             if (request?.Folders is null) throw new ArgumentException("The request could not be read.");
             var result = await _removed.EraseAsync(request.Folders, ct);
-            await resp.WriteAsJsonAsync(new EraseRemovedDto { Erased = result.Erased, Bytes = result.Bytes, Skipped = result.Skipped, Problems = result.Problems.ToList() }, ct);
+            await resp.WriteAsJsonAsync(new EraseRemovedDto { Erased = result.Erased, Recycled = result.Recycled, Bytes = result.Bytes, Skipped = result.Skipped, Problems = result.Problems.ToList() }, ct);
         }
         catch (ArgumentException ex)
         {

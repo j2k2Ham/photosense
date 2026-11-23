@@ -17,7 +17,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// name wherever it goes, and is never copied: the library holds one of it.
 /// </para>
 /// </summary>
-public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IFavoritePhotos, IPhotoKinds, IVideoCompressor, ISharingCopies, IPhotoDetails, IPhotoImport
 {
     /// <summary>What the album of removed pictures is called in the phone's own Photos app.</summary>
     public const string RemovedAlbum = "PhotoSense Removed";
@@ -100,6 +100,52 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
     }
 
     /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FavoritesAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlySet<string>>(Look().Files.Where(f => f.Value.Item.Favorite).Select(f => f.Key).ToHashSet(PhotoPath.Comparer));
+    }
+
+    /// <inheritdoc />
+    public void SetFavorite(string path, bool favorite)
+    {
+        var shown = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer in the library.");
+        try { _library.SetFavorite(shown.Item.Id, favorite); }
+        // What the library holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public void ChangeAll(IReadOnlyList<DetailsChange> changes)
+    {
+        // A Live Photo's picture and video are one item in Photos, changed once.
+        var items = changes.Select(c => (Shown: Find(c.Path) ?? throw new IOException($"{Path.GetFileName(c.Path)} is no longer in the library."), Change: c))
+            .GroupBy(c => c.Shown.Item.Id).Select(g => (g.Key, g.First().Change.Taken, g.First().Change.Place)).ToList();
+        try { _library.ChangeDetails(items); }
+        // What the library holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public string? IdOf(string path) => Find(path)?.Item.Id;
+
+    /// <inheritdoc />
+    public bool CanChangePlace(string path) => Find(path) is not null;
+
+    /// <inheritdoc />
+    public Task<SharedCopy> CopyForSharingAsync(string path, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var shown = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer in the library.");
+        return _library.CopyForSharingAsync(shown.Item.Id, shown.File.Kind, removeLocation, removeCamera, ct);
+    }
+
+    /// <inheritdoc />
+    public bool IsScreenshot(string path) => Look().Files.TryGetValue(path, out var file) && file.Item.Screenshot;
+
+    /// <inheritdoc />
+    public string? BurstOf(string path) => Look().Files.TryGetValue(path, out var file) ? file.Item.BurstId : null;
+
+    /// <inheritdoc />
     public void Move(string from, string to) => MoveAll([new FileMove(from, to)]);
 
     /// <inheritdoc />
@@ -162,6 +208,35 @@ public sealed class PhotoLibraryFileSystem : IPhotoFileSystem, IPhotoChangesToge
         // A picture gone since its folder was read has nothing left to erase.
         change.Delete.AddRange(paths.Select(p => seen.Files.GetValueOrDefault(p)?.Item.Id).OfType<string>().Distinct());
         Apply(change);
+    }
+
+    /// <inheritdoc />
+    public async Task<long> CompressAsync(string path, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        if (Find(path) is not { File.Kind: LibraryFileKind.Video } video) throw new IOException($"{Path.GetFileName(path)} is not a video in the library.");
+        try { return await _library.CompressAsync(video.Item.Id, target, progress, ct); }
+        // The copy is a new item: the library is read afresh.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>It goes in the album it was in, when PhotoSense made that album and it is there still; otherwise at the top of the library.</remarks>
+    public async Task<IReadOnlyList<string>> ImportAsync(string folder, IReadOnlyList<ImportedFile> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        var album = Look().Albums.GetValueOrDefault(Path.TrimEndingDirectorySeparator(folder));
+        // The first is the picture or the video; a second is a Live Photo's moving part.
+        var kinds = files.Select((f, i) => (i > 0 ? LibraryFileKind.PairedVideo : MediaFiles.IsVideo(f.Name) ? LibraryFileKind.Video : LibraryFileKind.Photo, f.Name, f.Content)).ToList();
+        string id;
+        try { id = await _library.ImportAsync(kinds, taken, place, ct); }
+        // The library has a new item: it is read afresh.
+        finally { _seen = null; }
+        if (album is not null)
+        {
+            var change = new LibraryChange();
+            change.Add.Add((id, album));
+            Apply(change);
+        }
+        return [.. Look().Files.Where(f => f.Value.Item.Id == id).Select(f => f.Key)];
     }
 
     /// <summary>

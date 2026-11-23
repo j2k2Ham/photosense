@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using PhotoSense.Domain.Configuration;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Infrastructure;
 
 namespace PhotoSense.Tests;
@@ -31,6 +32,28 @@ internal static class Stores
     public static IOrganizeBatchStore Batches(this LiteDatabase db) => On(db).GetRequiredService<IOrganizeBatchStore>();
     /// <summary>The devices paired with this one, each stamped from <paramref name="time"/>.</summary>
     public static IPairingStore Pairings(this LiteDatabase db, TimeProvider time) => On(db, time).GetRequiredService<IPairingStore>();
+    /// <summary>Each day's count of removals, and the plan a paired phone shared.</summary>
+    public static IPlanStore Plan(this LiteDatabase db) => On(db).GetRequiredService<IPlanStore>();
+
+    /// <summary>The phones backing up to a computer, kept in <paramref name="db"/>.</summary>
+    public static IBackupStore Backups(this LiteDatabase db) => On(db).GetRequiredService<IBackupStore>();
+
+    /// <summary>A phone's own record of its backups, kept in <paramref name="db"/>.</summary>
+    public static IBackupLedger Ledger(this LiteDatabase db) => On(db).GetRequiredService<IBackupLedger>();
+    /// <summary>Swipe to clean's record on a phone, kept in <paramref name="db"/>.</summary>
+    public static ISwipeStore Swipes(this LiteDatabase db) => On(db).GetRequiredService<ISwipeStore>();
+
+    /// <summary>A phone's notification settings, kept in <paramref name="db"/>.</summary>
+    public static INoticeStore Notices(this LiteDatabase db) => On(db).GetRequiredService<INoticeStore>();
+
+    /// <summary>The fixes made to a phone's dates and places, kept in <paramref name="db"/>.</summary>
+    public static IDetailsFixStore Fixes(this LiteDatabase db) => On(db).GetRequiredService<IDetailsFixStore>();
+
+    /// <summary>The home chosen for Trips, kept in <paramref name="db"/>.</summary>
+    public static ITripStore TripHome(this LiteDatabase db) => On(db).GetRequiredService<ITripStore>();
+
+    /// <summary>A phone's backup locations and what each holds, on this database.</summary>
+    public static ILocationStore Locations(this LiteDatabase db) => On(db).GetRequiredService<ILocationStore>();
     /// <summary>What has been read from each file for Organize.</summary>
     public static IMediaDetailsStore MediaDetails(this LiteDatabase db) => On(db).GetRequiredService<IMediaDetailsStore>();
 }

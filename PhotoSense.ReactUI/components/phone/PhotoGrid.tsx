@@ -11,6 +11,8 @@ export interface GridItem {
   readonly thumbnail?: string;
   /** How long a video plays, as shown on it ("0:42"); absent for a picture. */
   readonly duration?: string;
+  /** It is on the computer, checked: a small tick at its foot says so. */
+  readonly backedUp?: boolean;
 }
 
 interface GridProps {
@@ -22,14 +24,13 @@ interface GridProps {
 }
 
 /**
- * Pictures and videos as square tiles, edge to edge with 2 px between: three across on a phone; on an iPad six, or
- * eight with its sidebar hidden; eight on an Android tablet. While choosing, each has a circle, filled when chosen.
+ * Pictures and videos as square tiles, edge to edge with 2 px between: three across on a phone; on a tablet eight, its
+ * corners rounded, inside the margins. While choosing, each has a circle, filled when chosen.
  */
 export function PhotoGrid({ items, selecting, selected, onTap }: GridProps) {
-  const { ios, tablet, sidebarHidden } = usePhone();
-  const columns = !tablet ? 'grid-cols-3' : ios && !sidebarHidden ? 'grid-cols-6' : 'grid-cols-8';
+  const { ios, tablet } = usePhone();
   return (
-    <ul className={`grid gap-[2px] ${columns}`}>
+    <ul className={`grid gap-[2px] ${tablet ? 'mx-4 grid-cols-8 overflow-hidden rounded-[14px]' : 'grid-cols-3'}`}>
       {items.map(item => {
         const on = !!selected?.has(item.id);
         // Android draws a chosen tile smaller, its corners round; an iPhone only fills its circle.
@@ -41,6 +42,9 @@ export function PhotoGrid({ items, selecting, selected, onTap }: GridProps) {
               {item.thumbnail
                 ? <img src={item.thumbnail} alt="" loading="lazy" className={`absolute object-cover transition-all duration-150 ${shrunk}`} />
                 : <span aria-hidden className={`absolute grid place-items-center bg-[#1c2124] transition-all duration-150 ${shrunk}`}><span className="ml-1 h-0 w-0 border-y-[9px] border-l-[14px] border-y-transparent border-l-white" /></span>}
+              {item.backedUp && (
+                <span role="img" aria-label="On the computer" className="absolute bottom-1.5 left-1.5 grid h-[18px] w-[18px] place-items-center rounded-full bg-black/[.52] text-white"><TickIcon size={11} /></span>
+              )}
               {item.duration && <span className="absolute bottom-1 right-1.5 text-[12px] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,.6)]">{item.duration}</span>}
               {selecting && (
                 <span aria-hidden className={`absolute grid h-6 w-6 place-items-center rounded-full border-[1.5px] border-white ${on ? 'bg-acc' : 'bg-black/20'} ${ios ? 'bottom-1.5 right-1.5' : 'left-1.5 top-1.5'}`}>

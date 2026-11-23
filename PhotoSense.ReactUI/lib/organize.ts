@@ -145,6 +145,22 @@ export function relativeFolder(root: string, folder: string): string {
   return sameFolder(folder.slice(0, base.length), base) && (next === '\\' || next === '/') ? folder.slice(base.length + 1) : folder;
 }
 
+/**
+ * A folder named from the scanned folder it is in, as a phone names one from its library: "Photos › Butte", or "Photos"
+ * for the scanned folder itself (Jamie, 2026-11-20). One in none of the scanned folders is named in full.
+ * @param roots The scanned folders, those not known left out.
+ */
+export function fromScanned(folder: string, roots: readonly (string | undefined)[]): string {
+  for (const root of roots) {
+    if (!root) continue;
+    const name = root.replace(/[\\/]+$/, '').split(/[\\/]/).at(-1)!;
+    const inside = relativeFolder(root, folder);
+    if (inside === 'Top level') return name;
+    if (inside !== folder) return [name, ...inside.split(/[\\/]/)].join(' › ');
+  }
+  return folder;
+}
+
 /** Everything about a file that the search box looks through. */
 export function searchText(f: OrganizeFileDto, places: readonly OrganizePlaceDto[]): string {
   const p = f.place == null ? undefined : places[f.place];

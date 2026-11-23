@@ -35,6 +35,11 @@ export const AddToFolderIcon = (p: IconProps) => (
   <Line {...p}><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /><path d="M12 11.5v5M9.5 14h5" /></Line>
 );
 
+/** Backup: a laptop with an arrow going up into it. */
+export const BackupIcon = (p: IconProps) => (
+  <Line {...p}><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5M2.5 18.5h19M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2" /></Line>
+);
+
 /** Send: a laptop with an arrow going up. */
 export const SendIcon = (p: IconProps) => (
   <Line {...p}><path d="M5 15.5V7a1.5 1.5 0 0 1 1.5-1.5h11A1.5 1.5 0 0 1 19 7v8.5" /><path d="M2.5 18.5h19" /><path d="M12 13V8.5M9.8 10.7 12 8.5l2.2 2.2" /></Line>
@@ -65,6 +70,9 @@ export const ChevronIcon = (p: IconProps) => <Line size={14} stroke={2.2} {...p}
 /** Close, or stop selecting: a cross. */
 export const CloseIcon = (p: IconProps) => <Line size={22} stroke={2} {...p}><path d="M6 6l12 12M18 6 6 18" /></Line>;
 
+/** Undo: an arrow turning back on itself. */
+export const UndoIcon = (p: IconProps) => <Line size={22} stroke={2} {...p}><path d="M9 14 4.5 9.5 9 5" /><path d="M4.5 9.5H14a5.5 5.5 0 0 1 0 11h-3" /></Line>;
+
 /** Hiding or showing an iPad's sidebar: a window with a column. */
 export const SidebarIcon = (p: IconProps) => <Line size={22} stroke={1.8} {...p}><rect x="3" y="4.5" width="18" height="15" rx="3" /><path d="M9 4.5v15" /></Line>;
 
@@ -86,6 +94,9 @@ export const TickIcon = ({ size = 14 }: IconProps) => (
   <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 );
 
+/** A check in the colour of the text around it, for what a plan includes. */
+export const CheckIcon = (p: IconProps) => <Line size={16} stroke={2.4} {...p}><path d="M5 12.5l4.5 4.5L19 7.5" /></Line>;
+
 /** Options: three sliders. */
 export const SlidersIcon = (p: IconProps) => (
   <Line size={18} stroke={1.9} {...p}><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></Line>
@@ -106,3 +117,47 @@ export const LaptopIcon = (p: IconProps) => (
 export const WifiIcon = (p: IconProps) => (
   <Line size={22} stroke={1.9} {...p}><path d="M2.5 9a14 14 0 0 1 19 0M5.5 12.5a9.5 9.5 0 0 1 13 0M8.6 16a5 5 0 0 1 6.8 0" /><path d="M12 19.5h.01" strokeWidth={3} /></Line>
 );
+
+/** Large videos: a film camera. */
+export const VideoIcon = (p: IconProps) => <Line {...p}><rect x="3" y="6.5" width="12.5" height="11" rx="2.5" /><path d="m15.5 10.5 5-3v9l-5-3" /></Line>;
+
+/** Bursts: three frames, one behind another. */
+export const BurstIcon = (p: IconProps) => <Line {...p}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M5.5 16V6.5a1 1 0 0 1 1-1H16" /><path d="M3 13.5V4a1 1 0 0 1 1-1h9.5" /></Line>;
+
+/** Screenshots: a phone's screen. */
+export const ScreenshotIcon = (p: IconProps) => <Line {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></Line>;
+
+/** Blurry: a picture's outline, doubled as if shaken. */
+export const BlurryIcon = (p: IconProps) => <Line {...p}><circle cx="10.5" cy="12" r="6" /><path d="M16.5 7.5a6 6 0 0 1 0 9" opacity=".6" /><path d="M19 9a6 6 0 0 1 0 6" opacity=".35" /></Line>;
+
+/** Messaging apps: a speech bubble. */
+export const ChatIcon = (p: IconProps) => <Line {...p}><path d="M4 11.5a7.5 7 0 1 1 3.5 6l-3.5 1 1-3.2A6.8 6.8 0 0 1 4 11.5z" /></Line>;
+
+/** Share: an arrow rising out of a tray. */
+export const ShareIcon = (p: IconProps) => <Line size={20} stroke={2} {...p}><path d="M12 3.5v11M7.5 8 12 3.5 16.5 8" /><path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></Line>;
+
+/** Search: a magnifying glass. */
+export const SearchIcon = (p: IconProps) => <Line size={19} {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Line>;
+
+/** A past search: a clock. */
+export const ClockIcon = (p: IconProps) => <Line size={18} {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Line>;
+
+/** The hidden vault: a padlock. */
+export const LockIcon = (p: IconProps) => <Line size={20} {...p}><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></Line>;
+
+/** A date: a calendar's page. */
+export const CalendarIcon = (p: IconProps) => <Line size={18} {...p}><rect x="4" y="5.5" width="16" height="14.5" rx="2.5" /><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4" /></Line>;
+
+/** Favorite: a heart, filled once it is one. */
+export const HeartIcon = ({ filled, ...p }: IconProps & { readonly filled?: boolean }) => (
+  <Line size={22} {...p}><path fill={filled ? 'currentColor' : 'none'} d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z" /></Line>
+);
+
+/** Info: an i in a circle. */
+export const InfoIcon = (p: IconProps) => <Line size={22} {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5M12 7.6v.1" /></Line>;
+
+/** A trip: a pin on a map. */
+export const PinIcon = (p: IconProps) => <Line size={20} {...p}><path d="M12 21s-6.5-5.6-6.5-11A6.5 6.5 0 0 1 18.5 10c0 5.4-6.5 11-6.5 11z" /><circle cx="12" cy="10" r="2.3" /></Line>;
+
+/** Home, on the travel map. */
+export const HomeIcon = (p: IconProps) => <Line size={14} stroke={2.2} {...p}><path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1z" /></Line>;

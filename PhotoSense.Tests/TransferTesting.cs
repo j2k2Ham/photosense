@@ -12,8 +12,20 @@ internal sealed class MemoryPairs(string self) : IPairingStore
     /// <summary>The pairings kept.</summary>
     public IReadOnlyCollection<PairedDevice> Paired => _paired.Values;
 
+    private string? _name;
+
     /// <inheritdoc />
     public Task<string> SelfIdAsync(CancellationToken ct) => Task.FromResult(self);
+
+    /// <inheritdoc />
+    public Task<string?> SelfNameAsync(CancellationToken ct) => Task.FromResult(_name);
+
+    /// <inheritdoc />
+    public Task SaveSelfNameAsync(string name, CancellationToken ct)
+    {
+        _name = name;
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc />
     public Task<PairedDevice?> GetAsync(string id, CancellationToken ct) => Task.FromResult(_paired.GetValueOrDefault(id));

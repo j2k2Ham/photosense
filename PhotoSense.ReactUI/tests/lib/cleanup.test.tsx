@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  allGone, allQuestion, copyGone, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, useCleanUp, whereOf,
+  allGone, allQuestion, copyGone, originalsStay, copyQuestion, detailRows, duplicates, keepSaid, matchNote, scannedLine, useCleanUp, whereOf,
 } from '../../lib/cleanup';
 import { WORDS } from '../../lib/phone';
 import type { DuplicateGroupDto, GroupMode } from '../../types';
@@ -74,7 +74,7 @@ describe('what Clean up says on a phone', () => {
     const keeper = photo('IMG_4299.JPG'), copy = photo('IMG_4299.HEIC');
     expect(copyQuestion(copy, keeper, where, ios)).toEqual({
       title: 'Delete IMG_4299.HEIC?',
-      lines: ['IMG_4299.JPG stays, in Photo Library.', 'IMG_4299.HEIC, in Photo Library, goes to PhotoSense Removed, where Undo can still bring it back.'],
+      lines: ['IMG_4299.JPG stays, in Photo Library.', 'IMG_4299.HEIC, in Photo Library, goes to Recently Deleted for 30 days.'],
       button: 'Delete IMG_4299.HEIC',
     });
   });
@@ -82,18 +82,30 @@ describe('what Clean up says on a phone', () => {
   it('asks before every duplicate goes, with what they take', () => {
     expect(allQuestion(264, 795 * 1024 ** 2, android)).toEqual({
       title: 'Delete all duplicates?',
-      lines: ['264 copies go to Pictures/PhotoSense Removed (795.0 MB).', 'The best copy of each picture or video stays. Copies marked keep are skipped.', 'Similar shots are not included.'],
+      lines: ['264 copies go to the bin (795.0 MB) for 30 days.', 'The best copy of each picture or video stays. Copies marked keep are skipped.', 'Similar shots are not included.'],
       button: 'Delete 264 duplicates',
     });
-    expect(allQuestion(1, 1024, ios).lines[0]).toBe('1 copy goes to PhotoSense Removed (1 KB).');
+    expect(allQuestion(1, 1024, ios).lines[0]).toBe('1 copy goes to Recently Deleted (1 KB) for 30 days.');
     expect(allQuestion(1, 1024, ios).button).toBe('Delete 1 duplicate');
   });
 
   it('says what went and what stays; two files of one name by where each is', () => {
-    expect(copyGone(photo('IMG_4299.HEIC'), photo('IMG_4299.JPG'), 0, where)).toBe('IMG_4299.HEIC deleted. IMG_4299.JPG stays.');
-    expect(copyGone(photo('IMG_1.JPG', { folder: `${ROOT}/Butte` }), photo('img_1.jpg'), 1, where))
-      .toBe('IMG_1.JPG and 1 linked file, in Photo Library › Butte, deleted. The one in Photo Library stays.');
-    expect([allGone(264, 0), allGone(1, 2)]).toEqual(['264 duplicates deleted. The best copy of each stays.', '1 duplicate and 2 linked files deleted. The best copy of each stays.']);
+    expect(copyGone(photo('IMG_4299.HEIC'), photo('IMG_4299.JPG'), 0, where, 'Recently Deleted'))
+      .toBe('IMG_4299.HEIC deleted. IMG_4299.JPG stays. The copy waits in Recently Deleted for 30 days.');
+    expect(copyGone(photo('IMG_1.JPG', { folder: `${ROOT}/Butte` }), photo('img_1.jpg'), 1, where, 'the bin'))
+      .toBe('IMG_1.JPG and 1 linked file, in Photo Library › Butte, deleted. The one in Photo Library stays. The copy waits in the bin for 30 days.');
+  });
+
+  it('says how many copies went, naming an original that stays and where it is, then where the copies wait', () => {
+    const folder = (f: string) => `[${f}]`;
+    const waits = 'The copies wait in Recently Deleted for 30 days.';
+    expect(allGone(264, 0, [`${ROOT}/IMG_4821.HEIC`, `${ROOT}/Butte/IMG_1.JPG`], folder, waits))
+      .toBe(`Deleted 264 copies. The originals stay, such as IMG_4821.HEIC in [${ROOT}]. ${waits}`);
+    expect(allGone(1, 2, ['C:\\Photos\\IMG_1.JPG'], folder, 'The copy waits in the bin for 30 days.'))
+      .toBe('Deleted 1 copy and 2 linked files. The original stays: IMG_1.JPG in [C:\\Photos]. The copy waits in the bin for 30 days.');
+    // None known, as when only records of files already gone were let go.
+    expect(allGone(3, 0, [], folder, waits)).toBe(`Deleted 3 copies. The best copy of each stays. ${waits}`);
+    expect(originalsStay([], folder)).toBe('');
   });
 
   it('says when a copy is marked keep, and what that means for each kind', () => {
@@ -134,8 +146,12 @@ describe('Clean up\'s state on a phone or tablet', () => {
     expect(result.current.group).toBeUndefined();
   });
 
-  it('on a tablet shows the first group, and when the one shown goes, the one that took its place', () => {
+  it('opens a list from Find, and on a tablet shows its first group, and when the one shown goes, the one that took its place', () => {
     const { result, rerender } = renderHook(() => useCleanUp(true));
+    // Clean up's first screen shows until a list is opened from Find.
+    expect([result.current.listing, result.current.group]).toEqual([false, undefined]);
+    act(() => result.current.openList('duplicates'));
+    expect(result.current.listing).toBe(true);
     expect(result.current.group?.keeper.fileName).toBe('A.JPG');
     act(() => result.current.review('group-B.JPG'));
     groups.duplicates = groups.duplicates.filter(g => g.key !== 'group-B.JPG');
@@ -148,6 +164,7 @@ describe('Clean up\'s state on a phone or tablet', () => {
 
   it('keeps the copy chosen within its group, and starts each review and each kind from the first', () => {
     const { result, rerender } = renderHook(() => useCleanUp(true));
+    act(() => result.current.openList('duplicates'));
     act(() => result.current.chooseCopy(1));
     expect(result.current.copy).toBe(1);
     groups.duplicates[0] = group(photo('A.JPG'), [photo('A.HEIC')]);
@@ -156,14 +173,18 @@ describe('Clean up\'s state on a phone or tablet', () => {
     act(() => result.current.chooseCopy(1));
     act(() => result.current.review('group-C.JPG'));
     expect(result.current.copy).toBe(0);
-    act(() => result.current.turnTo('similar'));
+    act(() => result.current.openList('similar'));
     expect([result.current.mode, result.current.group?.keeper.fileName, result.current.copy]).toEqual(['similar', 'S.JPG', 0]);
+    // Going back to the first screen lets the group go.
+    act(() => result.current.chooseCopy(1));
+    act(() => result.current.closeList());
+    expect([result.current.listing, result.current.group, result.current.copy]).toEqual([false, undefined, 0]);
   });
 
   it('shows none of the other kind\'s groups while the kind turned to is being read', () => {
     reading = 'similar';
     const { result } = renderHook(() => useCleanUp(true));
-    act(() => result.current.turnTo('similar'));
+    act(() => result.current.openList('similar'));
     expect([result.current.data, result.current.items, result.current.group, result.current.more]).toEqual([undefined, [], undefined, false]);
   });
 

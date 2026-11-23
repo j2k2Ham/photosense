@@ -31,6 +31,15 @@ public sealed class FileSystemThumbnailStore : IThumbnailStore
     }
 
     /// <inheritdoc />
+    public Task RemoveAsync(IReadOnlyCollection<string> contentHashes, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        // A preview never made has nothing to discard.
+        foreach (var path in contentHashes.Select(PathFor).Where(File.Exists)) File.Delete(path);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task ClearAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

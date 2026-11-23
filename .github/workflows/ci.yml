@@ -12,6 +12,10 @@ permissions:
   contents: read
 
 jobs:
+  dependency-review:
+    # Every run fails on a package it brings in under the GPL, LGPL or AGPL, or with a known vulnerability.
+    uses: ./.github/workflows/dependency-review.yml
+
   build-test:
     runs-on: ubuntu-latest
     steps:
@@ -50,6 +54,25 @@ jobs:
       - name: Install React UI deps
         working-directory: PhotoSense.ReactUI
         run: npm ci
+
+      # The phone apps cannot be restored on Linux, so the packages only they use are fetched as they are, for their notices:
+      # the iPhone app's as its project names them, the Android app's as its packages.lock.json lists them, theirs among them.
+      - name: Fetch the phone apps' own packages
+        run: |
+          {
+            grep -o '<PackageReference Include="[^"]*" Version="[^"]*"' PhotoSense.iOS/PhotoSense.iOS.csproj | sed -E 's/.*Include="([^"]+)" Version="([^"]+)"/\1 \2/'
+            jq -r '.dependencies | to_entries[] | select(.key | contains("/") | not) | .value | to_entries[] | select(.value.type != "Project") | "\(.key) \(.value.resolved)"' PhotoSense.Android/packages.lock.json
+          } | sort -u |
+            while read -r id version; do
+              lower=$(echo "$id" | tr '[:upper:]' '[:lower:]')
+              folder="$HOME/.nuget/packages/$lower/$version"
+              [ -f "$folder/$lower.nuspec" ] && continue
+              mkdir -p "$folder"
+              curl -sSfL --retry 3 "https://api.nuget.org/v3-flatcontainer/$lower/$version/$lower.$version.nupkg" -o "$RUNNER_TEMP/package.nupkg"
+              unzip -qo "$RUNNER_TEMP/package.nupkg" -d "$folder"
+              # NuGet keeps the package's description under its id in lower case, which the notices read.
+              for nuspec in "$folder"/*.nuspec; do [ "$nuspec" = "$folder/$lower.nuspec" ] || mv "$nuspec" "$folder/$lower.nuspec"; done
+            done
 
       - name: Test the build tools, and that the third-party notices are up to date (fails below 100% coverage)
         run: >-

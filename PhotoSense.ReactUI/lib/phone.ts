@@ -7,7 +7,13 @@ export type Platform = 'ios' | 'android';
 export type Form = 'phone' | 'tablet';
 
 /** The four tabs, in their order. */
-export type TabId = 'library' | 'cleanup' | 'organize' | 'send';
+export type TabId = 'library' | 'cleanup' | 'organize' | 'backup';
+
+/** Library's collections, which a tablet lists in its sidebar or rail beside the tabs. */
+export type Collection = 'trips' | 'fixes' | 'hidden';
+
+/** What a tablet shows beside its sidebar or rail in place of a tab: one of Library's collections, or Settings. */
+export type Place = Collection | 'settings';
 
 /** What stands at a phone's foot: the tab bar, the bar of what can be done with a selection, or nothing (a pushed screen). */
 export type Foot = 'tabs' | 'selection' | 'none';
@@ -53,12 +59,16 @@ export interface Words {
   readonly bin: string;
   /** What the selection bar offers for putting files somewhere. */
   readonly put: string;
+  /** Where plans are bought. */
+  readonly store: string;
+  /** The account a purchase belongs to. */
+  readonly account: string;
 }
 
 /** Each platform's words. */
 export const WORDS: Record<Platform, Words> = {
-  ios: { album: 'album', Album: 'Album', albums: 'albums', library: 'Photo Library', separator: ' › ', removed: 'PhotoSense Removed', bin: 'Recently Deleted', put: 'Add to album' },
-  android: { album: 'folder', Album: 'Folder', albums: 'folders', library: 'Phone', separator: '/', removed: 'Pictures/PhotoSense Removed', bin: 'the bin', put: 'Move to folder' },
+  ios: { album: 'album', Album: 'Album', albums: 'albums', library: 'Photo Library', separator: ' › ', removed: 'PhotoSense Removed', bin: 'Recently Deleted', put: 'Add to album', store: 'App Store', account: 'Apple Account' },
+  android: { album: 'folder', Album: 'Folder', albums: 'folders', library: 'Phone', separator: '/', removed: 'Pictures/PhotoSense Removed', bin: 'the bin', put: 'Move to folder', store: 'Google Play', account: 'Google account' },
 };
 
 /** Where the page is: the platform, the form, and their words; and how the shell around the screen stands. */
@@ -74,11 +84,26 @@ export interface PhoneFrame {
   readonly foot: Foot;
   /** Opens Settings, from the gear of any screen. */
   openSettings(): void;
+  /** What a tablet shows in place of a tab, if anything. */
+  readonly place?: Place;
+  /** Where on a tablet a collection is drawn in place of the tab, once there is one to show. */
+  readonly placeSlot: HTMLElement | null;
 }
 
 /** What the person is holding, as the page names it: "phone", "iPad", or an Android "tablet". */
 export function deviceName(platform: Platform, tablet: boolean): string {
   return !tablet ? 'phone' : platform === 'ios' ? 'iPad' : 'tablet';
+}
+
+/**
+ * Where to get PhotoSense for Mac and PC, wherever a phone points to it: the web site's address once it has one
+ * (product.json's downloadUrl, Jamie, 2026-11-20), and until then that it is coming.
+ */
+export const downloadLine = (url: string | null | undefined) => (url ? `Get PhotoSense for Mac or PC at ${url}.` : 'PhotoSense for Mac and PC is coming soon.');
+
+/** What the person is holding, as the growth screens name it: "iPhone" or "iPad", or an Android "phone" or "tablet". */
+export function deviceWord(platform: Platform, tablet: boolean): string {
+  return platform === 'ios' ? (tablet ? 'iPad' : 'iPhone') : deviceName(platform, tablet);
 }
 
 /** The frame a phone's screens are drawn in, given by the shell. */

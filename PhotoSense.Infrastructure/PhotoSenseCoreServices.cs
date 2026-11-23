@@ -40,6 +40,14 @@ public static class PhotoSenseCoreServices
         s.AddSingleton<IScanHistory>(sp => new LiteDbScanHistory(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IOrganizeBatchStore>(sp => new LiteDbOrganizeBatchStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IPairingStore>(sp => new LiteDbPairingStore(sp.GetRequiredService<LiteDatabase>(), sp.GetRequiredService<TimeProvider>()));
+        s.AddSingleton<IPlanStore>(sp => new LiteDbPlanStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IBackupStore>(sp => new LiteDbBackupStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<ISwipeStore>(sp => new LiteDbSwipeStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<INoticeStore>(sp => new LiteDbNoticeStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IBackupLedger>(sp => new LiteDbBackupLedger(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<ITripStore>(sp => new LiteDbTripStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<ILocationStore>(sp => new LiteDbLocationStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IDetailsFixStore>(sp => new LiteDbDetailsFixStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IThumbnailStore>(sp =>
             new FileSystemThumbnailStore(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()));

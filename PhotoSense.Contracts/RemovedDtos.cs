@@ -11,6 +11,8 @@ public sealed class RemovedFolderDto
     [JsonPropertyName("files")] public int Files { get; init; }
     /// <summary>How much they take up.</summary>
     [JsonPropertyName("bytes")] public long Bytes { get; init; }
+    /// <summary>Its files go to a bin they can be got back from; otherwise, on a drive with none, they are erased for good.</summary>
+    [JsonPropertyName("recyclable")] public bool Recyclable { get; init; }
 }
 
 /// <summary>Everything that has been removed and not yet erased.</summary>
@@ -31,11 +33,13 @@ public sealed class EraseRemovedRequest
     [JsonPropertyName("folders")] public List<string?> Folders { get; init; } = [];
 }
 
-/// <summary>What erasing did.</summary>
+/// <summary>What emptying the folders of removed files did.</summary>
 public sealed class EraseRemovedDto
 {
-    /// <summary>Files erased for good.</summary>
+    /// <summary>Files that went: to a bin, or erased for good where there was none.</summary>
     [JsonPropertyName("erased")] public int Erased { get; init; }
+    /// <summary>Of those, the files that went to a bin they can be got back from: the Recycle Bin, the Trash, or a phone's own.</summary>
+    [JsonPropertyName("recycled")] public int Recycled { get; init; }
     /// <summary>How much they took up.</summary>
     [JsonPropertyName("bytes")] public long Bytes { get; init; }
     /// <summary>Files that could not be erased and are still there.</summary>

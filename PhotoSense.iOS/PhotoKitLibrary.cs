@@ -1,6 +1,11 @@
 using System.Runtime.InteropServices;
+using AVFoundation;
+using CoreLocation;
+using ImageIO;
 using ObjCRuntime;
 using Photos;
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
 using PhotoSense.Infrastructure.Library;
 
 namespace PhotoSense.iOS;
@@ -30,7 +35,8 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
             foreach (var resource in PHAssetResource.GetAssetResources(asset))
                 if (KindOf(resource.ResourceType) is { } kind) files.Add(new LibraryFile(kind, resource.OriginalFilename, SizeOf(resource)));
             var created = asset.CreationDate is { } taken ? (DateTime)taken : DateTime.UnixEpoch;
-            items.Add(new LibraryItem(asset.LocalIdentifier, created, asset.ModificationDate is { } changed ? (DateTime)changed : created, files));
+            items.Add(new LibraryItem(asset.LocalIdentifier, created, asset.ModificationDate is { } changed ? (DateTime)changed : created, files, asset.Favorite,
+                asset.MediaSubtypes.HasFlag(PHAssetMediaSubtype.Screenshot), string.IsNullOrEmpty(asset.BurstIdentifier) ? null : asset.BurstIdentifier));
         }
         return items;
     }
@@ -151,6 +157,255 @@ public sealed class PhotoKitLibrary(string dataFolder) : IPhotoLibrary
         if (!done)
             throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense make this change to your photos." : $"The photo library did not make the change: {error?.LocalizedDescription}");
         if (made.Count > 0) File.AppendAllLines(_made, made);
+    }
+
+    /// <summary>
+    /// Writes a smaller copy of a video as HEVC with AVFoundation, fetched from iCloud first when it is kept there, and
+    /// keeps it as a new item with the original's date, place and favorite mark. The original is left as it is. iOS's
+    /// export picks its own bitrate for the frame size chosen; at the smallest size it writes H.264, as iOS has no HEVC
+    /// preset of that size.
+    /// </summary>
+    public async Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        var found = PHAsset.FetchAssetsUsingLocalIdentifiers([id], null);
+        if (found.Count == 0 || found[0] is not PHAsset original || original.MediaType != PHAssetMediaType.Video)
+            throw new IOException("The video is no longer in the photo library.");
+        var video = await VideoAsync(original, ct);
+        var file = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".mov");
+        try
+        {
+            using var export = new AVAssetExportSession(video, PresetFor(original, target))
+            {
+                OutputUrl = NSUrl.FromFilename(file), OutputFileType = AVFileTypes.QuickTimeMovie.GetConstant()!, ShouldOptimizeForNetworkUse = false,
+            };
+            using (ct.Register(export.CancelExport))
+            {
+                var exporting = export.ExportTaskAsync();
+                while (!exporting.IsCompleted)
+                {
+                    await Task.WhenAny(exporting, Task.Delay(500, CancellationToken.None));
+                    progress.Report(export.Progress);
+                }
+                await exporting;
+            }
+            ct.ThrowIfCancellationRequested();
+            if (export.Status != AVAssetExportSessionStatus.Completed)
+                throw new IOException($"The phone could not compress the video: {export.Error?.LocalizedDescription}");
+            var bytes = new FileInfo(file).Length;
+            await KeepAsync(original, file);
+            return bytes;
+        }
+        // The exported file is the app's own: nothing of it stays.
+        finally { File.Delete(file); }
+    }
+
+    // The video as iOS plays it, edits and all, fetched from iCloud when it is kept there.
+    private static async Task<AVAsset> VideoAsync(PHAsset original, CancellationToken ct)
+    {
+        var got = new TaskCompletionSource<AVAsset>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var options = new PHVideoRequestOptions { NetworkAccessAllowed = true, DeliveryMode = PHVideoRequestOptionsDeliveryMode.HighQualityFormat };
+        var request = PHImageManager.DefaultManager.RequestAVAsset(original, options, (asset, _, _) =>
+        {
+            if (asset is null) got.TrySetException(new IOException("The video could not be fetched from iCloud. Check the phone's connection and try again."));
+            else got.TrySetResult(asset);
+        });
+        await using (ct.Register(() =>
+        {
+            PHImageManager.DefaultManager.CancelImageRequest(request);
+            got.TrySetCanceled(ct);
+        }))
+            return await got.Task;
+    }
+
+    // iOS's presets by frame: the original's own size, 1080 lines as HEVC, or 720 lines.
+    private static AVAssetExportSessionPreset PresetFor(PHAsset original, VideoTarget target)
+    {
+        var shortSide = Math.Min(target.Width, target.Height);
+        if (shortSide >= Math.Min((int)original.PixelWidth, (int)original.PixelHeight)) return AVAssetExportSessionPreset.HevcHighestQuality;
+        return shortSide <= 720 ? AVAssetExportSessionPreset.Preset1280x720 : AVAssetExportSessionPreset.Hevc1920x1080;
+    }
+
+    /// <summary>
+    /// Puts a picture or video back in Photos as a new item, its files together, dated and placed as given. The
+    /// files are written to the app's own temporary folder for Photos to take, and deleted after.
+    /// </summary>
+    public async Task<string> ImportAsync(IReadOnlyList<(LibraryFileKind Kind, string FileName, Stream Content)> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "unhidden", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        try
+        {
+            var written = new List<(LibraryFileKind Kind, string File)>();
+            foreach (var (kind, name, content) in files)
+            {
+                var file = Path.Combine(folder, Path.GetFileName(name));
+                await using (var output = File.Create(file)) await content.CopyToAsync(output, ct);
+                written.Add((kind, file));
+            }
+            ct.ThrowIfCancellationRequested();
+            var made = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+            string? id = null;
+            PHPhotoLibrary.SharedPhotoLibrary.PerformChanges(() =>
+            {
+                var request = PHAssetCreationRequest.CreationRequestForAsset();
+                foreach (var (kind, file) in written)
+                    request.AddResource(kind switch { LibraryFileKind.Photo => PHAssetResourceType.Photo, LibraryFileKind.Video => PHAssetResourceType.Video, _ => PHAssetResourceType.PairedVideo },
+                        NSUrl.FromFilename(file), new PHAssetResourceCreationOptions { OriginalFilename = Path.GetFileName(file) });
+                if (taken is { } when) request.CreationDate = (NSDate)DateTime.SpecifyKind(when, DateTimeKind.Local);
+                if (place is { Latitude: { } lat, Longitude: { } lon }) request.Location = new CLLocation(lat, lon);
+                id = request.PlaceholderForCreatedAsset?.LocalIdentifier;
+            }, (done, error) =>
+            {
+                if (done && id is not null) made.TrySetResult(id);
+                else made.TrySetException(new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense put it back in Photos." : $"Photos would not take it back: {error?.LocalizedDescription}"));
+            });
+            return await made.Task;
+        }
+        // Whatever happened, the files written for Photos to take do not stay.
+        finally { Directory.Delete(folder, recursive: true); }
+    }
+
+    // The copy, as a new item of the library with the original's date, place and favorite mark.
+    private static Task KeepAsync(PHAsset original, string file)
+    {
+        var kept = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        PHPhotoLibrary.SharedPhotoLibrary.PerformChanges(() =>
+        {
+            var copy = PHAssetCreationRequest.CreationRequestForAsset();
+            copy.AddResource(PHAssetResourceType.Video, NSUrl.FromFilename(file), null);
+            copy.CreationDate = original.CreationDate;
+            copy.Location = original.Location;
+            copy.Favorite = original.Favorite;
+        }, (done, error) =>
+        {
+            if (done) kept.TrySetResult();
+            else kept.TrySetException(new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense add the smaller copy." : $"The photo library would not keep the smaller copy: {error?.LocalizedDescription}"));
+        });
+        return kept.Task;
+    }
+
+    /// <summary>Marks a picture or video a favorite in Photos, or takes the mark away.</summary>
+    public void SetFavorite(string id, bool favorite)
+    {
+        var asset = AssetOf(id);
+        var done = PHPhotoLibrary.SharedPhotoLibrary.PerformChangesAndWait(() => PHAssetChangeRequest.ChangeRequest(asset).Favorite = favorite, out var error);
+        if (!done)
+            throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense change this photo." : $"The photo library did not change it: {error?.LocalizedDescription}");
+    }
+
+    /// <summary>
+    /// Gives pictures and videos the dates and places asked, all together, after iOS asks. Photos keeps them with each
+    /// item; the files are left as they are.
+    /// </summary>
+    public void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes)
+    {
+        var assets = changes.Select(c => (Asset: AssetOf(c.Id), c.Taken, c.Place)).ToList();
+        var done = PHPhotoLibrary.SharedPhotoLibrary.PerformChangesAndWait(() =>
+        {
+            foreach (var (asset, taken, place) in assets)
+            {
+                var request = PHAssetChangeRequest.ChangeRequest(asset);
+                // The date is as the clock showed it where it was taken; Photos keeps a moment, read in this phone's own zone.
+                if (taken is { } when) request.CreationDate = (NSDate)DateTime.SpecifyKind(when, DateTimeKind.Local);
+                if (place is not null) request.Location = place.Latitude is { } lat && place.Longitude is { } lon ? new CLLocation(lat, lon) : null;
+            }
+        }, out var error);
+        if (!done)
+            throw new IOException(error?.Code == SaidNo ? "You chose not to let PhotoSense change these photos." : $"The photo library did not change them: {error?.LocalizedDescription}");
+    }
+
+    /// <summary>
+    /// A copy of a picture or video as Photos shows it, edits and all, in the app's temporary folder, without where it
+    /// was taken and the camera's details as asked. A picture keeps its format and is not encoded again; a video is
+    /// re-written as it is, not encoded again. The copy shared before is deleted first.
+    /// </summary>
+    public async Task<SharedCopy> CopyForSharingAsync(string id, LibraryFileKind kind, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var asset = AssetOf(id);
+        var name = PHAssetResource.GetAssetResources(asset).FirstOrDefault(r => KindOf(r.ResourceType) == kind)?.OriginalFilename ?? "Photo";
+        var folder = Path.Combine(Path.GetTempPath(), "shared");
+        if (Directory.Exists(folder)) Directory.Delete(folder, true);
+        Directory.CreateDirectory(folder);
+        return kind == LibraryFileKind.Photo
+            ? await PictureCopyAsync(asset, Path.Combine(folder, Path.GetFileNameWithoutExtension(name)), removeLocation, removeCamera, ct)
+            : await VideoCopyAsync(asset, Path.Combine(folder, Path.GetFileNameWithoutExtension(name) + ".mov"), removeLocation, removeCamera, ct);
+    }
+
+    // The picture's own bytes written again with its details less those asked, by ImageIO, which copies the image
+    // itself as it is.
+    private static async Task<SharedCopy> PictureCopyAsync(PHAsset asset, string named, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var (data, type) = await PictureAsync(asset, ct);
+        using var source = CGImageSource.FromData(data) ?? throw new IOException("The picture could not be read.");
+        type = source.TypeIdentifier ?? type;
+        var file = named + ExtensionOf(type);
+        var details = source.CopyMetadata(0, (NSDictionary?)null) is { } read ? new CGMutableImageMetadata(read) : new CGMutableImageMetadata();
+        foreach (var tag in details.GetTags() ?? Array.Empty<CGImageMetadataTag>())
+            if ($"{tag.Prefix}:{tag.Name}" is var path && (removeLocation && SharingDetails.IsPlace(path) || removeCamera && SharingDetails.IsCamera(path)))
+                details.RemoveTag(null, new NSString(path));
+        using var destination = CGImageDestination.Create(NSUrl.FromFilename(file), type, 1) ?? throw new IOException("The copy could not be made.");
+        var options = new CGCopyImageSourceOptions { Metadata = details, NullableMergeMetadata = false, NullableShouldExcludeGps = removeLocation };
+        if (!destination.CopyImageSource(source, options, out var error))
+            throw new IOException($"The copy could not be made: {error?.LocalizedDescription}");
+        return new SharedCopy(file, MimeOf(type));
+    }
+
+    // The picture as Photos shows it, with its kind, fetched from iCloud when it is kept there.
+    private static async Task<(NSData Data, string Type)> PictureAsync(PHAsset asset, CancellationToken ct)
+    {
+        var got = new TaskCompletionSource<(NSData, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var options = new PHImageRequestOptions { NetworkAccessAllowed = true, Version = PHImageRequestOptionsVersion.Current, DeliveryMode = PHImageRequestOptionsDeliveryMode.HighQualityFormat };
+        var request = PHImageManager.DefaultManager.RequestImageDataAndOrientation(asset, options, (data, type, _, _) =>
+        {
+            if (data is null) got.TrySetException(new IOException("The picture could not be fetched from iCloud. Check the phone's connection and try again."));
+            else got.TrySetResult((data, type ?? "public.jpeg"));
+        });
+        await using (ct.Register(() =>
+        {
+            PHImageManager.DefaultManager.CancelImageRequest(request);
+            got.TrySetCanceled(ct);
+        }))
+            return await got.Task;
+    }
+
+    // The video as iOS plays it, written again as it is, with its details less those asked.
+    private static async Task<SharedCopy> VideoCopyAsync(PHAsset asset, string file, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var video = await VideoAsync(asset, ct);
+        using var export = new AVAssetExportSession(video, AVAssetExportSessionPreset.Passthrough)
+        {
+            OutputUrl = NSUrl.FromFilename(file), OutputFileType = AVFileTypes.QuickTimeMovie.GetConstant()!,
+            Metadata = [.. video.Metadata.Where(m => m.MetadataIdentifier?.ToString() is not { } said || !(removeLocation && SharingDetails.IsPlace(said) || removeCamera && SharingDetails.IsCamera(said)))],
+        };
+        using (ct.Register(export.CancelExport)) await export.ExportTaskAsync();
+        ct.ThrowIfCancellationRequested();
+        if (export.Status != AVAssetExportSessionStatus.Completed)
+            throw new IOException($"The copy could not be made: {export.Error?.LocalizedDescription}");
+        return new SharedCopy(file, "video/quicktime");
+    }
+
+    private static string ExtensionOf(string type) => type switch
+    {
+        "public.heic" => ".HEIC",
+        "public.png" => ".PNG",
+        "public.tiff" => ".TIF",
+        "com.compuserve.gif" => ".GIF",
+        _ => ".JPG",
+    };
+
+    private static string MimeOf(string type) => type switch
+    {
+        "public.heic" => "image/heic",
+        "public.png" => "image/png",
+        "public.tiff" => "image/tiff",
+        "com.compuserve.gif" => "image/gif",
+        _ => "image/jpeg",
+    };
+
+    private static PHAsset AssetOf(string id)
+    {
+        var found = PHAsset.FetchAssetsUsingLocalIdentifiers([id], null);
+        return found.Count > 0 && found[0] is PHAsset asset ? asset : throw new IOException("The picture or video is no longer in the photo library.");
     }
 
     [DllImport(Constants.ObjectiveCLibrary, EntryPoint = "objc_msgSend")]

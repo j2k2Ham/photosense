@@ -15,6 +15,8 @@ internal sealed class InMemoryThumbnailStore : IThumbnailStore
     public Task<byte[]?> GetAsync(string contentHash, CancellationToken ct) => Task.FromResult(Saved.GetValueOrDefault(contentHash));
     /// <inheritdoc />
     public Task ClearAsync(CancellationToken ct) { Saved.Clear(); return Task.CompletedTask; }
+    /// <inheritdoc />
+    public Task RemoveAsync(IReadOnlyCollection<string> contentHashes, CancellationToken ct) { foreach (var hash in contentHashes) Saved.TryRemove(hash, out _); return Task.CompletedTask; }
 }
 
 /// <summary>File-system helpers shared by tests.</summary>

@@ -22,6 +22,23 @@ async function undoLatest(page: Page) {
 }
 
 test.describe('Organize: suggested folders', () => {
+  // Moving a suggestion is part of Pro, which this computer would have from a paired phone that bought it: stood in
+  // for, as no phone pairs here, by sending each suggestion as a move of the person's own. One test leaves it out.
+  test.beforeEach(async ({ page }, info) => {
+    if (info.title.startsWith('on the free plan')) return;
+    await page.route(url => url.pathname.endsWith('/api/organize/apply'), route => route.continue({ postData: JSON.stringify({ ...route.request().postDataJSON(), suggested: false }) }));
+  });
+
+  test('on the free plan, a suggested folder is previewed but not moved: moving one is part of Pro, which a phone brings', async ({ page, photos }) => {
+    trip(photos);
+    await openOrganize(page, photos.root);
+    await suggestions(page).getByRole('button', { name: 'Preview Butte' }).click();
+    await preview(page).getByRole('button', { name: 'Move 2 files' }).click();
+    await expect(message(page, 'Organizing by place and date is part of Pro. Pro bought on your phone covers this computer too.')).toBeVisible();
+    expect(photos.exists('Trips/IMG_0001.JPG')).toBe(true);
+    expect(photos.exists('Trips/Butte')).toBe(false);
+  });
+
   test('pictures are suggested folders by where they were taken, split by year, and those with no place are set apart', async ({ page, photos }) => {
     trip(photos);
     await openOrganize(page, photos.root);

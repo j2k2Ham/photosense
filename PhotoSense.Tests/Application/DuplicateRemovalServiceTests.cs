@@ -8,6 +8,7 @@ using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
 using PhotoSense.Application.Removal;
 using PhotoSense.Infrastructure.Persistence;
+using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests.Application;
 
@@ -22,7 +23,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
 
     public DuplicateRemovalServiceTests()
     {
-        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk);
+        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk, TestPlans.Unlimited());
         _service = Service(new CompanionFileFinder(_disk, (_, _) => Task.FromResult<string?>(null)));
     }
 
@@ -70,6 +71,42 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
         await Assert.That(File.Exists(Held(Path.Combine("backup", "IMG_1 (1).jpg")))).IsTrue();
         await Assert.That(await _repo.GetAsync(copy.Id, ct)).IsNull();
         await Assert.That(await _repo.GetAsync(keeper.Id, ct)).IsNotNull();
+    }
+
+    [Test]
+    public async Task Removes_The_Photos_Chosen_Together_Whatever_Their_Copies_And_Leaves_Or_Forgets_What_Changed_Or_Went(CancellationToken ct)
+    {
+        var chosen = await AddAsync("IMG_1.jpg", "AAAA", ct);
+        // The last of its picture: chosen by the person, it goes all the same.
+        var only = await AddAsync(Path.Combine("Trips", "IMG_2.jpg"), "BBBB", ct);
+        var changed = await AddAsync("IMG_3.jpg", "CCCC", ct);
+        await File.WriteAllTextAsync(changed.SourcePath, "edited since the scan", ct);
+        var gone = await AddAsync("IMG_4.jpg", "DDDD", ct);
+        File.Delete(gone.SourcePath);
+        var stays = await AddAsync("IMG_5.jpg", "EEEE", ct);
+
+        var result = await _service.RemovePhotosAsync([chosen.Id, only.Id, changed.Id, gone.Id, new PhotoId(Guid.NewGuid())], ct);
+
+        await Assert.That((result.Removed, result.Skipped, result.BatchId is not null)).IsEqualTo((3, 1, true));
+        await Assert.That(result.Problems.Single()).StartsWith("Changed since the scan");
+        await Assert.That((File.Exists(Held("IMG_1.jpg")), File.Exists(Held("Trips", "IMG_2.jpg")), File.Exists(changed.SourcePath), File.Exists(stays.SourcePath))).IsEqualTo((true, true, true, true));
+        await Assert.That((await _repo.GetAsync(gone.Id, ct), await _repo.GetAsync(chosen.Id, ct))).IsEqualTo(((Photo?)null, (Photo?)null));
+        // One change: Undo puts both back.
+        await _changes.UndoAsync(result.BatchId!.Value, ct);
+        await Assert.That((File.Exists(chosen.SourcePath), File.Exists(only.SourcePath))).IsEqualTo((true, true));
+    }
+
+    [Test]
+    public async Task Removes_None_Of_The_Photos_Chosen_When_One_Cannot_Move(CancellationToken ct)
+    {
+        var first = await AddAsync("IMG_1.jpg", "AAAA", ct);
+        var second = await AddAsync("IMG_2.jpg", "BBBB", ct);
+        _disk.Fail("move", second.SourcePath);
+
+        var result = await _service.RemovePhotosAsync([first.Id, second.Id], ct);
+
+        await Assert.That((result.Removed, result.Skipped, result.BatchId)).IsEqualTo((0, 2, (Guid?)null));
+        await Assert.That((File.Exists(first.SourcePath), File.Exists(second.SourcePath))).IsEqualTo((true, true));
     }
 
     [Test]

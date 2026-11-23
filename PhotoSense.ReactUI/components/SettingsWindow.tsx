@@ -1,5 +1,6 @@
 import React, { useEffect, useId } from 'react';
 import { DISTANCE_UNITS } from '../lib/distance';
+import { binName } from '../lib/format';
 import { Segmented } from './ModeSwitch';
 import { Scrim } from './Scrim';
 import type { AppSettings } from '../lib/settings';
@@ -40,8 +41,8 @@ export function SettingsWindow({ settings, onChange, onClose }: Props) {
         <h2 className="text-[21px] font-semibold">Settings</h2>
         <div className="flex flex-col gap-3">
           <div className="label-caps">Deleting permanently</div>
-          <Switch title="Ask a second time before deleting permanently" on={settings.eraseAskTwice} onChange={eraseAskTwice => onChange({ eraseAskTwice })}
-            about="After the warning, Delete permanently asks “Are you sure?” once more. Turned off, the files are erased as soon as the warning is confirmed." />
+          <Switch title={`Ask a second time before moving to the ${binName()}`} on={settings.eraseAskTwice} onChange={eraseAskTwice => onChange({ eraseAskTwice })}
+            about={`After the first question, Move to ${binName()} asks “Are you sure?” once more. Turned off, the files go as soon as the first question is confirmed.`} />
         </div>
         <div className="flex flex-col gap-3">
           <div className="label-caps">Distances</div>

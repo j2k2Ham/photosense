@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widgets' colours, as the page's Material skin has them; the dark theme's are in values-night. -->
+<resources>
+  <color name="widget_back">#E7EDEE</color>
+  <color name="widget_text">#171D1E</color>
+  <color name="widget_faint">#3F484A</color>
+  <color name="widget_accent">#006874</color>
+  <color name="widget_on_accent">#FFFFFF</color>
+  <color name="widget_amber">#7A5900</color>
+  <color name="widget_dot_off">#C3CBCC</color>
+</resources>

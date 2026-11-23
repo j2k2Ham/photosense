@@ -16,6 +16,8 @@
 - **The rest of the thin layer:**
   - `AndroidImageAnalyzer` (`ImageDecoder`, sRGB, software allocator).
   - `NsdAdvertiser` (`NsdManager`), which keeps the screen on while offering.
+  - Compressing: `AndroidMediaStore.CompressAsync`, Media3 Transformer (`Xamarin.AndroidX.Media3.Transformer`), made, started, asked its progress and cancelled on the main looper; the copy is inserted pending into the original's folder and written whole before it shows. `Presentation` is also `Android.App.Presentation`: alias the Media3 one.
+  - Notifications: `AndroidNotifier` (a channel; `POST_NOTIFICATIONS` asked through `MainActivity.AskPermission` on Android 13 and later; `NoticeWorker` for one to come later; `NoticeReceiver` for Not now). A tap opens `MainActivity` with `photosense-opens`; `OnNewIntent` tells the page (`photosense-notice`).
   - `AndroidAccess`: Android 14's choose-some permission, and the app's settings page. The app does not ask for photos as it starts: the page asks after Welcome (`library/ask`, `MainActivity.AskForPhotosAgain`). Android stops asking once the person has said no twice.
   - Back goes back in the web view's history, which closes what the page opened last (`useBackLayer`); with nothing there it sends Escape to the page, and leaves the app when no window is open.
   - The page draws under the status and gesture bars (`SetDecorFitsSystemWindows(false)`, the bars transparent), and is told their heights as `--app-inset-top` and `--app-inset-bottom` (`UnderBars`, again on every load). The page tells the app its theme through `PhotoSenseBars.theme`, and the bars' icons follow it (`ShowTheme`).

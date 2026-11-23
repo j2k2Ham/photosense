@@ -17,14 +17,36 @@ export async function openOrganize(page: Page, root: string) {
  * phone app, so the tabs are waited for.
  */
 export async function phoneTab(page: Page, name: string) {
-  await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name, exact: true }).click();
+  // An iPad's sidebar says how many beside a tab's name once it knows: "Library 2".
+  await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name: new RegExp(`^${name}( [\\d,]+)?$`) }).click();
 }
 
-/** In the phone app, Settings, from the gear of the screen showing. */
+/**
+ * In the phone app, Settings: from the gear of the screen showing on a phone, over every tab; from the foot of the
+ * sidebar or rail on a tablet, where it shows in place of the tab.
+ */
 export async function phoneSettings(page: Page) {
   await page.getByRole('navigation', { name: 'Tabs' }).waitFor();
   await page.getByRole('button', { name: 'Settings' }).first().click();
-  return page.getByRole('dialog', { name: 'Settings' });
+  return page.getByRole('dialog', { name: 'Settings' }).or(page.getByRole('region', { name: 'Settings', exact: true }));
+}
+
+/** Puts Settings away: Back on a phone; on a tablet, the tab of that name again. */
+export async function leaveSettings(page: Page, settings: Locator, isMobile: boolean, tab: string) {
+  if (isMobile) await settings.getByRole('button', { name: 'Back' }).click();
+  else await phoneTab(page, tab);
+  await expect(settings).toBeHidden();
+}
+
+/**
+ * In the phone app, one of Library's collections, and the screen it opens: from its tile in Library on a phone, over
+ * every tab; from the sidebar or rail on a tablet, in place of the tab.
+ */
+export async function phoneCollection(page: Page, name: 'Trips' | 'Needs fixing' | 'Hidden', isMobile: boolean) {
+  if (isMobile) await page.getByRole('region', { name: 'Library' }).getByRole('button', { name: new RegExp(`^${name},`) }).click();
+  else await page.getByRole('navigation', { name: 'Tabs' }).getByRole('button', { name: new RegExp(`^${name}( [\\d,]+)?$`) }).click();
+  const screen = name === 'Needs fixing' ? 'Fix dates and places' : name;
+  return isMobile ? page.getByRole('dialog', { name: screen }) : page.getByRole('region', { name: screen, exact: true });
 }
 
 export const menu = async (page: Page, item: string | RegExp) => {

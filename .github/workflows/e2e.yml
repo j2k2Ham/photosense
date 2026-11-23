@@ -41,16 +41,18 @@ jobs:
 
       - name: Install the tests and their browsers
         working-directory: e2e
-        # A browser's download now and then stops short and never ends, so each try is given five minutes, three times.
-        # The machine may still be installing packages of its own, or briefly unable to reach Ubuntu's servers: apt
-        # waits for its locks and retries a download, each try waits for the machine's own apt to finish, and a failed
-        # try is followed by half a minute's pause.
+        # The browsers' system packages are installed once, with no time limit of ours: a limit killed only the command
+        # that started apt, which went on holding its lock, so every later try failed on the lock. The machine may still
+        # be installing packages of its own, or briefly unable to reach Ubuntu's servers: apt waits for its locks and
+        # retries a download. A browser's own download now and then stops short and never ends, so that alone is given
+        # five minutes, three times, with half a minute's pause after a failed try.
         run: |
           npm ci
-          echo 'DPkg::Lock::Timeout "300"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/90photosense-wait
+          echo 'DPkg::Lock::Timeout "600"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/90photosense-wait
+          timeout 600 bash -c 'while pgrep -x "apt|apt-get|dpkg|unattended-upgr" > /dev/null; do sleep 5; done' || true
+          npx playwright install-deps chromium webkit
           for try in 1 2 3; do
-            timeout 300 bash -c 'while pgrep -x "apt|apt-get|dpkg|unattended-upgr" > /dev/null; do sleep 5; done' || true
-            timeout 300 npx playwright install --with-deps chromium webkit && exit 0
+            timeout 300 npx playwright install chromium webkit && exit 0
             sleep 30
           done
           exit 1
@@ -62,6 +64,32 @@ jobs:
       - name: Type-check the tests
         working-directory: e2e
         run: npm run typecheck
+
+      # Every test starts the program, so one that does not start would only time out, test after test. Started once
+      # first, as Jamie starts it, a program that does not answer within a minute is shown here: what it said, and
+      # where each of its threads is, read with dotnet-stack.
+      - name: Start the program once
+        working-directory: e2e/.cache/server
+        env:
+          PhotoStorage__DatabasePath: ${{ runner.temp }}/photosense/photosense.db
+          PhotoStorage__ThumbnailPath: ${{ runner.temp }}/photosense/thumbnails
+          PhotoStorage__BackupPath: ${{ runner.temp }}/photosense/backups
+        run: |
+          dotnet PhotoSense.Server.dll --urls http://localhost:7199 > "$RUNNER_TEMP/said.txt" 2>&1 &
+          program=$!
+          for second in $(seq 60); do
+            if curl -sf --max-time 2 http://localhost:7199/api/health > /dev/null; then
+              echo "PhotoSense answered after about $second seconds."
+              kill $program; wait $program || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::PhotoSense did not answer within a minute."
+          echo "It said:"; cat "$RUNNER_TEMP/said.txt"
+          dotnet tool install --global dotnet-stack > /dev/null && "$HOME/.dotnet/tools/dotnet-stack" report --process-id $program || true
+          kill -9 $program
+          exit 1
 
       - name: Run the tests
         working-directory: e2e

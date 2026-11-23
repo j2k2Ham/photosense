@@ -26,6 +26,7 @@ internal sealed class AboutEndpoints
         {
             Name = _product.Name, Version = _program.Version, Program = _program.Program, Publisher = _product.Publisher, Copyright = _product.Copyright,
             SupportEmail = _product.SupportEmail, Website = _product.Website, PrivacyPolicyUrl = _product.PrivacyPolicyUrl, TermsUrl = _product.TermsUrl, SupportUrl = _product.SupportUrl,
+            DownloadUrl = _product.DownloadUrl,
         }, ct);
         return resp;
     }

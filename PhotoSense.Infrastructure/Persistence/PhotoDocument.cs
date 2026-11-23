@@ -55,6 +55,14 @@ internal sealed class PhotoDocument
     public List<string> Categories { get; set; } = new();
     /// <summary>The person marked it to keep.</summary>
     public bool IsKept { get; set; }
+    /// <summary>How sharp the picture is; null for a video or one not measured.</summary>
+    public double? Sharpness { get; set; }
+    /// <summary>A picture of the screen.</summary>
+    public bool IsScreenshot { get; set; }
+    /// <summary>The burst it belongs to, as an iPhone marks it.</summary>
+    public string? BurstId { get; set; }
+    /// <summary>What is in the picture, as a phone's labelling names it.</summary>
+    public string[]? Labels { get; set; }
 
     /// <summary>The record as the database holds it.</summary>
     public static PhotoDocument From(Photo p) => new()
@@ -82,7 +90,11 @@ internal sealed class PhotoDocument
         Longitude = p.Longitude,
         Set = (int)p.Set,
         Categories = p.Categories.ToList(),
-        IsKept = p.IsKept
+        IsKept = p.IsKept,
+        Sharpness = p.Sharpness,
+        IsScreenshot = p.IsScreenshot,
+        BurstId = p.BurstId,
+        Labels = p.Labels,
     };
 
     /// <summary>The record as the rest of PhotoSense knows it.</summary>
@@ -112,7 +124,11 @@ internal sealed class PhotoDocument
             Latitude = Latitude,
             Longitude = Longitude,
             Set = (PhotoSet)Set,
-            IsKept = IsKept
+            IsKept = IsKept,
+            Sharpness = Sharpness,
+            IsScreenshot = IsScreenshot,
+            BurstId = BurstId,
+            Labels = Labels,
         };
         entity.LoadCategories(Categories);
         return entity;

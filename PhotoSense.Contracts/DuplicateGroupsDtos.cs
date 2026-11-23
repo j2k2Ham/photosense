@@ -106,6 +106,26 @@ public sealed class BulkRemovalResultDto
     [JsonPropertyName("companions")] public int Companions { get; init; }
     /// <summary>Why each file left alone was left, naming it.</summary>
     [JsonPropertyName("problems")] public IReadOnlyList<string> Problems { get; init; } = [];
-    /// <summary>What to undo the removal by; absent when no file was moved.</summary>
+    /// <summary>What to undo the removal by; absent when no file was moved, or when they went to a phone's bin.</summary>
     [JsonPropertyName("batchId")] public string? BatchId { get; init; }
+    /// <summary>The photos kept in place of the copies that went, by path, so that the message can name what stays.</summary>
+    [JsonPropertyName("stays")] public IReadOnlyList<string> Stays { get; init; } = [];
+}
+
+/// <summary>What the scans so far have found to free, by kind.</summary>
+public sealed class FindingsDto
+{
+    /// <summary>Each kind: "duplicates", "similar" or "largeVideos", with how many files and how much they take; a file is counted under one kind only.</summary>
+    [JsonPropertyName("items")] public IReadOnlyList<FindingDto> Items { get; init; } = [];
+}
+
+/// <summary>What there is to free of one kind.</summary>
+public sealed class FindingDto
+{
+    /// <summary>"duplicates", "similar" or "largeVideos".</summary>
+    [JsonPropertyName("kind")] public string Kind { get; init; } = string.Empty;
+    /// <summary>How many files.</summary>
+    [JsonPropertyName("count")] public int Count { get; init; }
+    /// <summary>What they take together.</summary>
+    [JsonPropertyName("bytes")] public long Bytes { get; init; }
 }

@@ -1,0 +1,47 @@
+name: Dependency review
+
+# Fails a change that brings in a package under the GPL, LGPL or AGPL, or one with a known vulnerability, by comparing
+# GitHub's dependency graph before and after it (the rules are in ../dependency-review-config.yml). It runs on every
+# pull request, into any branch, and in every run of the main CI, which calls it: on pull requests into main, on
+# each push to main (a merge among them) and when started by hand.
+on:
+  pull_request:
+    # Pull requests into main have it through the main CI, which runs on them.
+    branches-ignore: [ master, main ]
+  merge_group:
+  workflow_call:
+  workflow_dispatch:
+
+# The token may read the repository and nothing more: the review only reads the dependency graph.
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # A pull request or merge queue says what it changes; a push is compared with the commit before it, and a
+      # branch's first push, or a run by hand, with main.
+      - name: Find what to compare
+        id: refs
+        if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+        env:
+          BEFORE: ${{ github.event.before }}
+          MAIN: ${{ github.event.repository.default_branch }}
+        run: |
+          base="$BEFORE"
+          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ]; then base="$MAIN"; fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+      - name: Review the packages it brings in
+        uses: actions/dependency-review-action@v5
+        with:
+          config-file: ./.github/dependency-review-config.yml
+          base-ref: ${{ steps.refs.outputs.base }}
+          head-ref: ${{ steps.refs.outputs.base && github.sha || '' }}
+          # NuGet's packages that come in through others reach the graph from dependencies.yml, run on the same push.
+          retry-on-snapshot-warnings: true
+          retry-on-snapshot-warnings-timeout: 300

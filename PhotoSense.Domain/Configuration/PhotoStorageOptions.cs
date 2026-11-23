@@ -26,8 +26,15 @@ public class PhotoStorageOptions
     public string DatabasePath { get; set; } = "photosense.db";
     /// <summary>Where preview images are cached. Defaults to a folder beside the database.</summary>
     public string ThumbnailPath { get; set; } = string.Empty;
+    /// <summary>The folder each paired phone's backups get a folder in. Defaults to PhotoSense in the person's Pictures.</summary>
+    public string BackupPath { get; set; } = string.Empty;
     /// <summary>Set to CameraOriginal (PhotoStorage__KeepFormat) to keep HEIC originals instead of their JPEG conversions.</summary>
     public FormatPreference KeepFormat { get; set; } = FormatPreference.WidelyCompatible;
+    /// <summary>
+    /// Whether Move to Recycle Bin uses the computer's Recycle Bin or Trash. On unless turned off, as the end-to-end tests
+    /// do, so that their photos never land in the person's own bin; off, every folder is treated as one with no bin.
+    /// </summary>
+    public bool UseRecycleBin { get; set; } = true;
 
     /// <summary>
     /// Where the database and the thumbnail cache are kept unless an absolute path says otherwise: a folder
@@ -46,6 +53,16 @@ public class PhotoStorageOptions
 
     /// <summary>The folder the database is in.</summary>
     public string ResolveDatabaseFolder() => Path.GetDirectoryName(ResolveDatabasePath()) ?? DefaultDataFolder;
+
+    /// <summary>The full path of the folder each paired phone's backups get a folder in.</summary>
+    /// <param name="pictures">The person's Pictures folder; empty where the system names none, as on a Linux account without one.</param>
+    /// <param name="home">The person's own folder, whose Pictures folder stands in when the system names none; empty for an account that has none.</param>
+    public string ResolveBackupPath(string pictures, string home)
+    {
+        // An empty base would be refused even for a full path, and the program would not start.
+        var folder = string.IsNullOrEmpty(pictures) ? Path.Combine(string.IsNullOrEmpty(home) ? Path.GetTempPath() : home, "Pictures") : pictures;
+        return string.IsNullOrWhiteSpace(BackupPath) ? Path.Combine(folder, "PhotoSense") : Path.GetFullPath(BackupPath, folder);
+    }
 
     /// <summary>The full path of the folder previews are cached in.</summary>
     public string ResolveThumbnailPath()

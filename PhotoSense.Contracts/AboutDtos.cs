@@ -25,4 +25,6 @@ public sealed class AboutDto
     [JsonPropertyName("termsUrl")] public string? TermsUrl { get; init; }
     /// <summary>Where the support page is published; null until set.</summary>
     [JsonPropertyName("supportUrl")] public string? SupportUrl { get; init; }
+    /// <summary>Where PhotoSense for Mac and PC is downloaded from; null until the web site has it.</summary>
+    [JsonPropertyName("downloadUrl")] public string? DownloadUrl { get; init; }
 }

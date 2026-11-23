@@ -39,3 +39,32 @@ public interface IPhoneFinder
     /// <summary>The phones offering photos now; none when there are none, or none can be reached this way.</summary>
     Task<IReadOnlyList<FoundPhone>> FindAsync(CancellationToken ct);
 }
+
+/// <summary>A computer with PhotoSense that a phone found on the network.</summary>
+/// <param name="Id">The computer's own id.</param>
+/// <param name="Name">What the computer is called.</param>
+/// <param name="Connect">Opens a connection to the computer.</param>
+public sealed record FoundComputer(string Id, string Name, Func<CancellationToken, Task<Stream>> Connect);
+
+/// <summary>Finds the computers with PhotoSense on the network the phone is on (Bonjour).</summary>
+public interface IComputerFinder
+{
+    /// <summary>The computers waiting for phones now; none when there are none, or the network cannot be asked.</summary>
+    Task<IReadOnlyList<FoundComputer>> FindAsync(CancellationToken ct);
+}
+
+/// <summary>Opens a connection to a computer at the addresses its pairing code gave.</summary>
+public interface IComputerConnector
+{
+    /// <summary>A connection to the first of <paramref name="hosts"/> that answers on <paramref name="port"/>.</summary>
+    /// <exception cref="IOException">None of them answered.</exception>
+    Task<Stream> ConnectAsync(IReadOnlyList<string> hosts, int port, CancellationToken ct);
+}
+
+/// <summary>The phone's own scanner of codes: the camera, looking for a QR code.</summary>
+public interface ICodeScanner
+{
+    /// <summary>The text of the first QR code seen, or null when the person put the scanner away.</summary>
+    /// <exception cref="IOException">The camera cannot be used, saying why for the person.</exception>
+    Task<string?> ScanAsync(CancellationToken ct);
+}

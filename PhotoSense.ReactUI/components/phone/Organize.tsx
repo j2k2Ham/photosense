@@ -17,7 +17,9 @@ import { Chip, IconButton, ListGroup, ListRow, PhoneButton, Radio, Segmented, St
 import { ChevronIcon, DoneIcon, ListIcon, MapIcon, PlusIcon, SlidersIcon, TrashIcon } from './Icons';
 import { NewAlbumSheet } from './Library';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
+import { usePlanGate } from './ProSheet';
 import { Sheet } from './Sheet';
+import { limitLine } from '../../lib/plan';
 
 type Notify = (message: string, kind: ToastKind, action?: ToastAction) => void;
 
@@ -367,6 +369,7 @@ const FIRST_ROWS = 2, MORE_ROWS = 5;
  * there, and its files by year, month or place, any of which can be left where it is. Move moves the rest.
  */
 function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, undoAction, onBack }: PreviewProps) {
+  const gate = usePlanGate();
   const { ios, tablet, words, platform } = usePhone();
   const root = library.root!;
   const [base, setBase] = useState(() => newAlbumBase(root, platform));
@@ -405,7 +408,7 @@ function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, 
     onBusy(true);
     try {
       const result = await applyOrganize({
-        basePath: base, folderName: folderName!, direct: false, mode: 'move', companions: true, label: folderName!,
+        basePath: base, folderName: folderName!, direct: false, mode: 'move', companions: true, label: folderName!, suggested: true,
         files: going.map(f => ({ id: f.id, name: resolved.names[f.id], subfolder: s.subfolderOf(f) })),
       });
       if (result.done > 0) {
@@ -492,7 +495,8 @@ function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, 
         );
       })}
       <StickyFooter>
-        <PhoneButton disabled={busy || !plan || going.length === 0 || folderName === undefined} onClick={() => void move()}>Move {files(going.length)}</PhoneButton>
+        <PhoneButton disabled={busy || !plan || going.length === 0 || folderName === undefined}
+          onClick={() => (gate.plan?.tier === 'free' ? gate.offer('organize', () => void move()) : void move())}>Move {files(going.length)}</PhoneButton>
         <p className="text-center text-[13px] text-t2">Into {goesTo(destination, root, words, platform)}. Undo puts them back.</p>
       </StickyFooter>
 
@@ -501,7 +505,7 @@ function Preview({ row, suggestion: s, organize, library, busy, onBusy, notify, 
           <WhereSheet places={placesFor(root, library.files.map(f => f.folder), platform)} value={base} onPick={setBase} onClose={() => setSheet(undefined)} />
         )}
         {sheet === 'names' && clashes.length > 0 && (
-          <NamesSheet clashes={clashes} root={root} busy={busy} onBusy={onBusy} notify={notify} undoAction={undoAction}
+          <NamesSheet clashes={clashes} root={root} busy={busy} onBusy={onBusy} notify={notify}
             onChoice={(clash, how, name) => {
               setExcluded(x => ({ ...x, [clash.file.id]: how === 'skip' }));
               // A name already typed for it is kept; otherwise one is offered that says when the file is from.
@@ -544,7 +548,6 @@ interface NamesProps {
   readonly busy: boolean;
   onBusy(busy: boolean): void;
   notify: Notify;
-  undoAction(batchId: string | undefined): ToastAction | undefined;
   /** What should happen to the file whose name is taken, with the name typed for it. */
   onChoice(clash: Clash, how: 'auto' | 'rename' | 'skip', name?: string): void;
   onDone(): void;
@@ -558,10 +561,11 @@ interface Side { readonly id: string; readonly name: string; readonly where: str
  * The names already taken, one at a time: the file going in beside the one already there, either of which can be
  * deleted after a question naming the one that stays, and what happens to the file going in. Nothing is ever replaced.
  */
-function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice, onDone, onClose }: NamesProps) {
+function NamesSheet({ clashes, root, busy, onBusy, notify, onChoice, onDone, onClose }: NamesProps) {
   const { words } = usePhone();
   const [index, setIndex] = useState(0);
   const [deleting, setDeleting] = useState<{ goes: Side; stays: Side }>();
+  const gate = usePlanGate();
   const at = Math.min(index, clashes.length - 1), clash = clashes[at], there = clash.takenBy[0], last = at === clashes.length - 1;
   const where = (folder: string) => whereIs(folder, root, words);
   const going: Side = { id: clash.file.id, name: clash.file.name, where: `From ${where(clash.file.folder)}`, date: clash.file.date, sizeBytes: clash.file.sizeBytes, isVideo: clash.file.isVideo, folder: clash.file.folder };
@@ -572,7 +576,8 @@ function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice,
     try {
       const result = await removeOrganize(root, [goes.id]);
       setDeleting(undefined);
-      if (result.done > 0) notify(`${goes.name} deleted from ${where(goes.folder)}. ${stays.name} in ${where(stays.folder)} stays.`, 'ok', undoAction(result.batchId || undefined));
+      // To the phone's own bin, which has no Undo of PhotoSense's (Jamie, 2026-11-20).
+      if (result.done > 0) notify(`${goes.name} deleted from ${where(goes.folder)}. ${stays.name} in ${where(stays.folder)} stays. ${goes.name} waits in ${words.bin} for 30 days.`, 'ok');
       if (result.skipped > 0) notify(`${goes.name} was left where it is. ${result.problems[0] ?? ''}`.trim(), 'error');
     } catch (e) {
       notify(said(e), 'error');
@@ -590,7 +595,7 @@ function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice,
       <span className="truncate pt-1 font-code text-[12.5px]">{side.name}</span>
       <span className="truncate text-[13px] text-t2">{side.where}</span>
       <span className="text-[13px] text-t2">{shortDate(side.date)} · {formatBytes(side.sizeBytes)}</span>
-      <button type="button" disabled={busy} onClick={() => setDeleting({ goes: side, stays })} aria-label={`Delete ${side.name}, ${heading.toLowerCase()}`}
+      <button type="button" disabled={busy} onClick={() => gate.remove(1, 'items', () => setDeleting({ goes: side, stays }))} aria-label={`Delete ${side.name}, ${heading.toLowerCase()}`}
         className="mt-1 flex h-8 items-center gap-1.5 self-start rounded-full bg-danger-soft px-3 text-[13.5px] font-semibold text-danger-t disabled:opacity-40"><TrashIcon size={15} />Delete</button>
     </div>
   );
@@ -610,7 +615,8 @@ function NamesSheet({ clashes, root, busy, onBusy, notify, undoAction, onChoice,
         </div>
         {deleting ? (
           <div role="alertdialog" aria-label={`Delete ${deleting.goes.name}?`} className="flex flex-col gap-3 rounded-cell bg-danger-soft px-4 py-3.5">
-            <p className="text-[15px] leading-[1.4]">Delete {deleting.goes.name} from {where(deleting.goes.folder)}? The one in {where(deleting.stays.folder)} stays.</p>
+            <p className="text-[15px] leading-[1.4]">Delete {deleting.goes.name} from {where(deleting.goes.folder)}? The one in {where(deleting.stays.folder)} stays. {deleting.goes.name} goes to {words.bin} for 30 days.</p>
+            {limitLine(gate.plan) && <p className="text-[13.5px] text-t2">{limitLine(gate.plan)}</p>}
             <div className="flex gap-2">
               <button type="button" onClick={() => setDeleting(undefined)} className="h-10 flex-1 rounded-full bg-btn2-bg text-[15px] font-semibold text-btn2-fg">Cancel</button>
               <button type="button" disabled={busy} onClick={() => void remove(deleting.goes, deleting.stays)} className="h-10 flex-1 rounded-full bg-danger text-[15px] font-semibold text-on-danger disabled:opacity-40">Delete</button>

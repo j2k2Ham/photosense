@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { licenceText, main, nugetPackages, pagePackages, referencedPackages } from '../notices.mjs';
+import { licenceText, lockedPackages, main, nugetPackages, pagePackages, referencedPackages, shipsOn } from '../notices.mjs';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const made = [];
@@ -18,6 +18,20 @@ function write(path, text) {
 
 const assets = packages => JSON.stringify({ targets: { 'net10.0': packages } });
 const dll = { type: 'package', runtime: { 'lib/net10.0/x.dll': {} } };
+
+// The Android app's lock file: its packages and theirs, a runtime's own section, and a project it builds on.
+const androidLock = JSON.stringify({ version: 1, dependencies: {
+  'net10.0-android36.0/android-x64': { 'Runtime.Only': { type: 'Transitive', resolved: '1.0.0' } },
+  'net10.0-android36.0': {
+    'Droid.Binding': { type: 'Direct', resolved: '1.0.0' },
+    'Droid.Java': { type: 'Transitive', resolved: '2.0.0' },
+    'Droid.Twin': { type: 'Transitive', resolved: '1.0.0' },
+    'Portable': { type: 'Transitive', resolved: '1.0.0' },
+    'Elsewhere.Only': { type: 'Transitive', resolved: '1.0.0' },
+    'Build.Tool': { type: 'Direct', resolved: '1.0.0' },
+    'photosense.api': { type: 'Project' },
+  },
+} });
 
 /** A repository and NuGet folder of made-up packages, one for each way a package can give its licence. */
 function fixture({ unknownLicence = false } = {}) {
@@ -37,12 +51,13 @@ function fixture({ unknownLicence = false } = {}) {
     'Refs.Only/1.0.0': { type: 'package', runtime: { 'lib/net10.0/_._': {} } },
     'Build.Only/1.0.0': { type: 'package' },
     'PhotoSense.Domain/1.0.0': { type: 'project' },
+    'System.Delta/1.0.0': dll,
     ...(unknownLicence ? { 'Odd/1.0.0': dll } : {}),
   };
   for (const project of ['PhotoSense.Server', 'PhotoSense.Desktop']) write(join(root, project, 'obj', 'project.assets.json'), assets(server));
   for (const project of ['PhotoSense.Infrastructure', 'PhotoSense.Api']) write(join(root, project, 'obj', 'project.assets.json'), assets({ 'Alpha/1.0.0': dll }));
   write(join(root, 'PhotoSense.iOS', 'PhotoSense.iOS.csproj'), '<PackageReference Include="Microsoft.Missing" Version="1.0.0" />');
-  write(join(root, 'PhotoSense.Android', 'PhotoSense.Android.csproj'), '<PackageReference Include="Microsoft.Missing" Version="1.0.0" />');
+  write(join(root, 'PhotoSense.Android', 'packages.lock.json'), androidLock);
   write(join(nuget, 'alpha', '1.0.0', 'alpha.nuspec'), '<license type="expression">MIT</license><copyright>Copyright Alpha</copyright>');
   write(join(nuget, 'beta', '2.0.0', 'beta.nuspec'), '<license type="expression">Apache-2.0</license><copyright>Copyright Beta</copyright>');
   write(join(nuget, 'beta', '2.0.0', 'LICENSE.txt'), 'The Beta licence.\r\n');
@@ -52,6 +67,24 @@ function fixture({ unknownLicence = false } = {}) {
   write(join(nuget, 'linked', '1.0.0', 'LICENSE.md'), 'The Linked licence.');
   write(join(nuget, 'native.thing', '1.0.0', 'License'), 'The Thing licence.');
   write(join(nuget, 'odd', '1.0.0', 'odd.nuspec'), '<license type="expression">WTFPL</license>');
+  write(join(nuget, 'system.delta', '1.0.0', 'system.delta.nuspec'), '<license type="expression">MIT</license><copyright>Copyright Delta</copyright>');
+  write(join(nuget, 'system.delta', '1.0.0', 'THIRD-PARTY-NOTICES.TXT'), 'Not repeated either.');
+  // A binding of a Java library, and a second whose licence and notices are word for word the first's.
+  for (const [id, code] of [['droid.binding', join('lib', 'net10.0-android36.0', 'Droid.Binding.dll')], ['droid.twin', join('aar', 'twin.aar')]]) {
+    write(join(nuget, id, '1.0.0', code), '');
+    write(join(nuget, id, '1.0.0', 'LICENSE.md'), 'The binding licence.');
+    write(join(nuget, id, '1.0.0', 'THIRD-PARTY-NOTICES.txt'), 'The Java library licence.');
+  }
+  write(join(nuget, 'droid.twin', '1.0.0', 'lib', 'net10.0-android36.0', '_._'), '');
+  write(join(nuget, 'droid.java', '2.0.0', 'droid.java.nuspec'), '<license type="expression">MIT</license><copyright>Copyright Java</copyright>');
+  write(join(nuget, 'droid.java', '2.0.0', 'jar', 'java.jar'), '');
+  write(join(nuget, 'droid.java', '2.0.0', 'lib', 'net10.0-android36.0', '_._'), '');
+  write(join(nuget, 'portable', '1.0.0', 'portable.nuspec'), '<license type="expression">MIT</license><copyright>Copyright Portable</copyright>');
+  write(join(nuget, 'portable', '1.0.0', 'lib', 'netstandard2.0', 'Portable.dll'), '');
+  write(join(nuget, 'elsewhere.only', '1.0.0', 'lib', 'MonoAndroid10', '_._'), '');
+  write(join(nuget, 'elsewhere.only', '1.0.0', 'lib', 'net46', 'Elsewhere.dll'), '');
+  write(join(nuget, 'build.tool', '1.0.0', 'build', 'Build.Tool.targets'), '');
+  write(join(nuget, 'build.tool', '1.0.0', 'tools', 'Tool.dll'), '');
   const page = join(root, 'PhotoSense.ReactUI');
   write(join(page, 'package-lock.json'), JSON.stringify({ packages: {
     '': { name: 'page' },
@@ -61,6 +94,8 @@ function fixture({ unknownLicence = false } = {}) {
     'node_modules/vitest': { version: '4.1.12', license: 'MIT', dev: true },
     'node_modules/sharp': { version: '0.34.0', license: 'Apache-2.0', optional: true },
     'node_modules/fsevents': { version: '2.3.3', license: 'MIT', devOptional: true },
+    'node_modules/stand-in': { resolved: 'stubs/stand-in', link: true },
+    'stubs/stand-in': { version: '0.0.0', license: 'MIT' },
   } }));
   for (const [path, text] of [['react', 'React licence'], ['next/node_modules/postcss', 'PostCSS licence'], ['tailwindcss', 'Tailwind licence']]) write(join(page, 'node_modules', ...path.split('/'), 'LICENSE'), text);
   return { root, nuget };
@@ -72,7 +107,23 @@ describe('the packages a program ships', () => {
   it('are those with files that run, not reference-only packages, build tools or the projects themselves', () => {
     const { root } = fixture();
     const listed = nugetPackages(JSON.parse(readFileSync(join(root, 'PhotoSense.Server', 'obj', 'project.assets.json'), 'utf8')));
-    assert.deepEqual(listed.map(p => p.id), ['Alpha', 'Beta', 'Microsoft.Gamma', 'XmpCore', 'Native.Thing', 'Linked']);
+    assert.deepEqual(listed.map(p => p.id), ['Alpha', 'Beta', 'Microsoft.Gamma', 'XmpCore', 'Native.Thing', 'Linked', 'System.Delta']);
+  });
+
+  it('include every package a lock file lists for the app itself, those its packages bring among them, but no project', () => {
+    assert.deepEqual(lockedPackages(JSON.parse(androidLock)).map(p => `${p.id} ${p.version}`),
+      ['Droid.Binding 1.0.0', 'Droid.Java 2.0.0', 'Droid.Twin 1.0.0', 'Portable 1.0.0', 'Elsewhere.Only 1.0.0', 'Build.Tool 1.0.0']);
+  });
+
+  it('from a lock file, are those with Java code or an assembly for the phone, not a placeholder there nor a build tool', () => {
+    const { nuget } = fixture();
+    const ships = id => shipsOn(join(nuget, id, id === 'droid.java' ? '2.0.0' : '1.0.0'), 'android');
+    assert.deepEqual(['droid.binding', 'droid.java', 'droid.twin', 'portable', 'elsewhere.only', 'build.tool'].map(ships), [true, true, true, true, false, false]);
+  });
+
+  it('from a lock file, stop the notices being written when one has not been restored or fetched', () => {
+    const { nuget } = fixture();
+    assert.throws(() => shipsOn(join(nuget, 'nowhere', '1.0.0'), 'android'), /nowhere.1\.0\.0 is not in the NuGet folder: restore the app, or fetch its packages as ci\.yml does\./);
   });
 
   it('include those a project names itself when it cannot be restored here', () => {
@@ -80,7 +131,7 @@ describe('the packages a program ships', () => {
       [{ id: 'A.B', version: '1.2.3' }, { id: 'C', version: '4.0.0' }]);
   });
 
-  it('for the page, are its own and theirs, and the styles Tailwind writes, but no tool that only builds or tests it', () => {
+  it('for the page, are its own and theirs, and the styles Tailwind writes, but no tool that only builds or tests it, nor a stand-in of its own', () => {
     const { root } = fixture();
     const names = pagePackages(JSON.parse(readFileSync(join(root, 'PhotoSense.ReactUI', 'package-lock.json'), 'utf8'))).map(p => p.name);
     assert.deepEqual(names, ['react', 'postcss', 'tailwindcss']);
@@ -119,7 +170,11 @@ describe('the notices', () => {
     assert.match(server, /\nAlpha 1\.0\.0 \(MIT\)\n-+\n\nMIT License\n\nCopyright Alpha\n/);
     // Its own text, and the copyright that text does not give, and its NOTICE.
     assert.match(server, /\nBeta 2\.0\.0 \(Apache-2\.0\)\nCopyright Beta\n-+\n\nThe Beta licence\.\n\nBeta includes Delta\.\n/);
-    assert.match(server, /\nMicrosoft\.Gamma 3\.0\.0 \(MIT\)\n-+\n\nMIT License\n\nCopyright \(c\) \.NET Foundation and Contributors\n/);
+    // The .NET licence word for word, given once, under .NET.
+    assert.match(server, /\n\.NET \(MIT\)\nIts own third-party notices: [^\n]+\n-+\n\nMIT License\n\nCopyright \(c\) \.NET Foundation and Contributors\n/);
+    assert.match(server, /\nMicrosoft\.Gamma 3\.0\.0 \(MIT\)\n-+\n\nIts licence is word for word that of \.NET, above\.\n/);
+    // A System package's licence names its own holder, but its notices are .NET's, named under .NET.
+    assert.match(server, /\nSystem\.Delta 1\.0\.0 \(MIT\)\n-+\n\nMIT License\n\nCopyright Delta\n/);
     assert.doesNotMatch(server, /Not repeated/);
     assert.match(server, /\nXmpCore 6\.1\.10\.1 \(BSD-3-Clause\)\n-+\n\nBSD 3-Clause License\n\nCopyright 2006-2007 Adobe Systems Incorporated/);
     assert.match(server, /\nNative\.Thing 1\.0\.0 \(its own licence\)\n-+\n\nThe Thing licence\.\n/);
@@ -136,7 +191,13 @@ describe('the notices', () => {
     const android = readFileSync(join(root, 'notices', 'android.txt'), 'utf8');
     assert.match(android, /^Third-party notices for PhotoSense for Android\n/);
     assert.match(android, /\n\.NET for Android \(MIT\)\n/);
-    assert.doesNotMatch(android, /Beta|ASP\.NET|iOS/);
+    // A binding gives its Java library's licence in its third-party notices; a second, word for word the same, points to them.
+    assert.match(android, /\nDroid\.Binding 1\.0\.0 \(its own licence\)\n-+\n\nThe binding licence\.\n\nThe Java library licence\.\n/);
+    assert.match(android, /\nDroid\.Twin 1\.0\.0 \(its own licence\)\n-+\n\nIts licence is word for word that of Droid\.Binding 1\.0\.0, above\.\n\nIts third-party notices are word for word those of Droid\.Binding 1\.0\.0, above\.\n/);
+    assert.match(android, /\nDroid\.Java 2\.0\.0 \(MIT\)\n/);
+    assert.match(android, /\nPortable 1\.0\.0 \(MIT\)\n/);
+    assert.match(android, /\nAlpha 1\.0\.0 \(MIT\)\n/);
+    assert.doesNotMatch(android, /Beta|ASP\.NET|iOS|Elsewhere|Build\.Tool|Runtime\.Only|photosense\.api/);
   });
 
   it('are found up to date by --check once written, and out of date when one is changed or missing', () => {

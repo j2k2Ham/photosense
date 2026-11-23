@@ -6,7 +6,12 @@ namespace PhotoSense.Application.Transfer;
 
 /// <summary>Why sending photos between a phone and a computer stopped, in words for the person.</summary>
 /// <param name="message">What happened and what to do, for the person.</param>
-public sealed class TransferException(string message) : IOException(message);
+/// <param name="refused">The other device turned the connection away before anything was agreed.</param>
+public sealed class TransferException(string message, bool refused = false) : IOException(message)
+{
+    /// <summary>The other device turned the connection away before anything was agreed, as a computer showing another code does.</summary>
+    public bool Refused { get; } = refused;
+}
 
 /// <summary>
 /// What a phone and a computer say to each other: frames, each its length in four bytes and then that many bytes.

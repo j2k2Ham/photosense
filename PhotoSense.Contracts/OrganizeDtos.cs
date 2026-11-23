@@ -119,6 +119,8 @@ public sealed class OrganizeRequest
     [JsonPropertyName("companions")] public bool Companions { get; init; }
     /// <summary>What the folder is called in the record of what was done.</summary>
     [JsonPropertyName("label")] public string? Label { get; init; }
+    /// <summary>One of Organize's suggestions, by place or by date, which only Pro moves; files the person chose move on any plan.</summary>
+    [JsonPropertyName("suggested")] public bool Suggested { get; init; }
     /// <summary>The files.</summary>
     [JsonPropertyName("files")] public List<OrganizeRequestFile> Files { get; init; } = [];
 }

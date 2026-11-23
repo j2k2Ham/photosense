@@ -5,11 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CleanUpScreen } from '../../../components/phone/CleanUp';
 import { useCleanUp } from '../../../lib/cleanup';
 import type { Platform } from '../../../lib/phone';
-import type { DuplicateGroupDto, GroupMode, ScanStatusDto } from '../../../types';
-import { frame, inFrame } from './frame';
+import type { CategoryName, CategoryReportDto, DuplicateGroupDto, GroupMode, ScanStatusDto, SwipeStateDto } from '../../../types';
+import { frame, gate, inFrame } from './frame';
 import { group, groupsPage, photo } from './groups';
+import { plan } from '../../fixtures';
 
-const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), setKept: vi.fn(), undoChange: vi.fn() }));
+const api = vi.hoisted(() => ({ useGroupsThrough: vi.fn(), useGroups: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), setKept: vi.fn(), undoChange: vi.fn(), useCategories: vi.fn(),
+  useCategoryPhotos: vi.fn(), useBursts: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
 const ROOT = '/Photo Library';
@@ -27,6 +29,9 @@ function useVersion() {
 const sameBytes = () => group(photo('DLWL2718.MP4', { isVideo: true, fileSizeBytes: 4.5 * 1024 ** 2, durationSeconds: 47 }),
   [photo('DLWL2718 (8E01B7C2).MP4', { isVideo: true, fileSizeBytes: 4.5 * 1024 ** 2, durationSeconds: 47 }), photo('DLWL2718 (1).MP4', { isVideo: true, fileSizeBytes: 4.5 * 1024 ** 2, durationSeconds: 47 })], 'identical');
 
+// The plan's gate: no plan known, every removal going ahead, unless a test gives its own.
+let planGate = gate();
+beforeEach(() => { planGate = gate(); });
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset();
   groups = {
@@ -47,36 +52,153 @@ beforeEach(() => {
     for (const mode of ['duplicates', 'similar'] as const)
       groups[mode] = groups[mode].map(g => ({ ...g, members: g.members.filter(m => m.photo.id !== id) })).filter(g => g.members.length > 0);
     changed();
-    return { heldAt: 'x', companions: 0, batchId: 'b1' };
+    return { heldAt: null, companions: 0, batchId: null };
   });
-  api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 21 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: 'b2' });
+  api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 21 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: null, stays: ['/Photo Library/IMG_4299.JPG', '/Photo Library/DLWL2718.MP4'] });
   api.setKept.mockResolvedValue(undefined);
   api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+  // Find's rows: how many there are to delete of each kind, and what they take.
+  api.useGroups.mockImplementation((mode: GroupMode) => ({ data: groupsPage(mode, groups[mode], mode === 'duplicates' ? { removableCount: 3, reclaimableBytes: 21 * 1024 ** 2 } : { removableCount: 1, reclaimableBytes: 1024 }) }));
+  api.useCategories.mockReturnValue({ data: report({ duplicates: [3, 21 * 1024 ** 2] }) });
+  api.useCategoryPhotos.mockReturnValue({ data: [] });
+  api.useBursts.mockReturnValue({ data: [] });
 });
 
-interface ShowProps { platform?: Platform; tablet?: boolean; status?: ScanStatusDto; root?: string }
+/** What Clean up's categories hold: those named, with how many and what they take, and nothing of the rest. */
+function report(found: Partial<Record<CategoryName, [number, number]>>, more: Partial<CategoryReportDto> = {}): CategoryReportDto {
+  const names: CategoryName[] = ['largeVideos', 'screenshots', 'bursts', 'blurry', 'messaging', 'duplicates'];
+  return { categories: names.map(category => ({ category, count: found[category]?.[0] ?? 0, bytes: found[category]?.[1] ?? 0 })), unmeasured: 0, storageTotal: null, storageFree: null, ...more };
+}
 
-/** Clean up in a phone's or tablet's frame, holding its state as PhoneApp does. */
-function show({ platform = 'ios', tablet = false, status, root = ROOT }: ShowProps = {}) {
-  const notify = vi.fn(), onScanAgain = vi.fn();
+interface ShowProps { platform?: Platform; tablet?: boolean; status?: ScanStatusDto; root?: string; home?: boolean; swipe?: SwipeStateDto }
+
+/** A library as Library holds it, with nothing read yet: the swipe card has no pictures to show. */
+const LIBRARY = { files: [] };
+
+/**
+ * Clean up in a phone's or tablet's frame, holding its state as PhoneApp does: its first screen with `home`, otherwise
+ * the duplicates' list, opened from Find.
+ */
+function show({ platform = 'ios', tablet = false, status, root = ROOT, home = false, swipe }: ShowProps = {}) {
+  const notify = vi.fn(), onScanAgain = vi.fn(), onSwipe = vi.fn();
   function Holder() {
     const cleanUp = useCleanUp(tablet);
-    return <CleanUpScreen cleanUp={cleanUp} root={root} status={status} notify={notify} onScanAgain={onScanAgain} />;
+    return <CleanUpScreen cleanUp={cleanUp} root={root} status={status} notify={notify} onScanAgain={onScanAgain} swipe={swipe} library={LIBRARY} onSwipe={onSwipe} />;
   }
-  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }));
-  return { ...view, notify, onScanAgain };
+  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }), planGate);
+  if (!home) fireEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Duplicates/ }));
+  return { ...view, notify, onScanAgain, onSwipe };
+}
+
+/** Back to Clean up's first screen, and on to the other kind's list from Find. */
+async function turnTo(kind: 'Duplicates' | 'Similar shots') {
+  await userEvent.click(screen.getAllByRole('button', { name: 'Back' })[0]);
+  await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: new RegExp(`^${kind}`) }));
 }
 
 const rows = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button');
 const row = (name: string) => within(screen.getByRole('list', { name: 'Groups' })).getByRole('button', { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) });
 const sheet = (name: string | RegExp) => screen.getByRole('dialog', { name });
-const toastAction = (notify: ReturnType<typeof vi.fn>) => (notify.mock.calls.at(-1)![2] as { run(): void }).run;
 const table = (name: string) => within(screen.getByRole('table', { name })).getAllByRole('row').map(r => r.textContent);
+
+describe('Clean up\'s first screen', () => {
+  it('has the free removals left today, Swipe to clean, and Find, each kind with what there is to delete, and when the last scan read the library', async () => {
+    planGate = gate({ plan: plan() });
+    const { onScanAgain } = show({ home: true, status: { instanceId: 's', completed: new Date().toISOString(), totalPhotos: 6941 } });
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByText('21.0 MB can be freed')).toBeInTheDocument();
+    expect(screen.getByText('38 of 50 free removals left today')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Get Pro' }));
+    expect(planGate.offer).toHaveBeenCalledWith('none');
+    // Swipe to clean says so while today's set is being drawn.
+    expect(screen.getByRole('region', { name: 'Swipe to clean' })).toHaveTextContent('Drawing today\'s set…');
+    const find = within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent);
+    expect(find).toEqual(['Duplicates3 items · 21.0 MB', 'Similar shots1 item · 1 KB', 'Large videosNothing left to review', 'ScreenshotsNothing left to review',
+      'BurstsNothing left to review', 'BlurryNothing left to review']);
+    expect(screen.getByText(/^Scanned 6,941 photos and videos today at/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Scan again' }));
+    expect(onScanAgain).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing of the plan on Pro, nor of a kind with nothing left, and waits for the service to say what there is', () => {
+    planGate = gate({ plan: plan({ tier: 'pro', leftToday: null }) });
+    api.useGroups.mockReturnValue({});
+    api.useCategories.mockReturnValue({ data: report({}) });
+    const { again } = show({ home: true });
+    expect(screen.queryByText(/free removals left today/)).not.toBeInTheDocument();
+    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Find' })).getAllByRole('button').map(b => b.textContent)).toEqual(['Large videosNothing left to review',
+      'ScreenshotsNothing left to review', 'BurstsNothing left to review', 'BlurryNothing left to review', 'DuplicatesNothing left to review']);
+    api.useCategories.mockReturnValue({});
+    again(<CleanUpScreen cleanUp={{ ...stub(), listing: false }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /^Duplicates/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Clean up's alerts", () => {
+  it('turns low-storage alerts on or off, once the phone has said whether they are', async () => {
+    const onLowStorage = vi.fn();
+    const ui = (lowStorage?: boolean, change?: (on: boolean) => void) => (
+      <CleanUpScreen cleanUp={{ ...stub(), listing: false }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} lowStorage={lowStorage} onLowStorage={change} />
+    );
+    const { again } = inFrame(ui(undefined, onLowStorage), frame('ios'), gate());
+    expect(screen.queryByRole('switch', { name: /Low-storage alerts/ })).not.toBeInTheDocument();
+    again(ui(false, onLowStorage));
+    const alerts = screen.getByRole('switch', { name: 'Low-storage alerts When less than 10% is free, at most once a week' });
+    expect(alerts).not.toBeChecked();
+    await userEvent.click(alerts);
+    expect(onLowStorage).toHaveBeenCalledWith(true);
+    // With nothing to tell, a tap changes nothing.
+    again(ui(true));
+    await userEvent.click(screen.getByRole('switch', { name: /^Low-storage alerts/ }));
+    expect(onLowStorage).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Clean up's categories, from its first screen", () => {
+  const MB = 1024 ** 2;
+  const find = () => within(screen.getByRole('region', { name: 'Find' }));
+
+  it("lists every kind largest first, says what can be freed, and opens each kind's screen over the first screen, which Back closes", async () => {
+    api.useCategories.mockReturnValue({ data: report({ largeVideos: [1, 300 * MB], screenshots: [2, 5 * MB], bursts: [1, 2 * MB], duplicates: [3, 21 * MB] }, { unmeasured: 4 }) });
+    show({ home: true });
+    expect(screen.getByText('328.0 MB can be freed')).toBeInTheDocument();
+    expect(find().getAllByRole('button').map(b => b.textContent)).toEqual(['Large videos1 item · 300.0 MB', 'Duplicates3 items · 21.0 MB', 'Screenshots2 items · 5.0 MB',
+      'Bursts1 extra shot · 2.0 MB', 'Similar shots1 item · 1 KB', 'BlurryScan again to find blurry shots']);
+    expect(screen.queryByRole('button', { name: /Free up space/ })).not.toBeInTheDocument();
+    for (const row of ['Large videos', 'Screenshots', 'Bursts', 'Blurry']) {
+      await userEvent.click(find().getByRole('button', { name: new RegExp(`^${row}`) }));
+      expect(screen.getByRole('heading', { level: 1, name: row })).toBeInTheDocument();
+      expect(screen.queryByRole('region', { name: 'Find' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+      expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    }
+  });
+
+  it('on a phone that has said its storage, shows it as a bar that opens Free up space', async () => {
+    api.useCategories.mockReturnValue({ data: report({ duplicates: [3, 100 * MB] }, { storageTotal: 1000 * MB, storageFree: 130 * MB }) });
+    show({ home: true });
+    expect(screen.getByText('100.0 MB found')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Storage 87% full. Free up space' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Free up space' })).toBeInTheDocument();
+    expect(screen.getByText('iPhone storage is 87% full')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+  });
+
+  it('on Android lists Messaging apps, whose folders are where it looks, each with its icon alone', async () => {
+    api.useCategories.mockReturnValue({ data: report({ messaging: [2, 4 * MB], duplicates: [3, 21 * MB] }) });
+    show({ home: true, platform: 'android' });
+    expect(find().getByRole('button', { name: /^Messaging apps/ })).toHaveTextContent('WhatsApp and Telegram · 2 items · 4.0 MB');
+    await userEvent.click(find().getByRole('button', { name: /^Messaging apps/ }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Messaging apps' })).toBeInTheDocument();
+  });
+});
 
 describe('Clean up\'s list', () => {
   it('says what deleting the duplicates would free, and lists each group: the one that stays, what there is to delete, and how many copies', async () => {
-    const { onScanAgain } = show({ status: { instanceId: 's', completed: new Date().toISOString(), totalPhotos: 6941 } });
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    show();
+    expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
     expect(screen.getByText('Copies of the same photo or video')).toBeInTheDocument();
     const card = screen.getByRole('region', { name: 'Duplicates to delete' });
     expect(card).toHaveTextContent('3 duplicates');
@@ -88,11 +210,8 @@ describe('Clean up\'s list', () => {
     // A video has no preview: a play mark in its place.
     expect(row('DLWL2718.MP4').querySelector('img')).toBeNull();
     expect(row('IMG_4299.JPG').querySelectorAll('img')[1]).toHaveAttribute('src', 'http://localhost:7071/api/photos/IMG_4299.JPG/thumbnail');
-    expect(screen.getByText(/^Scanned 6,941 photos and videos today at/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Scan again' }));
-    expect(onScanAgain).toHaveBeenCalledOnce();
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Duplicates to delete' })).not.toBeInTheDocument();
     expect(rows().map(r => r.textContent)).toEqual(['IMG_5101.HEIC3 similar shots+3']);
@@ -109,12 +228,12 @@ describe('Clean up\'s list', () => {
     groups = { duplicates: [], similar: [] };
     api.useGroupsThrough.mockImplementation((mode: GroupMode) => ({ data: groupsPage(mode, []) }));
     const { again } = show({ platform: 'android' });
-    expect(screen.getByText('No duplicates left. What you deleted waits in Pictures/PhotoSense Removed until you delete it permanently.')).toBeInTheDocument();
+    expect(screen.getByText('No duplicates left. What you deleted waits in the bin for 30 days.')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Duplicates to delete' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     expect(screen.getByText('No similar shots left to review.')).toBeInTheDocument();
     api.useGroupsThrough.mockReturnValue({});
-    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} />);
+    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);
     expect(screen.queryByText(/left/)).not.toBeInTheDocument();
   });
 
@@ -134,7 +253,7 @@ describe('Clean up\'s list', () => {
 
 /** A Clean up state with nothing in it, for drawing the screen as it is before anything is read. */
 function stub() {
-  return { mode: 'duplicates' as const, items: [], more: false, copy: 0, turnTo: vi.fn(), showMore: vi.fn(), review: vi.fn(), chooseCopy: vi.fn() };
+  return { mode: 'duplicates' as const, items: [], more: false, copy: 0, listing: true, openList: vi.fn(), closeList: vi.fn(), open: vi.fn(), close: vi.fn(), showMore: vi.fn(), review: vi.fn(), chooseCopy: vi.fn() };
 }
 
 describe('a group\'s review', () => {
@@ -177,7 +296,7 @@ describe('a group\'s review', () => {
 
   it('for similar shots names the best shot and each shot, and offers to keep a shot', async () => {
     show();
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     await userEvent.click(row('IMG_5101.HEIC'));
     expect(screen.getByText('3 similar shots')).toBeInTheDocument();
     expect(screen.getByText('A burst frame or an edited version.')).toBeInTheDocument();
@@ -214,40 +333,26 @@ describe('a group\'s review', () => {
 });
 
 describe('deleting on a phone', () => {
-  it('asks first, naming the file that stays and the file that goes; then says both, goes back to the list, and Undo puts the copy back', async () => {
+  it('asks first, naming the file that stays and the file that goes; then says both and where the copy waits, with no Undo, and goes back to the list', async () => {
     const { notify } = show();
     await userEvent.click(row('IMG_4299.JPG'));
     await userEvent.click(screen.getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     const asked = sheet('Delete IMG_4299.HEIC?');
     expect(asked).toHaveTextContent('IMG_4299.JPG stays, in Photo Library.');
-    expect(asked).toHaveTextContent('IMG_4299.HEIC, in Photo Library › Butte, goes to PhotoSense Removed, where Undo can still bring it back.');
+    expect(asked).toHaveTextContent('IMG_4299.HEIC, in Photo Library › Butte, goes to Recently Deleted for 30 days.');
     await userEvent.click(within(asked).getByRole('button', { name: 'Cancel' }));
     expect(api.removePhoto).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     await userEvent.click(within(sheet('Delete IMG_4299.HEIC?')).getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     expect(api.removePhoto).toHaveBeenCalledWith('IMG_4299.HEIC');
-    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays.', 'ok', expect.objectContaining({ label: 'Undo' }));
+    // The phone's own bin has no Undo of PhotoSense's (Jamie, 2026-11-20).
+    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays. The copy waits in Recently Deleted for 30 days.', 'ok');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Groups' })).toBeInTheDocument();
-
-    const undo = toastAction(notify);
-    api.undoChange.mockResolvedValueOnce({ restored: 1, skipped: 0, problems: [] })
-      .mockResolvedValueOnce({ restored: 0, skipped: 1, problems: ['Moved since.'] })
-      .mockResolvedValueOnce({ restored: 0, skipped: 1, problems: [] })
-      .mockRejectedValueOnce(new Error('No such change.'));
-    await act(async () => undo());
-    expect(api.undoChange).toHaveBeenCalledWith('b1');
-    expect(notify).toHaveBeenLastCalledWith('Put IMG_4299.HEIC back where it was.', 'ok');
-    await act(async () => undo());
-    expect(notify).toHaveBeenLastCalledWith('1 could not be put back. Moved since.', 'error');
-    await act(async () => undo());
-    expect(notify).toHaveBeenLastCalledWith('1 could not be put back.', 'error');
-    await act(async () => undo());
-    expect(notify).toHaveBeenLastCalledWith('No such change.', 'error');
   });
 
-  it('stays on a group with copies left, on the copy that took the deleted one\'s place; a removal that moved nothing offers no Undo', async () => {
+  it('stays on a group with copies left, on the copy that took the deleted one\'s place', async () => {
     api.removePhoto.mockImplementationOnce(async (id: string) => {
       groups.duplicates[1] = { ...groups.duplicates[1], members: groups.duplicates[1].members.filter(m => m.photo.id !== id) };
       changed();
@@ -258,7 +363,7 @@ describe('deleting on a phone', () => {
     await userEvent.click(within(screen.getByRole('group', { name: 'Copies' })).getByRole('button', { name: 'Copy 2' }));
     await userEvent.click(screen.getByRole('button', { name: 'Delete DLWL2718 (1).MP4' }));
     await userEvent.click(within(sheet('Delete DLWL2718 (1).MP4?')).getByRole('button', { name: 'Delete DLWL2718 (1).MP4' }));
-    expect(notify).toHaveBeenLastCalledWith('DLWL2718 (1).MP4 deleted. DLWL2718.MP4 stays.', 'ok', undefined);
+    expect(notify).toHaveBeenLastCalledWith('DLWL2718 (1).MP4 deleted. DLWL2718.MP4 stays. The copy waits in Recently Deleted for 30 days.', 'ok');
     expect(screen.getByRole('button', { name: 'See DLWL2718 (8E01B7C2).MP4 full screen' })).toHaveTextContent('Copy 1 of 1');
   });
 
@@ -272,34 +377,58 @@ describe('deleting on a phone', () => {
     expect(sheet('Delete IMG_4299.HEIC?')).toBeInTheDocument();
   });
 
-  it('asks before deleting every duplicate, then says how many went, with Undo, and how many were left alone', async () => {
+  it('on the free plan with fewer left than there are duplicates, deletes the groups that free the most, as many as are left, saying how many are left', async () => {
+    planGate = gate({ plan: plan({ leftToday: 2 }), remove: vi.fn((_count: number, _label: string, run: (allowed: number) => void) => run(2)) });
+    api.removeGroups.mockResolvedValue({ removed: 1, bytes: 12 * 1024 ** 2, skipped: 0, companions: 0, problems: [], batchId: null, stays: ['/Photo Library/Butte/IMG_4299.JPG'] });
+    const { notify } = show();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
+    expect(planGate.remove).toHaveBeenCalledWith(3, 'duplicates', expect.any(Function));
+    const asked = sheet('Delete 1 duplicate?');
+    expect(asked).toHaveTextContent('1 copy goes to Recently Deleted (12.0 MB) for 30 days.');
+    expect(asked).toHaveTextContent('The largest go first. The best copy of each picture or video stays.');
+    expect(asked).toHaveTextContent('Free plan: 2 removals left today.');
+    await userEvent.click(within(asked).getByRole('button', { name: 'Delete 1 duplicate' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['group-IMG_4299.JPG'], 'duplicates');
+    expect(api.removeDuplicates).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenLastCalledWith('Deleted 1 copy. The original stays: IMG_4299.JPG in Photo Library › Butte. The copy waits in Recently Deleted for 30 days.', 'ok');
+  });
+
+  it('asks the plan before a copy goes, and says the removals left in the question', async () => {
+    planGate = gate({ plan: plan({ leftToday: 38 }) });
+    show();
+    await userEvent.click(rows()[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
+    expect(planGate.remove).toHaveBeenCalledWith(1, 'items', expect.any(Function));
+    expect(sheet('Delete IMG_4299.HEIC?')).toHaveTextContent('Free plan: 38 removals left today.');
+  });
+
+  it('asks before deleting every duplicate, then says how many went, naming an original that stays, and how many were left alone', async () => {
     const { notify } = show();
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     const asked = sheet('Delete all duplicates?');
-    expect(asked).toHaveTextContent('3 copies go to PhotoSense Removed (21.0 MB).');
+    expect(asked).toHaveTextContent('3 copies go to Recently Deleted (21.0 MB) for 30 days.');
     expect(asked).toHaveTextContent('The best copy of each picture or video stays. Copies marked keep are skipped.');
     expect(asked).toHaveTextContent('Similar shots are not included.');
-    api.removeDuplicates.mockResolvedValueOnce({ removed: 3, bytes: 1, skipped: 1, companions: 2, problems: ['IMG_1.JPG is open elsewhere.'], batchId: 'b2' });
+    api.removeDuplicates.mockResolvedValueOnce({ removed: 3, bytes: 1, skipped: 1, companions: 2, problems: ['IMG_1.JPG is open elsewhere.'], batchId: null, stays: ['/Photo Library/IMG_4299.JPG', '/Photo Library/DLWL2718.MP4'] });
     await userEvent.click(within(asked).getByRole('button', { name: 'Delete 3 duplicates' }));
     expect(api.removeDuplicates).toHaveBeenCalledWith(undefined, 'duplicates');
     expect(notify.mock.calls).toEqual([
-      ['3 duplicates and 2 linked files deleted. The best copy of each stays.', 'ok', expect.objectContaining({ label: 'Undo' })],
+      ['Deleted 3 copies and 2 linked files. The originals stay, such as IMG_4299.JPG in Photo Library. The copies wait in Recently Deleted for 30 days.', 'ok'],
       ['1 left alone. IMG_1.JPG is open elsewhere.', 'error'],
     ]);
-    api.undoChange.mockResolvedValueOnce({ restored: 3, skipped: 0, problems: [] });
-    await act(async () => (notify.mock.calls[0][2] as { run(): void }).run());
-    expect(notify).toHaveBeenLastCalledWith('Put the 3 duplicates back where they were.', 'ok');
 
     notify.mockClear();
-    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 2, companions: 0, problems: [], batchId: null });
+    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 2, companions: 0, problems: [], batchId: null, stays: [] });
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     await userEvent.click(within(sheet('Delete all duplicates?')).getByRole('button', { name: 'Delete 3 duplicates' }));
     expect(notify.mock.calls).toEqual([['2 left alone.', 'error']]);
+  });
 
-    notify.mockClear();
+  it('names the original by the folder alone before the library is known', async () => {
+    const { notify } = show({ root: '' });
     await userEvent.click(screen.getByRole('button', { name: 'Delete all duplicates' }));
     await userEvent.click(within(sheet('Delete all duplicates?')).getByRole('button', { name: 'Delete 3 duplicates' }));
-    expect(notify.mock.calls).toEqual([['3 duplicates deleted. The best copy of each stays.', 'ok', expect.objectContaining({ label: 'Undo' })]]);
+    expect(notify).toHaveBeenLastCalledWith('Deleted 3 copies. The originals stay, such as IMG_4299.JPG in Photo Library. The copies wait in Recently Deleted for 30 days.', 'ok');
   });
 });
 
@@ -344,7 +473,7 @@ describe('the picture full screen', () => {
 
   it('names similar shots as shots', async () => {
     show();
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    await turnTo('Similar shots');
     await userEvent.click(row('IMG_5101.HEIC'));
     await userEvent.click(screen.getByRole('button', { name: 'See IMG_5101.HEIC full screen' }));
     const shown = sheet('IMG_5101.HEIC, full screen');
@@ -361,18 +490,19 @@ describe('the picture full screen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'See IMG_4299.HEIC full screen' }));
     await userEvent.click(within(sheet('IMG_4299.HEIC, full screen')).getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
     await userEvent.click(within(sheet('Delete IMG_4299.HEIC?')).getByRole('button', { name: 'Delete IMG_4299.HEIC' }));
-    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays.', 'ok', expect.anything());
+    expect(notify).toHaveBeenLastCalledWith('IMG_4299.HEIC deleted. IMG_4299.JPG stays. The copy waits in Recently Deleted for 30 days.', 'ok');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
 describe('Clean up on a tablet', () => {
-  it('shows the list and the first group\'s review side by side, the gear with the review, and the next group once one is done', async () => {
+  it('shows the list and the first group\'s review side by side, Settings left to the rail, and the next group once one is done', async () => {
     show({ platform: 'android', tablet: true });
-    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1, name: 'Duplicates' })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'IMG_4299.JPG' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
+    // The list goes back to Clean up's first screen; the review beside it is not pushed, and has no way back.
+    expect(screen.getAllByRole('button', { name: 'Back' })).toHaveLength(1);
     expect(row('IMG_4299.JPG')).toHaveAttribute('aria-current', 'true');
     expect(table('What differs').at(-1)).toBe('FolderPhonePhone/Butte');
     await userEvent.click(row('IMG_0712.JPG'));
@@ -386,11 +516,11 @@ describe('Clean up on a tablet', () => {
   it('says there is nothing left beside an empty list, and nothing before the groups are read', async () => {
     groups = { duplicates: [], similar: [] };
     const { again } = show({ tablet: true });
-    expect(screen.getAllByRole('heading', { name: 'Clean up', level: 1 })).toHaveLength(2);
-    expect(screen.getAllByText('No duplicates left. What you deleted waits in PhotoSense Removed until you delete it permanently.')).toHaveLength(2);
-    await userEvent.click(screen.getByRole('radio', { name: 'Similar' }));
+    expect(screen.getAllByRole('heading', { name: 'Duplicates', level: 1 })).toHaveLength(2);
+    expect(screen.getAllByText('No duplicates left. What you deleted waits in Recently Deleted for 30 days.')).toHaveLength(2);
+    await turnTo('Similar shots');
     expect(screen.getAllByText('No similar shots left to review.')).toHaveLength(2);
-    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} />);
+    again(<CleanUpScreen cleanUp={{ ...stub(), data: undefined }} notify={vi.fn()} onScanAgain={vi.fn()} library={LIBRARY} onSwipe={vi.fn()} />);
     expect(screen.queryByText(/left/)).not.toBeInTheDocument();
   });
 

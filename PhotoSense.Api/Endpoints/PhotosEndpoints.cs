@@ -215,7 +215,7 @@ internal sealed class PhotosEndpoints
         }
         _log.Log("audit","Info",$"Removed photo {gid} physical={physical}");
         // The photo has gone; what was done is recorded whatever happens.
-        await _audit.AddAsync(new AuditEntry { Action = "Delete", PhotoId = gid.ToString(), Details = result.HeldAt is null ? "logical" : $"moved to {result.HeldAt} with {result.Companions.Count} linked files" }, CancellationToken.None);
+        await _audit.AddAsync(new AuditEntry { Action = "Delete", PhotoId = gid.ToString(), Details = !physical ? "logical" : result.HeldAt is null ? "its file gone, or sent to the phone's bin" : $"moved to {result.HeldAt} with {result.Companions.Count} linked files" }, CancellationToken.None);
         await resp.WriteAsJsonAsync(new { heldAt = result.HeldAt, companions = result.Companions.Count, batchId = result.BatchId?.ToString() }, ct);
         return resp;
     }
@@ -277,7 +277,7 @@ internal sealed class PhotosEndpoints
         _log.Log("audit", "Info", $"Removed {result.Removed} {what} ({result.Bytes} bytes) and {result.Companions} linked files, skipped {result.Skipped}");
         // The files have gone; what was done is recorded whatever happens.
         await _audit.AddAsync(new AuditEntry { Action = similar ? "RemoveSimilar" : "RemoveDuplicates", PhotoId = group, Details = $"removed={result.Removed} bytes={result.Bytes} linked={result.Companions} skipped={result.Skipped}{(groups.Count > 1 ? $" groups={groups.Count}" : "")}" }, CancellationToken.None);
-        await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems, BatchId = result.BatchId?.ToString() }, ct);
+        await resp.WriteAsJsonAsync(new BulkRemovalResultDto { Removed = result.Removed, Bytes = result.Bytes, Skipped = result.Skipped, Companions = result.Companions, Problems = result.Problems, BatchId = result.BatchId?.ToString(), Stays = result.Stays ?? [] }, ct);
         return resp;
     }
 }

@@ -60,11 +60,13 @@ test.describe('Help', () => {
     await reading.getByRole('button', { name: /^Next/ }).click();
     await expect(reading).toHaveAccessibleName('Scanning for duplicates');
 
-    await help.getByRole('textbox', { name: 'Search the guide' }).fill('recycle');
+    // The old name still finds the topic it became.
+    await help.getByRole('textbox', { name: 'Search the guide' }).fill('delete permanently');
     await expect(help.getByRole('navigation', { name: 'Topics' }).getByRole('button')).toHaveCount(1);
+    await expect(reading).toHaveAccessibleName('Removed files and the Recycle Bin');
     await help.getByRole('textbox', { name: 'Search the guide' }).fill('');
-    await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /Sending photos from a phone to a computer/ }).click();
-    await expect(reading).toContainText('They go over your own Wi-Fi');
+    await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /Backing up a phone to a computer/ }).click();
+    await expect(reading).toContainText('over your own Wi-Fi, never through the internet');
 
     await help.getByRole('navigation', { name: 'Topics' }).getByRole('button', { name: /Scanning for duplicates/ }).click();
     await reading.getByRole('button', { name: 'Go to the scan screen' }).click();

@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles } from '../../lib/apiClient';
-import { formatBytes, leaf, sameFolder } from '../../lib/format';
+import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles, usePlan } from '../../lib/apiClient';
+import { largest, limitLine, overLimit } from '../../lib/plan';
+import { binName, formatBytes, leaf, sameFolder } from '../../lib/format';
 import type { DistanceUnit } from '../../lib/distance';
 import {
   GALLERY_PAGE, defaultSettings, fileTag, joinPath, mapLayout, noChoices, pathOf, relativeFolder, searchText, suggest, totalBytes, unplaced,
   type FileRef, type OrganizeChoices, type OrganizeSettings, type OrganizedMark,
 } from '../../lib/organize';
-import { loadOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
+import { saveOrganizeRoot, useOrganizeRoot } from '../../lib/lastScan';
 import { useOrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeApplyRequest, OrganizeFileDto, OrganizePlaceDto } from '../../types';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { LimitDialog } from '../LimitDialog';
 import { Segmented } from '../ModeSwitch';
 import { FolderPicker } from '../FolderPicker';
 import type { ToastAction, ToastKind } from '../Toaster';
@@ -40,6 +42,8 @@ const REMOVED_FOLDER = '_PhotoSense_Removed';
 const PHONES = new Set(['iphone', 'android']);
 
 const messageOf = (e: unknown) => (e instanceof TypeError ? 'Cannot reach the PhotoSense server.' : e instanceof Error ? e.message : String(e));
+// The computer sells no plan: Pro comes from a paired phone that bought it.
+const proFromPhone = (e: unknown) => ((e as { status?: number }).status === 402 ? `${messageOf(e)} Pro bought on your phone covers this computer too.` : messageOf(e));
 const without = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(Object.entries(map).filter(([k]) => !keys.includes(k)));
 const only = <T,>(map: Readonly<Record<string, T>>, keys: readonly string[]) => Object.fromEntries(keys.filter(k => map[k]).map(k => [k, map[k]]));
 const NO_FILES: OrganizeFileDto[] = [];
@@ -52,8 +56,8 @@ const Where = ({ children }: { readonly children: string }) => <span className="
 export function OrganizeView({ startRoot, unit, notify }: Props) {
   const [chosen, setChosen] = useState<string>();
   // What this browser remembers is read once the page is in the browser.
-  useEffect(() => setChosen(c => c ?? (loadOrganizeRoot() || undefined)), []);
-  const root = chosen ?? startRoot;
+  const remembered = useOrganizeRoot();
+  const root = chosen ?? (remembered || undefined) ?? startRoot;
   const listing = useOrganizeFiles(root);
   const batches = useOrganizeBatches();
   // A phone keeps each picture once, in one of PhotoSense's albums at a time: there it can be moved, not copied.
@@ -87,6 +91,10 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   // For one of two files that share a name, the question also says which of them stays.
   const [deleting, setDeleting] = useState<{ files: FileRef[]; stays?: FileRef }>();
+  // A deletion asks the plan first: more than the free plan has left today waits on its own question, where the largest can go.
+  const plan = usePlan().data;
+  const [limited, setLimited] = useState<{ files: FileRef[]; stays?: FileRef }>();
+  const askDelete = (going: { files: FileRef[]; stays?: FileRef }) => (overLimit(plan, going.files.length) ? setLimited(going) : setDeleting(going));
   const undoable = useRef(new Map<string, Undoable>());
   // The folder that was just chosen, until its files have been read and that has been said.
   const announce = useRef<string | undefined>(undefined);
@@ -231,7 +239,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   const ownPreviewed = previewedOwn && folders.find(f => f.id === previewedOwn.id);
   // A folder whose last file was deleted from the preview has nothing left to preview.
   const nothingPreviewed = preview !== undefined && !(previewed ?? previewedOwn)?.files.length;
-  useEffect(() => { if (nothingPreviewed) setPreview(undefined); }, [nothingPreviewed]);
+  if (nothingPreviewed) setPreview(undefined);
   function renamePreviewed(name: string) {
     if (preview!.kind === 'suggested') setChoices(c => ({ ...c, renames: { ...c.renames, [preview!.key]: name } }));
     else setFolders(f => f.map(x => (x.id === preview!.key ? { ...x, name } : x)));
@@ -261,7 +269,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
       }
       if (result.skipped > 0) notify(`${result.skipped.toLocaleString()} left where ${result.skipped === 1 ? 'it is' : 'they are'}. ${result.problems[0] ?? ''}`.trim(), 'error');
     } catch (e) {
-      notify(messageOf(e), 'error');
+      notify(proFromPhone(e), 'error');
     } finally {
       setBusy(false);
     }
@@ -319,7 +327,7 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   // A folder is previewed, and moved, whole: not while more of its files may still turn up.
   const showPreview = (target: Target) => (reading ? notify(`Still reading ${leaf(root!)}. Preview a folder once every file is in.`, 'info') : setPreview(target));
   // Nor are files deleted while the list they are in is still being made.
-  const askToDelete = () => (reading ? notify(`Still reading ${leaf(root!)}. Delete files once every file is in.`, 'info') : setDeleting({ files: files.filter(f => picked.has(f.id)) }));
+  const askToDelete = () => (reading ? notify(`Still reading ${leaf(root!)}. Delete files once every file is in.`, 'info') : askDelete({ files: files.filter(f => picked.has(f.id)) }));
   const suggestedNames = byKey;
 
   return (
@@ -380,12 +388,16 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
         <MovePreview key={`${preview!.kind}:${preview!.key}`} kind={previewed ? 'Suggested folder' : 'Your folder'} root={root} files={previewed?.files ?? previewedOwn!.files} places={places}
           name={previewed?.name ?? previewedOwn!.name} base={ownPreviewed?.base} direct={ownPreviewed?.direct} split={previewed?.split} subfolderOf={previewed?.subfolderOf} merge={previewed?.merge ?? ''} mode={onPhone ? 'move' : mode} canCopy={!onPhone} companions={companions} busy={busy} asking={deleting !== undefined}
           placeOf={id => { const f = files.find(x => x.id === id); return f?.place == null ? undefined : `${places[f.place].town}, ${places[f.place].state}`; }}
-          onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move(request, going)}
-          onDelete={(file, stays) => setDeleting({ files: [file], stays })} onClose={() => setPreview(undefined)} />
+          onName={renamePreviewed} onMode={setMode} onCompanions={setCompanions} onMove={(request, going) => void move({ ...request, suggested: previewed !== undefined }, going)}
+          onDelete={(file, stays) => askDelete({ files: [file], stays })} onClose={() => setPreview(undefined)} />
+      )}
+      {limited && (
+        <LimitDialog plan={plan!} count={limited.files.length} label="files" partial={plan!.leftToday!} busy={busy}
+          onCancel={() => setLimited(undefined)} onPartial={() => { setDeleting({ files: largest(limited.files, plan!.leftToday!), stays: limited.stays }); setLimited(undefined); }} />
       )}
       {deleting && (
         <ConfirmDialog busy={busy} title={deleting.files.length === 1 ? `Delete ${deleting.files[0].name}?` : `Delete ${countFiles(deleting.files.length)}?`} confirmLabel={`Delete ${countFiles(deleting.files.length)}`}
-          note={<>Nothing is erased. The files are moved to <span className="font-mono">{REMOVED_FOLDER}</span> inside {leaf(root!)}, where Clean up puts what it removes. Undo this from Recently moved, or use Delete permanently in the menu to free the space.</>}
+          note={<>Nothing is erased. The files are moved to <span className="font-mono">{REMOVED_FOLDER}</span> inside {leaf(root!)}, where Clean up puts what it removes. Undo this from Recently moved, or use Move to {binName()} in the menu to free the space.{limitLine(plan) && ` ${limitLine(plan)}`}</>}
           onCancel={() => setDeleting(undefined)} onConfirm={() => void remove(deleting.files)}>
           {deleting.stays ? (
             <>

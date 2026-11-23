@@ -7,13 +7,28 @@ import { joinPath, MONTHS, relativeFolder, shortDate } from './organize';
 import type { Platform, Words } from './phone';
 import { useOrganizeReading } from './useOrganizeReading';
 
-/** What Library shows: everything, what has not been put in an album or folder, what has no place, or the videos. */
-export type LibraryFilter = 'all' | 'unsorted' | 'unplaced' | 'videos';
+/**
+ * What Library shows: everything, what is on the computer and what waits to be backed up, what has not been put in an
+ * album or folder, what has no place, or the videos.
+ */
+export type LibraryFilter = 'all' | 'onComputer' | 'waiting' | 'unsorted' | 'unplaced' | 'videos';
 
-/** The filters, in their order, with their names. */
+/** Which of the library's pictures and videos are on the computer, and which wait to be backed up, by their ids. */
+export interface BackedUp {
+  readonly on: ReadonlySet<string>;
+  readonly waiting: ReadonlySet<string>;
+}
+
+/** The filters, in their order, with their names, before the phone has a computer. */
 export const LIBRARY_FILTERS: readonly { readonly id: LibraryFilter; readonly label: string }[] = [
   { id: 'all', label: 'All' }, { id: 'unsorted', label: 'Not organized' }, { id: 'unplaced', label: 'No location' }, { id: 'videos', label: 'Videos' },
 ];
+
+/** The filters, with what is on the computer and what waits after All once the phone backs up to one. */
+export function libraryFilters(computer: string | null | undefined): readonly { readonly id: LibraryFilter; readonly label: string }[] {
+  if (!computer) return LIBRARY_FILTERS;
+  return [LIBRARY_FILTERS[0], { id: 'onComputer', label: `On ${computer}` }, { id: 'waiting', label: 'Waiting' }, ...LIBRARY_FILTERS.slice(1)];
+}
 
 /** The phone's library as Library shows it. */
 export interface Library {
@@ -55,17 +70,19 @@ export function isUnsorted(f: OrganizeFileDto, root: string, platform: Platform)
   return sameFolder(f.folder, root) || (platform === 'android' && sameFolder(f.folder, joinPath(root, 'DCIM', 'Camera')));
 }
 
-/** Whether a file is among those a filter shows. */
-export function shows(filter: LibraryFilter, f: OrganizeFileDto, root: string, platform: Platform): boolean {
+/** Whether a file is among those a filter shows; with no computer, none is on one or waits for one. */
+export function shows(filter: LibraryFilter, f: OrganizeFileDto, root: string, platform: Platform, backedUp?: BackedUp): boolean {
+  if (filter === 'onComputer') return !!backedUp?.on.has(f.id);
+  if (filter === 'waiting') return !!backedUp?.waiting.has(f.id);
   if (filter === 'unsorted') return isUnsorted(f, root, platform);
   if (filter === 'unplaced') return f.place == null;
   return filter === 'all' || f.isVideo;
 }
 
 /** How many files each filter shows. */
-export function filterCounts(files: readonly OrganizeFileDto[], root: string, platform: Platform): Record<LibraryFilter, number> {
-  const counts: Record<LibraryFilter, number> = { all: 0, unsorted: 0, unplaced: 0, videos: 0 };
-  for (const f of files) for (const { id } of LIBRARY_FILTERS) if (shows(id, f, root, platform)) counts[id]++;
+export function filterCounts(files: readonly OrganizeFileDto[], root: string, platform: Platform, backedUp?: BackedUp): Record<LibraryFilter, number> {
+  const counts: Record<LibraryFilter, number> = { all: 0, onComputer: 0, waiting: 0, unsorted: 0, unplaced: 0, videos: 0 };
+  for (const f of files) for (const id of Object.keys(counts) as LibraryFilter[]) if (shows(id, f, root, platform, backedUp)) counts[id]++;
   return counts;
 }
 
@@ -88,8 +105,13 @@ export const items = (n: number) => `${n.toLocaleString()} ${n === 1 ? 'item' : 
 
 /** "Dec 27, 2023, 11:34 PM": when a file was taken, as the camera's clock had it. */
 export function takenAt(date: string): string {
+  return `${shortDate(date)}, ${clockTime(date)}`;
+}
+
+/** The time of day of a date, as a phone's clock says it: "9:41 AM". */
+export function clockTime(date: string): string {
   const hour = Number(date.slice(11, 13));
-  return `${shortDate(date)}, ${hour % 12 || 12}:${date.slice(14, 16)} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `${hour % 12 || 12}:${date.slice(14, 16)} ${hour < 12 ? 'AM' : 'PM'}`;
 }
 
 /** Where a file is, in the platform's words: "Photo Library", "Photo Library › Trips › Butte", "Phone/DCIM/Camera". */
@@ -116,16 +138,16 @@ export function albumsOf(files: readonly OrganizeFileDto[], root: string, words:
 /** Where a new album or folder is made: at the top of an iPhone's library; in Pictures on Android, which keeps photos only in DCIM, Pictures or Movies. */
 export const newAlbumBase = (root: string, platform: Platform) => (platform === 'ios' ? root : joinPath(root, 'Pictures'));
 
-/** The question before files are deleted, naming them: its title, what happens, and its button. */
+/**
+ * The question before files are deleted, naming them: its title, what happens, and its button. They go to the phone's
+ * Recently Deleted or bin (Jamie, 2026-11-17), which PhotoSense cannot take them back from.
+ */
 export function deleteQuestion(names: readonly string[], words: Words): { title: string; lines: string[]; button: string } {
   const n = names.length, one = n === 1;
   const named = names.slice(0, 3).join(', ') + (n > 3 ? ` and ${(n - 3).toLocaleString()} more` : '');
   return {
     title: `Delete ${items(n)}?`,
-    lines: [
-      `${named} ${one ? 'goes' : 'go'} to ${words.removed}.`,
-      `Undo can bring ${one ? 'it' : 'them'} back. Delete permanently, in Settings, sends ${one ? 'it' : 'them'} to ${words.bin}.`,
-    ],
+    lines: [`${named} ${one ? 'goes' : 'go'} to ${words.bin} for 30 days.`],
     button: `Delete ${items(n)}`,
   };
 }

@@ -112,12 +112,14 @@ internal sealed class ChangesFixture : IDisposable
     public List<AuditEntry> Audited { get; } = [];
     /// <summary>The changes under test.</summary>
     public FileChanges Changes { get; }
+    /// <summary>The free plan the changes are made under: its counts, its clock, and no store.</summary>
+    public PlanParts Plan { get; } = new();
 
     public ChangesFixture()
     {
         var audit = new Mock<IAuditRepository>();
         audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
-        Changes = new FileChanges(Batches, Repo, audit.Object, Disk);
+        Changes = new FileChanges(Batches, Repo, audit.Object, Disk, TestPlans.Removals(Plan));
     }
 
     /// <summary>A path in the test's folder.</summary>

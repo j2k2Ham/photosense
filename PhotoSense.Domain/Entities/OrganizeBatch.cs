@@ -50,6 +50,8 @@ public sealed class OrganizeBatch
     public bool Removed { get; set; }
     /// <summary>Files asked for, not counting what came along with them.</summary>
     public int Files { get; set; }
+    /// <summary>How many of its files counted toward the free plan's removals that day: none for a move, or on Pro. An undo gives them back.</summary>
+    public int Counted { get; set; }
     /// <summary>The bytes of every file the change took, companions included.</summary>
     public long Bytes { get; set; }
     /// <summary>Every file the change put somewhere, companions included.</summary>

@@ -132,13 +132,77 @@ public class MagickImageAnalyzerTests
     }
 
     [Test]
-    public async Task What_Is_Not_An_Image_Is_Refused(CancellationToken ct)
+    public async Task What_Is_Not_A_Picture_It_Reads_Is_Refused_Before_Magick_Sees_It_Whatever_It_Is_Called(CancellationToken ct)
     {
-        // Magick's own error is turned into the one the rest of PhotoSense knows, with Magick's words for why.
-        var analyzing = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.AnalyzeAsync(new MemoryStream("not an image at all"u8.ToArray()), ct));
-        await Assert.That(analyzing!.InnerException).IsTypeOf<MagickMissingDelegateErrorException>();
+        // Text, and a drawing, PostScript and ImageMagick's own scripts, as a file named .jpg could hold them: none is
+        // handed to their readers, which could read other files or run programs.
+        foreach (var text in new[] { "not an image at all", "<?xml version=\"1.0\"?><svg xmlns=\"http://www.w3.org/2000/svg\"><image href=\"file:///etc/passwd\"/></svg>",
+            "%!PS-Adobe-3.0\n(hello) print", "push graphic-context\nimage over 0,0 0,0 'label:@/etc/passwd'\npop graphic-context", "<?xml version=\"1.0\"?><image><read filename=\"/etc/passwd\"/></image>" })
+        {
+            var analyzing = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.AnalyzeAsync(new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text)), ct));
+            await Assert.That((analyzing!.Message, analyzing.InnerException)).IsEqualTo(("It is not a picture PhotoSense reads: JPEG, PNG, GIF, BMP, TIFF, WebP or HEIC.", (Exception?)null));
+        }
+        await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.RenderJpegAsync(new MemoryStream([1, 2, 3, 4]), 100, ct));
+    }
+
+    [Test]
+    [Arguments(MagickFormat.Jpeg, "JPEG")]
+    [Arguments(MagickFormat.Png, "PNG")]
+    [Arguments(MagickFormat.Gif, "GIF")]
+    [Arguments(MagickFormat.Bmp, "BMP")]
+    [Arguments(MagickFormat.Tiff, "TIFF")]
+    [Arguments(MagickFormat.WebP, "WEBP")]
+    [Arguments(MagickFormat.Avif, "AVIF")]
+    public async Task Each_Format_It_Reads_Is_Decoded_As_What_Its_First_Bytes_Say(MagickFormat written, string read, CancellationToken ct)
+    {
+        using var picture = Picture(seed: 3, width: 300, height: 200);
+        var analysis = await _analyzer.AnalyzeAsync(new MemoryStream(picture.ToByteArray(written)), ct);
+        await Assert.That((analysis.Format, analysis.Width, analysis.Height)).IsEqualTo((read, 300, 200));
+    }
+
+    [Test]
+    public async Task A_Picture_That_Is_Broken_Inside_Is_Refused_With_Magicks_Own_Words(CancellationToken ct)
+    {
+        // A JPEG's first bytes, then nothing a JPEG holds: Magick's error is turned into the one PhotoSense knows.
+        var analyzing = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.AnalyzeAsync(new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4, 5]), ct));
+        await Assert.That(analyzing!.InnerException).IsAssignableTo<MagickException>();
         await Assert.That(analyzing.Message).IsEqualTo(analyzing.InnerException!.Message);
-        await Assert.That((await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.RenderJpegAsync(new MemoryStream([1, 2, 3, 4]), 100, ct)))!.InnerException).IsAssignableTo<MagickException>();
+    }
+
+    [Test]
+    public async Task A_Picture_Claiming_To_Be_Wider_Than_Any_Real_One_Is_Refused_Not_Decoded(CancellationToken ct)
+    {
+        // 40,000 pixels wide and one high, a few bytes once compressed: the decoder's limits refuse it before it is drawn.
+        var wide = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => _analyzer.AnalyzeAsync(new MemoryStream(GrayPng(MagickImageAnalyzer.MaxEdge + 7_232, 1)), ct));
+        await Assert.That(wide!.InnerException).IsAssignableTo<MagickException>();
+        // One within the limits decodes.
+        await Assert.That((await _analyzer.AnalyzeAsync(new MemoryStream(GrayPng(4_000, 2)), ct)).Width).IsEqualTo(4_000);
+    }
+
+    // A grey PNG of the size given, written by hand: Magick, whose limits a test sets for the whole program, never makes it.
+    private static byte[] GrayPng(uint width, uint height)
+    {
+        static byte[] BigEndian(uint n) => [(byte)(n >> 24), (byte)(n >> 16), (byte)(n >> 8), (byte)n];
+        static uint Crc(IEnumerable<byte> bytes)
+        {
+            var crc = 0xFFFFFFFFu;
+            foreach (var b in bytes)
+            {
+                crc ^= b;
+                for (var k = 0; k < 8; k++) crc = (crc & 1) != 0 ? 0xEDB88320u ^ (crc >> 1) : crc >> 1;
+            }
+            return crc ^ 0xFFFFFFFFu;
+        }
+        static byte[] Chunk(string type, byte[] data)
+        {
+            byte[] typed = [.. System.Text.Encoding.ASCII.GetBytes(type), .. data];
+            return [.. BigEndian((uint)data.Length), .. typed, .. BigEndian(Crc(typed))];
+        }
+        using var packed = new MemoryStream();
+        using (var zlib = new System.IO.Compression.ZLibStream(packed, System.IO.Compression.CompressionLevel.SmallestSize, leaveOpen: true))
+            for (var row = 0; row < height; row++) zlib.Write(new byte[width + 1]);
+        return [0x89, .. "PNG"u8, 0x0D, 0x0A, 0x1A, 0x0A,
+            .. Chunk("IHDR", [.. BigEndian(width), .. BigEndian(height), 8, 0, 0, 0, 0]), .. Chunk("IDAT", packed.ToArray()), .. Chunk("IEND", [])];
     }
 
     [Test]

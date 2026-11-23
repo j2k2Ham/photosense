@@ -1,3 +1,6 @@
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
+
 namespace PhotoSense.Infrastructure.Library;
 
 /// <summary>A picture or video as an Android phone's media store keeps it.</summary>
@@ -7,7 +10,8 @@ namespace PhotoSense.Infrastructure.Library;
 /// <param name="Length">Its size.</param>
 /// <param name="ModifiedUtc">When it last changed.</param>
 /// <param name="IsVideo">It is a video rather than a picture.</param>
-public sealed record MediaEntry(string Id, string Folder, string Name, long Length, DateTime ModifiedUtc, bool IsVideo);
+/// <param name="Favorite">It is a favorite (<c>IS_FAVORITE</c>).</param>
+public sealed record MediaEntry(string Id, string Folder, string Name, long Length, DateTime ModifiedUtc, bool IsVideo, bool Favorite = false);
 
 /// <summary>Changes to an Android phone's pictures and videos, made together.</summary>
 public sealed class MediaChange
@@ -41,4 +45,42 @@ public interface IMediaStore
     /// </summary>
     /// <exception cref="IOException">Nothing was changed, and why.</exception>
     void Change(MediaChange change);
+
+    /// <summary>
+    /// Writes a smaller copy of the video <paramref name="id"/>, made into <paramref name="target"/> as HEVC, into the
+    /// same folder with the original's date; answers how many bytes the copy takes. The original is left as it is.
+    /// </summary>
+    /// <exception cref="IOException">The video could not be read or written; nothing is kept.</exception>
+    Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
+
+    /// <summary>Marks a picture or video a favorite, or takes the mark away, after Android asks the person.</summary>
+    /// <exception cref="IOException">The person said no, or the phone could not change it.</exception>
+    void SetFavorite(string id, bool favorite);
+
+    /// <summary>
+    /// Gives pictures and videos, by their ids, the dates and places asked, all together, after Android asks: a picture's
+    /// own details are written again in its file, the picture itself untouched; a video's date is Android's record of it.
+    /// </summary>
+    /// <exception cref="IOException">The person said no, or the phone could not change them.</exception>
+    void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
+
+    /// <summary>
+    /// Adds a picture or video to a folder as a new file, under its name or, when that is taken, the one Android
+    /// gives it; dated as given, and placed too where its file can say so. Returns the store's id for it.
+    /// </summary>
+    /// <param name="folder">The folder as the store says it: "DCIM/Camera/".</param>
+    /// <param name="name">Its name.</param>
+    /// <param name="content">What it holds.</param>
+    /// <param name="taken">When it was taken; null to leave Android's own.</param>
+    /// <param name="place">Where it was taken; null for nowhere.</param>
+    /// <param name="ct">Stops it before Android has it.</param>
+    /// <exception cref="IOException">Android could not take it.</exception>
+    Task<string> ImportAsync(string folder, string name, Stream content, DateTime? taken, PlaceChange? place, CancellationToken ct);
+
+    /// <summary>
+    /// A copy of a picture or video for sharing, in the app's cache, without its place and camera details as asked: a
+    /// HEIC picture becomes a JPEG, as Android cannot rewrite HEIC's details; a video is re-written, not re-encoded.
+    /// </summary>
+    /// <exception cref="IOException">It could not be copied.</exception>
+    Task<SharedCopy> CopyForSharingAsync(string id, bool removeLocation, bool removeCamera, CancellationToken ct);
 }

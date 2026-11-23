@@ -1,6 +1,7 @@
 using Moq;
 using PhotoSense.Application.Changes;
 using PhotoSense.Application.Organizing;
+using PhotoSense.Application.Plans;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
 using PhotoSense.Domain.Services;
@@ -80,6 +81,8 @@ internal sealed class OrganizeFixture : IDisposable
     public FailingDisk Disk { get; } = new();
     /// <summary>The changes moves are made through.</summary>
     public FileChanges Changes { get; }
+    /// <summary>The free plan the changes are made under: its counts, its clock, and no store.</summary>
+    public PlanParts Plan { get; } = new();
     private readonly Mock<IAuditRepository> _audit = new();
 
     public OrganizeFixture()
@@ -91,7 +94,7 @@ internal sealed class OrganizeFixture : IDisposable
         Finder = new CompanionFileFinder(Disk, (path, _) => Task.FromResult(ContentAsId(path)));
         Planner = new OrganizePlanner(Library, Finder, Places, Disk);
         Batches = new MemoryBatchStore();
-        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk);
+        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk, TestPlans.Removals(Plan));
     }
 
     /// <summary>Finds companions, reading a file's content as its Live Photo identifier.</summary>
@@ -103,11 +106,12 @@ internal sealed class OrganizeFixture : IDisposable
     /// <summary>The clock changes are stamped with.</summary>
     public TestClock Clock { get; } = new(TestClock.Day, TimeSpan.FromSeconds(1));
 
-    /// <summary>Moves files for Organize, with the finder given or the fixture's own.</summary>
-    public OrganizeMover Mover(ICompanionFileFinder? finder = null) => new(Library, finder ?? Finder, Changes, _audit.Object, Disk, Clock);
+    /// <summary>Moves files for Organize, with the finder given or the fixture's own, on the plan given or the free one.</summary>
+    public OrganizeMover Mover(ICompanionFileFinder? finder = null, Subscription? plan = null) => new(Library, finder ?? Finder, Changes, _audit.Object, Disk, Clock, plan ?? TestPlans.Subscription());
 
     /// <param name="files">The file system it erases through; the fixture's own disk when not given.</param>
-    public PhotoSense.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null) => new(Repo, Batches, _audit.Object, files ?? Disk);
+    /// <param name="bin">The computer's Recycle Bin, if any.</param>
+    public PhotoSense.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null, IRecycleBin? bin = null) => new(Repo, Batches, _audit.Object, files ?? Disk, TestPlans.Removals(), bin);
 
     public void Dispose()
     {

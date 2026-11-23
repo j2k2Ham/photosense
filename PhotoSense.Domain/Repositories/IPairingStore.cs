@@ -12,6 +12,12 @@ public interface IPairingStore
     /// <summary>This device's own id, made once and kept.</summary>
     Task<string> SelfIdAsync(CancellationToken ct);
 
+    /// <summary>What the person named this device, as others show it; null until they named it.</summary>
+    Task<string?> SelfNameAsync(CancellationToken ct);
+
+    /// <summary>Keeps what the person named this device.</summary>
+    Task SaveSelfNameAsync(string name, CancellationToken ct);
+
     /// <summary>The pairing with a device, or null when this one has never been paired with it.</summary>
     Task<PairedDevice?> GetAsync(string id, CancellationToken ct);
 

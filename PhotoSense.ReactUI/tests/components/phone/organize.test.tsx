@@ -10,8 +10,8 @@ import type { Platform } from '../../../lib/phone';
 import { useOrganize } from '../../../lib/phoneOrganize';
 import type { OrganizeApplyDto, OrganizeBatchDto, OrganizeClashDto, OrganizeDestination, OrganizeFileDto, OrganizePlanFile } from '../../../types';
 import { deferred } from '../../deferred';
-import { organizeFile, organizePlace } from '../../fixtures';
-import { frame, inFrame } from './frame';
+import { organizeFile, organizePlace, plan } from '../../fixtures';
+import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({ planOrganize: vi.fn(), applyOrganize: vi.fn(), removeOrganize: vi.fn(), undoChange: vi.fn(), useOrganizeBatches: vi.fn() }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
@@ -33,6 +33,9 @@ function changed() { version++; watching.forEach(f => f()); }
 const useVersion = () => React.useSyncExternalStore(f => { watching.add(f); return () => watching.delete(f); }, () => version);
 const applied = (more: Partial<OrganizeApplyDto> = {}): OrganizeApplyDto => ({ batchId: 'b1', done: 4, bytes: 4 * 1024 ** 2, companions: 0, renamed: 0, skipped: 0, problems: [], items: [], ...more });
 
+// The plan's gate: no plan known, every removal going ahead, unless a test gives its own.
+let planGate = gate();
+beforeEach(() => { planGate = gate(); });
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset();
   files = [
@@ -77,7 +80,7 @@ function show({ platform = 'ios', tablet = false, made = [], unit = 'miles' }: S
     const organize = useOrganize(listing, platform, tablet, unit);
     return <OrganizeScreen organize={organize} library={library} made={made} onMade={onMade} onNoLocation={onNoLocation} notify={notify} />;
   }
-  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }));
+  const view = inFrame(<Holder />, frame(platform, { tablet, form: tablet ? 'tablet' : 'phone' }), planGate);
   return { ...view, notify, onMade, onNoLocation };
 }
 
@@ -309,12 +312,23 @@ describe('a suggestion\'s preview', () => {
 });
 
 describe('moving', () => {
+  it('on the free plan opens the Pro sheet first, as organizing by place and date is part of Pro, and moves once Pro is bought', async () => {
+    planGate = gate({ plan: plan() });
+    show();
+    await userEvent.click(row('Anaconda'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Move 4 files' }));
+    expect(planGate.offer).toHaveBeenCalledExactlyOnceWith('organize', expect.any(Function));
+    expect(api.applyOrganize).not.toHaveBeenCalled();
+    await act(async () => (vi.mocked(planGate.offer).mock.calls[0][1] as () => void)());
+    expect(api.applyOrganize).toHaveBeenCalledWith(expect.objectContaining({ folderName: 'Anaconda', suggested: true }));
+  });
+
   it('moves the files that go, says so with Undo, and shows the suggestion as moved; Undo puts them back', async () => {
     const { notify } = show();
     await userEvent.click(row('Anaconda'));
     await userEvent.click(await screen.findByRole('button', { name: 'Move 4 files' }));
     expect(api.applyOrganize).toHaveBeenCalledWith({
-      basePath: ROOT, folderName: 'Anaconda', direct: false, mode: 'move', companions: true, label: 'Anaconda',
+      basePath: ROOT, folderName: 'Anaconda', direct: false, mode: 'move', companions: true, label: 'Anaconda', suggested: true,
       files: [{ id: 'a1', name: 'a1.JPG', subfolder: '2022' }, { id: 'a2', name: 'a2.JPG', subfolder: '2023' }, { id: 'a3', name: 'a3.JPG', subfolder: '2023' }, { id: 'a4', name: 'a4.JPG', subfolder: '2023' }],
     });
     expect(notify).toHaveBeenLastCalledWith('Moved 4 files to Anaconda.', 'ok', expect.objectContaining({ label: 'Undo' }));
@@ -348,7 +362,8 @@ describe('moving', () => {
   it('on a tablet shows the first suggestion beside the list, and what was done once it moves', async () => {
     api.undoChange.mockResolvedValueOnce({ restored: 1, skipped: 2, problems: ['Moved since.'] }).mockRejectedValueOnce('no answer');
     const { notify } = show({ tablet: true });
-    expect(screen.getAllByRole('button', { name: 'Settings' })).toHaveLength(1);
+    // Settings is at the foot of the sidebar.
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     expect(row('Anaconda')).toHaveAttribute('aria-current', 'true');
     await userEvent.click(row('Uptown Butte'));
     await userEvent.click(await screen.findByRole('button', { name: 'Move 1 file' }));
@@ -441,7 +456,7 @@ describe('names already taken', () => {
     expect(await screen.findByText('2 names are already taken in Anaconda. Each gets a number, as in a1 (1).JPG.')).toBeInTheDocument();
   });
 
-  it('deletes either file after a question naming the one that stays, with Undo; Cancel keeps both', async () => {
+  it('deletes either file after a question naming the one that stays, saying where it waits; Cancel keeps both', async () => {
     const { notify } = show();
     await userEvent.click(row('Anaconda'));
     await userEvent.click(await screen.findByRole('button', { name: 'Review each name' }));
@@ -454,10 +469,23 @@ describe('names already taken', () => {
     await userEvent.click(within(names).getByRole('button', { name: 'Delete a2.JPG, going in' }));
     await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete' }));
     expect(api.removeOrganize).toHaveBeenCalledWith(ROOT, ['a2']);
-    expect(notify).toHaveBeenLastCalledWith('a2.JPG deleted from Photo Library. a2.JPG in Photo Library › Anaconda › 2023 stays.', 'ok', expect.objectContaining({ label: 'Undo' }));
+    // Gone to the phone's own bin, which has no Undo of PhotoSense's (Jamie, 2026-11-20).
+    expect(notify).toHaveBeenLastCalledWith('a2.JPG deleted from Photo Library. a2.JPG in Photo Library › Anaconda › 2023 stays. a2.JPG waits in Recently Deleted for 30 days.', 'ok');
     // No name is taken any longer, so the sheet has gone.
     expect(await screen.findByText('3 of 3 files will move. Tap a file to leave it where it is.')).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks the plan before deleting either file, and says where it goes and the removals left on the free plan', async () => {
+    planGate = gate({ plan: plan({ leftToday: 38 }) });
+    show();
+    await userEvent.click(row('Anaconda'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Review each name' }));
+    await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete a2.JPG, already there' }));
+    expect(planGate.remove).toHaveBeenCalledWith(1, 'items', expect.any(Function));
+    const asked = within(sheet('Name taken')).getByRole('alertdialog', { name: 'Delete a2.JPG?' });
+    expect(asked).toHaveTextContent('a2.JPG goes to Recently Deleted for 30 days.');
+    expect(asked).toHaveTextContent('Free plan: 38 removals left today.');
   });
 
   it('says when a file could not be deleted, or why', async () => {
@@ -472,7 +500,7 @@ describe('names already taken', () => {
     }
   });
 
-  it('names another file of the same move as also going in, and a deletion with nothing to undo offers no Undo', async () => {
+  it('names another file of the same move as also going in, and either can be deleted', async () => {
     taken = {};
     files = [at('a1', { place: 0, date: '2023-01-01T00:00:00' }), at('dup', { name: 'a1.JPG', place: 0, date: '2023-02-01T00:00:00', folder: `${ROOT}/Other` })];
     files = [files[0], { ...files[1], folder: ROOT }];
@@ -485,7 +513,7 @@ describe('names already taken', () => {
     expect(names).toHaveTextContent('Also from Photo Library');
     await userEvent.click(within(names).getByRole('button', { name: 'Delete a1.JPG, also going in' }));
     await userEvent.click(within(sheet('Name taken')).getByRole('button', { name: 'Delete' }));
-    expect(notify).toHaveBeenLastCalledWith('a1.JPG deleted from Photo Library. a1.JPG in Photo Library stays.', 'ok', undefined);
+    expect(notify).toHaveBeenLastCalledWith('a1.JPG deleted from Photo Library. a1.JPG in Photo Library stays. a1.JPG waits in Recently Deleted for 30 days.', 'ok');
   });
 });
 

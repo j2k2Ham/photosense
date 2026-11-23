@@ -1,5 +1,11 @@
 import type { DuplicateGroupDto, GroupMode, MatchKind, PhotoDto } from '../types';
 
+/**
+ * What the computer calls its bin, where Move to Recycle Bin sends removed files (Jamie, 2026-11-20): "Trash" on a Mac,
+ * "Recycle Bin" elsewhere. The page is shown on the computer the program runs on, so its browser says which.
+ */
+export const binName = (agent: string = typeof navigator === 'undefined' ? '' : navigator.userAgent) => (/Macintosh|Mac OS X/.test(agent) ? 'Trash' : 'Recycle Bin');
+
 /** A size as a person reads it: "2.41 GB", "3.2 MB" or "12 KB", never less than 1 KB. */
 export function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;

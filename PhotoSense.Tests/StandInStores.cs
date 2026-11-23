@@ -1,6 +1,9 @@
+using PhotoSense.Application.Transfer;
+using PhotoSense.Infrastructure.Transfer;
 using Microsoft.Extensions.DependencyInjection;
 using PhotoSense.Domain.Entities;
 using PhotoSense.Domain.Repositories;
+using PhotoSense.Domain.Services;
 using PhotoSense.Domain.ValueObjects;
 
 namespace PhotoSense.Tests;
@@ -85,7 +88,7 @@ internal sealed class MemoryBatchStore : IOrganizeBatchStore
 
     private static OrganizeBatch Copy(OrganizeBatch b) => new()
     {
-        Id = b.Id, UtcTicks = b.UtcTicks, Label = b.Label, Copy = b.Copy, Removed = b.Removed, Files = b.Files, Bytes = b.Bytes, Undone = b.Undone, State = b.State,
+        Id = b.Id, UtcTicks = b.UtcTicks, Label = b.Label, Copy = b.Copy, Removed = b.Removed, Files = b.Files, Counted = b.Counted, Bytes = b.Bytes, Undone = b.Undone, State = b.State,
         Items = b.Items.Select(i => new OrganizeBatchItem { From = i.From, To = i.To, SizeBytes = i.SizeBytes, ModifiedUtcTicks = i.ModifiedUtcTicks, Companion = i.Companion, Back = i.Back }).ToList(),
         CreatedFolders = [.. b.CreatedFolders], UndoFolders = [.. b.UndoFolders],
     };
@@ -158,6 +161,170 @@ internal sealed class MemoryAudit(TimeProvider time) : IAuditRepository
     }
 }
 
+/// <summary>Each day's count of removals and a shared plan, in memory.</summary>
+internal sealed class MemoryPlanStore : IPlanStore
+{
+    private readonly Dictionary<DateOnly, int> _removed = [];
+    private Entitlement? _shared;
+
+    /// <inheritdoc />
+    public Task<int> RemovedOnAsync(DateOnly day, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_removed) return Task.FromResult(_removed.GetValueOrDefault(day));
+    }
+
+    /// <inheritdoc />
+    public Task AddRemovedAsync(DateOnly day, int count, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_removed) _removed[day] = Math.Max(0, _removed.GetValueOrDefault(day) + count);
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<Entitlement?> SharedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_shared);
+    }
+
+    /// <inheritdoc />
+    public Task KeepSharedAsync(Entitlement? plan, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _shared = plan;
+        return Task.CompletedTask;
+    }
+
+    private readonly Dictionary<DateOnly, (int Removed, long Freed)> _cleaned = [];
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<DateOnly, int>> RemovedInAsync(int year, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_removed) return Task.FromResult<IReadOnlyDictionary<DateOnly, int>>(_removed.Where(d => d.Key.Year == year).ToDictionary());
+    }
+
+    /// <inheritdoc />
+    public Task AddCleanedAsync(DateOnly day, int removed, long freed, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_cleaned)
+        {
+            var (was, gone) = _cleaned.GetValueOrDefault(day);
+            _cleaned[day] = (Math.Max(0, was + removed), Math.Max(0, gone + freed));
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<CleanedDay>> CleanedInAsync(int year, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_cleaned) return Task.FromResult<IReadOnlyList<CleanedDay>>([.. _cleaned.Where(d => d.Key.Year == year).OrderBy(d => d.Key).Select(d => new CleanedDay(d.Key, d.Value.Removed, d.Value.Freed))]);
+    }
+}
+
+/// <summary>A phone's notification settings, in memory.</summary>
+internal sealed class MemoryNoticeStore : INoticeStore
+{
+    private NoticeSettings _settings = NoticeSettings.None;
+
+    /// <inheritdoc />
+    public Task<NoticeSettings> GetAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_settings);
+    }
+
+    /// <inheritdoc />
+    public Task SaveAsync(NoticeSettings settings, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _settings = settings;
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>The home chosen for Trips, and the names given trips, in memory.</summary>
+internal sealed class MemoryTripStore : ITripStore
+{
+    private HomeTown? _home;
+    private readonly Dictionary<string, string> _names = new(StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, string>> NamesAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>(_names, StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task SaveNameAsync(string tripId, string? name, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (name is null) _names.Remove(tripId);
+        else _names[tripId] = name;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<HomeTown?> HomeAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_home);
+    }
+
+    /// <inheritdoc />
+    public Task SaveHomeAsync(HomeTown? home, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _home = home;
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>The fixes made to a phone's dates and places, and the last of each kind, in memory.</summary>
+internal sealed class MemoryDetailsFixStore : IDetailsFixStore
+{
+    private readonly Dictionary<string, FixedDetails> _fixed = new(StringComparer.Ordinal);
+    private readonly Dictionary<FixKind, IReadOnlyList<FixedItem>> _last = [];
+
+    /// <inheritdoc />
+    public Task<IReadOnlyDictionary<string, FixedDetails>> FixedAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_fixed) return Task.FromResult<IReadOnlyDictionary<string, FixedDetails>>(new Dictionary<string, FixedDetails>(_fixed, StringComparer.Ordinal));
+    }
+
+    /// <inheritdoc />
+    public Task SaveFixedAsync(IReadOnlyDictionary<string, FixedDetails?> fixes, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_fixed)
+            foreach (var (id, fix) in fixes)
+                if (fix is null) _fixed.Remove(id);
+                else _fixed[id] = fix;
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<FixedItem>> LastAsync(FixKind kind, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_last) return Task.FromResult(_last.GetValueOrDefault(kind) ?? []);
+    }
+
+    /// <inheritdoc />
+    public Task SaveLastAsync(FixKind kind, IReadOnlyList<FixedItem> items, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_last) _last[kind] = [.. items];
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>Every store a program keeps, replaced by a stand-in in memory, so that no test but the stores' own touches the database.</summary>
 internal static class StandInStores
 {
@@ -170,5 +337,15 @@ internal static class StandInStores
             .AddSingleton<IMediaDetailsStore>(new MemoryMediaDetailsStore())
             .AddSingleton<IScanHistory>(new MemoryScanHistory())
             .AddSingleton<IAuditRepository>(sp => new MemoryAudit(sp.GetRequiredService<TimeProvider>()))
-            .AddSingleton<IPairingStore>(pairs ?? new MemoryPairs("this-device"));
+            .AddSingleton<IPairingStore>(pairs ?? new MemoryPairs("this-device"))
+            .AddSingleton<IPlanStore>(new MemoryPlanStore())
+            .AddSingleton<IBackupStore>(new MemoryBackupStore())
+            .AddSingleton<IBackupLedger>(new MemoryBackupLedger())
+            .AddSingleton<ISwipeStore>(new MemorySwipeStore())
+            .AddSingleton<INoticeStore>(new MemoryNoticeStore())
+            .AddSingleton<ITripStore>(new MemoryTripStore())
+            .AddSingleton<IDetailsFixStore>(new MemoryDetailsFixStore())
+            .AddSingleton<ILocationStore>(new MemoryLocationStore())
+            // The computer's door for phones waits on a free port of its own, and tells no network.
+            .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

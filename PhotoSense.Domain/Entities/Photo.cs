@@ -49,6 +49,15 @@ public class Photo
     public PhotoSet Set { get; set; }
     /// <summary>The person marked it to keep, so no bulk removal takes it.</summary>
     public bool IsKept { get; set; }
+    /// <summary>How sharp the picture is (<see cref="Services.ImageFingerprint.Sharpness"/>); null for a video, or a picture not measured yet.</summary>
+    public double? Sharpness { get; set; }
+    /// <summary>A picture of the screen, as the phone marks it, or as its name or folder says.</summary>
+    public bool IsScreenshot { get; set; }
+    /// <summary>The burst the shot belongs to, as an iPhone marks it; null when the phone says of none, as elsewhere bursts are told by time.</summary>
+    public string? BurstId { get; set; }
+
+    /// <summary>What is in the picture, as a phone's own labelling names it in lower case; null where nothing labelled it, empty where it found nothing.</summary>
+    public string[]? Labels { get; set; }
     /// <summary>Width times height: the larger copy of a shot is the better one to keep.</summary>
     public long PixelCount => (long)Width * Height;
     /// <summary>Whether the file is a video, by its extension.</summary>
@@ -80,7 +89,11 @@ public class Photo
             Latitude = Latitude,
             Longitude = Longitude,
             Set = Set,
-            IsKept = IsKept
+            IsKept = IsKept,
+            Sharpness = Sharpness,
+            IsScreenshot = IsScreenshot,
+            BurstId = BurstId,
+            Labels = Labels,
         };
         moved.LoadCategories(_categories);
         return moved;

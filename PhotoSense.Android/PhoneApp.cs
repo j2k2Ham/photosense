@@ -5,8 +5,10 @@ using PhotoSense.Api;
 using PhotoSense.Api.About;
 using PhotoSense.Api.Http;
 using PhotoSense.Application.Changes;
+using PhotoSense.Application.Plans;
 using PhotoSense.Application.Scanning.Interfaces;
 using PhotoSense.Infrastructure.Library;
+using PhotoSense.Infrastructure.Transfer;
 
 namespace PhotoSense.AndroidApp;
 
@@ -34,7 +36,11 @@ public static class PhoneApp
         if (_built is not null) return;
         _built = new ServiceCollection()
             .AddPhotoSenseAndroid(new AndroidMediaStore(context), new AndroidAccess(), new AndroidImageAnalyzer(), DataFolder(context), context.CacheDir!.AbsolutePath,
-                new NsdAdvertiser(context), $"{Build.Manufacturer} {Build.Model}".Trim())
+                new NsdAdvertiser(context), new PlayBillingStore(TimeProvider.System),
+                new GoogleCodeScanner(), new MdnsComputerFinder(), new AndroidDevice(context), new AndroidNotifier(context), new AndroidShareSheet(context),
+                new KeystoreVaultKeys(context), new DeviceUnlocker(), new AndroidWidgets(context), new KeystoreLocationSecrets(context), new WebSignIn(),
+                $"{Build.Manufacturer} {Build.Model}".Trim(),
+                vaultFolder: Path.Combine(context.NoBackupFilesDir!.AbsolutePath, "Hidden"))
             .AddPhotoSenseApi()
             .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "android"))
             .BuildServiceProvider();
@@ -43,6 +49,20 @@ public static class PhoneApp
             var log = Services.GetRequiredService<IScanLogSink>();
             // Putting back runs once, at start, until it is done: nothing stops it part way.
             foreach (var sentence in await Services.GetRequiredService<FileChanges>().RecoverAsync(CancellationToken.None)) log.Log("audit", "Warning", sentence);
+            // The trial's reminder follows the plan, and a low-storage alert goes if one is due.
+            var notices = Services.GetRequiredService<PhoneNotices>();
+            await notices.RemindAsync(CancellationToken.None);
+            await notices.CheckStorageAsync(CancellationToken.None);
+            // The home screen widgets show how things stand now.
+            await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(CancellationToken.None);
         });
+    }
+
+    /// <summary>Hands the home screen widgets how things stand, once the app is ready; as the app goes off the screen.</summary>
+    public static async Task RefreshWidgetsAsync()
+    {
+        await Ready;
+        // Nothing stops it part way: it reads what PhotoSense knows and draws two widgets.
+        await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(CancellationToken.None);
     }
 }

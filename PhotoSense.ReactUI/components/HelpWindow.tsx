@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { GUIDE, searchGuide, type GuidePlace } from '../lib/guide';
+import { guideFor, searchGuide, type GuidePlace, type GuidePlatform } from '../lib/guide';
 import { WindowShell } from './WindowShell';
 
 interface Props {
+  /** Where PhotoSense runs: the guide shows that platform's topics, in its words. */
+  readonly platform: GuidePlatform;
   /** Takes the reader to the place a topic describes; the guide is put away for it. */
   onGo(place: GuidePlace): void;
   onClose(): void;
@@ -17,10 +19,10 @@ function rich(text: string) {
  * The user guide: its topics down the left, the one being read on the right. It can be searched, read
  * from one topic to the next, and each topic that describes a place in PhotoSense has a button that goes there.
  */
-export function HelpWindow({ onGo, onClose }: Props) {
+export function HelpWindow({ platform, onGo, onClose }: Props) {
   const [query, setQuery] = useState('');
-  const [at, setAt] = useState(GUIDE[0].id);
-  const found = useMemo(() => searchGuide(query), [query]);
+  const [at, setAt] = useState(() => guideFor(platform)[0].id);
+  const found = useMemo(() => searchGuide(query, platform), [query, platform]);
   // The topic being read, while the search still finds it; otherwise the first one it does find.
   const topic = found.find(t => t.id === at) ?? found[0];
   const index = found.indexOf(topic);

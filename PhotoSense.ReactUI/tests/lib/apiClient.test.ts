@@ -73,6 +73,8 @@ describe('requests that act on photos', () => {
     const isGroupListing = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
     expect(isGroupListing(`${API}/scan/groups?mode=duplicates&page=1&hideKept=false&q=`)).toBe(true);
     expect(isGroupListing(`${API}/scan/status`)).toBe(true);        // the count of files on record changes with them
+    expect(isGroupListing(`${API}/plan`)).toBe(true);               // a removal counts toward the free plan's limit
+    expect(isGroupListing(`${API}/plan/buy`)).toBe(false);
     expect(isGroupListing(`${API}/scan/progress/scan-1`)).toBe(false);
     expect(isGroupListing(['/scan/groups'])).toBe(false);
     expect(isGroupListing(null)).toBe(false);
@@ -131,7 +133,7 @@ describe('requests that act on photos', () => {
     expect(lastRequest().url).toBe(`${API}/photos/bulk/remove-duplicates?mode=similar`);
     // With no group named nothing is asked for, least of all "every duplicate".
     fetchMock.mockClear();
-    await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] });
+    await expect(api.removeGroups([], 'duplicates')).resolves.toEqual({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -445,7 +447,7 @@ describe('removed files', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
 
   it('are counted in and around the folders the page knows of', async () => {
-    const found = { folders: [{ path: 'C:\\photos\\_PhotoSense_Removed', files: 3, bytes: 900 }], files: 3, bytes: 900 };
+    const found = { folders: [{ path: 'C:\\photos\\_PhotoSense_Removed', files: 3, bytes: 900, recyclable: true }], files: 3, bytes: 900 };
     answering(found);
     const api = await load();
     await expect(api.fetchRemoved(['C:\\photos', 'D:\\Trips & days'])).resolves.toEqual(found);
@@ -534,62 +536,475 @@ describe('the log stream', () => {
   });
 });
 
-describe('sending photos from a phone to a computer', () => {
+describe('backing up from a phone to a computer', () => {
   const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
-  const state = { stage: 'waiting', code: null, computer: null, done: 0, total: 2, bytes: 0, totalBytes: 900, deletable: [], where: null, phone: 'iPhone', problem: null, current: null };
+  const settings = { automatic: false, onlyWhileCharging: true, includeVideos: true, keepFavorites: true, keepRecent: true };
+  const state = { stage: 'ready', computer: 'Studio iMac', folder: 'Pictures/PhotoSense', waiting: 3, waitingBytes: 900, onComputer: 0, done: 0, total: 0, bytes: 0, totalBytes: 0,
+    lastChecked: null, lastBackup: null, strip: [], problem: null, settings };
 
-  it('follows the phone every second while watched or while an offer stands, and shows each answer of the phone at once', async () => {
-    swr.useSWR.mockReturnValue({ data: state });
+  it('follows a backup every second while it runs and every half minute otherwise, and asks nothing while it is not wanted', async () => {
     const api = await load();
-    expect(api.useSendState(true)).toEqual({ data: state });
+    api.useBackup(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useBackup(true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/backup`, expect.any(Function), { refreshInterval: expect.any(Function) });
     const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
-    expect([every(undefined), every({ stage: 'idle' })]).toEqual([1000, 1000]);
-    api.useSendState(false);
-    const unwatched = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
-    expect(['waiting', 'comparing', 'sending', 'sent', 'failed', 'idle'].map(stage => unwatched({ stage }))).toEqual([1000, 1000, 1000, 0, 0, 0]);
-    expect(unwatched(undefined)).toBe(0);
-    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/send/state`, expect.any(Function), { refreshInterval: expect.any(Function) });
+    expect([every(undefined), every({ stage: 'running' }), every({ stage: 'ready' })]).toEqual([30_000, 1000, 30_000]);
+    api.useLibraryBackup(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/backup/library`);
+    api.useLibraryBackup(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useSafeReview(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/backup/safe`);
+    api.useSafeReview(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+  });
 
+  it('starts, sends what was chosen, pauses, backs up if due and keeps the settings, showing each answer at once', async () => {
     answering(state);
-    await expect(api.startSending(['f1', 'f2'])).resolves.toEqual(state);
-    expect(lastRequest()).toEqual({ url: `${API}/send/start`, init: { method: 'POST', body: JSON.stringify({ files: ['f1', 'f2'] }), headers: json } });
-    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/send/state`, state, { revalidate: false });
-    await api.confirmSending(true);
-    expect(lastRequest()).toEqual({ url: `${API}/send/confirm`, init: { method: 'POST', body: JSON.stringify({ same: true }), headers: json } });
-    await api.stopSending();
-    expect(lastRequest()).toEqual({ url: `${API}/send/stop`, init: { method: 'POST', headers: json } });
+    const api = await load();
+    await expect(api.startBackup()).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/start`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/backup`, state, { revalidate: false });
+    const matches = swr.mutate.mock.lastCall![0] as (key: unknown) => boolean;
+    expect([`${API}/backup`, `${API}/backup/library`, `${API}/backup/safe`, `${API}/plan`, 7].map(matches)).toEqual([true, true, true, false, false]);
+    await api.startBackup(['f1']);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/start`, init: { method: 'POST', body: JSON.stringify({ files: ['f1'] }), headers: json } });
+    await api.pauseBackup();
+    expect(lastRequest().url).toBe(`${API}/backup/pause`);
+    await api.backUpIfDue();
+    expect(lastRequest().url).toBe(`${API}/backup/auto`);
+    await api.saveBackupSettings(settings);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/settings`, init: { method: 'POST', body: JSON.stringify(settings), headers: json } });
   });
 
-  it('deletes from the phone what is safely on the computer, and then shows the phone and Organize afresh', async () => {
-    answering({ deleted: 2 });
+  it('removes what is safe to delete, all of it or the largest few, and then asks the plan again', async () => {
+    const removed = { removed: 2, bytes: 900, left: 0, storageTotal: 128e9, storageFreeBefore: 16e9 };
+    answering(removed);
     const api = await load();
-    await expect(api.deleteSent()).resolves.toEqual({ deleted: 2 });
-    expect(lastRequest()).toEqual({ url: `${API}/send/delete-sent`, init: { method: 'POST', headers: json } });
-    expect(swr.mutate).toHaveBeenCalledWith(`${API}/send/state`);
-    const matches = swr.mutate.mock.calls[0][0] as (key: unknown) => boolean;
-    expect([`${API}/organize/files?root=x`, `${API}/send/state`].map(matches)).toEqual([true, false]);
+    await expect(api.removeSafe()).resolves.toEqual(removed);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/remove`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/plan`);
+    await api.removeSafe(50);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/remove`, init: { method: 'POST', body: JSON.stringify({ atMost: 50 }), headers: json } });
   });
 
-  it('looks for phones and follows receiving only while each is on screen', async () => {
+  it('on a computer, follows the phones every two seconds while one is arriving, and changes where one goes or whether it is paused', async () => {
     const api = await load();
-    api.usePhones(true);
-    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/phones`, expect.any(Function), { refreshInterval: 3000 });
-    api.usePhones(false);
+    api.useBackupPhones(true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/backup/phones`, expect.any(Function), { refreshInterval: expect.any(Function) });
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { arriving: unknown }[]): number }).refreshInterval;
+    expect([every(undefined), every([{ arriving: null }]), every([{ arriving: null }, { arriving: {} }])]).toEqual([10_000, 10_000, 2000]);
+    api.useBackupPhones(false);
     expect(swr.useSWR.mock.lastCall![0]).toBeNull();
-    api.useReceiveState(true);
-    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/receive/state`, expect.any(Function), { refreshInterval: 1000 });
-    api.useReceiveState(false);
-    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    answering({ id: 'p 1' });
+    await api.moveBackups('p 1', 'D:\Phones');
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p%201/folder`, init: { method: 'POST', body: JSON.stringify({ folder: 'D:\Phones' }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/backup/phones`);
+    await api.pausePhone('p 1', true);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p%201/pause`, init: { method: 'POST', body: JSON.stringify({ paused: true }), headers: json } });
+  });
+});
 
-    const receiving = { stage: 'connecting', code: null, phone: 'iPhone', done: 0, total: 0, bytes: 0, totalBytes: 0, alreadyThere: 0, folder: 'C:\Photos', problem: null };
-    answering(receiving);
-    await expect(api.startReceiving('wifi:1', 'C:\Photos')).resolves.toEqual(receiving);
-    expect(lastRequest()).toEqual({ url: `${API}/receive/start`, init: { method: 'POST', body: JSON.stringify({ phone: 'wifi:1', folder: 'C:\Photos' }), headers: json } });
-    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/receive/state`, receiving, { revalidate: false });
-    await api.confirmReceiving(false);
-    expect(lastRequest()).toEqual({ url: `${API}/receive/confirm`, init: { method: 'POST', body: JSON.stringify({ same: false }), headers: json } });
-    await api.stopReceiving();
-    expect(lastRequest()).toEqual({ url: `${API}/receive/stop`, init: { method: 'POST', headers: json } });
+describe('Swipe to clean on a phone', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const state = { date: '2026-11-17', set: [], earlier: [], week: [], streak: 0, freed: null, unswiped: 0 };
+
+  it('asks for today only while it is wanted, and not again each time the page has the focus', async () => {
+    const api = await load();
+    api.useSwipe(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useSwipe(true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/swipe`, expect.any(Function), { revalidateOnFocus: false });
+  });
+
+  it('decides, takes back and spares, showing each answer at once', async () => {
+    answering(state);
+    const api = await load();
+    await expect(api.decideSwipe('a', true)).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/decide`, init: { method: 'POST', body: JSON.stringify({ id: 'a', delete: true }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/swipe`, state, { revalidate: false });
+    await api.undoSwipe();
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/undo`, init: { method: 'POST', headers: json } });
+    await api.spareSwipe('a', false);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/spare`, init: { method: 'POST', body: JSON.stringify({ id: 'a', spared: false }), headers: json } });
+  });
+
+  it('deletes what is marked, all of it or the largest few, and then reads Swipe to clean, Library, the backup and the plan again', async () => {
+    const freed = { deleted: 2, bytes: 900, left: 1 };
+    answering(freed);
+    const api = await load();
+    await expect(api.deleteSwiped()).resolves.toEqual(freed);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/delete`, init: { method: 'POST', headers: json } });
+    const keys = swr.mutate.mock.calls.map(c => c[0]);
+    expect(keys).toContain(`${API}/swipe`);
+    expect(keys).toContain(`${API}/plan`);
+    await api.deleteSwiped(30);
+    expect(lastRequest()).toEqual({ url: `${API}/swipe/delete`, init: { method: 'POST', body: JSON.stringify({ atMost: 30 }), headers: json } });
+  });
+});
+
+describe("Clean up's categories", () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it("asks what each holds only while wanted, a category's photos, and the bursts only while wanted", async () => {
+    const api = await load();
+    api.useCategories(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useCategories(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/cleanup/categories`);
+    api.useCategoryPhotos('screenshots');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/cleanup/categories/screenshots`);
+    api.useBursts(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useBursts(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/cleanup/categories/bursts`);
+  });
+
+  it('deletes those chosen, then reads the categories, the groups, Library and the plan again', async () => {
+    const done = { deleted: 2, bytes: 900, skipped: 0, problems: [] };
+    answering(done);
+    const api = await load();
+    await expect(api.deleteChosen(['a', 'b'])).resolves.toEqual(done);
+    expect(lastRequest()).toEqual({ url: `${API}/cleanup/categories/delete`, init: { method: 'POST', body: JSON.stringify({ ids: ['a', 'b'] }), headers: json } });
+    const predicates = swr.mutate.mock.calls.map(c => c[0]).filter((k): k is (key: unknown) => boolean => typeof k === 'function');
+    const read = (key: unknown) => predicates.some(f => f(key));
+    expect(read(`${API}/cleanup/categories`)).toBe(true);
+    expect(read(`${API}/cleanup/categories/blurry`)).toBe(true);
+    expect(read(`${API}/scan/groups?mode=duplicates`)).toBe(true);
+    expect(read(`${API}/plan`)).toBe(true);
+    expect(read(42)).toBe(false);
+  });
+});
+
+describe("compressing and the phone's notifications", () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const running = { stage: 'running', quality: 'small', total: 1, done: 0, current: 'IMG_1.MOV', progress: 0, results: [], saved: 0, originalsDeleted: null, problem: null };
+
+  it('asks for the large videos, and how compressing stands every second only while it runs', async () => {
+    const api = await load();
+    api.useCompressVideos(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useCompressVideos(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/compress/videos`);
+    api.useCompression(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useCompression(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/compress`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect([every({ stage: 'running' }), every({ stage: 'done' }), every(undefined)]).toEqual([1000, 0, 0]);
+  });
+
+  it('starts and cancels, showing how it stands at once, and reads again what it changed once it ends', async () => {
+    answering(running);
+    const api = await load();
+    await expect(api.startCompression(['a'], 'small')).resolves.toEqual(running);
+    expect(lastRequest()).toEqual({ url: `${API}/compress/start`, init: { method: 'POST', body: JSON.stringify({ ids: ['a'], quality: 'small' }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/compress`, running, { revalidate: false });
+    await api.cancelCompression();
+    expect(lastRequest()).toEqual({ url: `${API}/compress/cancel`, init: { method: 'POST', headers: json } });
+    await api.refreshCompressed();
+    expect(swr.mutate.mock.calls.map(c => c[0])).toContain(`${API}/compress/videos`);
+  });
+
+  it('asks which notifications are on, changes them, and what one tapped opens', async () => {
+    const state = { lowStorage: true, trialReminder: false, allowed: true };
+    answering(state);
+    const api = await load();
+    api.useNotices(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useNotices(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/notices`);
+    await expect(api.changeNotices({ lowStorage: true })).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/notices`, init: { method: 'POST', body: JSON.stringify({ lowStorage: true }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/notices`, state, { revalidate: false });
+    answering({ opens: 'free-up-space' });
+    await expect(api.openedNotice()).resolves.toEqual({ opens: 'free-up-space' });
+    expect(lastRequest().url).toBe(`${API}/notices/opened`);
+  });
+
+  it("turns the trial's reminder on when a trial starts, as its terms promise", async () => {
+    const plan = { tier: 'trial', kind: 'yearly' };
+    fetchMock.mockImplementationOnce(async () => reply({ outcome: 'bought', plan })).mockImplementationOnce(async () => reply({ lowStorage: false, trialReminder: true, allowed: true }));
+    const api = await load();
+    await api.buyPlan('yearly');
+    expect(lastRequest()).toEqual({ url: `${API}/notices`, init: { method: 'POST', body: JSON.stringify({ trialReminder: true }), headers: json } });
+    fetchMock.mockClear();
+    answering({ outcome: 'cancelled', plan });
+    await api.buyPlan('yearly');
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Year in review and sharing', () => {
+  it('asks for the year due only while it is wanted', async () => {
+    const api = await load();
+    api.useYear(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useYear(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/year`);
+  });
+
+  it("hands a card to the phone's share sheet, and says why it could not", async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.shareImage('iVBOR', 'PhotoSense 2026.png');
+    expect(lastRequest()).toEqual({ url: `${API}/share`, init: { method: 'POST', body: JSON.stringify({ image: 'iVBOR', name: 'PhotoSense 2026.png' }), headers: { 'Content-Type': 'application/json', 'x-photosense-client': 'web' } } });
+    answering('The share sheet could not open.', 409);
+    await expect(api.shareImage('iVBOR', 'x.png')).rejects.toThrow('The share sheet could not open.');
+  });
+});
+
+describe('search and the viewer', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('searches only once something is asked, and asks every search again once Pro is bought', async () => {
+    const api = await load();
+    api.useSearch('');
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useSearch('dog & cat 2023');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/search?q=dog%20%26%20cat%202023`);
+    await api.refreshSearch();
+    const asked = swr.mutate.mock.lastCall![0] as (key: unknown) => boolean;
+    expect([asked(`${API}/search?q=dog`), asked(`${API}/searches`), asked(`${API}/plan`), asked(undefined)]).toEqual([true, false, false, false]);
+  });
+
+  it("asks for a picture's details only while one is shown, and marks a favorite, keeping what the phone says", async () => {
+    const api = await load();
+    api.usePhotoDetails(undefined);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.usePhotoDetails('/Photo Library/IMG_1.HEIC');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/viewer/details?path=%2FPhoto%20Library%2FIMG_1.HEIC`);
+    const details = { camera: 'iPhone 15 Pro', favorite: true };
+    answering(details);
+    await expect(api.setFavorite('/Photo Library/IMG_1.HEIC', true)).resolves.toEqual(details);
+    expect(lastRequest()).toEqual({ url: `${API}/viewer/favorite`, init: { method: 'POST', body: JSON.stringify({ path: '/Photo Library/IMG_1.HEIC', favorite: true }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/viewer/details?path=%2FPhoto%20Library%2FIMG_1.HEIC`, details, { revalidate: false });
+  });
+
+  it("hands a copy of a photo to the phone's share sheet, without what was asked, and says why it could not", async () => {
+    answering(undefined, 204);
+    const api = await load();
+    await api.sharePhoto('/Photo Library/IMG_1.HEIC', true, false);
+    expect(lastRequest()).toEqual({ url: `${API}/share/photo`, init: { method: 'POST', body: JSON.stringify({ path: '/Photo Library/IMG_1.HEIC', removeLocation: true, removeCamera: false }), headers: json } });
+    answering('IMG_1.HEIC is no longer in the library.', 409);
+    await expect(api.sharePhoto('/Photo Library/IMG_1.HEIC', true, true)).rejects.toThrow('IMG_1.HEIC is no longer in the library.');
+  });
+});
+
+describe('trips', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('asks for trips, a trip and the towns only while wanted, and every second while a folder is being made', async () => {
+    const api = await load();
+    api.useTrips(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useTrips(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/trips`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ folder: null }), every({ folder: { stage: 'ready' } }), every({ folder: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+    api.useTrip(undefined);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useTrip('2026 07');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/trips/2026%2007`);
+    api.useTowns(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useTowns(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/trips/towns`);
+  });
+
+  it("chooses home, asking trips again, makes a trip's folder, and says why it could not", async () => {
+    answering(undefined, 204);
+    const api = await load();
+    const butte = { town: 'Butte', region: 'Montana', country: 'US', latitude: 46, longitude: -112.5, days: 3 };
+    await api.chooseHome(butte);
+    expect(lastRequest()).toEqual({ url: `${API}/trips/home`, init: { method: 'POST', body: JSON.stringify({ town: butte }), headers: json } });
+    const asked = swr.mutate.mock.lastCall![0] as (key: unknown) => boolean;
+    expect([asked(`${API}/trips`), asked(`${API}/trips/abc`), asked(`${API}/year`), asked(undefined)]).toEqual([true, true, false, false]);
+    await api.chooseHome(null);
+    expect(lastRequest().init!.body).toBe('{"town":null}');
+    answering(undefined, 202);
+    await api.makeTripFolder('gla');
+    expect(lastRequest()).toEqual({ url: `${API}/trips/gla/folder`, init: { method: 'POST', body: '{}', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/trips`);
+    answering('Pair with a computer first: in Settings, choose Computer.', 409);
+    await expect(api.makeTripFolder('gla')).rejects.toThrow('Pair with a computer first');
+    answering(undefined, 204);
+    await api.renameTrip('gla', 'Glacier with Sam');
+    expect(lastRequest()).toEqual({ url: `${API}/trips/gla/name`, init: { method: 'POST', body: JSON.stringify({ name: 'Glacier with Sam' }), headers: json } });
+    await api.renameTrip('gla', null);
+    expect(lastRequest().init!.body).toBe('{"name":null}');
+  });
+
+  it("names the computer, and chooses where a phone's trip folders go", async () => {
+    const api = await load();
+    answering({ stage: 'idle', name: 'Office PC' });
+    await expect(api.nameComputer('Office PC')).resolves.toMatchObject({ name: 'Office PC' });
+    expect(lastRequest()).toEqual({ url: `${API}/pairing/name`, init: { method: 'POST', body: JSON.stringify({ name: 'Office PC' }), headers: json } });
+    answering({ id: 'p1' });
+    await api.tripsGoTo('p1', 'D:\\Trips');
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p1/trips`, init: { method: 'POST', body: JSON.stringify({ folder: 'D:\\Trips' }), headers: json } });
+  });
+});
+
+describe('fixing dates and places, and naming copies by date', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('asks what needs fixing only while wanted, and every second while the computer renames', async () => {
+    const api = await load();
+    api.useFixes(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useFixes(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/fixes`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ names: null }), every({ names: { stage: 'ready' } }), every({ names: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+  });
+
+  it('fixes, undoes and renames, asking everything again after a fix', async () => {
+    const api = await load();
+    answering({ changed: 32 });
+    await expect(api.fixDates('2026-03-02')).resolves.toBe(32);
+    expect(lastRequest()).toEqual({ url: `${API}/fixes/dates`, init: { method: 'POST', body: JSON.stringify({ date: '2026-03-02' }), headers: json } });
+    expect((swr.mutate.mock.lastCall![0] as () => boolean)()).toBe(true);
+    await api.addPlaces();
+    expect(lastRequest()).toEqual({ url: `${API}/fixes/places`, init: { method: 'POST', headers: json } });
+    await api.undoFix('places');
+    expect(lastRequest().init!.body).toBe('{"kind":"places"}');
+    answering(undefined, 202);
+    await api.renameOnComputer('date');
+    expect(lastRequest()).toEqual({ url: `${API}/fixes/names`, init: { method: 'POST', body: '{"kind":"date"}', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/fixes`);
+  });
+
+  it('asks how the hidden vault stands only while wanted, and every second while its items come back', async () => {
+    const api = await load();
+    api.useVault(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useVault(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/vault`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ restore: null }), every({ restore: { stage: 'ready' } }), every({ restore: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+  });
+
+  it('turns the vault on, restores, unlocks, locks, shows the key, and hides, puts back and deletes, asking everything again after', async () => {
+    const api = await load();
+    answering({ recoveryKey: 'K7QP' });
+    await expect(api.turnOnVault()).resolves.toBe('K7QP');
+    expect(lastRequest()).toEqual({ url: `${API}/vault/on`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/vault`);
+    await expect(api.vaultRecoveryKey()).resolves.toBe('K7QP');
+    expect(lastRequest()).toEqual({ url: `${API}/vault/key`, init: { headers: json } });
+    answering(undefined, 202);
+    await api.recoverVault('K7QP');
+    expect(lastRequest()).toEqual({ url: `${API}/vault/recover`, init: { method: 'POST', body: '{"recoveryKey":"K7QP"}', headers: json } });
+    answering({ unlocked: true });
+    await expect(api.unlockVault()).resolves.toBe(true);
+    expect(lastRequest()).toEqual({ url: `${API}/vault/unlock`, init: { method: 'POST', headers: json } });
+    answering(undefined, 204);
+    await api.lockVault();
+    expect(lastRequest()).toEqual({ url: `${API}/vault/lock`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    answering({ changed: 2 });
+    await expect(api.hideItems(['a', 'b'])).resolves.toBe(2);
+    expect(lastRequest()).toEqual({ url: `${API}/vault/hide`, init: { method: 'POST', body: '{"ids":["a","b"]}', headers: json } });
+    expect((swr.mutate.mock.lastCall![0] as () => boolean)()).toBe(true);
+    await api.unhideItems(['h 1']);
+    expect(lastRequest().url).toBe(`${API}/vault/unhide`);
+    await api.deleteHidden(['h 1']);
+    expect(lastRequest().url).toBe(`${API}/vault/delete`);
+    expect([api.vaultThumbnailUrl('h 1'), api.vaultImageUrl('h 1')]).toEqual([`${API}/vault/h%201/thumbnail`, `${API}/vault/h%201/image`]);
+  });
+
+  it('on a computer, asks what renaming would do only for a phone, and renames', async () => {
+    const api = await load();
+    api.useRenaming(undefined, 'date');
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useRenaming('p 1', 'datePlace');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/backup/phones/p%201/names?style=datePlace`);
+    answering({ changed: 6941 });
+    await expect(api.renameCopies('p 1', 'date')).resolves.toBe(6941);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p%201/names`, init: { method: 'POST', body: '{"kind":"date"}', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/backup/phones`);
+  });
+});
+
+describe('the plan', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const plan = { tier: 'pro', kind: 'monthly', started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 0, leftToday: null, offers: [] };
+
+  it('is asked for at its own address', async () => {
+    const api = await load();
+    api.usePlan();
+    expect(swr.useSWR).toHaveBeenCalledWith(`${API}/plan`, expect.any(Function));
+  });
+
+  it('is bought, restored and managed through the store, and the plan after is kept at once', async () => {
+    const api = await load();
+    answering({ outcome: 'bought', plan });
+    await expect(api.buyPlan('monthly')).resolves.toEqual({ outcome: 'bought', plan });
+    expect(lastRequest()).toEqual({ url: `${API}/plan/buy`, init: { method: 'POST', body: JSON.stringify({ kind: 'monthly' }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/plan`, plan, { revalidate: false });
+
+    answering(plan);
+    await expect(api.restorePurchases()).resolves.toEqual(plan);
+    expect(lastRequest()).toEqual({ url: `${API}/plan/restore`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/plan`, plan, { revalidate: false });
+
+    answering(undefined, 204);
+    await api.manageSubscription();
+    expect(lastRequest()).toEqual({ url: `${API}/plan/manage`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+  });
+});
+
+describe('pairing and what a scan found', () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+  const state = { stage: 'waiting', link: 'photosense:pair', code: '482913', expires: null, check: null, other: null, folder: null, problem: null };
+
+  it('asks how pairing stands only while it is shown, every second while it is under way', async () => {
+    const api = await load();
+    api.usePairing(false);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(null, expect.any(Function), expect.anything());
+    api.usePairing(true);
+    const [key, , options] = swr.useSWR.mock.calls.at(-1)!;
+    expect(key).toBe(`${API}/pairing/state`);
+    const every = (options as { refreshInterval(latest?: { stage: string }): number }).refreshInterval;
+    expect([every(undefined), every({ stage: 'waiting' }), every({ stage: 'comparing' }), every({ stage: 'paired' }), every({ stage: 'idle' })]).toEqual([0, 1000, 1000, 0, 0]);
+  });
+
+  it('opens, scans, takes a code, confirms, closes and stops, keeping the state each answers with', async () => {
+    const api = await load();
+    answering(state);
+    await expect(api.openPairing()).resolves.toEqual(state);
+    expect(lastRequest()).toEqual({ url: `${API}/pairing/open`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/pairing/state`, state, { revalidate: false });
+    await api.scanPairing();
+    expect(lastRequest().url).toBe(`${API}/pairing/scan`);
+    await api.enterPairingCode('482 913');
+    expect(lastRequest()).toEqual({ url: `${API}/pairing/code`, init: { method: 'POST', body: JSON.stringify({ code: '482 913' }), headers: json } });
+    await api.confirmPairing(true);
+    expect(lastRequest().init?.body).toBe(JSON.stringify({ same: true }));
+
+    answering(undefined, 204);
+    await api.closePairing();
+    expect(lastRequest()).toEqual({ url: `${API}/pairing/close`, init: { method: 'POST', headers: { 'x-photosense-client': 'web' } } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/pairing/state`);
+    await api.stopPairing();
+    expect(lastRequest().url).toBe(`${API}/pairing/stop`);
+  });
+
+  it('asks what waits to be erased only while it is shown', async () => {
+    const api = await load();
+    api.useRemoved(null);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(null, expect.any(Function), { revalidateOnFocus: false });
+    api.useRemoved(['/Photo Library']);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/removed?root=%2FPhoto%20Library`, expect.any(Function), { revalidateOnFocus: false });
+  });
+
+  it('asks what a scan found only while it is shown, every two seconds while a scan runs', async () => {
+    const api = await load();
+    api.useFound(false, false);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(null, expect.any(Function), { refreshInterval: 0 });
+    api.useFound(true, true);
+    expect(swr.useSWR).toHaveBeenLastCalledWith(`${API}/scan/found`, expect.any(Function), { refreshInterval: 2000 });
   });
 });
 
@@ -604,11 +1019,75 @@ describe('on Android', () => {
       expect(keep).toHaveBeenCalledExactlyOnceWith(JSON.stringify({ primaryLocation: '/Phone', secondaryLocation: '', recursive: true }));
       expect(lastRequest().init?.headers).toMatchObject({ 'x-photosense-body': 'body-7' });
       // A request with no body carries nothing.
-      await api.stopSending();
+      await api.pauseBackup();
       expect(keep).toHaveBeenCalledOnce();
       expect(lastRequest().init?.headers).not.toHaveProperty('x-photosense-body');
+      // A card for the share sheet goes the same way.
+      answering(undefined, 204);
+      await api.shareImage('iVBOR', 'PhotoSense.png');
+      expect(lastRequest().init?.headers).toMatchObject({ 'x-photosense-body': 'body-7' });
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe("a phone's locations", () => {
+  const json = { 'Content-Type': 'application/json', 'x-photosense-client': 'web' };
+
+  it('are asked for only while wanted, every second while they are busy, and one in full by its id', async () => {
+    const api = await load();
+    api.useLocations(false);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useLocations(true);
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/locations`);
+    const every = (swr.useSWR.mock.lastCall![2] as { refreshInterval(latest?: unknown): number }).refreshInterval;
+    expect([every(undefined), every({ activity: null }), every({ activity: { stage: 'ready' } }), every({ activity: { stage: 'running' } })]).toEqual([0, 0, 0, 1000]);
+    api.useLocationDetails(undefined);
+    expect(swr.useSWR.mock.lastCall![0]).toBeNull();
+    api.useLocationDetails('s3 1');
+    expect(swr.useSWR.mock.lastCall![0]).toBe(`${API}/locations/s3%201`);
+  });
+
+  it('are turned on and off, changed, backed up to, checked and sent to, each asked for again after, even when refused', async () => {
+    const api = await load();
+    answering(undefined, 204);
+    const asks: [() => Promise<unknown>, string, string][] = [
+      [() => api.turnOnLocation('google-drive'), 'google-drive/on', '{}'], [() => api.turnOffLocation('google-drive'), 'google-drive/off', '{}'],
+      [() => api.locationInstead('dropbox'), 'dropbox/instead', '{}'], [() => api.disconnectLocation('dropbox'), 'dropbox/disconnect', '{}'],
+      [() => api.removeLocation('s 1'), 's%201/remove', '{}'], [() => api.renameLocation('s1', 'NAS'), 's1/name', '{"name":"NAS"}'],
+      [() => api.setCountAt(2), 'count', '{"countAt":2}'], [api.backUpToLocations, 'backup', '{}'], [api.checkLocations, 'check', '{}'],
+      [api.pauseLocations, 'pause', '{}'], [api.locationsIfDue, 'auto', '{}'], [() => api.sendToLocation('s1', ['a']), 's1/send', '{"ids":["a"]}'],
+    ];
+    for (const [ask, path, body] of asks) {
+      swr.mutate.mockClear();
+      await ask();
+      expect(lastRequest()).toEqual({ url: `${API}/locations/${path}`, init: { method: 'POST', body, headers: json } });
+      expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
+    }
+    // Refused for Pro: the page is told which.
+    answering({ error: 'The free plan backs up to your computer and one other location, and Google Drive is on.' }, 402);
+    swr.mutate.mockClear();
+    await expect(api.turnOnLocation('dropbox')).rejects.toMatchObject({ message: 'The free plan backs up to your computer and one other location, and Google Drive is on.', status: 402 });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
+  });
+
+  it('are added by Connect to server, and what was sent is deleted from the phone, the plan asked for again', async () => {
+    const api = await load();
+    answering({ id: 'new' });
+    const connection = { id: null, kind: 'webDav' as const, name: 'NAS', settings: { url: 'https://nas' }, secrets: { pass: 'p' } };
+    await expect(api.connectServer(connection)).resolves.toBe('new');
+    expect(lastRequest()).toEqual({ url: `${API}/locations/connect`, init: { method: 'POST', body: JSON.stringify(connection), headers: json } });
+    answering({ error: 'NAS let PhotoSense list its folder but not write to it.' }, 502);
+    swr.mutate.mockClear();
+    await expect(api.connectServer(connection)).rejects.toMatchObject({ status: 502 });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/locations`);
+
+    answering({ removed: 2, bytes: 9, left: 0, storageTotal: 1, storageFreeBefore: 0 });
+    await expect(api.deleteSent(2)).resolves.toMatchObject({ removed: 2 });
+    expect(lastRequest()).toEqual({ url: `${API}/locations/sent/delete`, init: { method: 'POST', body: '{"atMost":2}', headers: json } });
+    expect(swr.mutate).toHaveBeenCalledWith(`${API}/plan`);
+    await api.deleteSent();
+    expect(lastRequest().init?.body).toBe('{}');
   });
 });

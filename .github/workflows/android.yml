@@ -83,6 +83,17 @@ jobs:
       - name: Get what the build needs of Android's SDK
         run: dotnet build PhotoSense.Android/PhotoSense.Android.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
 
+      # The restore above, for both of the app's runtimes, wrote packages.lock.json again, from which the app's third-party
+      # notices are written (tools/notices.mjs): it must be the list committed. The linker's own tasks are left out, as the
+      # SDK adds them at its own version and they are a build tool, never shipped; so NuGet's locked mode cannot be used.
+      - name: Check the app's list of packages is up to date
+        run: |
+          same='walk(if type == "object" then del(."Microsoft.NET.ILLink.Tasks") else . end)'
+          if ! diff <(git show HEAD:PhotoSense.Android/packages.lock.json | jq -S "$same") <(jq -S "$same" PhotoSense.Android/packages.lock.json); then
+            echo "::error title=Packages::PhotoSense.Android/packages.lock.json is out of date with the app's packages: restore the app (dotnet restore PhotoSense.Android/PhotoSense.Android.csproj --force), run node tools/notices.mjs, and commit both."
+            exit 1
+          fi
+
       - name: Build the app for the emulator
         run: |
           dotnet build PhotoSense.Android/PhotoSense.Android.csproj --configuration Release -r android-x64 \

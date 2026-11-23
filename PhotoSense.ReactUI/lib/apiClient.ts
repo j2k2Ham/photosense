@@ -1,7 +1,9 @@
 import useSWR, { mutate } from 'swr';
 import type {
-  AboutDocument, AboutDto, BulkRemovalResultDto, DeleteSentDto, EraseRemovedDto, FolderListingDto, FoundPhonesDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PhotoAccessDto, ReceiveStateDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, SendStateDto, StartScanRequest,
+  AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
+  CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
+  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto, LocationsDto, LocationDetailsDto, ServerConnectionDto,
 } from '../types';
 
 import { API_BASE } from './apiBase';
@@ -12,10 +14,15 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY; // provided via env when auth e
 // The server acts on photos only for requests carrying this header, which other web sites cannot send.
 const authHeaders: Record<string, string> = { 'x-photosense-client': 'web', ...(API_KEY ? { 'x-api-key': API_KEY } : {}) };
 
+/** A refusal from the service, with its status: 402 when what was asked for is part of Pro. */
+export type ApiError = Error & { readonly status: number };
+
 // The server answers failures with either plain text or { error }.
-async function failure(res: Response): Promise<Error> {
+async function failure(res: Response): Promise<ApiError> {
   const text = await res.text();
-  try { return new Error(JSON.parse(text).error ?? text); } catch { return new Error(text || `Request failed (${res.status})`); }
+  let said: string;
+  try { said = JSON.parse(text).error ?? text; } catch { said = text || `Request failed (${res.status})`; }
+  return Object.assign(new Error(said), { status: res.status });
 }
 
 // Android's web view hands the app no request's body, so there the page hands each body over beside its request,
@@ -35,7 +42,10 @@ async function send(url: string, method: 'POST' | 'DELETE'): Promise<Response> {
   return res;
 }
 
-const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status')));
+const planUrl = `${API_BASE}/plan`;
+// A removal counts toward the free plan's limit each day, so the plan is asked again after one, with the groups and
+// Clean up's categories, which leave out what is gone or marked keep.
+const refreshGroups = () => mutate((key: unknown) => typeof key === 'string' && (key.includes('/scan/groups') || key.includes('/scan/status') || key.includes('/cleanup/categories') || key === planUrl));
 
 /** Asks again for everything on screen, for when the service has been out of reach. */
 export const retryNow = () => mutate(() => true);
@@ -194,7 +204,7 @@ export async function removeDuplicates(groupKey?: string, mode: GroupMode = 'dup
  */
 export async function removeGroups(groupKeys: string[], mode: GroupMode): Promise<BulkRemovalResultDto> {
   // With no group named the service would take every duplicate.
-  if (groupKeys.length === 0) return { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [] };
+  if (groupKeys.length === 0) return { removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [] };
   // Named in the body, as more of them than an address holds can be ticked.
   const result = await json<BulkRemovalResultDto>(`${API_BASE}/photos/bulk/remove-duplicates${mode === 'similar' ? '?mode=similar' : ''}`,
     { method: 'POST', body: JSON.stringify({ groups: groupKeys }) });
@@ -309,6 +319,79 @@ export async function openOrganizeFile(id: string) {
   await send(`${API_BASE}/organize/files/${id}/open`, 'POST');
 }
 
+// ---- The plan
+
+/** The plan, how many removals are left today, and the plans for sale with the store's prices. */
+export function usePlan() {
+  return useSWR<PlanDto>(planUrl, json);
+}
+
+/** Puts the store's own sheet for buying a plan in front of the person, and answers how it ended, with the plan then. */
+export async function buyPlan(kind: PlanKind): Promise<PlanBuyResultDto> {
+  const result = await json<PlanBuyResultDto>(`${planUrl}/buy`, { method: 'POST', body: JSON.stringify({ kind }) });
+  await mutate(planUrl, result.plan, { revalidate: false });
+  // The trial's terms promise a reminder two days before it ends: starting it turns the reminder on, which asks the phone first.
+  if (result.outcome === 'bought' && kind === 'yearly') await changeNotices({ trialReminder: true });
+  return result;
+}
+
+/** Asks the store again for what was bought with the same account, and answers with the plan then. */
+export async function restorePurchases(): Promise<PlanDto> {
+  const plan = await json<PlanDto>(`${planUrl}/restore`, { method: 'POST' });
+  await mutate(planUrl, plan, { revalidate: false });
+  return plan;
+}
+
+/** Opens the store's own page for changing or cancelling the subscription. */
+export async function manageSubscription() {
+  await send(`${planUrl}/manage`, 'POST');
+}
+
+// ---- Pairing a phone with a computer
+
+const pairingUrl = `${API_BASE}/pairing/state`;
+// Pairing is waited on while it is shown, or while it is under way.
+const PAIRING_LIVE: ReadonlySet<PairingStateDto['stage']> = new Set(['waiting', 'scanning', 'finding', 'connecting', 'comparing']);
+
+/** Where pairing has got to, on whichever this program is: asked every second while it is shown, or under way; nothing is asked otherwise. */
+export function usePairing(watching: boolean) {
+  return useSWR<PairingStateDto>(watching ? pairingUrl : null, json, { refreshInterval: latest => (latest !== undefined && PAIRING_LIVE.has(latest.stage) ? 1000 : 0) });
+}
+
+async function pairing(what: string, body?: unknown): Promise<PairingStateDto> {
+  const state = await json<PairingStateDto>(`${API_BASE}/pairing/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(pairingUrl, state, { revalidate: false });
+  return state;
+}
+
+/** On a computer: shows a new QR code and code, and waits for a phone. */
+export const openPairing = () => pairing('open');
+/** On a phone: opens the camera, and pairs with the computer whose QR code it sees. */
+export const scanPairing = () => pairing('scan');
+/** On a phone: finds the computer showing the code typed. */
+export const enterPairingCode = (code: string) => pairing('code', { code });
+/** The person's answer to whether the numbers on the two match. */
+export const confirmPairing = (same: boolean) => pairing('confirm', { same });
+/** On a computer: names it as phones show it. */
+export const nameComputer = (name: string) => pairing('name', { name });
+
+/** On a computer: stops waiting for a phone. */
+export async function closePairing() {
+  await send(`${API_BASE}/pairing/close`, 'POST');
+  await mutate(pairingUrl);
+}
+
+/** On a phone: stops pairing. */
+export async function stopPairing() {
+  await send(`${API_BASE}/pairing/stop`, 'POST');
+  await mutate(pairingUrl);
+}
+
+/** What the scans so far have found to free, by kind: asked every two seconds while a scan runs. */
+export function useFound(watching: boolean, scanning: boolean) {
+  return useSWR<FindingsDto>(watching ? `${API_BASE}/scan/found` : null, json, { refreshInterval: scanning ? 2000 : 0 });
+}
+
 // ---- Removed files
 
 const removedUrl = (roots: readonly string[]) => `${API_BASE}/removed?${roots.map(r => `root=${encodeURIComponent(r)}`).join('&')}`;
@@ -331,58 +414,439 @@ export async function eraseRemoved(folders: string[]) {
   return result;
 }
 
-// ---- Sending photos from a phone to a computer
+// ---- Backing up from a phone to a computer
 
-const sendStateUrl = `${API_BASE}/send/state`;
+const backupUrl = `${API_BASE}/backup`;
+const backupLibraryUrl = `${API_BASE}/backup/library`;
+const safeUrl = `${API_BASE}/backup/safe`;
+const phonesUrl = `${API_BASE}/backup/phones`;
+// What a backup or Safe to delete changes: how backing up stands, what is on the computer, what is safe to delete.
+const refreshBackup = () => mutate((key: unknown) => typeof key === 'string' && (key === backupUrl || key === backupLibraryUrl || key === safeUrl));
 
-/** Where sending from this phone has got to: asked every second while it is watched, or while an offer stands. */
-export function useSendState(watching: boolean) {
-  return useSWR<SendStateDto>(sendStateUrl, json, { refreshInterval: latest => (watching || (latest !== undefined && LIVE_SEND.has(latest.stage)) ? 1000 : 0) });
+/** On a phone: how backing up stands, asked every second while a backup runs and every half minute otherwise; nothing is asked while `watching` is off. */
+export function useBackup(watching: boolean) {
+  return useSWR<BackupStateDto>(watching ? backupUrl : null, json, { refreshInterval: latest => (latest?.stage === 'running' ? 1000 : 30_000) });
 }
-// The stages in which the phone is waiting for the computer, comparing numbers with it, or sending.
-const LIVE_SEND = new Set<SendStateDto['stage']>(['waiting', 'comparing', 'sending']);
 
-async function sending(path: string, body?: object) {
-  const state = await json<SendStateDto>(`${API_BASE}/send/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
-  await mutate(sendStateUrl, state, { revalidate: false });
+/** On a phone: which of the library's pictures and videos are on the computer, and which wait. */
+export function useLibraryBackup(on: boolean) {
+  return useSWR<LibraryBackupDto>(on ? backupLibraryUrl : null, json);
+}
+
+/** On a phone: what Safe to delete could delete, and what the keep rules keep. */
+export function useSafeReview(on: boolean) {
+  return useSWR<SafeReviewDto>(on ? safeUrl : null, json);
+}
+
+async function backingUp(what: string, body?: unknown): Promise<BackupStateDto> {
+  const state = await json<BackupStateDto>(`${backupUrl}/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(backupUrl, state, { revalidate: false });
+  await refreshBackup();
   return state;
 }
 
-/** Offers these files, by the ids Organize gave them, to the computer that connects next. */
-export const startSending = (files: string[]) => sending('start', { files });
-/** Says whether the number on the computer is the one on the phone. */
-export const confirmSending = (same: boolean) => sending('confirm', { same });
-/** Stops sending from this phone. */
-export const stopSending = () => sending('stop');
+/** On a phone: backs up what waits, or carries on a backup paused; with `files`, sends only those (Send now). */
+export const startBackup = (files?: readonly string[]) => backingUp('start', files ? { files } : undefined);
+/** On a phone: pauses the backup going on. */
+export const pauseBackup = () => backingUp('pause');
+/** On a phone: backs up by itself if a backup is due, as the app opens. */
+export const backUpIfDue = () => backingUp('auto');
+/** On a phone: how it backs up by itself, and what Safe to delete keeps. */
+export const saveBackupSettings = (settings: BackupSettingsDto) => backingUp('settings', settings);
 
-/** Deletes from the phone what is safely on the computer; the phone asks first, and keeps them in Recently Deleted. */
-export async function deleteSent() {
-  const result = await json<DeleteSentDto>(`${API_BASE}/send/delete-sent`, { method: 'POST' });
-  await Promise.all([refreshOrganize(), mutate(sendStateUrl)]);
-  return result;
+/** On a phone: Safe to delete, the largest first and no more than `atMost`; the phone asks first. Each counts toward the day's free removals. */
+export async function removeSafe(atMost?: number): Promise<SafeRemovalDto> {
+  const removed = await json<SafeRemovalDto>(`${backupUrl}/remove`, { method: 'POST', ...(atMost === undefined ? {} : { body: JSON.stringify({ atMost }) }) });
+  await refreshBackup();
+  await mutate(planUrl);
+  return removed;
 }
 
-const receiveStateUrl = `${API_BASE}/receive/state`;
-
-/** The phones offering photos now, looked for again every few seconds while they are being chosen from. */
-export function usePhones(looking: boolean) {
-  return useSWR<FoundPhonesDto>(looking ? `${API_BASE}/phones` : null, json, { refreshInterval: 3000 });
+/** On a computer: every phone that backs up to it, asked every two seconds while one is arriving and every ten otherwise. */
+export function useBackupPhones(on: boolean) {
+  return useSWR<BackupPhoneDto[]>(on ? phonesUrl : null, json, { refreshInterval: latest => (latest?.some(p => p.arriving) ? 2000 : 10_000) });
 }
 
-/** Where receiving from a phone has got to, asked every second while it goes on. */
-export function useReceiveState(receiving: boolean) {
-  return useSWR<ReceiveStateDto>(receiving ? receiveStateUrl : null, json, { refreshInterval: 1000 });
+async function phoneChange(id: string, what: 'folder' | 'pause' | 'trips', body: unknown) {
+  const phone = await json<BackupPhoneDto>(`${phonesUrl}/${encodeURIComponent(id)}/${what}`, { method: 'POST', body: JSON.stringify(body) });
+  await mutate(phonesUrl);
+  return phone;
 }
 
-async function receiving(path: string, body?: object) {
-  const state = await json<ReceiveStateDto>(`${API_BASE}/receive/${path}`, { method: 'POST', body: body && JSON.stringify(body) });
-  await mutate(receiveStateUrl, state, { revalidate: false });
+/** On a computer: sends a phone's backups to another folder from now on. */
+export const moveBackups = (id: string, folder: string) => phoneChange(id, 'folder', { folder });
+/** On a computer: makes a phone's trip folders in another folder from now on; those made already stay. */
+export const tripsGoTo = (id: string, folder: string) => phoneChange(id, 'trips', { folder });
+/** On a computer: pauses a phone's backups, or lets them run again. */
+export const pausePhone = (id: string, paused: boolean) => phoneChange(id, 'pause', { paused });
+
+
+const swipeUrl = `${API_BASE}/swipe`;
+
+/** On a phone: how Swipe to clean stands today; nothing is asked while `on` is false. */
+export function useSwipe(on: boolean) {
+  return useSWR<SwipeStateDto>(on ? swipeUrl : null, json, { revalidateOnFocus: false });
+}
+
+async function swiping(what: string, body?: unknown): Promise<SwipeStateDto> {
+  const state = await json<SwipeStateDto>(`${swipeUrl}/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(swipeUrl, state, { revalidate: false });
   return state;
 }
 
-/** Receives what the phone found offers, into a folder of this computer. */
-export const startReceiving = (phone: string, folder: string) => receiving('start', { phone, folder });
-/** Says whether the numbers shown on the phone and on this computer are the same. */
-export const confirmReceiving = (same: boolean) => receiving('confirm', { same });
-/** Stops receiving photos on this computer. */
-export const stopReceiving = () => receiving('stop');
+/** Keeps a photo of today's set, or marks it to delete; nothing is deleted yet. */
+export const decideSwipe = (id: string, del: boolean) => swiping('decide', { id, delete: del });
+
+/** Takes back the last decision of today. */
+export const undoSwipe = () => swiping('undo');
+
+/** On the summary, keeps a photo marked to delete after all, or marks it again. */
+export const spareSwipe = (id: string, spared: boolean) => swiping('spare', { id, spared });
+
+/**
+ * Deletes what is marked, the largest first and no more than `atMost`, to the phone's Recently Deleted or bin after its
+ * own question; the rest stay marked for another day. Library, what is backed up and the plan's count are read again.
+ */
+export async function deleteSwiped(atMost?: number): Promise<SwipeFreedDto> {
+  const freed = await json<SwipeFreedDto>(`${swipeUrl}/delete`, { method: 'POST', ...(atMost === undefined ? {} : { body: JSON.stringify({ atMost }) }) });
+  await Promise.all([mutate(swipeUrl), refreshOrganize(), refreshBackup(), mutate(planUrl)]);
+  return freed;
+}
+
+const categoriesUrl = `${API_BASE}/cleanup/categories`;
+
+/** What Clean up's categories hold, and a phone's storage; nothing is asked while `on` is false. */
+export function useCategories(on: boolean) {
+  return useSWR<CategoryReportDto>(on ? categoriesUrl : null, json);
+}
+
+/** The pictures or videos of a category: duplicates' copies and large videos largest first, the rest latest first. */
+export function useCategoryPhotos(category: Exclude<CategoryName, 'bursts'>) {
+  return useSWR<PhotoDto[]>(`${categoriesUrl}/${category}`, json);
+}
+
+/** The bursts, latest first, each with the shot kept; nothing is asked while `on` is false. */
+export function useBursts(on: boolean) {
+  return useSWR<BurstDto[]>(on ? `${categoriesUrl}/bursts` : null, json);
+}
+
+/**
+ * Deletes the pictures and videos chosen from Clean up's categories: on a phone to its own bin after its question, on a
+ * computer into _PhotoSense_Removed with Undo. The categories, the groups, Library and the plan's count are read again.
+ */
+export async function deleteChosen(ids: readonly string[]): Promise<CategoryRemovalDto> {
+  const done = await json<CategoryRemovalDto>(`${categoriesUrl}/delete`, { method: 'POST', body: JSON.stringify({ ids }) });
+  await refreshOrganize();
+  return done;
+}
+
+const compressUrl = `${API_BASE}/compress`;
+
+/** On a phone: the large videos, largest first, each with about what its copy takes at each quality; nothing is asked while `on` is false. */
+export function useCompressVideos(on: boolean) {
+  return useSWR<CompressibleVideoDto[]>(on ? `${compressUrl}/videos` : null, json);
+}
+
+/** On a phone: how compressing stands, asked every second while it runs; nothing is asked while `on` is false. */
+export function useCompression(on: boolean) {
+  return useSWR<CompressionStateDto>(on ? compressUrl : null, json, { refreshInterval: latest => (latest?.stage === 'running' ? 1000 : 0) });
+}
+
+/** Starts compressing the videos given at the quality given, in the background, and shows how it stands at once. */
+export async function startCompression(ids: readonly string[], quality: CompressionQuality): Promise<CompressionStateDto> {
+  const state = await json<CompressionStateDto>(`${compressUrl}/start`, { method: 'POST', body: JSON.stringify({ ids, quality }) });
+  await mutate(compressUrl, state, { revalidate: false });
+  return state;
+}
+
+/** Stops compressing after the video it is on; what was compressed is kept. */
+export async function cancelCompression(): Promise<CompressionStateDto> {
+  const state = await json<CompressionStateDto>(`${compressUrl}/cancel`, { method: 'POST' });
+  await mutate(compressUrl, state, { revalidate: false });
+  return state;
+}
+
+/**
+ * Once compressing has ended: the large videos, the categories, the groups, Library and the plan are read again, as the
+ * originals may have gone and their smaller copies come.
+ */
+export const refreshCompressed = () => Promise.all([mutate(`${compressUrl}/videos`), refreshOrganize()]);
+
+const noticesUrl = `${API_BASE}/notices`;
+
+/** On a phone: which notifications are on, and whether the phone lets PhotoSense send any; nothing is asked while `on` is false. */
+export function useNotices(on: boolean) {
+  return useSWR<NoticeStateDto>(on ? noticesUrl : null, json);
+}
+
+/** Turns low-storage alerts or the trial's reminder on or off; turning one on may ask the phone's own question first. */
+export async function changeNotices(change: Partial<Pick<NoticeStateDto, 'lowStorage' | 'trialReminder'>>): Promise<NoticeStateDto> {
+  const state = await json<NoticeStateDto>(noticesUrl, { method: 'POST', body: JSON.stringify(change) });
+  await mutate(noticesUrl, state, { revalidate: false });
+  return state;
+}
+
+/** What the last notification tapped asked to open, once. */
+export const openedNotice = () => json<NoticeOpenedDto>(`${noticesUrl}/opened`);
+
+/** On a phone: Year in review, the year due now (null the rest of the year) and its figures; nothing is asked while `on` is false. */
+export function useYear(on: boolean) {
+  return useSWR<YearReviewDto>(on ? `${API_BASE}/year` : null, json);
+}
+
+// A request that answers with nothing, its body carried as json's are.
+async function post(url: string, body: string): Promise<void> {
+  const carried: Record<string, string> = android ? { 'x-photosense-body': android.keep(body) } : {};
+  const res = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': 'application/json', ...authHeaders, ...carried } });
+  if (!res.ok) throw await failure(res);
+}
+
+/** Hands a card, a PNG in base 64, to the phone's share sheet, named `name`. */
+export const shareImage = (image: string, name: string) => post(`${API_BASE}/share`, JSON.stringify({ image, name }));
+
+const searchUrl = `${API_BASE}/search`;
+
+/** On a phone: the photos that match a search, latest first; nothing is asked while `query` is empty. Searches stay on the phone. */
+export function useSearch(query: string) {
+  return useSWR<SearchResultDto>(query ? `${searchUrl}?q=${encodeURIComponent(query)}` : null, json);
+}
+
+/** Asks every search again, for when Pro has been bought and things in photos can be searched. */
+export const refreshSearch = () => mutate((key: unknown) => typeof key === 'string' && key.startsWith(`${searchUrl}?`));
+
+const detailsUrl = (path: string) => `${API_BASE}/viewer/details?path=${encodeURIComponent(path)}`;
+
+/** On a phone: a picture or video's camera and whether it is a favorite; nothing is asked while `path` is undefined. */
+export function usePhotoDetails(path: string | undefined) {
+  return useSWR<PhotoDetailsDto>(path === undefined ? null : detailsUrl(path), json);
+}
+
+/** Marks a picture or video a favorite in the phone's own photos app, or takes the mark away. */
+export async function setFavorite(path: string, favorite: boolean): Promise<PhotoDetailsDto> {
+  const details = await json<PhotoDetailsDto>(`${API_BASE}/viewer/favorite`, { method: 'POST', body: JSON.stringify({ path, favorite }) });
+  await mutate(detailsUrl(path), details, { revalidate: false });
+  return details;
+}
+
+/** Hands a copy of a picture or video to the phone's share sheet, without where it was taken and the camera's details as asked. */
+export const sharePhoto = (path: string, removeLocation: boolean, removeCamera: boolean) => post(`${API_BASE}/share/photo`, JSON.stringify({ path, removeLocation, removeCamera }));
+
+const tripsUrl = `${API_BASE}/trips`;
+
+/**
+ * On a phone: home, the trips, the latest first, the computer, and the trip folder being made; asked every second while
+ * one is being made. Nothing is asked while `on` is false.
+ */
+export function useTrips(on: boolean) {
+  return useSWR<TripsDto>(on ? tripsUrl : null, json, { refreshInterval: latest => (latest?.folder?.stage === 'running' ? 1000 : 0) });
+}
+
+/** On a phone: a trip with its days; nothing is asked while `id` is undefined. */
+export function useTrip(id: string | undefined) {
+  return useSWR<TripDetailDto>(id === undefined ? null : `${tripsUrl}/${encodeURIComponent(id)}`, json);
+}
+
+/** On a phone: the towns photos were taken in, those on the most days first, to choose home from; nothing is asked while `on` is false. */
+export function useTowns(on: boolean) {
+  return useSWR<TownDto[]>(on ? `${tripsUrl}/towns` : null, json);
+}
+
+// Trips and every trip asked for, which a new home changes.
+const refreshTrips = () => mutate((key: unknown) => typeof key === 'string' && key.startsWith(tripsUrl));
+
+/** Makes `town` home for Trips, or with null lets PhotoSense work it out again. */
+export async function chooseHome(town: TownDto | null): Promise<void> {
+  await post(`${tripsUrl}/home`, JSON.stringify({ town }));
+  await refreshTrips();
+}
+
+/** Names a trip as the person wants it, its folder too; with null, PhotoSense's own name again. */
+export async function renameTrip(id: string, name: string | null): Promise<void> {
+  await post(`${tripsUrl}/${encodeURIComponent(id)}/name`, JSON.stringify({ name }));
+  await refreshTrips();
+}
+
+/** Makes a trip's folder on the computer, sending first what is not there yet; `useTrips` says how it stands. */
+export async function makeTripFolder(id: string): Promise<void> {
+  await post(`${tripsUrl}/${encodeURIComponent(id)}/folder`, '{}');
+  await mutate(tripsUrl);
+}
+
+const fixesUrl = `${API_BASE}/fixes`;
+
+/**
+ * On a phone: what needs a date or a place, and how the computer names the phone's copies; asked every second while
+ * the computer renames them. Nothing is asked while `on` is false.
+ */
+export function useFixes(on: boolean) {
+  return useSWR<FixesDto>(on ? fixesUrl : null, json, { refreshInterval: latest => (latest?.names?.stage === 'running' ? 1000 : 0) });
+}
+
+// A fix, or its Undo, after which everything that shows a date or place is asked again.
+async function fix(what: string, body?: unknown): Promise<number> {
+  const result = await json<FixResultDto>(`${fixesUrl}/${what}`, { method: 'POST', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  await mutate(() => true);
+  return result.changed;
+}
+
+/** Gives every photo with a wrong date the day chosen, "2026-03-02", each keeping its time of day; the phone asks first. */
+export const fixDates = (date: string) => fix('dates', { date });
+/** Gives every photo with no place that of the one taken nearest in time, within 30 minutes; the phone asks first. */
+export const addPlaces = () => fix('places');
+/** Puts back what the last fix of a kind changed; the phone asks first. */
+export const undoFix = (kind: 'dates' | 'places') => fix('undo', { kind });
+
+/** On a phone: has the computer name its copies so, now and as they arrive; `useFixes` says how it stands. */
+export async function renameOnComputer(style: FileNaming): Promise<void> {
+  await post(`${fixesUrl}/names`, JSON.stringify({ kind: style }));
+  await mutate(fixesUrl);
+}
+
+const vaultUrl = `${API_BASE}/vault`;
+
+/**
+ * On a phone: how the hidden vault stands, and, once unlocked, what it holds; asked every second while its items are
+ * brought back from the computer. Nothing is asked while `on` is false.
+ */
+export function useVault(on: boolean) {
+  return useSWR<VaultDto>(on ? vaultUrl : null, json, { refreshInterval: latest => (latest?.restore?.stage === 'running' ? 1000 : 0) });
+}
+
+/** Turns the hidden vault on (Pro), unlocked; gives its recovery key, to write down. */
+export async function turnOnVault(): Promise<string> {
+  const { recoveryKey } = await json<{ recoveryKey: string }>(`${vaultUrl}/on`, { method: 'POST' });
+  await mutate(vaultUrl);
+  return recoveryKey;
+}
+
+/** Takes a vault's recovery key and brings its items back from the computer; `useVault` says how it stands. */
+export async function recoverVault(recoveryKey: string): Promise<void> {
+  await post(`${vaultUrl}/recover`, JSON.stringify({ recoveryKey }));
+  await mutate(vaultUrl);
+}
+
+/** Asks the phone's own question; true when the person passed it and the vault is open. */
+export async function unlockVault(): Promise<boolean> {
+  const { unlocked } = await json<{ unlocked: boolean }>(`${vaultUrl}/unlock`, { method: 'POST' });
+  await mutate(vaultUrl);
+  return unlocked;
+}
+
+/** Locks the hidden vault. */
+export async function lockVault(): Promise<void> {
+  await send(`${vaultUrl}/lock`, 'POST');
+  await mutate(vaultUrl);
+}
+
+/** The vault's recovery key, while it is unlocked, to write down again. */
+export async function vaultRecoveryKey(): Promise<string> {
+  return (await json<{ recoveryKey: string }>(`${vaultUrl}/key`)).recoveryKey;
+}
+
+// A change of what the vault holds, after which the library and the vault are asked again.
+async function vaultChange(what: 'hide' | 'unhide' | 'delete', ids: readonly string[]): Promise<number> {
+  const result = await json<FixResultDto>(`${vaultUrl}/${what}`, { method: 'POST', body: JSON.stringify({ ids }) });
+  await mutate(() => true);
+  return result.changed;
+}
+
+/** Seals Library's pictures and videos into the vault; the phone then asks before they leave the library. */
+export const hideItems = (ids: readonly string[]) => vaultChange('hide', ids);
+/** Puts items of the vault back in the library, each with its date and place. */
+export const unhideItems = (ids: readonly string[]) => vaultChange('unhide', ids);
+/** Puts items back and sends them to Recently Deleted or the bin, after the phone asks. */
+export const deleteHidden = (ids: readonly string[]) => vaultChange('delete', ids);
+
+/** An item's small preview, made when it was hidden; shown only while the vault is open. */
+export function vaultThumbnailUrl(id: string): string {
+  return `${vaultUrl}/${encodeURIComponent(id)}/thumbnail`;
+}
+
+/** The picture as the vault's viewer shows it. */
+export function vaultImageUrl(id: string): string {
+  return `${vaultUrl}/${encodeURIComponent(id)}/image`;
+}
+
+/** On a computer: what naming a phone's copies so would make of the first few, and how many; nothing is asked while `id` is undefined. */
+export function useRenaming(id: string | undefined, style: FileNaming) {
+  return useSWR<RenamingDto>(id === undefined ? null : `${phonesUrl}/${encodeURIComponent(id)}/names?style=${style}`, json);
+}
+
+/** On a computer: names a phone's copies so, now and as they arrive, or keeps the phone's names for those that arrive. */
+export async function renameCopies(id: string, style: FileNaming): Promise<number> {
+  const result = await json<FixResultDto>(`${phonesUrl}/${encodeURIComponent(id)}/names`, { method: 'POST', body: JSON.stringify({ kind: style }) });
+  await mutate(phonesUrl);
+  return result.changed;
+}
+
+
+const locationsUrl = `${API_BASE}/locations`;
+
+/** On a phone: every place it backs up to, the Safe to delete rule, and what they are doing, asked every second while they are busy. */
+export function useLocations(on: boolean) {
+  return useSWR<LocationsDto>(on ? locationsUrl : null, json, { refreshInterval: latest => (latest?.activity?.stage === 'running' ? 1000 : 0) });
+}
+
+/** On a phone: one location in full, asked of it now. */
+export function useLocationDetails(id: string | undefined) {
+  return useSWR<LocationDetailsDto>(id ? `${locationsUrl}/${encodeURIComponent(id)}` : null, json);
+}
+
+// A change to the locations, after which they are asked again.
+async function changeLocations(path: string, body: unknown = {}): Promise<void> {
+  try { await post(`${locationsUrl}/${path}`, JSON.stringify(body)); } finally { await mutate(locationsUrl); }
+}
+
+/** Turns a location on, signing in to a cloud service first if need be; refused with 402 on the free plan with another on. */
+export const turnOnLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/on`);
+
+/** Turns a location off. Nothing there is deleted. */
+export const turnOffLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/off`);
+
+/** On the free plan, turns this location on in place of the one that is on. */
+export const locationInstead = (id: string) => changeLocations(`${encodeURIComponent(id)}/instead`);
+
+/** Signs out of a cloud service. Nothing there is deleted. */
+export const disconnectLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/disconnect`);
+
+/** Removes a location Connect to server added. Nothing there is deleted. */
+export const removeLocation = (id: string) => changeLocations(`${encodeURIComponent(id)}/remove`);
+
+/** Names a location Connect to server added. */
+export const renameLocation = (id: string, name: string) => changeLocations(`${encodeURIComponent(id)}/name`, { name });
+
+/** On how many locations a copy must be checked before a photo counts as backed up: 1 or 2. */
+export const setCountAt = (countAt: number) => changeLocations('count', { countAt });
+
+/** Backs up to every location that is on. */
+export const backUpToLocations = () => changeLocations('backup');
+
+/** Check all backups. */
+export const checkLocations = () => changeLocations('check');
+
+/** Pauses what the locations are doing. */
+export const pauseLocations = () => changeLocations('pause');
+
+/** Backs up to the locations other than the computer when one is due. */
+export const locationsIfDue = () => changeLocations('auto');
+
+/** Send to: sends Library's pictures and videos chosen to one location. */
+export const sendToLocation = (id: string, ids: string[]) => changeLocations(`${encodeURIComponent(id)}/send`, { ids });
+
+/** Connect to server (Pro): checks the location, then adds or changes it; its id. */
+export async function connectServer(connection: ServerConnectionDto): Promise<string> {
+  try {
+    return (await json<{ id: string }>(`${locationsUrl}/connect`, { method: 'POST', body: JSON.stringify(connection) })).id;
+  } finally {
+    await mutate(locationsUrl);
+  }
+}
+
+/** Deletes from the phone what was sent and matched, the largest first and no more than `atMost`, after the phone's own question. */
+export async function deleteSent(atMost?: number): Promise<SafeRemovalDto> {
+  try {
+    return await json<SafeRemovalDto>(`${locationsUrl}/sent/delete`, { method: 'POST', body: JSON.stringify({ atMost }) });
+  } finally {
+    await Promise.all([mutate(locationsUrl), mutate(planUrl)]);
+  }
+}

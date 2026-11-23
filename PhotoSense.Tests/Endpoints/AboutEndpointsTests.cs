@@ -12,8 +12,9 @@ namespace PhotoSense.Tests.Endpoints;
 public class AboutEndpointsTests
 {
     private static readonly ProductInfo Product = new("PhotoSense", "Jamie Hamman", "© 2026 Jamie Hamman", "help@photosense.example", "https://photosense.example",
-        "https://photosense.example/privacy", "https://photosense.example/terms", "https://photosense.example/support", "the State of Example");
-    private static readonly ProductInfo NothingSetYet = Product with { SupportEmail = null, Website = null, PrivacyPolicyUrl = null, TermsUrl = null, SupportUrl = null, GoverningLaw = null };
+        "https://photosense.example/privacy", "https://photosense.example/terms", "https://photosense.example/support", "the State of Example",
+        "https://photosense.example/download");
+    private static readonly ProductInfo NothingSetYet = Product with { SupportEmail = null, Website = null, PrivacyPolicyUrl = null, TermsUrl = null, SupportUrl = null, GoverningLaw = null, DownloadUrl = null };
     private static readonly ProgramInfo Program = new("iphone", "1.2.0.57", () => "LiteDB 5.0.21 (MIT)");
 
     // The About addresses of a program that is the iPhone app, made by the product given.
@@ -36,6 +37,7 @@ public class AboutEndpointsTests
         await Assert.That(json.GetProperty("privacyPolicyUrl").GetString()).IsEqualTo("https://photosense.example/privacy");
         await Assert.That(json.GetProperty("termsUrl").GetString()).IsEqualTo("https://photosense.example/terms");
         await Assert.That(json.GetProperty("supportUrl").GetString()).IsEqualTo("https://photosense.example/support");
+        await Assert.That(json.GetProperty("downloadUrl").GetString()).IsEqualTo("https://photosense.example/download");
     }
 
     [Test]
@@ -96,9 +98,9 @@ public class AboutEndpointsTests
     [Test]
     public async Task Reads_Product_Json_Taking_A_Blank_Or_Missing_Value_As_Not_Set_Yet(CancellationToken ct)
     {
-        var product = Read("""{ "name": "PhotoSense", "publisher": " Jamie Hamman ", "copyright": "© 2026 Jamie Hamman", "supportEmail": "  ", "website": "https://photosense.example" }""");
+        var product = Read("""{ "name": "PhotoSense", "publisher": " Jamie Hamman ", "copyright": "© 2026 Jamie Hamman", "supportEmail": "  ", "website": "https://photosense.example", "downloadUrl": "https://photosense.example/download" }""");
 
-        await Assert.That(product).IsEqualTo(new ProductInfo("PhotoSense", "Jamie Hamman", "© 2026 Jamie Hamman", null, "https://photosense.example", null, null, null, null));
+        await Assert.That(product).IsEqualTo(new ProductInfo("PhotoSense", "Jamie Hamman", "© 2026 Jamie Hamman", null, "https://photosense.example", null, null, null, null, "https://photosense.example/download"));
         var error = Assert.Throws<InvalidDataException>(() => Read("""{ "name": "PhotoSense", "publisher": "", "copyright": "©" }"""));
         await Assert.That(error!.Message).IsEqualTo("product.json has no publisher.");
     }

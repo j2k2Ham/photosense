@@ -10,10 +10,14 @@ using Android.Views;
 using Android.Webkit;
 using Android.Window;
 using Android.Widget;
+using Microsoft.Extensions.DependencyInjection;
+using PhotoSense.Application.Vault;
 
 namespace PhotoSense.AndroidApp;
 
 /// <summary>The one screen: the page, the whole of it, under the phone's own bars, which the page keeps clear of.</summary>
+// The app icon's menu (36): Search photos, Start swipe, Back up now.
+[MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
 [Activity(Name = "com.j2k2ham.photosense.MainActivity", Label = "PhotoSense", MainLauncher = true, Exported = true, Theme = "@android:style/Theme.DeviceDefault.NoActionBar",
     ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize | ConfigChanges.UiMode)]
 public sealed class MainActivity : Activity
@@ -44,7 +48,10 @@ public sealed class MainActivity : Activity
         base.OnCreate(savedInstanceState);
         Shown = this;
         PhoneApp.Start(ApplicationContext!);
+        // Automatic backup, with the app closed too: it backs up only when one is due.
+        BackupWorker.Schedule(ApplicationContext!);
         SelfCheck.Prepare(this, Intent);
+        AndroidNotifier.Opened(Intent);
 
         var page = _page = new WebView(this);
         page.Settings.JavaScriptEnabled = true;
@@ -69,6 +76,14 @@ public sealed class MainActivity : Activity
 
         // The page asks for the photos itself, once it has said what PhotoSense does with them (library/ask).
         page.LoadUrl(PageClient.Origin);
+    }
+
+    // A notification tapped while the app was open: the page is told, and asks what to open.
+    protected override void OnNewIntent(Intent? intent)
+    {
+        base.OnNewIntent(intent);
+        AndroidNotifier.Opened(intent);
+        _page?.EvaluateJavascript("window.dispatchEvent(new Event('photosense-notice'))", null);
     }
 
     public override void OnRequestPermissionsResult(int requestCode, string[] permissions, Permission[] grantResults)
@@ -121,6 +136,23 @@ public sealed class MainActivity : Activity
         public void OnBackInvoked() => back();
     }
 
+    /// <summary>Off the screen: the hidden vault locks, and the home screen widgets are told how things stand.</summary>
+    /// <inheritdoc />
+    protected override void OnResume()
+    {
+        base.OnResume();
+        // Back from the browser without signing in: the sign-in ends.
+        WebSignIn.Resumed();
+    }
+
+    /// <inheritdoc />
+    protected override void OnStop()
+    {
+        PhoneApp.Services.GetRequiredService<HiddenVault>().Lock();
+        _ = PhoneApp.RefreshWidgetsAsync();
+        base.OnStop();
+    }
+
     protected override void OnDestroy()
     {
         if (Shown == this)
@@ -151,6 +183,15 @@ public sealed class MainActivity : Activity
         var screen = Shown ?? throw new IOException("PhotoSense has to be open on the screen to ask.");
         var (id, answer) = Question();
         screen.RunOnUiThread(() => screen.RequestPermissions(PhotoPermissions, id));
+        return answer.Task;
+    }
+
+    /// <summary>Asks for one of Android's permissions, such as sending notifications, and answers whether it was given.</summary>
+    public static Task<bool> AskPermission(string permission)
+    {
+        var screen = Shown ?? throw new IOException("PhotoSense has to be open on the screen to ask.");
+        var (id, answer) = Question();
+        screen.RunOnUiThread(() => screen.RequestPermissions([permission], id));
         return answer.Task;
     }
 

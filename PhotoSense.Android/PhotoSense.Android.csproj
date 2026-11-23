@@ -19,6 +19,10 @@
     <TrimMode>partial</TrimMode>
     <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <!-- Every package the app ships, those its packages bring among them, is listed in packages.lock.json, from which
+         its third-party notices are written where the app cannot be restored (tools/notices.mjs). android.yml fails
+         when its restore writes a different list. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <!-- The page built for the app; a build elsewhere, without this computer's own settings in it, can be named instead. -->
     <PhotoSensePage Condition="'$(PhotoSensePage)' == ''">..\PhotoSense.ReactUI\out</PhotoSensePage>
   </PropertyGroup>
@@ -28,6 +32,16 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <!-- Google Play Billing: buying, restoring and managing Pro (PlayBillingStore). -->
+    <PackageReference Include="Xamarin.Android.Google.BillingClient" Version="9.1.0.2" />
+    <!-- Google's code scanner, which reads a computer's pairing code without the app needing the camera (Jamie, 2026-11-13). -->
+    <PackageReference Include="Xamarin.GooglePlayServices.Code.Scanner" Version="116.1.0.17" />
+    <!-- Automatic backup with the app closed: WorkManager wakes the app on Wi-Fi. -->
+    <PackageReference Include="Xamarin.AndroidX.Work.Runtime" Version="2.12.0" />
+    <!-- Compressing large videos to HEVC on the phone (Jamie, 2026-11-17). -->
+    <PackageReference Include="Xamarin.AndroidX.Media3.Transformer" Version="1.11.1" />
+    <!-- What is in a photo, for search, named on the phone by Google Play services' own model, which the app does not bundle (Jamie, 2026-11-18). -->
+    <PackageReference Include="Xamarin.GooglePlayServices.MLKit.ImageLabeling" Version="116.0.8.20" />
   </ItemGroup>
   <ItemGroup>
     <!-- The page, built for a program that hands it out itself: in PhotoSense.ReactUI,

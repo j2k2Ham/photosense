@@ -15,10 +15,10 @@ const config = [
       'jsx-a11y/label-has-associated-control': ['error', { depth: 3 }],
       // Taking a value out of an object with ...rest names it without using it, to leave it out of the rest.
       '@typescript-eslint/no-unused-vars': ['warn', { ignoreRestSiblings: true }],
-      // These two make a component ready for React's compiler, which the page does not use yet. What they flag works
-      // today; they stay as warnings, to be dealt with before the compiler is turned on.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
+      // These two keep a component ready for React's compiler: state is not set straight from an effect, nor a ref
+      // read or written while drawing (Jamie, 2026-11-17: every warning fixed, and none let back in).
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/refs': 'error',
     },
   },
   { ignores: ['.next/**', 'out/**', 'coverage/**', 'next-env.d.ts'] },

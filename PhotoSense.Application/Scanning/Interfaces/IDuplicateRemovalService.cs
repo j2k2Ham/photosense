@@ -39,8 +39,10 @@ public sealed record RemovalResult(RemovalOutcome Outcome, string? HeldAt = null
 /// <param name="Skipped">Files left alone because removing them could not be shown to be safe, or, when a file could not be moved, every file.</param>
 /// <param name="Problems">Why each file left alone was left, naming it.</param>
 /// <param name="Companions">Sidecars and Live Photo videos moved along with the files they belonged to.</param>
-/// <param name="BatchId">What to undo the removal by; absent when no file was moved.</param>
-public sealed record BulkRemovalResult(int Removed, long Bytes, int Skipped, IReadOnlyList<string> Problems, int Companions = 0, Guid? BatchId = null);
+/// <param name="BatchId">What to undo the removal by; absent when no file was moved, or when they went to a phone's bin.</param>
+/// <param name="Stays">The photos kept in place of the copies that went, by path, so that the message can name what stays.</param>
+public sealed record BulkRemovalResult(int Removed, long Bytes, int Skipped, IReadOnlyList<string> Problems, int Companions = 0, Guid? BatchId = null,
+    IReadOnlyList<string>? Stays = null);
 
 /// <summary>Removes the copies and look-alikes a scan found, into the folder that holds removed files.</summary>
 public interface IDuplicateRemovalService
@@ -67,6 +69,15 @@ public interface IDuplicateRemovalService
     /// <param name="similar">Take their look-alikes instead of their duplicates.</param>
     /// <param name="ct">Stops the removal before any file has moved.</param>
     Task<BulkRemovalResult> RemoveGroupsAsync(IReadOnlyCollection<string> groupKeys, bool similar, CancellationToken ct);
+
+    /// <summary>
+    /// Removes the photos chosen, as Clean up's categories choose them, all as one change, with their Live Photo videos
+    /// and sidecars. Each is the person's own choice, not a copy of another, so none waits on another staying; one
+    /// changed since the scan is left alone, and one whose file has gone is forgotten.
+    /// </summary>
+    /// <param name="ids">The photos.</param>
+    /// <param name="ct">Stops the removal before any file has moved.</param>
+    Task<BulkRemovalResult> RemovePhotosAsync(IReadOnlyCollection<PhotoId> ids, CancellationToken ct);
 
     /// <summary>
     /// Removes one photo. A photo in a duplicate group goes only while another file of the group stays

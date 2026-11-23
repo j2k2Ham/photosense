@@ -1,3 +1,6 @@
+using PhotoSense.Domain.Services;
+using PhotoSense.Domain.ValueObjects;
+
 namespace PhotoSense.Infrastructure.Library;
 
 /// <summary>What one of the files a picture or video is kept as holds.</summary>
@@ -24,7 +27,10 @@ public sealed record LibraryFile(LibraryFileKind Kind, string FileName, long Len
 /// <param name="CreatedUtc">When it was taken or added.</param>
 /// <param name="ModifiedUtc">When it last changed.</param>
 /// <param name="Files">The files it is kept as.</param>
-public sealed record LibraryItem(string Id, DateTime CreatedUtc, DateTime ModifiedUtc, IReadOnlyList<LibraryFile> Files);
+/// <param name="Favorite">The person marked it as a favorite in Photos.</param>
+/// <param name="Screenshot">Photos marks it as a picture of the screen.</param>
+/// <param name="BurstId">The burst Photos says it was taken in; null for none.</param>
+public sealed record LibraryItem(string Id, DateTime CreatedUtc, DateTime ModifiedUtc, IReadOnlyList<LibraryFile> Files, bool Favorite = false, bool Screenshot = false, string? BurstId = null);
 
 /// <summary>An album PhotoSense made: the names of the folders it is in, outermost first, then its own; and what is in it.</summary>
 /// <param name="Path">The names of the folders it is in, outermost first, then its own.</param>
@@ -76,4 +82,35 @@ public interface IPhotoLibrary
     /// </summary>
     /// <exception cref="IOException">Nothing was changed: the person said no, or the library could not make one of the changes.</exception>
     void Change(LibraryChange change);
+
+    /// <summary>
+    /// Writes a smaller copy of the video <paramref name="id"/>, made into <paramref name="target"/> as HEVC, as a new
+    /// item with the original's date and place, fetching it from the cloud first when it is kept there; answers how many
+    /// bytes the copy takes. The original is left as it is.
+    /// </summary>
+    /// <exception cref="IOException">The video could not be fetched, read or written; nothing is kept.</exception>
+    Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
+
+    /// <summary>Marks a picture or video a favorite in Photos, or takes the mark away.</summary>
+    /// <exception cref="IOException">The library could not change it.</exception>
+    void SetFavorite(string id, bool favorite);
+
+    /// <summary>Gives pictures and videos, by their ids, the dates and places asked, all together, after iOS asks; the files are left as they are.</summary>
+    /// <exception cref="IOException">The person said no, or the library could not change them: none changed.</exception>
+    void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
+
+    /// <summary>
+    /// Adds a picture or video to the library as a new item, its files together (a Live Photo's picture and its
+    /// video), dated and placed as given. Returns the library's id for it.
+    /// </summary>
+    /// <exception cref="IOException">The library could not take it.</exception>
+    /// <exception cref="UnauthorizedAccessException">PhotoSense may not add to the library.</exception>
+    Task<string> ImportAsync(IReadOnlyList<(LibraryFileKind Kind, string FileName, Stream Content)> files, DateTime? taken, PlaceChange? place, CancellationToken ct);
+
+    /// <summary>
+    /// A copy of one file of a picture or video for sharing, in the app's temporary folder, without its place and camera
+    /// details as asked, fetched from the cloud first when it is kept there.
+    /// </summary>
+    /// <exception cref="IOException">It could not be fetched or copied.</exception>
+    Task<SharedCopy> CopyForSharingAsync(string id, LibraryFileKind kind, bool removeLocation, bool removeCamera, CancellationToken ct);
 }

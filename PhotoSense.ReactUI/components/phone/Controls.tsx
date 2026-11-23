@@ -81,15 +81,19 @@ export const Radio = ({ on }: { readonly on: boolean }) => (
   <span aria-hidden className={`grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full border-2 ${on ? 'border-acc' : 'border-t3'}`}>{on && <span className="h-3 w-3 rounded-full bg-acc" />}</span>
 );
 
-/** A switch as each platform draws one, its label beside it: on is the platform's own colour. */
-export function PhoneSwitch({ label, on, onChange }: { readonly label: string; readonly on: boolean; onChange(on: boolean): void }) {
-  return (
-    <label className="flex min-h-[52px] cursor-pointer select-none items-center gap-3 rounded-cell bg-fill px-3.5 py-2 text-[15px]">
-      <span className="min-w-0 flex-1">{label}</span>
+/**
+ * A switch as each platform draws one, its label beside it, with a line under the label when there is more to say: on
+ * is the platform's own colour. `inList` makes it a row of a ListGroup, which gives it its background.
+ */
+export function PhoneSwitch({ label, detail, on, inList, onChange }: { readonly label: string; readonly detail?: string; readonly on: boolean; readonly inList?: boolean; onChange(on: boolean): void }) {
+  const control = (
+    <label className={`flex min-h-[52px] cursor-pointer select-none items-center gap-3 ${inList ? 'px-4 py-2 text-[16px]' : 'rounded-cell bg-fill px-3.5 py-2 text-[15px]'}`}>
+      <span className="flex min-w-0 flex-1 flex-col">{label}{detail && ' '}{detail && <span className="text-[13px] text-t2">{detail}</span>}</span>
       <input type="checkbox" role="switch" checked={on} onChange={e => onChange(e.target.checked)} className="peer sr-only" />
       <span aria-hidden className="relative h-[31px] w-[51px] shrink-0 rounded-full bg-sw-off transition after:absolute after:left-[2px] after:top-[2px] after:h-[27px] after:w-[27px] after:rounded-full after:bg-white after:shadow after:transition peer-checked:bg-sw-on peer-checked:after:translate-x-5 peer-focus-visible:ring-2 peer-focus-visible:ring-acc" />
     </label>
   );
+  return inList ? <li>{control}</li> : control;
 }
 
 /** A filter or a choice in a row of them, with how many it holds after its name. */
@@ -147,11 +151,13 @@ interface RowProps {
   readonly chevron?: boolean;
   readonly danger?: boolean;
   readonly disabled?: boolean;
+  /** The row's detail shows beside the list, on a tablet: it is lit. */
+  readonly current?: boolean;
   onClick?(): void;
 }
 
 /** One row of a list: pressed when it does something, with a chevron when it leads somewhere. */
-export function ListRow({ children, detail, chevron, danger, disabled, onClick }: RowProps) {
+export function ListRow({ children, detail, chevron, danger, disabled, current, onClick }: RowProps) {
   const inside = (
     <>
       <span className={`min-w-0 flex-1 ${danger ? 'text-danger-t' : ''}`}>{children}</span>
@@ -163,9 +169,9 @@ export function ListRow({ children, detail, chevron, danger, disabled, onClick }
   );
   const shape = 'flex min-h-[52px] w-full items-center gap-3 px-4 py-[11px] text-left text-[16px]';
   return (
-    <li>
+    <li className={current ? 'bg-sel' : undefined}>
       {onClick
-        ? <button type="button" disabled={disabled} onClick={onClick} className={`${shape} disabled:opacity-40`}>{inside}</button>
+        ? <button type="button" disabled={disabled} aria-current={current ? 'true' : undefined} onClick={onClick} className={`${shape} disabled:opacity-40`}>{inside}</button>
         : <div className={shape}>{inside}</div>}
     </li>
   );

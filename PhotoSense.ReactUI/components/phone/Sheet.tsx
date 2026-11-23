@@ -16,7 +16,7 @@ interface SheetProps {
 
 /**
  * A sheet over the screen: on a phone rising from the bottom, the width of the screen, with a grabber; on a tablet a
- * card in the middle. Pressing outside it, Escape, Back or its own button puts it away.
+ * form sheet 540 pixels wide in the middle, with none. Pressing outside it, Escape, Back or its own button puts it away.
  */
 export function Sheet({ title, done = 'Done', bare, children, onClose }: SheetProps) {
   const { ios, tablet } = usePhone();
@@ -31,7 +31,7 @@ export function Sheet({ title, done = 'Done', bare, children, onClose }: SheetPr
 
   const place = tablet ? 'items-center p-10' : 'items-end';
   const shape = tablet
-    ? 'w-[560px] max-w-full max-h-[calc(100%-40px)] rounded-[28px] pb-[14px]'
+    ? 'w-[540px] max-w-full max-h-[calc(100%-40px)] rounded-[28px] pb-[14px]'
     : `w-full rounded-t-sheet ${ios ? 'max-h-[calc(100%-56px)] pb-[calc(var(--safe-b)+12px)]' : 'max-h-[calc(100%-24px)] pb-[calc(var(--safe-b)+16px)]'}`;
   return (
     <Scrim className={`fixed inset-0 z-[45] flex animate-fade-in justify-center bg-scrim ${place}`} onDismiss={() => close.current()}>
@@ -60,13 +60,15 @@ interface ConfirmProps {
   readonly busy?: boolean;
   /** What the question leads to: danger for anything that removes files. */
   readonly kind?: 'danger' | 'primary';
+  /** The button that changes nothing: Cancel, or Not now for an offer. */
+  readonly cancelLabel?: string;
   readonly children?: React.ReactNode;
   onConfirm(): void;
   onCancel(): void;
 }
 
 /** A question in a sheet: its title, what will happen, the button that does it, and Cancel. */
-export function ConfirmSheet({ title, lines, confirmLabel, busy, kind = 'danger', children, onConfirm, onCancel }: ConfirmProps) {
+export function ConfirmSheet({ title, lines, confirmLabel, busy, kind = 'danger', cancelLabel = 'Cancel', children, onConfirm, onCancel }: ConfirmProps) {
   return (
     <Sheet title={title} bare onClose={onCancel}>
       <div className="flex flex-col gap-2 px-5 pb-2 pt-4">
@@ -76,7 +78,7 @@ export function ConfirmSheet({ title, lines, confirmLabel, busy, kind = 'danger'
       </div>
       <div className="flex flex-col gap-2 px-4 pt-3">
         <PhoneButton kind={kind} disabled={busy} onClick={onConfirm}>{confirmLabel}</PhoneButton>
-        <PhoneButton kind="secondary" onClick={onCancel}>Cancel</PhoneButton>
+        <PhoneButton kind="secondary" onClick={onCancel}>{cancelLabel}</PhoneButton>
       </div>
     </Sheet>
   );

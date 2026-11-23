@@ -8,9 +8,13 @@ import type { Page } from '@playwright/test';
 // roles, landmarks. A person still has to try what no checker can, as with the keyboard and a screen reader.
 async function accessible(page: Page, what: string) {
   for (const theme of ['dark', 'light'] as const) {
-    await page.evaluate(light => document.documentElement.classList.toggle('light', light), theme === 'light');
-    // The theme's colours settle before they are measured.
-    await page.waitForTimeout(400);
+    // The theme's colours change through transitions, which are measured once they have all ended, never part way.
+    await page.evaluate(async light => {
+      document.documentElement.classList.toggle('light', light);
+      // Reading a style makes the browser start the transitions the new theme sets off, so they can be waited for.
+      void getComputedStyle(document.documentElement).color;
+      await Promise.allSettled(document.getAnimations().filter(a => a instanceof CSSTransition).map(a => a.finished));
+    }, theme === 'light');
     const found = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
     const said = found.violations.map(v => `${v.id} (${v.impact}): ${v.help}\n${v.nodes.slice(0, 3).map(n => `  ${n.target.join(' ')}: ${n.failureSummary?.split('\n')[1]?.trim() ?? ''}`).join('\n')}`);
     expect(said, `${what}, ${theme} theme`).toEqual([]);
@@ -34,6 +38,20 @@ test.describe('every screen can be used with assistive technology and read in ei
     await page.getByRole('region', { name: 'Review' }).getByRole('button', { name: 'Compare IMG_0001.JPG' }).first().click();
     await expect(page.getByRole('dialog', { name: /^Compare/ })).toBeVisible();
     await accessible(page, 'The compare window');
+  });
+
+  test("Clean up's categories, a burst among them, and the question before deleting", async ({ page, photos, service }) => {
+    photos.png('Screenshots/Screenshot 2024-01-02 at 09.15.00.png', { seed: 5 });
+    for (const seed of [1, 2, 3]) photos.picture(`Trip/IMG_000${seed}.JPG`, { seed, taken: new Date(2023, 6, 4, 10, 0, 0) });
+    await service.scan(photos.root);
+    await page.goto('/');
+    await page.getByRole('tab', { name: /^Categories/ }).click();
+    await expect(page.getByRole('region', { name: 'Screenshots' })).toBeVisible();
+    await accessible(page, 'Categories');
+    await page.getByRole('navigation', { name: 'Categories' }).getByRole('button', { name: /^Bursts/ }).click();
+    await page.getByRole('button', { name: 'Delete 2 extra shots' }).click();
+    await expect(page.getByRole('alertdialog')).toBeVisible();
+    await accessible(page, 'The question before deleting from a category');
   });
 
   test('Organize, its preview and the folder dialog', async ({ page, photos }) => {
@@ -62,5 +80,15 @@ test.describe('every screen can be used with assistive technology and read in ei
     await page.keyboard.press('Escape');
     await menu(page, 'About PhotoSense');
     await accessible(page, 'About');
+  });
+});
+
+test.describe('the note asking for a backup', () => {
+  test.use({ noteAccepted: false });
+
+  test('can be read and accepted with assistive technology @phone', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Accept and continue' })).toBeVisible();
+    await accessible(page, 'The note asking for a backup');
   });
 });

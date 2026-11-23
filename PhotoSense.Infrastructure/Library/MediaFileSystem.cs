@@ -16,7 +16,7 @@ namespace PhotoSense.Infrastructure.Library;
 /// sends to the phone's own bin. Nothing is ever copied onto the phone: photos are copied to a computer.
 /// </para>
 /// </summary>
-public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
+public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether, IVideoCompressor, IFavoritePhotos, ISharingCopies, IPhotoDetails, IPhotoImport
 {
     /// <summary>Where what is removed from the phone's storage as a whole waits, as Android shows it: inside Pictures.</summary>
     public const string RemovedHere = "PhotoSense Removed";
@@ -158,6 +158,74 @@ public sealed class MediaFileSystem : IPhotoFileSystem, IPhotoChangesTogether
         // A photo gone since its folder was read has nothing left to erase.
         change.Trash.AddRange(paths.Select(p => seen.Files.TryGetValue(p, out var found) ? found.Entry.Id : null).OfType<string>().Distinct());
         Apply(change);
+    }
+
+    /// <inheritdoc />
+    public async Task<long> CompressAsync(string path, VideoTarget target, IProgress<double> progress, CancellationToken ct)
+    {
+        if (Find(path) is not { IsVideo: true } video) throw new IOException($"{Path.GetFileName(path)} is not a video on the phone.");
+        try { return await _store.CompressAsync(video.Id, target, progress, ct); }
+        // The copy is a new file: the phone is read afresh.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    /// <remarks>Each file goes in the folder it was in, when that is one Android keeps photos in; otherwise in Pictures.</remarks>
+    public async Task<IReadOnlyList<string>> ImportAsync(string folder, IReadOnlyList<ImportedFile> files, DateTime? taken, PlaceChange? place, CancellationToken ct)
+    {
+        string where;
+        try { where = StoreFolder(Inside(folder)); }
+        // A folder Android would refuse, or one from another phone: Pictures, where any photo may go.
+        catch (UnauthorizedAccessException) { where = Pictures + "/"; }
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        try
+        {
+            foreach (var file in files) ids.Add(await _store.ImportAsync(where, file.Name, file.Content, taken, place, ct));
+        }
+        // The phone has new files: it is read afresh.
+        finally { _seen = null; }
+        return [.. Look().Files.Where(f => ids.Contains(f.Value.Entry.Id)).Select(f => f.Key)];
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlySet<string>> FavoritesAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlySet<string>>(Look().Files.Where(f => f.Value.Entry.Favorite).Select(f => f.Key).ToHashSet(PhotoPath.Comparer));
+    }
+
+    /// <inheritdoc />
+    public void SetFavorite(string path, bool favorite)
+    {
+        var entry = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer on the phone.");
+        try { _store.SetFavorite(entry.Id, favorite); }
+        // What the phone holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public void ChangeAll(IReadOnlyList<DetailsChange> changes)
+    {
+        var entries = changes.Select(c => ((Find(c.Path) ?? throw new IOException($"{Path.GetFileName(c.Path)} is no longer on the phone.")).Id, c.Taken, c.Place)).ToList();
+        try { _store.ChangeDetails(entries); }
+        // What the phone holds now is read afresh, whether or not the change was made.
+        finally { _seen = null; }
+    }
+
+    /// <inheritdoc />
+    public string? IdOf(string path) => Find(path)?.Id;
+
+    /// <inheritdoc />
+    public bool CanChangePlace(string path) => Find(path) is { IsVideo: false } && PlaceWritable.Contains(Path.GetExtension(path));
+
+    // The pictures Android writes a place into.
+    private static readonly HashSet<string> PlaceWritable = new([".jpg", ".jpeg", ".png", ".webp"], StringComparer.OrdinalIgnoreCase);
+
+    /// <inheritdoc />
+    public Task<SharedCopy> CopyForSharingAsync(string path, bool removeLocation, bool removeCamera, CancellationToken ct)
+    {
+        var entry = Find(path) ?? throw new IOException($"{Path.GetFileName(path)} is no longer on the phone.");
+        return _store.CopyForSharingAsync(entry.Id, removeLocation, removeCamera, ct);
     }
 
     /// <summary>Forgets the folders made for photos that never came; a folder Android has goes when it is empty, as Android has it.</summary>

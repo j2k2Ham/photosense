@@ -1,0 +1,8 @@
+{
+  "name": "sharp",
+  "version": "0.0.0-photosense",
+  "description": "Stands in for sharp, which Next.js would install for its image optimizer. PhotoSense's page is a static export and never runs the optimizer, and sharp's libvips is under the LGPL, which the dependency review refuses (package.json's overrides).",
+  "license": "MIT",
+  "private": true,
+  "main": "index.js"
+}

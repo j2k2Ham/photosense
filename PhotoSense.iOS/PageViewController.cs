@@ -46,6 +46,9 @@ public sealed class PageViewController : UIViewController
         Say.Line($"loading {Start}");
     }
 
+    /// <summary>Tells the page a notification was tapped, so that it asks what to open.</summary>
+    public void TellNotice() => InvokeOnMainThread(() => _web?.EvaluateJavaScript("window.dispatchEvent(new Event('photosense-notice'))", (_, _) => { }));
+
     public override UIStatusBarStyle PreferredStatusBarStyle() => _light ? UIStatusBarStyle.DarkContent : UIStatusBarStyle.LightContent;
 
     // What the page says of its theme, so that the status bar's icons match it.

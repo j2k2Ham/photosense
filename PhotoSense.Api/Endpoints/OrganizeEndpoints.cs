@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Web;
+using PhotoSense.Application.Locations;
 using PhotoSense.Application.Organizing;
 using PhotoSense.Contracts.Organize;
 using PhotoSense.Domain.Repositories;
@@ -118,7 +119,10 @@ internal sealed class OrganizeEndpoints
         return resp;
     }
 
-    /// <summary>POST /api/organize/apply: moves or copies the files, as one change that can be undone.</summary>
+    /// <summary>
+    /// POST /api/organize/apply: moves or copies the files, as one change that can be undone; one of Organize's
+    /// suggestions (<c>suggested</c>) only on Pro, refused with 402 otherwise.
+    /// </summary>
     public async Task<ApiResponse> ApplyAsync(ApiRequest req, CancellationToken ct)
     {
         if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
@@ -127,9 +131,16 @@ internal sealed class OrganizeEndpoints
 
         var copy = string.Equals(request!.Mode, "copy", StringComparison.OrdinalIgnoreCase);
         var label = string.IsNullOrWhiteSpace(request.Label) ? Path.GetFileName(destination!.Folder) : request.Label.Trim();
-        var result = await _mover.ApplyAsync(destination!, copy, request.Companions, label, request.Files.Select(f => (f.Id ?? string.Empty, f.Name)).ToList(),
-            request.Files.Select(f => f.Subfolder).ToList(), ct);
-        return await DoneAsync(req, result, ct);
+        var files = request.Files.Select(f => (f.Id ?? string.Empty, f.Name)).ToList();
+        var subfolders = request.Files.Select(f => f.Subfolder).ToList();
+        try
+        {
+            var result = request.Suggested
+                ? await _mover.ApplySuggestionAsync(destination!, copy, request.Companions, label, files, subfolders, ct)
+                : await _mover.ApplyAsync(destination!, copy, request.Companions, label, files, subfolders, ct);
+            return await DoneAsync(req, result, ct);
+        }
+        catch (ProNeededException ex) { return await RefuseAsync(req, HttpStatusCode.PaymentRequired, ex.Message, ct); }
     }
 
     /// <summary>
@@ -203,11 +214,7 @@ internal sealed class OrganizeEndpoints
         // Videos are never decoded, so they have no picture to show.
         if (await _library.FindAsync(id, ct) is not { IsVideo: false } file) return req.CreateResponse(HttpStatusCode.NotFound);
 
-        // A scan keeps previews by what the file holds. A file no scan has read is kept by its size and the
-        // instant it was last changed: those stay with it when it is moved, and a copy that shares them
-        // shares the picture too.
-        var key = file.ContentHash
-            ?? Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{Path.GetExtension(file.Path).ToUpperInvariant()}|{file.SizeBytes}|{file.ModifiedUtc.Ticks}")));
+        var key = file.PreviewKey;
         var jpeg = await _thumbnails.GetAsync(key, ct);
         if (jpeg is null)
         {
