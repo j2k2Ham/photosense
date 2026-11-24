@@ -73,7 +73,7 @@ test.describe('duplicates', () => {
     await question(page).getByRole('button', { name: 'Delete 2 files' }).click();
     await expect(message(page, /^Moved 2 duplicates/)).toBeVisible();
     expect(photoFiles(photos)).toEqual(['Trips/IMG_0001.JPG', 'Trips/IMG_0002.JPG', 'Trips/IMG_0003.JPG']);
-    await expect(page.getByText('No duplicates waiting to be removed.')).toBeVisible();
+    await expect(message(page, 'No duplicates waiting to be removed.')).toBeVisible();
   });
 
   test('groups are found by a file\'s name or folder, and those whose copies are all kept can be hidden', async ({ page, photos, service }) => {

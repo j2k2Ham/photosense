@@ -19,7 +19,6 @@ import type { SafeRemovalDto, ScanProgressSnapshotDto, ScanStatusDto } from '../
 import type { Toast, ToastAction, ToastKind } from '../Toaster';
 import { CleanUpScreen } from './CleanUp';
 import { Pair, useFirstRun, usePhoneScan } from './FirstRun';
-import { Launch } from './Launch';
 import { BackupScreen, SafeToDelete, SpaceFreed } from './Backup';
 import { LibraryScreen } from './Library';
 import { items as itemsSaid, useLibrary, type Album, type LibraryFilter } from '../../lib/library';
@@ -316,7 +315,6 @@ export function PhoneApp(props: Props) {
         {sending && <SendToSheet locations={sendable} count={sending.length} chosen={chosenLast} onSend={l => void sendTo(l, sending)} onClose={() => setSending(undefined)} />}
         {!sentInPane && sentShown}
         {proSheet}
-        <Launch />
       </>} />
     </PlanProvider>
   );

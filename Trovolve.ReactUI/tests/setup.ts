@@ -11,6 +11,7 @@ class MemoryStorage {
   clear() { this.items.clear(); }
 }
 Object.defineProperty(globalThis, 'localStorage', { value: new MemoryStorage(), configurable: true, writable: true });
+Object.defineProperty(globalThis, 'sessionStorage', { value: new MemoryStorage(), configurable: true, writable: true });
 
 // The test browser cannot be asked whether its system is set to light, which the Auto theme follows: it says dark.
 // A test of the theme stands in its own answer with vi.stubGlobal('matchMedia', …).
@@ -32,6 +33,7 @@ accepted();
 
 afterEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   cleanup();
   vi.restoreAllMocks();
   vi.useRealTimers();

@@ -209,15 +209,39 @@ describe('the results', () => {
     expect(api.useGroups.mock.calls[1]).toEqual(['similar', '', 1, false]);
   });
 
-  it('say so when there is one duplicate, or none', () => {
+  it('say so when there is one duplicate, and say in a message, once, when there are none', async () => {
     groupsFor = mode => ({ data: mode === 'similar' ? undefined : groupsPage([groupB]) });
     const { container, refresh } = open();
     expect(container).toHaveTextContent('1 duplicate file taking 5.8 MB.');
     expect(tab(/Similar/)).toHaveTextContent(/^Similar$/);
+    expect(screen.queryByText('No duplicates waiting to be removed.')).not.toBeInTheDocument();
     groupsFor = () => ({ data: groupsPage([]) });
     refresh();
-    expect(screen.getByText('No duplicates waiting to be removed.')).toBeInTheDocument();
+    const log = screen.getByRole('log', { name: 'Messages' });
+    expect(await within(log).findByText('No duplicates waiting to be removed.')).toBeInTheDocument();
+    // In the message, not on the bar.
+    expect(screen.getAllByText('No duplicates waiting to be removed.')).toHaveLength(1);
     expect(button('Delete all duplicates')).toBeDisabled();
+    // Said once while it stays so; again once duplicates have come and gone.
+    refresh();
+    expect(within(log).getAllByText('No duplicates waiting to be removed.')).toHaveLength(1);
+  });
+
+  it('say nothing of it while another tab shows, and say it on coming back to the duplicates', async () => {
+    groupsFor = mode => ({ data: mode === 'similar' ? undefined : groupsPage([groupB]) });
+    const { refresh } = open();
+    await userEvent.click(tab(/^Categories/));
+    groupsFor = () => ({ data: groupsPage([]) });
+    refresh();
+    expect(screen.queryByText('No duplicates waiting to be removed.')).not.toBeInTheDocument();
+    await userEvent.click(tab(/^Duplicates/));
+    expect(await screen.findByText('No duplicates waiting to be removed.')).toBeInTheDocument();
+  });
+
+  it('play the launch before anything else, before the page knows which program it is', () => {
+    api.useAbout.mockReturnValue({ data: undefined } as never);
+    open();
+    expect(screen.getByRole('img', { name: 'trovolve. Your memories. Evolved.' })).toBeInTheDocument();
   });
 
   it('point to the similar shots when no duplicates were found, and back again', async () => {

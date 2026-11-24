@@ -40,6 +40,7 @@ import { tellSystemBars } from '../lib/systemBars';
 import { useTheme } from '../lib/theme';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, RemovedFilesDto } from '../types';
 import { FeatureIcon } from '../components/FeatureIcons';
+import { Launch } from '../components/Launch';
 
 // Removed files are moved here, inside the scanned folder, rather than erased.
 const REMOVED_FOLDER = '_Trovolve_Removed';
@@ -175,6 +176,17 @@ export default function HomePage() {
   const comparedIndex = compared ? Math.min(copyIndex, compared.members.length - 1) : 0;
   const removable = data?.removableCount ?? 0;
   const reclaimable = data?.reclaimableBytes ?? 0;
+
+  // That no duplicates wait to be removed is said in a message, once each time it comes to be so (Jamie, 2026-11-24),
+  // while the duplicates show. The count is the whole scan's, whatever the search.
+  const nothingWaits = data !== undefined && removable === 0;
+  const saidNothing = useRef(false);
+  useEffect(() => {
+    if (!nothingWaits) { saidNothing.current = false; return; }
+    if (saidNothing.current || onPhone || area !== 'clean' || screen !== 'results' || categories || mode !== 'duplicates') return;
+    saidNothing.current = true;
+    push('No duplicates waiting to be removed.', 'info');
+  }, [nothingWaits, onPhone, area, screen, categories, mode, push]);
 
   // Removing the last groups of the last page leaves that page empty: step back to one that exists.
   const lastPage = data?.totalPages;
@@ -413,7 +425,7 @@ export default function HomePage() {
                     <p className="text-[13.5px] lg:text-[14.5px]">
                       {removable > 0
                         ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span><span className="lg:hidden xl:inline">. The best copy of each picture or video is kept.</span></>
-                        : <span className="text-t2">{data ? 'No duplicates waiting to be removed.' : 'Loading…'}</span>}
+                        : !data && <span className="text-t2">Loading…</span>}
                     </p>
                   </div>
                   <button type="button" disabled={busy || removable === 0} onClick={() => ask({ scope: 'all', count: removable, bytes: reclaimable })}
@@ -575,6 +587,8 @@ export default function HomePage() {
       {pairOpen && <PairWindow notify={push} onClose={() => setPairOpen(false)} />}
 
       {!platform && <Toaster toasts={toasts} remove={remove} />}
+      {/* The launch comes before everything else, on every program, while the page finds out which it is (Jamie, 2026-11-24). */}
+      <Launch />
     </div>
   );
 }

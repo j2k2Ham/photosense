@@ -78,6 +78,9 @@
 }
 /* In a phone app the page stays hidden until it has its skin, so the computer's layout never shows there for a moment.
    Should the program never answer, it shows after three seconds all the same, with whatever it can say. */
+/* The launch plays only on the app's first load: a reload never paints it. */
+html[data-launched] [data-launch] { display: none; }
+
 html[data-app] { background: #000; }
 html[data-app].light { background: #fff; }
 /* Until the phone's skin is known the page is hidden, on the launch screens' teal black, which the launch plays on. */

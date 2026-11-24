@@ -128,12 +128,18 @@ export class Service {
   }
 }
 
-export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean }>({
+export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean; launch: boolean }>({
   // Nearly every test is of what comes after the note asking for a backup; the note's own tests leave it to be asked.
   noteAccepted: [true, { option: true }],
+  // The launch covers the page for minutes when the app first loads; every test but the launch's own starts as a reload
+  // would, with it played already.
+  launch: [false, { option: true }],
   // Accepted through the program, which keeps it, as the page would.
-  page: async ({ page, noteAccepted, service }, use) => {
+  page: async ({ page, noteAccepted, launch, service }, use) => {
     if (noteAccepted) await service.post('terms/accept');
+    if (!launch) {
+      await page.addInitScript(() => sessionStorage.setItem('trovolve-launched', 'yes'));
+    }
     await use(page);
     // A stand-in answer still being fetched as the test ends (the page asking again in the background) is dropped, not
     // counted as the test failing.

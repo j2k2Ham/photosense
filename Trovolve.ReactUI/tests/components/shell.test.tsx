@@ -46,6 +46,12 @@ describe('the page frame', () => {
     expect(document.documentElement.hasAttribute('data-app')).toBe(true);
     document.documentElement.removeAttribute('data-app');
     document.documentElement.classList.remove('light');
+    // A reload, the launch played already, never paints it.
+    expect(document.documentElement.hasAttribute('data-launched')).toBe(false);
+    sessionStorage.setItem('trovolve-launched', 'yes');
+    paint();
+    expect(document.documentElement.hasAttribute('data-launched')).toBe(true);
+    document.documentElement.removeAttribute('data-launched');
     expect(metadata.title).toBe('Trovolve');
     // The one icon every program keeps, which the program answering hands out.
     expect(metadata.icons.icon).toBe('http://localhost:7071/api/about/icon');
