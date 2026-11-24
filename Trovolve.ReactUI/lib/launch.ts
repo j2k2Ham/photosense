@@ -1,8 +1,7 @@
 /**
- * How long the launch stays when the app first loads, in seconds, before it fades to show the app. Change it here
- * (Jamie, 2026-11-24: three minutes at first, then four).
+ * How long the launch stays when the app first loads, in seconds, before it fades to show the app. Change it here.
  */
-export const LAUNCH_SECONDS = 240;
+export const LAUNCH_SECONDS = 3;
 
 /** How long the launch takes to fade, in milliseconds, at the end of those seconds. */
 export const LAUNCH_FADE = 300;
