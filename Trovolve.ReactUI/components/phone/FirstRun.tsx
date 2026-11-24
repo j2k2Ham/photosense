@@ -342,9 +342,8 @@ export function Pair({ notify, onNext, later }: { readonly notify: Notify; onNex
 
 const KINDS: Record<FindingsDto['items'][number]['kind'], string> = { duplicates: 'Duplicates', similar: 'Similar shots', largeVideos: 'Large videos' };
 
-/** 05, and every scan after: how many of the photos are read, what has been found so far, and that nothing leaves the phone. */
+/** 05, and every scan after: how many of the photos are read, and what has been found so far. */
 function Scanning({ progress, first, onStop }: { readonly progress?: ScanProgressSnapshotDto; readonly first: boolean; onStop?(): void }) {
-  const device = useDevice();
   const found = useFound(true, true).data;
   const total = progress ? progress.primaryTotal + progress.secondaryTotal : 0;
   const done = progress ? progress.primaryProcessed + progress.secondaryProcessed : 0;
@@ -369,7 +368,6 @@ function Scanning({ progress, first, onStop }: { readonly progress?: ScanProgres
             </div>
           ))}
         </dl>
-        <p className="mt-3 flex items-center gap-2 text-[13.5px] text-t2"><span aria-hidden className="h-[7px] w-[7px] rounded-full bg-keep" />Everything stays on this {device}.</p>
       </div>
     </Cover>
   );

@@ -67,10 +67,14 @@ test.describe('every screen can be used with assistive technology and read in ei
     await accessible(page, 'The folder dialog');
   });
 
-  test('the menu, Settings, Help and About', async ({ page }) => {
+  test('the menu, Support, Settings, Help and About', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Menu' }).click();
-    await accessible(page, 'The menu');
+    await page.getByRole('menuitem', { name: /^Support/ }).click();
+    await accessible(page, 'The menu, Support open');
+    await page.getByRole('menuitem', { name: 'Support page' }).click();
+    await expect(page.getByRole('dialog', { name: 'Support' }).getByRole('article')).toContainText('Where do the files I delete go?');
+    await accessible(page, 'Support');
     await page.keyboard.press('Escape');
     await menu(page, 'Settings');
     await accessible(page, 'Settings');

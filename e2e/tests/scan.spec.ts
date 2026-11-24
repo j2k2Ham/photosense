@@ -8,10 +8,10 @@ test.describe('scanning', () => {
     photos.picture('Trips/IMG_0002.JPG', { seed: 2 });
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Find duplicate photos and videos' })).toBeVisible();
-    // In the bar, or in the menu where the bar has no room for it.
-    if (isMobile) await page.getByRole('button', { name: 'Menu' }).click();
-    await expect((isMobile ? page.getByRole('menu', { name: 'Menu' }) : page.getByRole('banner')).getByText('Runs on this device. Nothing is uploaded.')).toBeVisible();
-    if (isMobile) await page.keyboard.press('Escape');
+    // That nothing is uploaded is in the FAQ, not on the screen; with no results, the scan offers neither Start over nor Back to results.
+    await expect(page.getByText('Runs on this device. Nothing is uploaded.')).toHaveCount(0);
+    await expect(page.getByText('Start over')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back to results' })).toHaveCount(0);
 
     await page.getByRole('textbox', { name: 'Root folder' }).fill(photos.root);
     await page.getByRole('button', { name: 'Scan' }).click();
@@ -25,6 +25,9 @@ test.describe('scanning', () => {
     if (isMobile) await menu(page, 'Change folders or rescan');
     else await page.getByRole('button', { name: 'Change or rescan' }).click();
     await expect(page.getByRole('textbox', { name: 'Root folder' })).toHaveValue(photos.root);
+    // With results, the scan offers both.
+    await expect(page.getByText('Start over')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to results' })).toBeVisible();
   });
 
   test('a folder and its backup are scanned together, and copies between them are found', async ({ page, photos }) => {

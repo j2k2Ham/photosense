@@ -8,6 +8,7 @@ import { GroupList } from '../components/GroupList';
 import { AboutWindow, type AboutTopic } from '../components/AboutWindow';
 import { CategoriesView } from '../components/CategoriesView';
 import { HelpWindow } from '../components/HelpWindow';
+import { SupportWindow } from '../components/SupportWindow';
 import { LimitDialog } from '../components/LimitDialog';
 import type { Area } from '../components/ModeSwitch';
 import { OrganizeView } from '../components/organize/OrganizeView';
@@ -124,6 +125,7 @@ export default function HomePage() {
   const [helpOpen, setHelpOpen] = useState(false);
   // About, open at the topic it was opened for.
   const [aboutOpen, setAboutOpen] = useState<AboutTopic>();
+  const [supportOpen, setSupportOpen] = useState(false);
   // Keep a backup of the photos you care about: asked once, and put away only by accepting it; hidden while its terms are read.
   const backupNote = useBackupNote();
   const [pairOpen, setPairOpen] = useState(false);
@@ -390,9 +392,7 @@ export default function HomePage() {
                   <span className="font-mono text-[12px] font-normal text-t3">{categoryCount?.toLocaleString()}</span>
                 </button>
               </div>
-              {categories ? (
-                <p className="my-auto flex-1 text-[13px] text-t2 max-lg:order-2 lg:text-right lg:text-[14px]">Large videos, screenshots, bursts, blurry shots and what messaging apps saved. Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
-              ) : (<>
+              {!categories && (<>
               <label className="my-auto flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-4 max-lg:order-1 lg:w-[clamp(220px,22vw,380px)]">
                 <FeatureIcon name="search" size={16} className="shrink-0 text-t3" />
                 <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
@@ -415,7 +415,6 @@ export default function HomePage() {
                         ? <><span className="font-semibold">{removable.toLocaleString()}</span> duplicate {removable === 1 ? 'file' : 'files'} taking <span className="font-semibold">{formatBytes(reclaimable)}</span><span className="lg:hidden xl:inline">. The best copy of each picture or video is kept.</span></>
                         : <span className="text-t2">{data ? 'No duplicates waiting to be removed.' : 'Loading…'}</span>}
                     </p>
-                    <p className="hidden text-[12.5px] text-t3 sm:block lg:hidden xl:block">Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
                   </div>
                   <button type="button" disabled={busy || removable === 0} onClick={() => ask({ scope: 'all', count: removable, bytes: reclaimable })}
                     className="pill-rose my-auto h-11 shrink-0 px-[22px] text-[15px] max-lg:order-2">Delete all duplicates</button>
@@ -458,7 +457,7 @@ export default function HomePage() {
           notice={offlineNotice} toasts={toasts} removeToast={remove}
           theme={themeChoice} version={about?.version} errorCount={errors.length} onTheme={setTheme} settings={settings} onSettings={changeSettings} onTab={turnToTab}
           scanning={scanning} progress={progress.data} onStarted={started} onStopScan={() => void stop()} notify={push}
-          onErrors={() => setErrorsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} reading={aboutOpen !== undefined} />
+          onErrors={() => setErrorsOpen(true)} onSupport={() => setSupportOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} reading={aboutOpen !== undefined} />
       ) : (
         <>
         <TopBar plan={plan} area={area} fresh={settings.phonesSeen ? [] : ['phones']} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
@@ -466,7 +465,7 @@ export default function HomePage() {
           onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
           {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
           {menuOpen && (
-            <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)}
+            <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)} onSupport={() => setSupportOpen(true)}
               onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase} />
           )}
           {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
@@ -569,6 +568,9 @@ export default function HomePage() {
       )}
       {helpOpen && <HelpWindow platform={platform ?? 'computer'} onGo={goTo} onClose={() => setHelpOpen(false)} />}
       {aboutOpen && <AboutWindow start={aboutOpen} onClose={() => setAboutOpen(undefined)} />}
+      {/* The guide and the errors take Support's place, as both open beneath a window of its kind. */}
+      {supportOpen && <SupportWindow errors={errors} notify={push} onClose={() => setSupportOpen(false)}
+        onHelp={() => { setSupportOpen(false); setHelpOpen(true); }} onErrors={() => { setSupportOpen(false); setErrorsOpen(true); }} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
       {pairOpen && <PairWindow notify={push} onClose={() => setPairOpen(false)} />}
 

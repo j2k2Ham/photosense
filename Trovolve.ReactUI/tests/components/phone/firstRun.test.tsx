@@ -86,7 +86,7 @@ function App({ platform = 'ios', scanning = false, progress, onStarted = vi.fn()
     <PhoneApp platform={platform} tab={tab}
       toasts={[]} theme="dark" errorCount={0} settings={{ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true }} onSettings={vi.fn()} scanning={scanning || started} progress={progress}
       onStarted={id => { setStarted(true); onStarted(id); }} onStopScan={onStop} notify={notify}
-      onTab={next => { onTab(next); setTab(next); }} removeToast={vi.fn()} onTheme={vi.fn()} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={onAbout} reading={reading} />
+      onTab={next => { onTab(next); setTab(next); }} removeToast={vi.fn()} onTheme={vi.fn()} onErrors={vi.fn()} onSupport={vi.fn()} onHelp={vi.fn()} onAbout={onAbout} reading={reading} />
   );
 }
 
@@ -338,7 +338,7 @@ describe('first launch: the first scan and what it found', () => {
     expect(scan).toHaveTextContent('Scanning your library4,165of 6,941 photos and videos');
     expect(screen.getByRole('progressbar', { name: 'Photos read' })).toHaveAttribute('aria-valuenow', '60');
     expect([...scan.querySelectorAll('dl > div')].map(d => d.textContent)).toEqual(['Duplicates264', 'Similar shots512', 'Large videos0']);
-    expect(scan).toHaveTextContent('Everything stays on this iPhone.');
+    expect(scan).not.toHaveTextContent('Everything stays on this');
     expect(within(scan).getByRole('status')).toHaveTextContent('Scanning…');
     expect(screen.queryByRole('button', { name: 'Scanning…' })).not.toBeInTheDocument();
     expect(steps()).toBe(4);
@@ -356,13 +356,20 @@ describe('first launch: the first scan and what it found', () => {
     expect(stage()).toBe('offer');
   });
 
+  it('names an Android tablet as a tablet', () => {
+    localStorage.setItem('trovolve-first-run', 'access');
+    width(true);
+    render(<App platform="android" />);
+    expect(cover('Photo access')).toHaveTextContent('Photos are checked on this tablet and never uploaded.');
+  });
+
   it('counts before it knows how many there are, with nothing found yet, on a tablet', () => {
     localStorage.setItem('trovolve-first-run', 'scan');
     found = undefined;
     width(true);
     render(<App platform="android" scanning progress={snapshot({ primaryTotal: 0, primaryProcessed: 0 })} />);
     expect(cover('Scanning')).toHaveTextContent('Counting your photos and videos…');
-    expect(cover('Scanning')).toHaveTextContent('Everything stays on this tablet.');
+    expect(cover('Scanning')).not.toHaveTextContent('Everything stays on this');
     expect(screen.getByRole('progressbar', { name: 'Photos read' })).toHaveAttribute('aria-valuenow', '0');
   });
 

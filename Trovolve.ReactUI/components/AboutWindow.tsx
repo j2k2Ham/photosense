@@ -87,8 +87,8 @@ function Waiting({ error }: { readonly error?: Error }) {
     : <p role="status" className="text-[15px] text-t3">Loading…</p>;
 }
 
-/** One document, asked for only when it is turned to. */
-function DocumentTopic({ document }: { readonly document: AboutDocument }) {
+/** One document, asked for only when it is turned to: in About, and the support document in Support. */
+export function DocumentTopic({ document }: { readonly document: AboutDocument }) {
   const { data, error } = useAboutText(document);
   if (data === undefined) return <Waiting error={error} />;
   if (document === 'notices') return <pre className="whitespace-pre-wrap break-words font-mono text-[12.5px] leading-relaxed text-t2">{data}</pre>;

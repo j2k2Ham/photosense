@@ -26,7 +26,7 @@ describe('the guide itself', () => {
   it('has a topic for each part of Trovolve on a computer, each told from the others, and says where its buttons go', () => {
     expect(COMPUTER.map(t => t.title)).toEqual([
       'Getting started', 'Scanning for duplicates', 'Reviewing duplicates', 'Similar shots', 'Large videos, screenshots, bursts and blurry shots', 'Organize: suggested folders', 'Organize: folders of your own',
-      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Backing up a phone to a computer', 'Removed files and the Recycle Bin', 'The free plan and Pro', 'Settings, theme, errors and About', 'If something looks wrong',
+      'Organize: previewing and moving', 'Organize: selecting and deleting files', 'Backing up a phone to a computer', 'Removed files and the Recycle Bin', 'The free plan and Pro', 'Settings, theme, support and About', 'If something looks wrong',
     ]);
     expect(new Set(GUIDE.map(t => t.id)).size).toBe(GUIDE.length);
     expect(GUIDE.filter(t => t.go).map(t => [t.id, t.go!.place])).toEqual([
@@ -101,11 +101,15 @@ describe('the guide itself', () => {
     expect(ids('rename by date', 'computer')).toEqual(['phones']);
     expect(ids('unpair', 'computer')).toEqual(['phones']);
     expect(ids('forget this phone', 'computer')).toEqual(['phones']);
+    expect(ids('report a problem', 'computer')).toEqual(['menu']);
+    expect(ids('email support', 'computer')).toEqual(['menu']);
 
     for (const platform of ['ios', 'android'] as const) {
       expect(ids('recover', platform)).toEqual(['library', 'phone-removed']);
       expect(ids('transfer', platform)).toEqual(['backup']);
       expect(ids('cancel subscription', platform)).toEqual(['phone-plan']);
+      expect(ids('report a problem', platform)).toEqual(['phone-settings']);
+      expect(ids('email support', platform)).toEqual(['phone-settings']);
       expect(ids('dupes', platform)).toEqual(['phone-cleanup']);
       expect(ids('trip', platform)).toEqual(['phone-start', 'library', 'phone-organize', 'phone-plan']);
       expect(ids('vacation', platform)).toEqual(['library']);
@@ -196,7 +200,7 @@ describe('the help window', () => {
     await userEvent.click(within(page()).getByRole('button', { name: /^Previous\s*Getting started$/ }));
     expect(reading()).toBe('Getting started');
     await userEvent.click(topic('If something looks wrong'));
-    expect(within(page()).getByRole('button', { name: /^Previous\s*Settings, theme, errors and About$/ })).toBeInTheDocument();
+    expect(within(page()).getByRole('button', { name: /^Previous\s*Settings, theme, support and About$/ })).toBeInTheDocument();
     expect(within(page()).queryByRole('button', { name: /^Next/ })).not.toBeInTheDocument();
   });
 

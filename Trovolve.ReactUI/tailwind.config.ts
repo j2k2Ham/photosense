@@ -35,10 +35,11 @@ const config: Config = {
         dialog: 'var(--r-dialog)',
         chip: 'var(--r-chip)'
       },
-      // The phone layout's motion: a screen pushed in, a sheet or toast rising, a fade, a question popping up, a pulse.
+      // The motion: a screen pushed in, a sheet or toast rising, a toast sliding in, a fade, a question popping up, a pulse.
       keyframes: {
         'push-in': { from: { transform: 'translateX(44px)', opacity: '.3' }, to: { transform: 'none', opacity: '1' } },
         'rise': { from: { transform: 'translateY(40px)', opacity: '0' }, to: { transform: 'none', opacity: '1' } },
+        'slide-in': { from: { transform: 'translateX(calc(100% + 32px))', opacity: '0' }, to: { transform: 'none', opacity: '1' } },
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
         'pop': { from: { transform: 'scale(1.06)', opacity: '0' }, to: { transform: 'none', opacity: '1' } },
         'pulse-ring': { '0%': { transform: 'scale(.6)', opacity: '.6' }, '100%': { transform: 'scale(1.45)', opacity: '0' } }
@@ -47,6 +48,8 @@ const config: Config = {
         'push-in': 'push-in .28s cubic-bezier(.2,.8,.2,1)',
         'sheet-in': 'rise .3s cubic-bezier(.2,.8,.2,1)',
         'toast-in': 'rise .25s cubic-bezier(.2,.8,.2,1)',
+        // A message on a computer slides in from the right, in the corner it sits in.
+        'toast-slide': 'slide-in .32s cubic-bezier(.2,.8,.2,1)',
         'fade-in': 'fade-in .2s',
         'pop': 'pop .2s',
         'pulse-ring': 'pulse-ring 2.2s ease-out infinite'

@@ -325,7 +325,6 @@ export function RecentSheet({ batches, root, busy, onUndo, onClose }: { readonly
             ))}
           </ListGroup>
         )}
-        <p className="px-1 text-[13.5px] leading-[1.4] text-t2">Undo puts files back under the names they had. What was deleted permanently can&apos;t be put back.</p>
       </div>
     </Sheet>
   );

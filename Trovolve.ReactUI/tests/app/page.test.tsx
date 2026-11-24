@@ -201,7 +201,8 @@ describe('the results', () => {
     expect(tab(/Similar/)).toHaveTextContent('Similar1');
     expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
     expect(container).toHaveTextContent('3 duplicate files taking 14.5 MB. The best copy of each picture or video is kept.');
-    expect(container).toHaveTextContent('Deleted files move to _Trovolve_Removed, and Undo puts them back.');
+    // Where deleted files go is in the FAQ and the question before deleting, not on the bar.
+    expect(container).not.toHaveTextContent('Deleted files move to _Trovolve_Removed, and Undo puts them back.');
     expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
     expect(desk()).toHaveTextContent('IMG_4198.JPG2 duplicates · 8.7 MB to free');
     expect(api.useGroups.mock.calls[0]).toEqual(['duplicates', '', 1, false]);
@@ -346,7 +347,7 @@ describe("Clean up's categories on a computer", () => {
     expect(screen.getByRole('region', { name: 'Screenshots' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Groups')).not.toBeInTheDocument();
     expect(screen.queryByRole('textbox', { name: 'Search by file name or folder' })).not.toBeInTheDocument();
-    expect(screen.getByText(/^Large videos, screenshots, bursts, blurry shots and what messaging apps saved\./)).toBeInTheDocument();
+    expect(screen.queryByText(/^Large videos, screenshots, bursts, blurry shots and what messaging apps saved\./)).not.toBeInTheDocument();
     await userEvent.click(tab(/Duplicates/));
     expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
     expect(gallery()).toBeInTheDocument();
@@ -452,6 +453,7 @@ describe('the menu and the errors', () => {
 
     await click('Menu');
     expect(screen.queryByRole('dialog', { name: 'Errors' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Support/ }));
     await userEvent.click(screen.getByRole('menuitem', { name: /^Errors/ }));
     expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
     fireEvent.keyDown(window, { key: 'Escape' });
@@ -1012,6 +1014,31 @@ describe('about', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(about()).not.toBeInTheDocument();
   });
+
+  it('opens Support from the menu, and Support gives way to the guide or the errors', async () => {
+    open();
+    const support = () => screen.queryByRole('dialog', { name: 'Support' });
+    const toSupport = async () => {
+      await click('Menu');
+      await userEvent.click(screen.getByRole('menuitem', { name: /^Support/ }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Support page' }));
+    };
+    await toSupport();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(support()).toBeInTheDocument();
+    await userEvent.click(within(support()!).getByRole('button', { name: 'Read the guide' }));
+    expect(support()).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Help' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await toSupport();
+    await userEvent.click(within(support()!).getByRole('button', { name: 'See errors' }));
+    expect(support()).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await toSupport();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(support()).not.toBeInTheDocument();
+  });
 });
 
 describe('the note asking for a backup', () => {
@@ -1149,7 +1176,7 @@ describe('help', () => {  const help = () => screen.queryByRole('dialog', { name
     await go(/^Reviewing duplicates/, 'Show the duplicates');
     expect(tab(/Duplicates/)).toBeInTheDocument();
 
-    await go(/^Settings, theme, errors and About/, 'Open Settings');
+    await go(/^Settings, theme, support and About/, 'Open Settings');
     expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
   });
 });
@@ -1501,7 +1528,7 @@ describe('on a phone or tablet', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
   });
 
-  it('leads from Settings to the errors, help, About and the privacy policy, and shows no Trovolve Removed while nothing waits', async () => {
+  it('leads from Settings to the errors, Support, help, About and the privacy policy, and shows no Trovolve Removed while nothing waits', async () => {
     api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
     // Nothing left to clean up: an iPad's sidebar has no count to show beside Clean up.
     groupsFor = mode => ({ data: groupsPage([], {}, mode) });
@@ -1514,6 +1541,9 @@ describe('on a phone or tablet', () => {
     await userEvent.keyboard('{Escape}');
     await userEvent.click(within(await settings()).getByRole('button', { name: 'Errors None' }));
     expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Support' }));
+    expect(screen.getByRole('dialog', { name: 'Support' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     await userEvent.click(within(await settings()).getByRole('button', { name: 'Help' }));
     expect(screen.getByRole('dialog', { name: 'Help' })).toBeInTheDocument();

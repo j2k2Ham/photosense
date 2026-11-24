@@ -51,6 +51,8 @@ interface Props {
   onMoveRemoved(): void;
   onRecent(): void;
   onErrors(): void;
+  /** Opens the support page. */
+  onSupport(): void;
   onHelp(): void;
   onAbout(): void;
   onPrivacy(): void;
@@ -100,7 +102,11 @@ export function SettingsSheet(p: Props) {
         )}
         <ListGroup header="History">
           <ListRow chevron detail={p.moves === undefined ? undefined : p.moves.toLocaleString()} onClick={then(p.onRecent)}>Recently moved</ListRow>
+        </ListGroup>
+        {/* Support, as in the computer's menu (Jamie, 2026-11-24): the errors and the support page. */}
+        <ListGroup header="Support">
           <ListRow detail={p.errorCount === 0 ? 'None' : p.errorCount.toLocaleString()} onClick={then(p.onErrors)}>Errors</ListRow>
+          <ListRow chevron onClick={then(p.onSupport)}>Support</ListRow>
         </ListGroup>
         {p.onRemoveLocation && (
           <ListGroup header="Privacy">
@@ -112,7 +118,6 @@ export function SettingsSheet(p: Props) {
           <ListRow chevron detail={p.version} onClick={then(p.onAbout)}>About Trovolve</ListRow>
           <ListRow chevron onClick={then(p.onPrivacy)}>Privacy policy</ListRow>
         </ListGroup>
-        <p className="px-4 text-center text-[13px] leading-[1.45] text-t2">Your photos stay on your own devices. Trovolve has no ads and does not track what is in your photos.</p>
       </div>
   );
   // T5: on a tablet, beside the sidebar or rail, the list with the Subscription page beside it.

@@ -64,9 +64,9 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Finding your way',
         tips: [
           'The switch at the top left, **Clean up | Organize | Phones**, moves between the three areas. Each keeps what you were doing in it. A dot on **Phones** says it is new, until you first open it.',
-          'The menu, the three lines at the top right, has the theme, **Errors**, **Change folders or rescan**, **Clear results**, **Settings**, **Help**, **About Trovolve** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
+          'The menu, the three lines at the top right, has the theme, **Change folders or rescan**, **Clear results**, **Settings**, **Support** (with **Errors** and the **Support page** under it), **Help**, **About Trovolve** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
           'Beside the menu, your plan: **Trovolve Free**, with how many free removals are left today, or **Trovolve Pro**. Point at it for more.',
-          'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors** until you clear it.',
+          'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors**, in the menu’s **Support**, until you clear it.',
           'In a narrow window the screen rearranges itself to fit. In **Clean up**, click a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and clicking a folder shows its files. Make the window wider and the two sit side by side again.',
         ],
       },
@@ -111,7 +111,7 @@ export const GUIDE: GuideTopic[] = [
       {
         heading: 'Starting afresh',
         tips: [
-          '**Start over**, on the scan screen, forgets what earlier scans recorded and reads every file again.',
+          '**Start over**, on the scan screen, forgets what earlier scans recorded and reads every file again. It, and **Back to results**, are offered once a scan has found something.',
           '**Clear results**, in the menu, forgets it all without scanning.',
           'Neither touches your pictures, or anything already in **_Trovolve_Removed**.',
           'Files in **_Trovolve_Removed** are never scanned, so a deleted copy does not turn up as a duplicate again.',
@@ -481,18 +481,20 @@ export const GUIDE: GuideTopic[] = [
   {
     id: 'menu',
     only: COMPUTER,
-    title: 'Settings, theme, errors and About',
+    title: 'Settings, theme, support and About',
     summary: 'What the menu holds besides the things described elsewhere.',
     go: { label: 'Open Settings', place: 'settings' },
-    keywords: ['preferences', 'options', 'dark mode', 'light mode', 'version', 'privacy', 'terms', 'support', 'faq', 'licences', 'kilometers', 'miles'],
+    keywords: ['preferences', 'options', 'dark mode', 'light mode', 'version', 'privacy', 'terms', 'support', 'faq', 'licences', 'kilometers', 'miles', 'contact', 'email', 'help me', 'report a problem', 'errors'],
     sections: [
       {
         tips: [
           '**Theme** switches between dark and light.',
-          '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page.',
+          '**Support** opens beneath itself (or press the right arrow) to show **Errors** and the **Support page**. While there are errors, Support says how many.',
+          '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page too.',
+          'The **Support page** opens the guide or the errors, and has **Email support**: an email to Trovolve’s support with its version and your system already in it, and the last three errors, if any. **Copy details** copies the same, for a message written elsewhere. Beside them are answers to common questions.',
           '**Settings** has the switch for the second question before moving files to the Recycle Bin, and **Distances**: miles, or kilometers, for Organize and its map. Settings are kept in this browser.',
           '**Help** opens this guide.',
-          '**About Trovolve** shows the version of Trovolve you are running and who makes it, and holds the **Support** page, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that Trovolve uses.',
+          '**About Trovolve** shows the version of Trovolve you are running and who makes it, and holds the support document too, with answers to frequently asked questions (press a question to open its answer), the **Privacy policy**, the **Terms of use**, and the **Acknowledgements** of what others made that Trovolve uses.',
         ],
       },
     ],
@@ -1356,7 +1358,7 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'Settings',
     summary: 'Everything under the gear: your plan, the computer, the theme, photo access and the rest.',
-    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles', 'notifications', 'location when sharing'],
+    keywords: ['preferences', 'options', 'gear', 'dark mode', 'light mode', 'theme', 'permission', 'access', 'version', 'privacy', 'errors', 'kilometers', 'miles', 'notifications', 'location when sharing', 'support', 'contact', 'email', 'report a problem'],
     sections: [
       {
         tips: [
@@ -1366,7 +1368,8 @@ export const GUIDE: GuideTopic[] = [
           '**Clean up**: **Low-storage alerts**, a notification when less than a tenth of the storage is free, at most once a week.',
           '**Photo access** says what Trovolve may see, and opens the phone’s own settings for Trovolve to change it. **Scan again** reads your library again.',
           '**Trovolve Removed**, while anything still waits there from before, says how much, and **Move to …** sends it to where the phone keeps deleted photos for 30 days.',
-          '**Recently moved** lists what can still be undone. **Errors** lists what went wrong.',
+          '**Recently moved** lists what can still be undone.',
+          '**Support**: **Errors** lists what went wrong. **Support** opens the support page: the guide, the errors, **Email support** (an email to Trovolve’s support with its version and your phone’s system already in it, and the last three errors, if any), **Copy details**, and answers to common questions.',
           '**Privacy**: **Remove location when sharing** sets whether **Share photo** starts with **Remove location** on.',
           '**Help** opens this guide. **About Trovolve** shows the version and who makes it, with the support page, the terms and what others made that Trovolve uses. **Privacy policy** opens the privacy policy.',
         ],

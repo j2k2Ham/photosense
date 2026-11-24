@@ -33,8 +33,7 @@ interface Props {
 /** The bar along the top: Clean up, Organize or Phones, the folders scanned, the error count and the menu. */
 export function TopBar({ plan, area, fresh, onArea, showScan, folders, files, scanned, errorCount, menuOpen, onChangeFolders, onToggleErrors, onToggleMenu, children }: Props) {
   return (
-    // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)
-    // and the note that nothing leaves the device.
+    // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them).
     <header className="flex h-16 shrink-0 items-center gap-2.5 border-b border-line px-3 sm:gap-4 sm:px-6">
       {/* The name keeps its width; the scanned folders' chip gives way first, cutting its words short. */}
       <div className="flex shrink-0 items-center gap-[11px]">
@@ -60,9 +59,6 @@ export function TopBar({ plan, area, fresh, onArea, showScan, folders, files, sc
 
       <span className="flex-1" />
 
-      <span className="hidden h-9 shrink-0 items-center gap-2 rounded-full bg-s2 px-3.5 text-[13px] text-t2 xl:flex">
-        <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-keep" />Runs on this device. Nothing is uploaded.
-      </span>
 
       {errorCount > 0 && (
         <button type="button" onClick={onToggleErrors} className="pill h-9 shrink-0 gap-2 border border-rose-line bg-rose-bg px-3.5 text-[13px] text-rose-t">

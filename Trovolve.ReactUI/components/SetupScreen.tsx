@@ -52,7 +52,8 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
     setStarting(true);
     setMissing(undefined);
     try {
-      const res = await startScan({ primaryLocation: root.trim(), secondaryLocation: other || undefined, recursive, startOver });
+      // With no results there is nothing to forget, so Start over is not offered and never sent.
+      const res = await startScan({ primaryLocation: root.trim(), secondaryLocation: other || undefined, recursive, startOver: hasResults && startOver });
       saveLastScan({ root: root.trim(), second: other, recursive });
       // Asked for once, done once: the scan after this one builds on its results again.
       setStartOver(false);
@@ -106,10 +107,12 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
             <input type="checkbox" checked={recursive} onChange={e => setRecursive(e.target.checked)} className="h-[18px] w-[18px] rounded-[5px] accent-[var(--brand)]" />
             <span>Recursive <span className="text-t3">· include subfolders</span></span>
           </label>
-          <label className="flex items-center gap-2 text-[13px]" title="Forget the results of earlier scans and read every file again. Without this, a scan skips files that have not changed.">
-            <input type="checkbox" checked={startOver} onChange={e => setStartOver(e.target.checked)} className="h-[18px] w-[18px] rounded-[5px] accent-[var(--brand)]" />
-            <span>Start over <span className="text-t3">· forget earlier results</span></span>
-          </label>
+          {hasResults && (
+            <label className="flex items-center gap-2 text-[13px]" title="Forget the results of earlier scans and read every file again. Without this, a scan skips files that have not changed.">
+              <input type="checkbox" checked={startOver} onChange={e => setStartOver(e.target.checked)} className="h-[18px] w-[18px] rounded-[5px] accent-[var(--brand)]" />
+              <span>Start over <span className="text-t3">· forget earlier results</span></span>
+            </label>
+          )}
           <button type="button" disabled={running} onClick={scan} className="pill-brand h-[50px] px-[34px] text-[15px]">
             {starting ? 'Starting…' : scanning ? 'Scanning…' : 'Scan'}
           </button>

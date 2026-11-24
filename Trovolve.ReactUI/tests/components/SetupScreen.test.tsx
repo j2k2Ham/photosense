@@ -42,7 +42,8 @@ describe('choosing what to scan', () => {
     expect(screen.getByText(/keeps the best copy of each, and lets you check the rest before anything moves/)).toBeInTheDocument();
     expect(root()).toHaveValue('');
     expect(screen.getByLabelText(/^Recursive/)).toBeChecked();
-    expect(screen.getByLabelText(/^Start over/)).not.toBeChecked();
+    // With no results there is nothing to start over from or go back to.
+    expect(screen.queryByLabelText(/^Start over/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Back to results' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Scan progress')).not.toBeInTheDocument();
   });
@@ -95,7 +96,8 @@ describe('choosing what to scan', () => {
   });
 
   it('starts over when asked to, once: the scan after it builds on its results again', async () => {
-    show();
+    show({ hasResults: true });
+    expect(screen.getByLabelText(/^Start over/)).not.toBeChecked();
     await userEvent.type(root(), 'C:\\photos');
     await userEvent.click(screen.getByLabelText(/^Start over/));
     await userEvent.click(scan());

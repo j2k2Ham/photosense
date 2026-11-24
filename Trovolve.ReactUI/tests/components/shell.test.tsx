@@ -69,10 +69,10 @@ describe('TopBar', () => {
     expect(onArea.mock.calls).toEqual([['clean'], ['organize'], ['phones']]);
   });
 
-  it('shows the name, that nothing is uploaded, and the menu', async () => {
+  it('shows the name and the menu, and no note that nothing is uploaded, which the FAQ says', async () => {
     const { onToggleMenu } = show();
     expect(screen.getByRole('heading', { name: 'Trovolve' })).toBeInTheDocument();
-    expect(screen.getByText('Runs on this device. Nothing is uploaded.')).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is uploaded/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Scanned folders')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /error/ })).not.toBeInTheDocument();
@@ -113,7 +113,7 @@ describe('TopBar', () => {
 
 describe('AppMenu', () => {
   function show(theme: 'dark' | 'light' = 'dark') {
-    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onSupport: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
     render(<div><span>elsewhere</span><AppMenu theme={theme} errorCount={2} {...handlers} /></div>);
     return handlers;
   }
@@ -129,10 +129,9 @@ describe('AppMenu', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('says that nothing leaves the device, for a screen whose bar has no room to say it', () => {
+  it('says nothing of uploading, which the FAQ says', () => {
     show();
-    // Shown only below the width at which the bar says it itself.
-    expect(screen.getByText('Runs on this device. Nothing is uploaded.')).toHaveClass('xl:hidden');
+    expect(screen.getByRole('menu')).not.toHaveTextContent(/Nothing is uploaded/);
   });
 
   it('neither receives from a phone nor pairs one: Phones does', () => {
@@ -149,7 +148,7 @@ describe('AppMenu', () => {
   it('gives focus back to what opened it once it closes, if that is still there', () => {
     const { rerender } = render(<button type="button">Menu</button>);
     screen.getByRole('button', { name: 'Menu' }).focus();
-    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
+    const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onSupport: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
     rerender(<><button type="button">Menu</button><AppMenu theme="dark" errorCount={0} {...handlers} /></>);
     expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveFocus();
     rerender(<button type="button">Menu</button>);
@@ -167,7 +166,7 @@ describe('AppMenu', () => {
     await userEvent.keyboard('{ArrowDown}');
     expect(names()).toBe('Light');
     await userEvent.keyboard('{ArrowDown}');
-    expect(names()).toBe('Errors2');
+    expect(names()).toBe('Change folders or rescan');
     await userEvent.keyboard('{End}');
     expect(names()).toBe('Move to Recycle Bin…');
     await userEvent.keyboard('{ArrowDown}');
@@ -186,7 +185,7 @@ describe('AppMenu', () => {
   });
 
   it.each([
-    [/^Errors/, 'onErrors'], ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['About Trovolve', 'onAbout'], ['Move to Recycle Bin…', 'onDeletePermanently'],
+    ['Change folders or rescan', 'onChangeFolders'], ['Clear results', 'onClearResults'], ['Settings', 'onSettings'], ['Help', 'onHelp'], ['About Trovolve', 'onAbout'], ['Move to Recycle Bin…', 'onDeletePermanently'],
   ] as const)('does what is chosen and closes', async (name, handler) => {
     const handlers = show();
     await userEvent.click(screen.getByRole('menuitem', { name }));
@@ -194,15 +193,59 @@ describe('AppMenu', () => {
     expect(handlers.onClose).toHaveBeenCalledOnce();
   });
 
-  it('shows the error count, and says on hovering Move to Recycle Bin where removed files wait', () => {
+  it('shows the error count on Support, and says on hovering Move to Recycle Bin where removed files wait', () => {
     show();
-    expect(screen.getByRole('menuitem', { name: /^Errors/ })).toHaveTextContent('Errors2');
-    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Change folders or rescan', 'Clear results', 'Settings', 'Help', 'About Trovolve', 'Move to Recycle Bin…']);
+    expect(screen.getByRole('menuitem', { name: /^Support/ })).toHaveTextContent('Support2 errors');
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Change folders or rescan', 'Clear results', 'Settings', 'Support2 errors', 'Help', 'About Trovolve', 'Move to Recycle Bin…']);
     // The one thing in the menu that erases files is marked as such.
     expect(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' })).toHaveClass('text-rose-t');
     expect(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' })).toHaveAttribute('title', 'Removed files wait in _Trovolve_Removed inside each folder they were removed from. Move to Recycle Bin sends them there.');
     // It is said there and nowhere else in the menu.
     expect(screen.getByRole('menu')).not.toHaveTextContent('Removed files wait');
+  });
+
+  it('opens Support beneath itself, with the errors and the support page, each doing what is chosen and closing the menu', async () => {
+    const handlers = show();
+    const support = screen.getByRole('menuitem', { name: /^Support/ });
+    expect(support).toHaveAttribute('aria-haspopup', 'menu');
+    expect(support).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('menuitem', { name: /^Errors/ })).not.toBeInTheDocument();
+    await userEvent.click(support);
+    expect(support).toHaveAttribute('aria-expanded', 'true');
+    expect(handlers.onClose).not.toHaveBeenCalled();
+    const under = screen.getByRole('menu', { name: 'Support' });
+    expect(within(under).getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Errors2', 'Support page']);
+    await userEvent.click(within(under).getByRole('menuitem', { name: /^Errors/ }));
+    expect(handlers.onErrors).toHaveBeenCalledOnce();
+    expect(handlers.onClose).toHaveBeenCalledOnce();
+    await userEvent.click(within(under).getByRole('menuitem', { name: 'Support page' }));
+    expect(handlers.onSupport).toHaveBeenCalledOnce();
+    // Pressed again, it folds away.
+    await userEvent.click(support);
+    expect(screen.queryByRole('menu', { name: 'Support' })).not.toBeInTheDocument();
+  });
+
+  it('opens Support on its first item with the right arrow, and goes back to it with the left', async () => {
+    show();
+    const support = screen.getByRole('menuitem', { name: /^Support/ });
+    support.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('menuitem', { name: /^Errors/ })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('menuitem', { name: 'Support page' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(support).toHaveFocus();
+    expect(screen.queryByRole('menu', { name: 'Support' })).not.toBeInTheDocument();
+    // The right arrow anywhere else does nothing.
+    screen.getByRole('menuitem', { name: 'Help' }).focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('menuitem', { name: 'Help' })).toHaveFocus();
+  });
+
+  it('says nothing of errors on Support while there are none', () => {
+    render(<AppMenu theme="dark" errorCount={0} onTheme={vi.fn()} onErrors={vi.fn()} onSupport={vi.fn()} onChangeFolders={vi.fn()} onClearResults={vi.fn()}
+      onSettings={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onDeletePermanently={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('menuitem', { name: /^Support/ })).toHaveTextContent(/^Support$/);
   });
 
   it('closes on Escape and on a press outside, and on nothing else', () => {

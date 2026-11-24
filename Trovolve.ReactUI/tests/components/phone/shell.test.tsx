@@ -237,7 +237,7 @@ describe('Settings on a tablet (T5)', () => {
     inFrame(
       <PlaceContext.Provider value>
         <SettingsSheet theme="auto" unit="miles" errorCount={0} plan={plan()} beside={<p>the subscription</p>} onClose={onClose} onRecent={onRecent}
-          onTheme={none} onUnit={none} onPhotoAccess={none} onScanAgain={none} onMoveRemoved={none} onErrors={none} onHelp={none} onAbout={none} onPrivacy={none}
+          onTheme={none} onUnit={none} onPhotoAccess={none} onScanAgain={none} onMoveRemoved={none} onErrors={none} onSupport={none} onHelp={none} onAbout={none} onPrivacy={none}
           onSubscription={none} onLowStorage={none} />
       </PlaceContext.Provider>, frame('ios', { tablet: true }));
     expect(screen.getByRole('region', { name: 'Settings' })).toBeInTheDocument();
@@ -255,7 +255,7 @@ describe('Settings', () => {
   const removed = (files: number, bytes = 212 * 1024 ** 2) => ({ files, bytes, folders: files ? [{ path: '/Photo Library/_Trovolve_Removed', files, bytes, recyclable: true }] : [] });
   function show(platform: Platform = 'ios', more = {}) {
     const calls = {
-      onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onMoveRemoved: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
+      onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onMoveRemoved: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onSupport: vi.fn(), onHelp: vi.fn(),
       onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onLowStorage: vi.fn(),
     };
     const view = inFrame(<SettingsSheet theme="auto" unit="miles" version="1.4.0" errorCount={0} access="everything" removed={removed(37)} moves={1} {...calls} {...more} />, frame(platform));
@@ -289,7 +289,8 @@ describe('Settings', () => {
     expect(within(themes).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
     await userEvent.click(within(themes).getByRole('radio', { name: 'Light' }));
     expect(calls.onTheme).toHaveBeenCalledWith('light');
-    expect(screen.getByText('Your photos stay on your own devices. Trovolve has no ads and does not track what is in your photos.')).toBeInTheDocument();
+    // What Trovolve does with photos is in the FAQ, not at Settings' foot.
+    expect(screen.queryByText(/no ads/)).not.toBeInTheDocument();
   });
 
   it('shows the plan first: the removals left with Get Pro on the free plan, the plan and its renewal on Pro; either opens Subscription', async () => {
@@ -334,13 +335,13 @@ describe('Settings', () => {
     const { calls } = show();
     const rows = [
       ['Photo access Full access', calls.onPhotoAccess], ['Scan again', calls.onScanAgain], ['Move to Recently Deleted…', calls.onMoveRemoved], ['Recently moved 1', calls.onRecent],
-      ['Errors None', calls.onErrors], ['Help', calls.onHelp], ['About Trovolve 1.4.0', calls.onAbout], ['Privacy policy', calls.onPrivacy],
+      ['Errors None', calls.onErrors], ['Support', calls.onSupport], ['Help', calls.onHelp], ['About Trovolve 1.4.0', calls.onAbout], ['Privacy policy', calls.onPrivacy],
     ] as const;
     for (const [row, call] of rows) {
       await userEvent.click(screen.getByRole('button', { name: row }));
       expect(call).toHaveBeenCalledOnce();
     }
-    expect(calls.onClose).toHaveBeenCalledTimes(8);
+    expect(calls.onClose).toHaveBeenCalledTimes(9);
   });
 
   it('counts the errors, and shows no Trovolve Removed while nothing waits there or before it is known', () => {
@@ -361,7 +362,7 @@ describe('Settings', () => {
 /** Every action of Settings, done by nothing. */
 function noCalls() {
   return {
-    onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onMoveRemoved: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onHelp: vi.fn(),
+    onTheme: vi.fn(), onUnit: vi.fn(), onPhotoAccess: vi.fn(), onScanAgain: vi.fn(), onMoveRemoved: vi.fn(), onRecent: vi.fn(), onErrors: vi.fn(), onSupport: vi.fn(), onHelp: vi.fn(),
     onAbout: vi.fn(), onPrivacy: vi.fn(), onClose: vi.fn(), onSubscription: vi.fn(), onLowStorage: vi.fn(),
   };
 }
@@ -405,7 +406,7 @@ describe('Trovolve on a phone', () => {
     return (
       <PhoneApp platform={platform} tab={tab} status={{ instanceId: 's', completed: '2026-11-10T16:25:00Z', totalPhotos: 2 }}
         toasts={[]} theme={theme} version="1.4.0" errorCount={0} settings={settings} onSettings={onSettings} onTab={setTab} removeToast={vi.fn()} onTheme={setTheme}
-        scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={notify} onErrors={vi.fn()} onHelp={vi.fn()} onAbout={onAbout} />
+        scanning={false} onStarted={vi.fn()} onStopScan={vi.fn()} notify={notify} onErrors={vi.fn()} onSupport={vi.fn()} onHelp={vi.fn()} onAbout={onAbout} />
     );
   }
 

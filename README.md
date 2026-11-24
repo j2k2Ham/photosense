@@ -221,7 +221,7 @@ One folder is enough: copies inside it, in the folder itself or in its subfolder
 
 A scan builds on the one before it: files that have not changed since are skipped, files that have gone are forgotten at the end, and copies marked keep stay marked. That makes a second scan of a large library take seconds rather than minutes.
 
-To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan: everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only Trovolve's record goes, with its previews and keep marks; the photos, and anything already moved to `_Trovolve_Removed`, stay where they are.
+To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan (it, and **Back to results**, are shown only while there are results): everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only Trovolve's record goes, with its previews and keep marks; the photos, and anything already moved to `_Trovolve_Removed`, stay where they are.
 
 A scan runs in the service, not in the page. A page that is loaded again while one is running, or opened in another tab, shows that scan's progress and says when it has finished, as the page that started it does.
 
@@ -251,7 +251,7 @@ Set `PhotoStorage__DatabasePath` to an absolute path to keep the database elsewh
 
 The data must not be inside the folder the service runs from (`Trovolve.Server/bin/...`, or the folder of a published program), and the service refuses to start a database there: a rebuild, or a newer copy of the program put in its place, would take the data with it.
 
-If the service does stop answering, the page says so in a bar under the header, with a Retry button, since what is already on screen stays there. Every error is also kept in the Errors panel (the menu, or the red chip in the header) until it is cleared.
+If the service does stop answering, the page says so in a bar under the header, with a Retry button, since what is already on screen stays there. Every error is also kept in the Errors panel (**Support** in the menu, Settings on a phone, or the red chip in the header) until it is cleared.
 
 ## How duplicates are found
 
@@ -733,6 +733,8 @@ On an iPhone the version people see is the three numbers (`1.3.0`), and the buil
 
 **About Trovolve**, in the menu, shows the version of the program answering, who makes it and how to reach them (`/about`), and holds the support page, the privacy policy, the terms of use and the acknowledgements of what others made that Trovolve uses.
 
+**Support**, in the menu, opens beneath itself (or with the right arrow) to show **Errors** and the **Support page**; while there are errors it says how many. On a phone or tablet, Settings has a Support section with the same two. The Support page (`components/SupportWindow.tsx`) leads to the guide and the errors, and has **Email support**: a `mailto:` to `supportEmail` in `product.json`, its subject "Trovolve support", asking what the person did, expected and saw, with the version, the program and the system (read from the browser, `lib/support.ts`) and the last three errors already in it. **Copy details** copies the same, saying so if the page cannot use the clipboard. Beside them is the support document (`site/pages/support.md`): the common questions and how to write.
+
 - Who makes Trovolve, the copyright line, the support address, the web addresses and the governing law are in `product.json` alone, built into `Trovolve.Api`. A value left blank there is shown as not set yet.
 - The documents are Markdown in `site/pages`, with `{{name}}`, `{{publisher}}`, `{{supportEmail}}` and `{{governingLaw}}` filled in from `product.json`. A `###` heading that ends in a question mark is a frequently asked question: the app and the site show each as a row with a plus, which opens its answer (whatever follows the heading, up to the next one) under it and turns into a minus. The support page's questions are written that way. The app shows them as they are (`lib/markdown.ts` reads them); `node tools/site.mjs` writes the same pages as a web site in `site/out`, for the App Store listing and the app to point to. It refuses while the support address or the governing law is not set; `--draft` writes a marked draft.
 - The third-party notices are written by `node tools/notices.mjs`, a file for each program (`notices/server.txt`, `notices/iphone.txt`, `notices/android.txt`) from what it actually ships: its NuGet packages (from the restore; the Android app's, those its packages bring among them, from its `packages.lock.json`, as it cannot be restored where the notices are checked; the iPhone app's from its project), the page's own packages and Tailwind's styles (from `package-lock.json`), the page's fonts (`tools/fonts`) and the place names (GeoNames). Each licence is given in full, from the package itself or, where a package only names its licence, from `tools/licenses`; a binding of a Java library (`Xamarin.*`) also gives the library's own licence in its third-party notices, Google's terms for Play services and ML Kit among them. A text several packages carry word for word is given once and pointed to after. Run it after adding or updating a package; CI fails while the notices are out of date. Each program builds its own file in.
@@ -756,7 +758,7 @@ On an iPhone the version people see is the three numbers (`1.3.0`), and the buil
 - The menu is a menu: it opens on its first item, and the arrow keys, Home and End go through it. The theme is chosen among its items.
 - The header, the page's content (`<main>`) and the menu are landmarks a screen reader can jump between. Messages are added to one region that is always there (`role="log"`), so each is read out; an error says it is one.
 - The keyboard's place is always shown, in the brand's colour on both themes, and a text field drawn without an outline shows it on its frame. With less motion asked for, nothing slides, sweeps or fades.
-- Every screen was checked with [axe](https://github.com/dequelabs/axe-core) in Chrome, in both themes, with nothing found: the results, a group, Organize, the scan screen, the menu, Help, Settings and About.
+- Every screen was checked with [axe](https://github.com/dequelabs/axe-core) in Chrome, in both themes, with nothing found: the results, a group, Organize, the scan screen, the menu with Support open, Support, Help, Settings and About.
 
 The page is in English only.
 

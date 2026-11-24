@@ -61,7 +61,7 @@ export function Toaster({ toasts, remove }: ToasterProps) {
     <div role="log" aria-label="Messages" className="fixed inset-x-3 bottom-3 z-50 flex flex-col items-stretch gap-2.5 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:items-end">
       {toasts.slice(-4).map(t => (
         <div key={t.id}
-          className={`flex items-center gap-3 rounded-2xl bg-pop py-2.5 pl-4 pr-2.5 text-[14px] shadow-toast border sm:max-w-[540px] sm:rounded-full ${t.kind === 'error' ? 'border-rose-line' : 'border-line'}`}>
+          className={`flex animate-toast-in items-center gap-3 rounded-2xl bg-pop py-2.5 pl-4 pr-2.5 text-[14px] shadow-toast border sm:max-w-[540px] sm:animate-toast-slide sm:rounded-full ${t.kind === 'error' ? 'border-rose-line' : 'border-line'}`}>
           <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${dot[t.kind]}`} />
           <span className="min-w-0 flex-1 break-words">{t.kind === 'error' && <span className="sr-only">Error: </span>}{t.message}</span>
           {t.kind === 'error' && <span className="hidden shrink-0 text-[12.5px] text-t3 sm:inline">Kept in Errors</span>}

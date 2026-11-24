@@ -546,7 +546,7 @@ describe('your albums and what was moved', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Recently moved 2' }));
     const recent = sheet('Recently moved');
     expect(within(recent).getAllByRole('listitem').map(li => li.textContent)).toEqual(['Moved 724 files to Anaconda2 min agoUndo', 'Deleted 1 file from Photo Library › TripsJust nowUndo']);
-    expect(recent).toHaveTextContent('Undo puts files back under the names they had. What was deleted permanently can\'t be put back.');
+    expect(recent).not.toHaveTextContent('Undo puts files back under the names they had.');
     await userEvent.click(within(recent).getAllByRole('button', { name: 'Undo' })[0]);
     expect(api.undoChange).toHaveBeenCalledWith('m1');
     // Nothing came back, and nothing was left behind: nothing to say.

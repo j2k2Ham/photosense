@@ -58,6 +58,8 @@ interface Props {
   onTheme(theme: ThemeChoice): void;
   onSettings(change: Partial<AppSettings>): void;
   onErrors(): void;
+  /** Opens the support page. */
+  onSupport(): void;
   onHelp(): void;
   /** Opens About, at Trovolve itself or at one of its documents. */
   onAbout(topic?: AboutTopic): void;
@@ -265,7 +267,7 @@ export function PhoneApp(props: Props) {
       plan={gate.plan} onSubscription={() => { if (!tablet) setSheet('subscription'); }} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
       removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
       onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
-      onScanAgain={() => void scan()} onMoveRemoved={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onHelp={props.onHelp}
+      onScanAgain={() => void scan()} onMoveRemoved={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onSupport={props.onSupport} onHelp={props.onHelp}
       onAbout={() => props.onAbout()} onPrivacy={() => props.onAbout('privacy')} onClose={closeSheet} beside={tablet ? subscription : undefined}
       locations={<LocationsGroup notify={notify} onPair={() => setSheet('pair')} />} />
   );

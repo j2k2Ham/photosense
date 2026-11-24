@@ -29,7 +29,9 @@ test.describe('the menu', () => {
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
     await expect(page.getByRole('log', { name: 'Messages' })).toContainText(/left alone|could not|no longer/i);
 
-    await menu(page, /^Errors 1/);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('menuitem', { name: /^Support 1 error/ }).click();
+    await page.getByRole('menuitem', { name: /^Errors 1/ }).click();
     const errors = page.getByRole('dialog', { name: 'Errors' });
     await expect(errors.getByRole('listitem')).toHaveCount(1);
     await errors.getByRole('button', { name: 'Clear all' }).click();
@@ -46,7 +48,26 @@ test.describe('the menu', () => {
     await question(page).getByRole('button', { name: 'Clear results' }).click();
     await expect(message(page, 'Cleared the results: 2 files forgotten. Your photos were not touched.')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Find duplicate photos and videos' })).toBeVisible();
+    // With no results left, there is nothing to start over from or go back to.
+    await expect(page.getByText('Start over')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Back to results' })).toHaveCount(0);
     expect(photos.files()).toEqual(['Backup/IMG_0001.JPG', 'IMG_0001.JPG']);
+  });
+
+  test('Support, opened with the right arrow, leads to the support page: an email to support with the version and system, and the common questions @phone', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('menuitem', { name: /^Support/ }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.getByRole('menuitem', { name: /^Errors/ })).toBeFocused();
+    await page.getByRole('menuitem', { name: 'Support page' }).click();
+    const support = page.getByRole('dialog', { name: 'Support' });
+    await expect(support.getByLabel('Details for support')).toContainText(/^Trovolve \S+ for Windows and Mac\nSystem: \w+/);
+    await expect(support.getByRole('link', { name: 'Email support' })).toHaveAttribute('href', /^mailto:[^?]+\?subject=Trovolve%20support&body=What%20I%20did/);
+    await expect(support.getByRole('article', { name: 'Common questions' })).toContainText('Where do the files I delete go?');
+    await support.getByRole('button', { name: 'Read the guide' }).click();
+    await expect(page.getByRole('dialog', { name: 'Help' })).toBeVisible();
+    await expect(support).toBeHidden();
   });
 });
 
