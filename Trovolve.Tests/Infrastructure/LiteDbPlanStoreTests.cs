@@ -66,6 +66,19 @@ public class LiteDbPlanStoreTests
     }
 
     [Test]
+    public async Task The_Plan_Chosen_For_Testing_Is_Kept_Until_Another_Is(CancellationToken ct)
+    {
+        using var db = new LiteDatabase(new MemoryStream());
+        await Assert.That(await db.Plan().TestPlanAsync(ct)).IsEqualTo(TestPlan.AsBought);
+
+        await db.Plan().KeepTestPlanAsync(TestPlan.Trial, ct);
+        await Assert.That(await db.Plan().TestPlanAsync(ct)).IsEqualTo(TestPlan.Trial);
+        await db.Plan().KeepTestPlanAsync(TestPlan.AsBought, ct);
+        await Assert.That(await db.Plan().TestPlanAsync(ct)).IsEqualTo(TestPlan.AsBought);
+        await Assert.That(db.GetCollection("test_plan").Count()).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task Nothing_Is_Answered_Or_Kept_For_A_Caller_That_Has_Gone(CancellationToken ct)
     {
         using var db = new LiteDatabase(new MemoryStream());
@@ -76,6 +89,8 @@ public class LiteDbPlanStoreTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => plan.AddRemovedAsync(Day, 1, gone));
         await Assert.ThrowsAsync<OperationCanceledException>(() => plan.SharedAsync(gone));
         await Assert.ThrowsAsync<OperationCanceledException>(() => plan.KeepSharedAsync(null, gone));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => plan.TestPlanAsync(gone));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => plan.KeepTestPlanAsync(TestPlan.Free, gone));
         await Assert.That(await plan.RemovedOnAsync(Day, ct)).IsEqualTo(0);
     }
 }

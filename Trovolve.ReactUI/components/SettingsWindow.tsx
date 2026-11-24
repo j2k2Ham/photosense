@@ -1,13 +1,18 @@
 import React, { useEffect, useId } from 'react';
+import { chooseTestPlan, usePlan } from '../lib/apiClient';
 import { DISTANCE_UNITS } from '../lib/distance';
 import { binName } from '../lib/format';
 import { Segmented } from './ModeSwitch';
 import { Scrim } from './Scrim';
 import type { AppSettings } from '../lib/settings';
+import { TEST_PLANS, testPlanSaid } from '../lib/testPlans';
+import type { ToastKind } from './Toaster';
 
 interface Props {
   readonly settings: AppSettings;
   onChange(change: Partial<AppSettings>): void;
+  /** Says what happened, as every message is said. */
+  notify(message: string, kind: ToastKind): void;
   onClose(): void;
 }
 
@@ -28,7 +33,8 @@ function Switch({ title, about, on, onChange }: { readonly title: string; readon
 }
 
 /** The settings of Trovolve, each taking effect as it is changed. They are kept in this browser. */
-export function SettingsWindow({ settings, onChange, onClose }: Props) {
+export function SettingsWindow({ settings, onChange, notify, onClose }: Props) {
+  const testing = usePlan().data?.testPlan;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
@@ -51,6 +57,20 @@ export function SettingsWindow({ settings, onChange, onClose }: Props) {
             <Segmented label="Distances" value={settings.distanceUnit} onChange={distanceUnit => onChange({ distanceUnit })} options={DISTANCE_UNITS} size="medium" />
           </div>
         </div>
+        {/* A development build alone has plans to test as (Jamie, 2026-11-24): one for others has none, and this is not drawn. */}
+        {testing && (
+          <div className="flex flex-col gap-3">
+            <div className="label-caps">For testing</div>
+            <p className="text-[13px] text-t2">Use Trovolve as someone on this plan would, in place of the plan as bought. Only a development build has this.</p>
+            <div role="radiogroup" aria-label="Test as" className="flex flex-wrap gap-2">
+              {TEST_PLANS.map(p => (
+                <button key={p.id} type="button" role="radio" aria-checked={testing === p.id}
+                  onClick={() => void chooseTestPlan(p.id).then(() => notify(testPlanSaid(p.id), 'ok'), (e: unknown) => notify(e instanceof Error ? e.message : String(e), 'error'))}
+                  className={`pill h-8 px-3.5 text-[13px] ${testing === p.id ? 'bg-t1 text-bg' : 'border border-line text-t2'}`}>{p.label}</button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-3 pt-1">
           <p className="flex-1 text-[12.5px] text-t3">Settings are kept in this browser.</p>
           <button type="button" onClick={onClose} className="pill-brand h-11 px-6 text-[15px]">Done</button>

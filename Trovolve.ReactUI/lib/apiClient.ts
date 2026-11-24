@@ -1,10 +1,5 @@
 import useSWR, { mutate } from 'swr';
-import type {
-  AboutDocument, AboutDto, BackupPhoneDto, ForgottenComputerDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
-  OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, TermsDto, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
-  CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
-  TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto, LocationsDto, LocationDetailsDto, ServerConnectionDto,
-} from '../types';
+import type { AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, CompressibleVideoDto, CompressionQuality, CompressionStateDto, EraseRemovedDto, FileNaming, FindingsDto, FixResultDto, FixesDto, FolderListingDto, ForgottenComputerDto, GroupMode, GroupsPageDto, LibraryBackupDto, LocationDetailsDto, LocationsDto, NoticeOpenedDto, NoticeStateDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto, OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PhotoDetailsDto, PhotoDto, PlanBuyResultDto, PlanDto, PlanKind, RemovePhotoResultDto, RemovedFilesDto, RenamingDto, SafeRemovalDto, SafeReviewDto, ScanProgressSnapshotDto, ScanStatusDto, SearchResultDto, ServerConnectionDto, StartScanRequest, SwipeFreedDto, SwipeStateDto, TermsDto, TestPlan, TownDto, TripDetailDto, TripsDto, VaultDto, YearReviewDto } from '../types';
 
 import { API_BASE } from './apiBase';
 
@@ -340,6 +335,13 @@ export async function restorePurchases(): Promise<PlanDto> {
   const plan = await json<PlanDto>(`${planUrl}/restore`, { method: 'POST' });
   await mutate(planUrl, plan, { revalidate: false });
   return plan;
+}
+
+/** In a development build, tests as <plan> until another is chosen; "asBought" goes back to the plan as bought. Answers with the plan then. */
+export async function chooseTestPlan(plan: TestPlan): Promise<PlanDto> {
+  const now = await json<PlanDto>(`${planUrl}/test`, { method: 'POST', body: JSON.stringify({ plan }) });
+  await mutate(planUrl, now, { revalidate: false });
+  return now;
 }
 
 /** Opens the store's own page for changing or cancelling the subscription. */

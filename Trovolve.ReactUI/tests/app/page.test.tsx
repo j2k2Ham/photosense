@@ -14,7 +14,7 @@ const api = vi.hoisted(() => ({
   setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
   fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(), useRemoved: vi.fn((): { data?: unknown } => ({ data: undefined })),
   useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
-  usePlan: vi.fn((): { data?: PlanDto } => ({ data: undefined })),
+  usePlan: vi.fn((): { data?: PlanDto } => ({ data: undefined })), chooseTestPlan: vi.fn(),
   useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
   useCategoryPhotos: vi.fn(() => ({ data: [] })),
   // Accepted already, as nearly every test is of what comes after the note; the note's own tests say otherwise.
@@ -1041,6 +1041,34 @@ describe('about', () => {
   });
 });
 
+describe('plans for testing, in a development build', () => {
+  it('are a section of Settings on a computer, each chosen at once and said in a message, or what went wrong', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ testPlan: 'asBought' }) });
+    api.chooseTestPlan.mockResolvedValueOnce(plan({ tier: 'pro', kind: 'yearly', testPlan: 'yearly' })).mockRejectedValueOnce(new Error('The service is not answering.')).mockRejectedValueOnce('No answer came.');
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    const choices = within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('radiogroup', { name: 'Test as' });
+    expect(within(choices).getAllByRole('radio').map(r => r.textContent)).toEqual(['As bought', 'Free', 'Trial', 'Pro monthly', 'Pro yearly', 'Pro, paid once']);
+    expect(within(choices).getByRole('radio', { name: 'As bought' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(choices).getByRole('radio', { name: 'Pro yearly' }));
+    expect(api.chooseTestPlan).toHaveBeenCalledWith('yearly');
+    expect(await toast('Testing as Pro yearly. Only a development build can do this.')).toBeInTheDocument();
+    await userEvent.click(within(choices).getByRole('radio', { name: 'As bought' }));
+    expect(await toast('The service is not answering.')).toBeInTheDocument();
+    await userEvent.click(within(choices).getByRole('radio', { name: 'Free' }));
+    expect(await toast('No answer came.')).toBeInTheDocument();
+  });
+
+  it('are not offered in a build for others', async () => {
+    api.usePlan.mockReturnValue({ data: plan() });
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    expect(within(screen.getByRole('dialog', { name: 'Settings' })).queryByRole('radiogroup', { name: 'Test as' })).not.toBeInTheDocument();
+  });
+});
+
 describe('the note asking for a backup', () => {
   const NOTE = 'Keep a backup of photos you care about';
   const note = () => screen.queryByRole('alertdialog', { name: NOTE });
@@ -1526,6 +1554,20 @@ describe('on a phone or tablet', () => {
     expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
     await click('Back');
     expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
+  });
+
+  it('has plans for testing in Settings in a development build, said in a message once chosen, or what went wrong', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    api.usePlan.mockReturnValue({ data: plan({ testPlan: 'free' }) });
+    api.chooseTestPlan.mockResolvedValueOnce(plan({ tier: 'trial', testPlan: 'trial' })).mockRejectedValueOnce(new Error('The service is not answering.'));
+    open();
+    const group = within(await settings()).getByRole('region', { name: 'For testing' });
+    expect(within(group).getByRole('button', { name: 'Free, chosen' })).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Trial' }));
+    expect(api.chooseTestPlan).toHaveBeenCalledWith('trial');
+    expect(await toast('Testing as Trial. Only a development build can do this.')).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Pro monthly' }));
+    expect(await toast('The service is not answering.')).toBeInTheDocument();
   });
 
   it('leads from Settings to the errors, Support, help, About and the privacy policy, and shows no Trovolve Removed while nothing waits', async () => {

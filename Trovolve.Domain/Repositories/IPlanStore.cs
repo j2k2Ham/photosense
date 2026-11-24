@@ -40,6 +40,12 @@ public interface IPlanStore
 
     /// <summary>Keeps the day the note was accepted, in place of any before it.</summary>
     Task KeepAcceptedAsync(DateOnly day, CancellationToken ct);
+
+    /// <summary>The plan chosen for testing in a development build; <see cref="TestPlan.AsBought"/> when none was.</summary>
+    Task<TestPlan> TestPlanAsync(CancellationToken ct);
+
+    /// <summary>Keeps the plan chosen for testing, until another is.</summary>
+    Task KeepTestPlanAsync(TestPlan plan, CancellationToken ct);
 }
 
 /// <summary>What was cleaned up on a day.</summary>

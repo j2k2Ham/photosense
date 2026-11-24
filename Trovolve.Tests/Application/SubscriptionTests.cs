@@ -21,6 +21,69 @@ public class SubscriptionTests
 
     private static Entitlement Pro(DateTimeOffset? until) => new(PlanTier.Pro, PlanKind.Yearly, TestClock.Day, until);
 
+    // ---- plans for testing, in a development build (Jamie, 2026-11-24)
+
+    [Test]
+    public async Task A_Build_For_Others_Has_No_Plan_For_Testing_And_Refuses_One(CancellationToken ct)
+    {
+        var parts = new PlanParts { App = _app, Clock = _clock };
+        var subscription = TestPlans.Subscription(parts);
+        // Even one kept from a development build before is not used.
+        await parts.Store.KeepTestPlanAsync(TestPlan.Lifetime, ct);
+
+        await Assert.That(await subscription.TestPlanAsync(ct)).IsNull();
+        await Assert.That(await subscription.CurrentAsync(ct)).IsEqualTo(Entitlement.Free);
+        var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => subscription.ChooseTestPlanAsync(TestPlan.Yearly, ct));
+        await Assert.That(refused!.Message).IsEqualTo("Plans for testing are only in a development build.");
+        await Assert.ThrowsAsync<OperationCanceledException>(() => subscription.TestPlanAsync(new CancellationToken(canceled: true)));
+    }
+
+    [Test]
+    public async Task A_Development_Build_Tests_As_The_Plan_Chosen_Dated_From_Now_And_Goes_Back_To_What_Was_Bought(CancellationToken ct)
+    {
+        _app.Purchases.Add(new StorePurchase(PlanProducts.Monthly, TestClock.Day, TestClock.Day.AddMonths(1), Trial: false));
+        var subscription = TestPlans.Subscription(new PlanParts { App = _app, Clock = _clock, Dev = new DevMode(true) });
+        var bought = new Entitlement(PlanTier.Pro, PlanKind.Monthly, TestClock.Day, TestClock.Day.AddMonths(1));
+        var now = TestClock.Day;
+
+        await Assert.That(await subscription.TestPlanAsync(ct)).IsEqualTo(TestPlan.AsBought);
+        await Assert.That(await subscription.CurrentAsync(ct)).IsEqualTo(bought);
+
+        var expected = new (TestPlan Plan, Entitlement Is)[]
+        {
+            (TestPlan.Free, Entitlement.Free),
+            (TestPlan.Trial, new Entitlement(PlanTier.Trial, PlanKind.Yearly, now.AddDays(-2), now.AddDays(5))),
+            (TestPlan.Monthly, new Entitlement(PlanTier.Pro, PlanKind.Monthly, now.AddDays(-10), now.AddDays(20))),
+            (TestPlan.Yearly, new Entitlement(PlanTier.Pro, PlanKind.Yearly, now.AddDays(-30), now.AddDays(335))),
+            (TestPlan.Lifetime, new Entitlement(PlanTier.Pro, PlanKind.Lifetime, now.AddDays(-30))),
+        };
+        foreach (var (plan, its) in expected)
+        {
+            await subscription.ChooseTestPlanAsync(plan, ct);
+            await Assert.That(await subscription.TestPlanAsync(ct)).IsEqualTo(plan);
+            await Assert.That(await subscription.CurrentAsync(ct)).IsEqualTo(its);
+        }
+
+        // The free plan, tested on a phone that bought Pro, is the free plan.
+        await subscription.ChooseTestPlanAsync(TestPlan.Free, ct);
+        await Assert.That((await subscription.CurrentAsync(ct)).Pro).IsFalse();
+
+        await subscription.ChooseTestPlanAsync(TestPlan.AsBought, ct);
+        await Assert.That(await subscription.CurrentAsync(ct)).IsEqualTo(bought);
+    }
+
+    [Test]
+    public async Task A_Development_Build_Of_The_Computer_Tests_As_The_Plan_Chosen_Over_One_A_Phone_Shared(CancellationToken ct)
+    {
+        var subscription = TestPlans.Subscription(new PlanParts { Clock = _clock, Dev = new DevMode(true) });
+        await subscription.ShareFromAsync("Jamie's iPhone", Pro(TestClock.Day.AddDays(1)), ct);
+
+        await subscription.ChooseTestPlanAsync(TestPlan.Free, ct);
+        await Assert.That(await subscription.CurrentAsync(ct)).IsEqualTo(Entitlement.Free);
+        await subscription.ChooseTestPlanAsync(TestPlan.AsBought, ct);
+        await Assert.That((await subscription.CurrentAsync(ct)).SharedBy).IsEqualTo("Jamie's iPhone");
+    }
+
     // ---- the plan
 
     [Test]

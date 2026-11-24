@@ -19,6 +19,7 @@ public sealed class Subscription
     private readonly IPlanStore _store;
     private readonly TimeProvider _time;
     private readonly IAppStore? _app;
+    private readonly DevMode _dev;
     // What the store last said was bought, for when it cannot be reached: a store gone quiet does not take Pro away.
     private Entitlement _lastBought = Entitlement.Free;
 
@@ -26,23 +27,44 @@ public sealed class Subscription
     /// <param name="store">What this device keeps of the plan.</param>
     /// <param name="time">The clock a plan's end is compared with.</param>
     /// <param name="app">The phone's own store; null on a computer.</param>
-    public Subscription(IPlanStore store, TimeProvider time, IAppStore? app)
+    /// <param name="dev">Whether this is a development build, in which a plan can be chosen for testing; off when not given.</param>
+    public Subscription(IPlanStore store, TimeProvider time, IAppStore? app, DevMode? dev = null)
     {
         _store = store;
         _time = time;
         _app = app;
+        _dev = dev ?? DevMode.Off;
+    }
+
+    /// <summary>
+    /// The plan chosen for testing, in a development build; null in any other, where there is none to choose.
+    /// </summary>
+    public async Task<TestPlan?> TestPlanAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return _dev.On ? await _store.TestPlanAsync(ct) : null;
+    }
+
+    /// <summary>Chooses the plan to test as, until another is chosen; <see cref="TestPlan.AsBought"/> goes back to what was bought.</summary>
+    /// <exception cref="InvalidOperationException">This is not a development build.</exception>
+    public async Task ChooseTestPlanAsync(TestPlan plan, CancellationToken ct)
+    {
+        if (!_dev.On) throw new InvalidOperationException("Plans for testing are only in a development build.");
+        await _store.KeepTestPlanAsync(plan, ct);
     }
 
     /// <summary>What the store is called, or null on a computer, which has none.</summary>
     public string? StoreName => _app?.Name;
 
     /// <summary>
-    /// The plan now: what was bought through this device's store when that is Pro, otherwise the plan a paired phone
-    /// shared, while it stands; otherwise the free plan. When the store cannot be reached, what it last said stands.
+    /// The plan now: in a development build, the plan chosen for testing, when one is; otherwise what was bought through
+    /// this device's store when that is Pro, otherwise the plan a paired phone shared, while it stands; otherwise the
+    /// free plan. When the store cannot be reached, what it last said stands.
     /// </summary>
     public async Task<Entitlement> CurrentAsync(CancellationToken ct)
     {
         var now = _time.GetUtcNow();
+        if (_dev.On && TestPlanEntitlements.At(await _store.TestPlanAsync(ct), now) is { } test) return test;
         if (await BoughtAsync(now, ct) is { Pro: true } bought) return bought;
         return await _store.SharedAsync(ct) is { } shared && shared.StandsAt(now) ? shared : Entitlement.Free;
     }

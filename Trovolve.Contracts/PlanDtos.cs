@@ -25,6 +25,11 @@ public sealed class PlanDto
     [JsonPropertyName("leftToday")] public int? LeftToday { get; init; }
     /// <summary>The plans for sale, with the store's prices; empty on a computer, or when the store has not answered.</summary>
     [JsonPropertyName("offers")] public IReadOnlyList<PlanOfferDto> Offers { get; init; } = [];
+    /// <summary>
+    /// In a development build, the plan chosen for testing: "asBought", "free", "trial", "monthly", "yearly" or
+    /// "lifetime". Null in any other build, which offers none.
+    /// </summary>
+    [JsonPropertyName("testPlan")] public string? TestPlan { get; init; }
 }
 
 /// <summary>A plan for sale, priced as the store says.</summary>
@@ -38,6 +43,13 @@ public sealed class PlanOfferDto
     [JsonPropertyName("amount")] public decimal Amount { get; init; }
     /// <summary>The currency's ISO 4217 code, such as "USD".</summary>
     [JsonPropertyName("currency")] public string Currency { get; init; } = string.Empty;
+}
+
+/// <summary>A plan to test as, in a development build.</summary>
+public sealed class PlanTestRequest
+{
+    /// <summary>The plan: "asBought", "free", "trial", "monthly", "yearly" or "lifetime".</summary>
+    [JsonPropertyName("plan")] public string Plan { get; init; } = string.Empty;
 }
 
 /// <summary>A plan to buy.</summary>

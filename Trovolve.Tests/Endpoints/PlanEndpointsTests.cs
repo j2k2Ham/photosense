@@ -170,4 +170,39 @@ public class PlanEndpointsTests
         // Paired with no computer yet, there is none to tell: pairing tells it.
         await Assert.That(await backup.Telling).IsFalse();
     }
+
+    // ---- plans for testing, in a development build
+
+    [Test]
+    public async Task A_Build_For_Others_Says_No_Plan_For_Testing_And_Refuses_To_Choose_One(CancellationToken ct)
+    {
+        var plan = (await _phone.GetAsync(Http.Get("plan"), ct)).Json();
+        await Assert.That(plan.GetProperty("testPlan").ValueKind).IsEqualTo(JsonValueKind.Null);
+
+        var refused = await _phone.TestAsync(Http.Post("plan/test", "{\"plan\":\"lifetime\"}").FromClient(), ct);
+        await Assert.That(refused.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+        await Assert.That(refused.Text()).IsEqualTo("Plans for testing are only in a development build.");
+        await Assert.That((await _phone.TestAsync(Http.Post("plan/test", "{\"plan\":\"lifetime\"}"), ct)).StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
+    }
+
+    [Test]
+    public async Task A_Development_Build_Chooses_A_Plan_To_Test_As_And_Answers_With_The_Plan_Then(CancellationToken ct)
+    {
+        var dev = new PlanApi(new TestApi(s => s.AddSingleton<IAppStore>(_app).AddSingleton(new DevMode(true))));
+        await Assert.That((await dev.GetAsync(Http.Get("plan"), ct)).Json().GetProperty("testPlan").GetString()).IsEqualTo("asBought");
+
+        var trial = (await dev.TestAsync(Http.Post("plan/test", "{\"plan\":\"trial\"}").FromClient(), ct)).Json();
+        await Assert.That((trial.GetProperty("tier").GetString(), trial.GetProperty("kind").GetString(), trial.GetProperty("testPlan").GetString())).IsEqualTo(("trial", "yearly", "trial"));
+        await Assert.That(trial.GetProperty("leftToday").ValueKind).IsEqualTo(JsonValueKind.Null);
+
+        var back = (await dev.TestAsync(Http.Post("plan/test", "{\"plan\":\"AsBought\"}").FromClient(), ct)).Json();
+        await Assert.That((back.GetProperty("tier").GetString(), back.GetProperty("testPlan").GetString())).IsEqualTo(("free", "asBought"));
+
+        foreach (var body in new[] { "{\"plan\":\"gold\"}", "{\"plan\":\"3\"}", "null" })
+        {
+            var bad = await dev.TestAsync(Http.Post("plan/test", body).FromClient(), ct);
+            await Assert.That(bad.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+            await Assert.That(bad.Text()).IsEqualTo("Choose a plan to test as: asBought, free, trial, monthly, yearly or lifetime.");
+        }
+    }
 }

@@ -7,6 +7,7 @@ using Trovolve.Api.Http;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Scanning.Interfaces;
+using Trovolve.Domain.Entities;
 using Trovolve.Infrastructure.Library;
 using Trovolve.Infrastructure.Transfer;
 
@@ -15,6 +16,13 @@ namespace Trovolve.AndroidApp;
 /// <summary>Trovolve's services as the app runs them, made once.</summary>
 public static class PhoneApp
 {
+    // A Debug build, as made to try the app, offers plans for testing; a Release build, as sent to the store, never does.
+#if DEBUG
+    private static readonly DevMode Dev = new(true);
+#else
+    private static readonly DevMode Dev = DevMode.Off;
+#endif
+
     private static ServiceProvider? _built;
     private static Task? _ready;
 
@@ -43,6 +51,7 @@ public static class PhoneApp
                 vaultFolder: Path.Combine(context.NoBackupFilesDir!.AbsolutePath, "Hidden"))
             .AddTrovolveApi()
             .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "android"))
+            .AddSingleton(Dev)
             .BuildServiceProvider();
         _ready = Task.Run(async () =>
         {

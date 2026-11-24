@@ -5,8 +5,9 @@ import { formatBytes } from '../../lib/format';
 import { planLine, planTitle } from '../../lib/plan';
 import { usePhone } from '../../lib/phone';
 import type { ThemeChoice } from '../../lib/theme';
-import type { PhotoAccessDto, PlanDto, RemovedFilesDto } from '../../types';
-import { ListGroup, ListRow, PhoneSwitch, Segmented } from './Controls';
+import { TEST_PLANS } from '../../lib/testPlans';
+import type { PhotoAccessDto, PlanDto, RemovedFilesDto, TestPlan } from '../../types';
+import { ListGroup, ListRow, PhoneSwitch, Radio, Segmented } from './Controls';
 import { ChevronIcon } from './Icons';
 import { LayerScreen, PushedHeader, RootHeader, SplitView, useInPlace } from './Screens';
 import { ConfirmSheet } from './Sheet';
@@ -32,6 +33,8 @@ interface Props {
   readonly moves?: number;
   /** The plan, once the service has said. */
   readonly plan?: PlanDto;
+  /** Chooses the plan to test as, in a development build. */
+  onTestPlan?(plan: TestPlan): void;
   /** Whether low-storage alerts are on, once the phone has said. */
   readonly lowStorage?: boolean;
   /** Turns low-storage alerts on or off; on asks the phone first. */
@@ -111,6 +114,16 @@ export function SettingsSheet(p: Props) {
         {p.onRemoveLocation && (
           <ListGroup header="Privacy">
             <PhoneSwitch inList label="Remove location when sharing" detail="Applies to copies you share from Trovolve" on={p.removeLocation ?? true} onChange={p.onRemoveLocation} />
+          </ListGroup>
+        )}
+        {/* A development build alone has plans to test as (Jamie, 2026-11-24): one for others has none, and this is not drawn. */}
+        {p.plan?.testPlan && (
+          <ListGroup header="For testing">
+            {TEST_PLANS.map(t => (
+              <ListRow key={t.id} detail={<Radio on={p.plan!.testPlan === t.id} />} onClick={() => p.onTestPlan?.(t.id)}>
+                {t.label}{p.plan!.testPlan === t.id && <span className="sr-only">, chosen</span>}
+              </ListRow>
+            ))}
           </ListGroup>
         )}
         <ListGroup header="About">

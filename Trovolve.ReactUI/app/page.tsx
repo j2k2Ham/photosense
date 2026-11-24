@@ -571,7 +571,7 @@ export default function HomePage() {
       {/* The guide and the errors take Support's place, as both open beneath a window of its kind. */}
       {supportOpen && <SupportWindow errors={errors} notify={push} onClose={() => setSupportOpen(false)}
         onHelp={() => { setSupportOpen(false); setHelpOpen(true); }} onErrors={() => { setSupportOpen(false); setErrorsOpen(true); }} />}
-      {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} onClose={() => setSettingsOpen(false)} />}
+      {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} notify={push} onClose={() => setSettingsOpen(false)} />}
       {pairOpen && <PairWindow notify={push} onClose={() => setPairOpen(false)} />}
 
       {!platform && <Toaster toasts={toasts} remove={remove} />}

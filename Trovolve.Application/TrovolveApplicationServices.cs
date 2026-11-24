@@ -9,6 +9,7 @@ using Trovolve.Application.Scanning;
 using Trovolve.Application.Scanning.Interfaces;
 using Trovolve.Application.Scanning.Services;
 using Trovolve.Domain.Configuration;
+using Trovolve.Domain.Entities;
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
 
@@ -32,8 +33,10 @@ public static class TrovolveApplicationServices
         s.AddSingleton<LibraryFindings>();
         // The settings only those who make Trovolve change; a configuration service can be registered before this.
         s.TryAddSingleton<IProductSettingsSource, CodedProductSettings>();
-        // A phone registers its store; a computer has none, and learns the plan from a paired phone.
-        s.AddSingleton(sp => new Subscription(sp.GetRequiredService<IPlanStore>(), sp.GetRequiredService<TimeProvider>(), sp.GetService<IAppStore>()));
+        // A phone registers its store; a computer has none, and learns the plan from a paired phone. A development build
+        // registers DevMode on, before or after this, to offer plans for testing; every other build has it off.
+        s.TryAddSingleton(DevMode.Off);
+        s.AddSingleton(sp => new Subscription(sp.GetRequiredService<IPlanStore>(), sp.GetRequiredService<TimeProvider>(), sp.GetService<IAppStore>(), sp.GetRequiredService<DevMode>()));
         s.AddSingleton<DailyRemovals>();
         // The note asking for a backup is accepted once per person; a phone and its computer tell each other.
         s.AddSingleton<TermsAcceptance>();

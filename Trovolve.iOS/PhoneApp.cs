@@ -9,6 +9,7 @@ using Trovolve.Application.Locations;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Scanning.Interfaces;
 using Trovolve.Application.Transfer;
+using Trovolve.Domain.Entities;
 using Trovolve.Domain.Repositories;
 using Trovolve.Infrastructure.Library;
 
@@ -17,12 +18,20 @@ namespace Trovolve.iOS;
 /// <summary>Trovolve's services as the app runs them, made once.</summary>
 public static class PhoneApp
 {
+    // A Debug build, as made to try the app, offers plans for testing; a Release build, as sent to the store, never does.
+#if DEBUG
+    private static readonly DevMode Dev = new(true);
+#else
+    private static readonly DevMode Dev = DevMode.Off;
+#endif
+
     private static readonly Lazy<ServiceProvider> Built = new(() => new ServiceCollection()
         .AddTrovolvePhone(new PhotoKitLibrary(DataFolder), new PhotoKitAccess(), new ImageIOAnalyzer(), DataFolder, Folder(NSSearchPathDirectory.CachesDirectory), new BonjourAdvertiser(), new StoreKitStore(),
             new CameraCodeScanner(), new BonjourComputerFinder(), new IosDevice(), IosNotifier.Shared, new IosShareSheet(), new KeychainVaultKeys(), new DeviceUnlocker(),
             new IosWidgets(), new KeychainLocationSecrets(), new WebSignIn(), UIDevice.CurrentDevice.Name)
         .AddTrovolveApi()
         .AddSingleton(ProgramInfo.From(typeof(PhoneApp).Assembly, "iphone"))
+        .AddSingleton(Dev)
         .BuildServiceProvider());
 
     private static Task? _ready;

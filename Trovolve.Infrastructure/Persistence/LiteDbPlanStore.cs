@@ -4,7 +4,7 @@ using Trovolve.Domain.Repositories;
 
 namespace Trovolve.Infrastructure.Persistence;
 
-/// <summary>Each day's count of removals, the plan a paired phone shared, and the day the terms of use were accepted, kept in the database with everything else.</summary>
+/// <summary>Each day's count of removals, the plan a paired phone shared, the day the terms of use were accepted, and a development build's plan for testing, kept in the database with everything else.</summary>
 /// <remarks>Each method answers at once; its token is checked first, as nothing it does takes long enough to stop part way.</remarks>
 internal sealed class LiteDbPlanStore : IPlanStore
 {
@@ -12,6 +12,7 @@ internal sealed class LiteDbPlanStore : IPlanStore
     private readonly ILiteCollection<SharedDocument> _shared;
     private readonly ILiteCollection<CleanedDocument> _cleaned;
     private readonly ILiteCollection<AcceptedDocument> _accepted;
+    private readonly ILiteCollection<TestPlanDocument> _test;
 
     /// <summary>Uses a database that other stores share; the caller disposes it.</summary>
     /// <param name="db">The shared database.</param>
@@ -25,6 +26,23 @@ internal sealed class LiteDbPlanStore : IPlanStore
         _cleaned = db.GetCollection<CleanedDocument>("cleaned_by_day");
         LiteDbMapping.Prepare<AcceptedDocument>();
         _accepted = db.GetCollection<AcceptedDocument>("terms_accepted");
+        LiteDbMapping.Prepare<TestPlanDocument>();
+        _test = db.GetCollection<TestPlanDocument>("test_plan");
+    }
+
+    /// <inheritdoc />
+    public Task<TestPlan> TestPlanAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_test.FindById("test")?.Plan ?? TestPlan.AsBought);
+    }
+
+    /// <inheritdoc />
+    public Task KeepTestPlanAsync(TestPlan plan, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _test.Upsert(new TestPlanDocument { Id = "test", Plan = plan });
+        return Task.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -138,6 +156,12 @@ internal sealed class LiteDbPlanStore : IPlanStore
         public int Removed { get; set; }
         /// <summary>Bytes freed from the device that day.</summary>
         public long Freed { get; set; }
+    }
+
+    private sealed class TestPlanDocument
+    {
+        public string Id { get; set; } = string.Empty;
+        public TestPlan Plan { get; set; }
     }
 
     private sealed class AcceptedDocument

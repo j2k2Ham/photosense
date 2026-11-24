@@ -971,6 +971,15 @@ describe('the plan', () => {
     await api.manageSubscription();
     expect(lastRequest()).toEqual({ url: `${API}/plan/manage`, init: { method: 'POST', headers: { 'x-trovolve-client': 'web' } } });
   });
+
+  it('is chosen for testing in a development build, and the plan after is kept at once', async () => {
+    const api = await load();
+    const testing = { ...plan, testPlan: 'monthly' };
+    answering(testing);
+    await expect(api.chooseTestPlan('monthly')).resolves.toEqual(testing);
+    expect(lastRequest()).toEqual({ url: `${API}/plan/test`, init: { method: 'POST', body: JSON.stringify({ plan: 'monthly' }), headers: json } });
+    expect(swr.mutate).toHaveBeenLastCalledWith(`${API}/plan`, testing, { revalidate: false });
+  });
 });
 
 describe('the note asking for a backup', () => {

@@ -5,6 +5,7 @@ using Trovolve.Desktop.Imaging;
 using Trovolve.Desktop.Removal;
 using Trovolve.Desktop.Viewing;
 using Trovolve.Domain.Configuration;
+using Trovolve.Domain.Entities;
 using Trovolve.Domain.Services;
 using Trovolve.Infrastructure;
 using Trovolve.Infrastructure.Files;
@@ -28,6 +29,10 @@ internal static class TrovolveServices
     {
         s.Configure<PhotoStorageOptions>(cfg.GetSection("PhotoStorage"));
         s.AddSingleton<IValidateOptions<PhotoStorageOptions>, PhotoStorageOptionsValidator>();
+#if DEBUG
+        // A development build (dev-start.ps1 makes one) offers plans for testing; a Release build, as made for others, never does.
+        s.AddSingleton(new DevMode(true));
+#endif
         // Where the photos are: this computer's disks. On a phone it is the phone's photo library.
         s.AddSingleton<IPhotoFileSystem, DiskFileSystem>();
         s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();

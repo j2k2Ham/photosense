@@ -84,6 +84,21 @@ internal sealed class PlanEndpoints
         return await PlanAsync(req, ct);
     }
 
+    /// <summary>
+    /// POST /api/plan/test: in a development build, chooses the plan to test as (Jamie, 2026-11-24), and answers with the
+    /// plan then; 404 in any other build, which has none.
+    /// </summary>
+    public async Task<ApiResponse> TestAsync(ApiRequest req, CancellationToken ct)
+    {
+        if (!RequestGuard.Allows(req.Headers)) return req.CreateResponse(HttpStatusCode.Unauthorized);
+        if (await _subscription.TestPlanAsync(ct) is null) return await RefuseAsync(req, HttpStatusCode.NotFound, "Plans for testing are only in a development build.", ct);
+        var request = await req.ReadJsonAsync<PlanTestRequest>(Json, ct);
+        if (request is null || !Enum.TryParse<TestPlan>(request.Plan, ignoreCase: true, out var plan) || !string.Equals(plan.ToString(), request.Plan, StringComparison.OrdinalIgnoreCase))
+            return await RefuseAsync(req, HttpStatusCode.BadRequest, "Choose a plan to test as: asBought, free, trial, monthly, yearly or lifetime.", ct);
+        await _subscription.ChooseTestPlanAsync(plan, ct);
+        return await PlanAsync(req, ct);
+    }
+
     /// <summary>POST /api/plan/manage: opens the store's page for changing or cancelling the subscription.</summary>
     public async Task<ApiResponse> ManageAsync(ApiRequest req, CancellationToken ct)
     {
@@ -118,6 +133,7 @@ internal sealed class PlanEndpoints
             RemovedToday = today.Used,
             LeftToday = today.Left,
             Offers = [.. offers.Select(o => new PlanOfferDto { Kind = o.Kind.ToString().ToLowerInvariant(), Price = o.Product.Price, Amount = o.Product.Amount, Currency = o.Product.Currency })],
+            TestPlan = await _subscription.TestPlanAsync(ct) is { } test ? JsonNamingPolicy.CamelCase.ConvertName(test.ToString()) : null,
         };
     }
 

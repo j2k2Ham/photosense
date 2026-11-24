@@ -131,6 +131,7 @@ public sealed class TrovolveRoutes
             .Post("plan/buy", (r, _, ct) => plan.BuyAsync(r, ct))
             .Post("plan/restore", (r, _, ct) => plan.RestoreAsync(r, ct))
             .Post("plan/manage", (r, _, ct) => plan.ManageAsync(r, ct))
+            .Post("plan/test", (r, _, ct) => plan.TestAsync(r, ct))
             .Get("terms", (r, _, ct) => plan.TermsAsync(r, ct))
             .Post("terms/accept", (r, _, ct) => plan.AcceptAsync(r, ct))
             .Post("pairing/open", (r, _, ct) => pairing.OpenAsync(r, ct))

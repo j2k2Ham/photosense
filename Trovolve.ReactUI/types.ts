@@ -429,7 +429,11 @@ export interface PlanDto {
   /** How many more can be removed today; null when there is no limit. */
   leftToday: number | null;
   offers: PlanOfferDto[];
+  /** In a development build, the plan chosen for testing; null in any other build, which offers none. */
+  testPlan: TestPlan | null;
 }
+/** A plan a development build can test as (Trovolve.Domain.Entities.TestPlan): "asBought" is the plan as bought. */
+export type TestPlan = 'asBought' | 'free' | 'trial' | 'monthly' | 'yearly' | 'lifetime';
 /** How buying a plan ended, and the plan then (Trovolve.Contracts.Plans.PlanBuyResultDto). */
 export interface PlanBuyResultDto {
   outcome: 'bought' | 'cancelled' | 'pending';

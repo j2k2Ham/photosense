@@ -69,7 +69,7 @@ export const OFFERS: PlanOfferDto[] = [
 
 /** A plan as the service says it: the free plan with 38 of 50 left today, on an iPhone, unless the test says otherwise. */
 export function plan(overrides: Partial<PlanDto> = {}): PlanDto {
-  return { tier: 'free', kind: null, started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 12, leftToday: 38, offers: OFFERS, ...overrides };
+  return { tier: 'free', kind: null, started: null, until: null, sharedBy: null, store: 'App Store', removalsPerDay: 50, removedToday: 12, leftToday: 38, offers: OFFERS, testPlan: null, ...overrides };
 }
 
 /** How a phone backs up as it starts: by hand, with videos, keeping favorites and the last 30 days. */

@@ -166,6 +166,22 @@ internal sealed class MemoryPlanStore : IPlanStore
 {
     private readonly Dictionary<DateOnly, int> _removed = [];
     private DateOnly? _accepted;
+    private TestPlan _test;
+
+    /// <inheritdoc />
+    public Task<TestPlan> TestPlanAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_test);
+    }
+
+    /// <inheritdoc />
+    public Task KeepTestPlanAsync(TestPlan plan, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _test = plan;
+        return Task.CompletedTask;
+    }
 
     /// <inheritdoc />
     public Task<DateOnly?> AcceptedAsync(CancellationToken ct)

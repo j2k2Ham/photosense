@@ -1,4 +1,5 @@
 using Trovolve.Application.Plans;
+using Trovolve.Domain.Entities;
 using Trovolve.Domain.Services;
 using Trovolve.Domain.ValueObjects;
 
@@ -87,7 +88,7 @@ internal sealed class FakeAppStore : IAppStore
 internal static class TestPlans
 {
     /// <summary>The plan made of <paramref name="holder"/>: a computer's, with no store, when none is given.</summary>
-    public static Subscription Subscription(PlanParts? holder = null) => new((holder ?? new PlanParts()).Store, holder?.Clock ?? new TestClock(), holder?.App);
+    public static Subscription Subscription(PlanParts? holder = null) => new((holder ?? new PlanParts()).Store, holder?.Clock ?? new TestClock(), holder?.App, holder?.Dev);
 
     /// <summary>Whether the terms of use were accepted, kept in a store of its own that says they have not been, dated by the test's clock.</summary>
     public static TermsAcceptance Terms() => new(new MemoryPlanStore(), new TestClock());
@@ -123,4 +124,6 @@ internal sealed class PlanParts
     public TimeProvider Clock { get; init; } = new TestClock();
     /// <summary>The phone's store; null for a computer.</summary>
     public FakeAppStore? App { get; init; }
+    /// <summary>Whether this is a development build, with plans for testing; off unless given.</summary>
+    public DevMode? Dev { get; init; }
 }

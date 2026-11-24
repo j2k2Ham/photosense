@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useEffectEvent, useState } from 'react';
 import { useBackLayer } from '../../lib/backStack';
 import { useForm, WORDS, type Place, type Platform, type TabId } from '../../lib/phone';
-import { backUpIfDue, eraseRemoved, locationsIfDue, openedNotice, openPhotoSettings, sendToLocation, startBackup, useBackup, useFixes, useLibraryBackup, useLocations, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useTrips, useYear } from '../../lib/apiClient';
+import { backUpIfDue, chooseTestPlan, eraseRemoved, locationsIfDue, openedNotice, openPhotoSettings, sendToLocation, startBackup, useBackup, useFixes, useLibraryBackup, useLocations, useOrganizeBatches, usePhotoAccess, useRemoved, useSafeReview, useSwipe, useTrips, useYear } from '../../lib/apiClient';
 import { LocationsGroup, SendToSheet, SentSheet } from './Locations';
 import type { LocationDto } from '../../types';
 import { formatBytes } from '../../lib/format';
@@ -31,6 +31,7 @@ import { PlanProvider, usePlanSheet } from './ProSheet';
 import { SubscriptionScreen } from './Subscription';
 import { SwipeSession, SwipeSummary } from './Swipe';
 import { marked } from '../../lib/swipe';
+import { testPlanSaid } from '../../lib/testPlans';
 
 interface Props {
   readonly platform: Platform;
@@ -264,7 +265,8 @@ export function PhoneApp(props: Props) {
   );
   const settings = (
     <SettingsSheet theme={theme} unit={props.settings.distanceUnit} version={version} errorCount={errorCount} access={access} removed={removed} moves={batches?.length}
-      plan={gate.plan} onSubscription={() => { if (!tablet) setSheet('subscription'); }} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
+      plan={gate.plan} onTestPlan={plan => void chooseTestPlan(plan).then(() => notify(testPlanSaid(plan), 'ok'), e => notify(said(e), 'error'))}
+      onSubscription={() => { if (!tablet) setSheet('subscription'); }} lowStorage={notices.state?.lowStorage} onLowStorage={lowStorage => void notices.change({ lowStorage })}
       removeLocation={props.settings.removeLocationWhenSharing} onRemoveLocation={removeLocationWhenSharing => props.onSettings({ removeLocationWhenSharing })}
       onTheme={props.onTheme} onUnit={distanceUnit => props.onSettings({ distanceUnit })} onPhotoAccess={() => void openPhotoSettings().catch(e => notify(said(e), 'error'))}
       onScanAgain={() => void scan()} onMoveRemoved={() => setSheet('erase')} onRecent={() => setSheet('recent')} onErrors={props.onErrors} onSupport={props.onSupport} onHelp={props.onHelp}
