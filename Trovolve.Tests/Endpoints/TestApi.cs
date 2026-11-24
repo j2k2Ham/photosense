@@ -250,4 +250,8 @@ internal sealed class BackupApi(TestApi api)
     public Task<ApiResponse> TripsFolderAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/trips");
     /// <summary>POST /backup/phones/{id}/pause.</summary>
     public Task<ApiResponse> PausePhoneAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/pause");
+    /// <summary>POST /backup/phones/{id}/forget.</summary>
+    public Task<ApiResponse> ForgetPhoneAsync(ApiRequest r, string id, CancellationToken ct) => api.SendAsync(r, ct, $"backup/phones/{TestApi.Part(id)}/forget");
+    /// <summary>POST /backup/forget.</summary>
+    public Task<ApiResponse> ForgetComputerAsync(ApiRequest r, CancellationToken ct) => api.SendAsync(r, ct, "backup/forget");
 }

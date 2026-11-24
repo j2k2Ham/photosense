@@ -366,7 +366,7 @@ export const GUIDE: GuideTopic[] = [
     only: COMPUTER,
     title: 'Backing up a phone to a computer',
     summary: 'Pairing a phone or tablet with this computer, where its backups go, and what Phones shows of each.',
-    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive', 'trip folders', 'trips', 'rename', 'file names', 'name by date', 'computer name'],
+    keywords: ['iphone', 'ipad', 'android', 'tablet', 'pair', 'connect', 'qr code', 'transfer', 'import', 'sync', 'wifi', 'wi-fi', 'back up', 'receive', 'trip folders', 'trips', 'rename', 'file names', 'name by date', 'computer name', 'forget', 'unpair', 'remove phone'],
     sections: [
       {
         text: [
@@ -404,6 +404,8 @@ export const GUIDE: GuideTopic[] = [
           'A phone’s hidden vault arrives encrypted, in a **Hidden** folder inside its folder. This computer cannot open those files: only the phone, or a new phone given its recovery key, can. Leave them where they are, so that a backup never sends them twice.',
           '**File names** says how the phone’s copies are named here: **As on the phone** (IMG_4821.HEIC) to start with. **Rename by date…** opens **Rename files by date**: choose **Date and time** (2026-03-02 14.31.07.HEIC) or **Date, time and place** (2026-03-02 14.31.07 Big Sky.HEIC), see the first few names now and after, and **Rename** them. Copies backed up from then on are named the same way. A Live Photo’s video takes its picture’s name; files with the same date and time get -2, -3 at the end; a file that does not say when it was taken keeps its name. Only the copies on this computer change, as one move listed in **Recently moved**, where **Undo** puts the names back. Renaming is part of Pro, which a phone’s Pro covers. Once named by date, **Change names…** also offers **As on the phone** for what arrives from then on.',
           '**Pause backups** turns the phone away until **Resume backups**. **Activity** lists what happened.',
+          '**Forget this phone…** (or tablet), at the foot, asks first, then forgets it: it leaves the list and must be paired again to back up here. Its backups stay in its folder, and nothing is deleted here or on the phone. On the phone, photos backed up only here stop counting as safe to delete. If Pro on this computer came from that phone, this computer goes back to the free plan until another paired phone with Pro backs up. The phone learns of it the next time it connects, and asks to be paired again.',
+          'Paired again, a phone carries on in the same folder: what is there already counts again, and nothing is sent twice.',
         ],
       },
     ],
@@ -1077,7 +1079,7 @@ export const GUIDE: GuideTopic[] = [
     only: PHONES,
     title: 'Backing up to your computer',
     summary: 'Pairing with your computer, backing up over Wi-Fi with each file checked, and then freeing space here.',
-    keywords: ['back up', 'transfer', 'sync', 'copy to computer', 'pc', 'mac', 'windows', 'pair', 'connect', 'qr code', 'wifi', 'wi-fi', 'send', 'automatic', 'safe to delete', 'free space', 'storage'],
+    keywords: ['back up', 'transfer', 'sync', 'copy to computer', 'pc', 'mac', 'windows', 'pair', 'connect', 'qr code', 'wifi', 'wi-fi', 'send', 'automatic', 'safe to delete', 'free space', 'storage', 'forget', 'unpair', 'disconnect computer'],
     sections: [
       {
         text: [
@@ -1092,6 +1094,15 @@ export const GUIDE: GuideTopic[] = [
           '**Scan the code** and point the camera at the QR code: the two are paired at once.',
           'Or choose **Enter the code instead**, type the six digits and tap **Pair**. Both then show a number: tap **It’s the same number** only if the computer shows the same one.',
           'Once paired, Trovolve says where on the computer your backups go: **Pictures/Trovolve**, in a folder named after this device. The folder is changed on the computer, in **Phones**.',
+        ],
+      },
+      {
+        heading: 'Forgetting your computer',
+        tips: [
+          'In **Settings**, under **Locations**, tap the computer, then **Forget this computer**. After the question, this device stops backing up to it until you pair them again.',
+          'The backups on the computer stay there; nothing is deleted on either. Photos backed up only on the computer stop counting as safe to delete.',
+          'Trovolve tells the computer, so that it forgets this device too. If the computer is not found on this Wi-Fi, it still lists this device: forget it there too, in **Phones**.',
+          'If the computer forgot this device first, **Backup** says so, and offers **Connect your computer** to pair them again. Paired again, backups carry on in the same folder, and nothing is sent twice.',
         ],
       },
       {
@@ -1212,7 +1223,7 @@ export const GUIDE: GuideTopic[] = [
         tips: [
           'Tap a location in **Settings** for its page: how it stands, its storage where the service says, its folder, how many copies are checked, the last backup and the last check.',
           'A server you connected shows its type and how it is reached, its keys masked. **Rename** changes its name at any time; **Edit** changes how it is reached, and is checked again before it is saved.',
-          '**Turn off** stops backing up there. **Disconnect** signs out of a cloud service; **Remove location** removes a server. None of them deletes anything there, but photos backed up only there stop counting as safe to delete.',
+          '**Turn off** stops backing up there. **Disconnect** signs out of a cloud service; **Remove location** removes a server; **Forget this computer** forgets the computer until you pair them again. None of them deletes anything there, but photos backed up only there stop counting as safe to delete.',
         ],
       },
       {

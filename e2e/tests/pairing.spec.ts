@@ -51,6 +51,31 @@ test.describe('phones and pairing', () => {
     await expect(files).toContainText('File namesDate and time');
   });
 
+  test('Forget this phone asks first, saying its backups stay, and the phone leaves the list', async ({ page }) => {
+    let phones = [{
+      id: 'p', name: "Jamie's iPhone", kind: 'iPhone', folder: "Pictures/Trovolve/Jamie's iPhone", path: '/Pictures/Trovolve/Jamie', paused: false,
+      paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 2, heldBytes: 2, safe: 0, safeBytes: 0, tripFolders: 0,
+      tripsFolder: 'Pictures/Trovolve', tripsPath: '/Pictures/Trovolve', names: 'asOnPhone', arriving: null, events: [],
+    }];
+    const forgot: string[] = [];
+    // A paired phone, which only a phone could make, stood in for; forgetting it answered as the program would.
+    await page.route(url => url.pathname.endsWith('/api/backup/phones'), route => route.fulfill({ json: phones }));
+    await page.route(url => url.pathname.endsWith('/api/backup/phones/p/forget'), route => {
+      forgot.push(route.request().method());
+      phones = [];
+      return route.fulfill({ json: phones });
+    });
+    await page.goto('/');
+    await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: /^Phones/ }).click();
+    await page.getByRole('button', { name: 'Forget this phone…' }).click();
+    const asked = page.getByRole('alertdialog', { name: "Forget Jamie's iPhone?" });
+    await expect(asked).toContainText("Its backups stay in Pictures/Trovolve/Jamie's iPhone. Nothing is deleted, here or on the phone.");
+    await asked.getByRole('button', { name: "Forget Jamie's iPhone" }).click();
+    await expect(message(page, "Forgot Jamie's iPhone. Its backups stay in Pictures/Trovolve/Jamie's iPhone.")).toBeVisible();
+    expect(forgot).toEqual(['POST']);
+    await expect(page.getByRole('region', { name: 'No phones yet' })).toBeVisible();
+  });
+
   test('Pair a phone says what phones will call this computer, and Rename names it, kept for the next time it opens', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: /^Phones/ }).click();

@@ -215,6 +215,16 @@ public sealed class BackupFolderRequest
     [JsonPropertyName("folder")] public string? Folder { get; init; }
 }
 
+/// <summary>A computer a phone forgot, and whether the computer heard, so that it forgot the phone too.</summary>
+public sealed class ForgottenComputerDto
+{
+    /// <summary>What the computer is called.</summary>
+    [JsonPropertyName("computer")] public required string Computer { get; init; }
+
+    /// <summary>The computer was found and forgot this phone too; when not, it still lists the phone until it is forgotten there.</summary>
+    [JsonPropertyName("told")] public bool Told { get; init; }
+}
+
 /// <summary>Whether a phone's backups are paused on this computer.</summary>
 public sealed class BackupPauseRequest
 {

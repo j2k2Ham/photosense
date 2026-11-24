@@ -36,6 +36,13 @@ internal sealed class MemoryPairs(string self) : IPairingStore
         _paired[device.Id] = device;
         return Task.CompletedTask;
     }
+
+    /// <inheritdoc />
+    public Task ForgetAsync(string id, CancellationToken ct)
+    {
+        _paired.Remove(id);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>Two ends of one connection over this computer's own network.</summary>

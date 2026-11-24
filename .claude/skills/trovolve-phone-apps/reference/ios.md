@@ -22,7 +22,7 @@
   - `NSPhotoLibraryUsageDescription`
   - `NSLocalNetworkUsageDescription`, and `NSBonjourServices` (`_trovolve._tcp`)
   - `PHPhotoLibraryPreventAutomaticLimitedAccessAlert`
-  - `ITSAppUsesNonExemptEncryption`, still false: an open question for Jamie, since the app now encrypts what it sends.
+  - `ITSAppUsesNonExemptEncryption` is true (Jamie, 2026-11-23): the app encrypts what it sends to a computer and seals the hidden vault (AES-GCM, ECDH, HKDF, through iOS's own cryptography), and bundles SSH.NET and BouncyCastle for SFTP, standard algorithms beyond the OS's. App Store Connect asks the export questions for each build until Apple gives an `ITSEncryptionExportComplianceCode`; STEPS.md has the answers.
 - **`PrivacyInfo.xcprivacy`:** App Store Connect refuses an upload without it.
 - **`iphone.yml`:**
   - Pins Xcode 26.6, .NET SDK 10.0.401 and the iOS workload set 10.0.401; each workload release needs one Xcode.

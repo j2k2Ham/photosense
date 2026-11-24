@@ -99,6 +99,8 @@ describe('the guide itself', () => {
     expect(ids('trip folders', 'computer')).toContain('phones');
     expect(ids('file names', 'computer')).toContain('phones');
     expect(ids('rename by date', 'computer')).toEqual(['phones']);
+    expect(ids('unpair', 'computer')).toEqual(['phones']);
+    expect(ids('forget this phone', 'computer')).toEqual(['phones']);
 
     for (const platform of ['ios', 'android'] as const) {
       expect(ids('recover', platform)).toEqual(['library', 'phone-removed']);
@@ -128,6 +130,8 @@ describe('the guide itself', () => {
       expect(ids('running out', platform)).toEqual(['phone-cleanup']);
       expect(ids('reminder', platform)).toContain('phone-plan');
       expect(ids('wrapped', platform)).toEqual(['library']);
+      expect(ids('unpair', platform)).toEqual(['backup']);
+      expect(ids('forget this computer', platform)).toContain('backup');
       expect(ids('share card', platform)).toContain('library');
       expect(ids('search', platform)).toContain('library');
       expect(ids('look for', platform)).toContain('library');

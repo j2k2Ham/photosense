@@ -604,6 +604,24 @@ describe('backing up from a phone to a computer', () => {
     await api.pausePhone('p 1', true);
     expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p%201/pause`, init: { method: 'POST', body: JSON.stringify({ paused: true }), headers: json } });
   });
+
+  it('on a computer, forgets a phone, keeping the phones still listed and asking the plan again', async () => {
+    answering([]);
+    const api = await load();
+    await expect(api.forgetPhone('p 1')).resolves.toEqual([]);
+    expect(lastRequest()).toEqual({ url: `${API}/backup/phones/p%201/forget`, init: { method: 'POST', headers: json } });
+    expect(swr.mutate.mock.calls).toEqual([[`${API}/backup/phones`, [], { revalidate: false }], [`${API}/plan`]]);
+  });
+
+  it('on a phone, forgets the computer, asking again how backing up and the locations stand', async () => {
+    answering({ computer: 'Studio iMac', told: true });
+    const api = await load();
+    await expect(api.forgetComputer()).resolves.toEqual({ computer: 'Studio iMac', told: true });
+    expect(lastRequest()).toEqual({ url: `${API}/backup/forget`, init: { method: 'POST', headers: json } });
+    const [backups, places] = swr.mutate.mock.calls.map(c => c[0] as (key: unknown) => boolean);
+    expect([`${API}/backup`, `${API}/backup/safe`, `${API}/locations`].map(backups)).toEqual([true, true, false]);
+    expect([`${API}/locations`, `${API}/locations/computer`, `${API}/backup`, 7].map(places)).toEqual([true, true, false, false]);
+  });
 });
 
 describe('Swipe to clean on a phone', () => {

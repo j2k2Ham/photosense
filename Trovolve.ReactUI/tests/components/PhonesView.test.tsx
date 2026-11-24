@@ -6,7 +6,7 @@ import { activityTime, phoneStatus, PhonesView } from '../../components/PhonesVi
 import type { BackupPhoneDto } from '../../types';
 import { backupPhone } from '../fixtures';
 
-const api = vi.hoisted(() => ({ tripsGoTo: vi.fn(), useBackupPhones: vi.fn(), moveBackups: vi.fn(), pausePhone: vi.fn() }));
+const api = vi.hoisted(() => ({ tripsGoTo: vi.fn(), useBackupPhones: vi.fn(), moveBackups: vi.fn(), pausePhone: vi.fn(), forgetPhone: vi.fn() }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The rename window is tested on its own; here it shows which phone it is for, and closes.
 vi.mock('../../components/RenameWindow', () => ({
@@ -33,6 +33,7 @@ beforeEach(() => {
   api.moveBackups.mockResolvedValue(backupPhone());
   api.pausePhone.mockResolvedValue(backupPhone());
   api.tripsGoTo.mockResolvedValue(backupPhone());
+  api.forgetPhone.mockResolvedValue([]);
 });
 
 const now = new Date(2026, 10, 13, 15, 0);
@@ -153,6 +154,28 @@ describe('Phones, on the computer', () => {
 });
 
 describe('Where trip folders go', () => {
+  it('forgets a phone after a question that says its backups stay, or is put away', async () => {
+    const notify = vi.fn();
+    phones = [backupPhone(), backupPhone({ id: 'pad', name: "Alex's iPad", kind: 'iPad' })];
+    render(<PhonesView notify={notify} onPair={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Forget this phone…' }));
+    const asked = screen.getByRole('alertdialog', { name: "Forget Alex's iPhone?" });
+    expect(asked).toHaveTextContent("Alex's iPhone can no longer back up to this computer until you pair them again. On the phone, photos backed up only here stop counting as safe to delete.");
+    expect(asked).toHaveTextContent("If Pro on this computer came from Alex's iPhone, this computer goes back to the free plan.");
+    expect(asked).toHaveTextContent("Its backups stay in Pictures/Trovolve/Alex's iPhone. Nothing is deleted, here or on the phone.");
+    await userEvent.click(within(asked).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(api.forgetPhone).not.toHaveBeenCalled();
+
+    await userEvent.click(within(screen.getByRole('complementary', { name: 'Phones and tablets' })).getByRole('button', { name: /^Alex's iPad/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Forget this tablet…' }));
+    expect(screen.getByRole('alertdialog', { name: "Forget Alex's iPad?" })).toHaveTextContent('Nothing is deleted, here or on the tablet.');
+    await userEvent.click(screen.getByRole('button', { name: "Forget Alex's iPad" }));
+    expect(api.forgetPhone).toHaveBeenCalledWith('pad');
+    expect(notify).toHaveBeenLastCalledWith("Forgot Alex's iPad. Its backups stay in Pictures/Trovolve/Alex's iPhone.", 'ok');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
   it('is Pictures/Trovolve to start with, and Change… makes them in the folder chosen from then on', async () => {
     const notify = vi.fn();
     render(<PhonesView notify={notify} onPair={vi.fn()} />);

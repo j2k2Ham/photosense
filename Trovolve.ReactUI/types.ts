@@ -532,6 +532,13 @@ export interface SafeRemovalDto {
   storageFreeBefore: number;
 }
 
+/** A computer a phone forgot (`POST backup/forget`), and whether the computer heard and forgot the phone too (Trovolve.Contracts.ForgottenComputerDto). */
+export interface ForgottenComputerDto {
+  computer: string;
+  /** False when the computer was not found: it still lists the phone until it is forgotten there. */
+  told: boolean;
+}
+
 /** A phone that backs up to this computer, as Phones shows it (Trovolve.Contracts.Transfer.BackupPhoneDto). */
 export interface BackupPhoneDto {
   id: string;

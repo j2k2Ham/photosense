@@ -10,7 +10,7 @@ import { frame, gate, inFrame } from './frame';
 
 const api = vi.hoisted(() => ({
   useLocations: vi.fn(), useLocationDetails: vi.fn(), turnOnLocation: vi.fn(), turnOffLocation: vi.fn(), locationInstead: vi.fn(), disconnectLocation: vi.fn(), removeLocation: vi.fn(),
-  renameLocation: vi.fn(), setCountAt: vi.fn(), backUpToLocations: vi.fn(), checkLocations: vi.fn(), pauseLocations: vi.fn(), connectServer: vi.fn(), deleteSent: vi.fn(),
+  renameLocation: vi.fn(), setCountAt: vi.fn(), backUpToLocations: vi.fn(), checkLocations: vi.fn(), pauseLocations: vi.fn(), connectServer: vi.fn(), deleteSent: vi.fn(), forgetComputer: vi.fn(),
 }));
 vi.mock('../../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../../lib/apiClient')>()), ...api }));
 
@@ -25,6 +25,7 @@ beforeEach(() => {
   for (const change of [api.turnOnLocation, api.turnOffLocation, api.locationInstead, api.disconnectLocation, api.removeLocation, api.renameLocation, api.setCountAt,
     api.backUpToLocations, api.checkLocations, api.pauseLocations]) change.mockResolvedValue(undefined);
   api.connectServer.mockResolvedValue('new');
+  api.forgetComputer.mockResolvedValue({ computer: 'Studio iMac', told: true });
   api.deleteSent.mockResolvedValue({ removed: 2, bytes: 9, left: 0, storageTotal: 1, storageFreeBefore: 0 });
 });
 
@@ -252,6 +253,37 @@ describe('a location in full', () => {
     expect(layer()).toHaveTextContent('Last backup Not yet');
     expect(layer()).not.toHaveTextContent('Last checked');
     expect(within(layer()).queryByRole('button', { name: 'Remove location' })).not.toBeInTheDocument();
+    cleanup();
+    // A computer not paired yet has nothing to forget.
+    show(location({ id: 'computer', kind: 'computer', name: 'Computer' }));
+    expect(screen.queryByRole('button', { name: 'Forget this computer' })).not.toBeInTheDocument();
+  });
+
+  it('forgets the computer after a question saying its backups stay there, and says whether the computer heard', async () => {
+    const studio = location({ id: 'computer', kind: 'computer', name: 'Studio iMac', on: true, connected: true, settings: { folder: 'Pictures/Trovolve' } });
+    const { notify, onClose, layer } = show(studio);
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Forget this computer' }));
+    const asked = screen.getByRole('dialog', { name: 'Forget Studio iMac?' });
+    expect(asked).toHaveTextContent('This iPhone stops backing up to Studio iMac, until you pair them again. The backups on Studio iMac stay there; nothing is deleted.');
+    expect(asked).toHaveTextContent('Photos backed up only there stop counting as safe to delete.');
+    await userEvent.click(within(asked).getByRole('button', { name: 'Cancel' }));
+    expect(api.forgetComputer).not.toHaveBeenCalled();
+
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Forget this computer' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Forget Studio iMac?' })).getByRole('button', { name: 'Forget Studio iMac' }));
+    expect(notify).toHaveBeenLastCalledWith('Forgot Studio iMac. It no longer lists this iPhone.', 'ok');
+    expect(onClose).toHaveBeenCalledOnce();
+
+    api.forgetComputer.mockResolvedValueOnce({ computer: 'Studio iMac', told: false });
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Forget this computer' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Forget Studio iMac?' })).getByRole('button', { name: 'Forget Studio iMac' }));
+    expect(notify).toHaveBeenLastCalledWith('Forgot Studio iMac. It was not found on this Wi-Fi, so it still lists this iPhone: forget it in Phones there too.', 'ok');
+
+    api.forgetComputer.mockRejectedValueOnce(new Error('This phone is not paired with a computer.'));
+    await userEvent.click(within(layer()).getByRole('button', { name: 'Forget this computer' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Forget Studio iMac?' })).getByRole('button', { name: 'Forget Studio iMac' }));
+    expect(notify).toHaveBeenLastCalledWith('This phone is not paired with a computer.', 'error');
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 
   it('on Android says its keys are in the Keystore', () => {

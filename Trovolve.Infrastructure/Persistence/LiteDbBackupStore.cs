@@ -31,7 +31,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         ct.ThrowIfCancellationRequested();
         return Task.FromResult<IReadOnlyList<BackupPhone>>([.. _phones.FindAll().OrderBy(d => d.PairedUtcTicks).Select(d =>
             new BackupPhone(d.Id, d.Name, d.Kind, d.Folder, d.Paused, Time(d.PairedUtcTicks), Time(d.LastBackupUtcTicks), Time(d.LastCheckedUtcTicks), d.Safe, d.SafeBytes,
-                d.TripFolders is { Count: > 0 } trips ? trips : null, d.TripsFolder, (FileNaming)d.Names))]);
+                d.TripFolders is { Count: > 0 } trips ? trips : null, d.TripsFolder, (FileNaming)d.Names, d.Forgotten))]);
     }
 
     /// <inheritdoc />
@@ -42,6 +42,7 @@ internal sealed class LiteDbBackupStore : IBackupStore
         {
             Id = phone.Id, Name = phone.Name, Kind = phone.Kind, Folder = phone.Folder, Paused = phone.Paused, PairedUtcTicks = phone.Paired.UtcTicks,
             LastBackupUtcTicks = phone.LastBackup?.UtcTicks, LastCheckedUtcTicks = phone.LastChecked?.UtcTicks, Safe = phone.Safe, SafeBytes = phone.SafeBytes, TripFolders = phone.TripFolders?.ToList(), TripsFolder = phone.TripsFolder, Names = (int)phone.Names,
+            Forgotten = phone.Forgotten,
         });
         return Task.CompletedTask;
     }
@@ -124,6 +125,8 @@ internal sealed class LiteDbBackupStore : IBackupStore
         public string? TripsFolder { get; set; }
         /// <summary>How its copies are named here.</summary>
         public int Names { get; set; }
+        /// <summary>The person forgot it.</summary>
+        public bool Forgotten { get; set; }
     }
 
     private sealed class HeldDocument
@@ -215,6 +218,20 @@ internal sealed class LiteDbBackupLedger : IBackupLedger
                 });
             else _computer.Upsert(document);
         }
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
+    public Task ForgetComputerAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_computer)
+            _db.Together(() =>
+            {
+                _onComputer.DeleteAll();
+                _foldersMade.DeleteAll();
+                _computer.Delete("computer");
+            });
         return Task.CompletedTask;
     }
 

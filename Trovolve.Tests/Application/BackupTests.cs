@@ -57,7 +57,7 @@ public sealed class BackupTests : IDisposable
             .AddSingleton<TimeProvider>(new TestClock())
             .BuildServiceProvider();
         _router = _phone.GetRequiredService<TrovolveRoutes>().Router;
-        _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "Trovolve"), _kept, home: In("Home"), terms: _computerTerms);
+        _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "Trovolve"), _kept, home: In("Home"), terms: _computerTerms, pairs: _computerPairs);
         _door = new ComputerPairing(new TcpTransferListener(0), _telling, _computerPairs, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System);
         _computer = new BackupApi(new TestApi(s => s.AddSingleton(_backups)));
     }
@@ -311,6 +311,80 @@ public sealed class BackupTests : IDisposable
     }
 
     [Test]
+    public async Task Forgetting_The_Computer_On_The_Phone_Tells_It_And_Its_Copies_Count_Again_Only_Once_Paired_Again(CancellationToken ct)
+    {
+        Library();
+        await PairedAsync(ct);
+        var phoneId = await _phone.GetRequiredService<IPairingStore>().SelfIdAsync(ct);
+        // Paired but never backed up: the computer has no record of the phone, and forgets its pairing all the same.
+        var first = await PhoneAsync("POST", "backup/forget", ct);
+        await Assert.That((first.GetProperty("computer").GetString(), first.GetProperty("told").GetBoolean())).IsEqualTo(("Studio iMac", true));
+        await Assert.That(_computerPairs.Paired.Count).IsEqualTo(0);
+
+        await PairedAsync(ct);
+        await BackedUpAsync(ct);
+        await Assert.That((await PhoneAsync("GET", "backup/safe", ct)).GetProperty("checked").GetProperty("count").GetInt32()).IsEqualTo(3);
+        await NotedOnComputerAsync("4 items backed up and checked", ct);
+
+        var forgot = await PhoneAsync("POST", "backup/forget", ct);
+        await Assert.That(forgot.GetProperty("told").GetBoolean()).IsTrue();
+        var state = await PhoneAsync("GET", "backup", ct);
+        await Assert.That((state.GetProperty("stage").GetString(), state.GetProperty("problem").ValueKind, state.GetProperty("waiting").GetInt32())).IsEqualTo(("unpaired", JsonValueKind.Null, 3));
+        // Nothing counts as backed up any more, though every copy stays on the computer.
+        var safe = await PhoneAsync("GET", "backup/safe", ct);
+        await Assert.That((safe.GetProperty("checked").GetProperty("count").GetInt32(), safe.GetProperty("removable").GetProperty("count").GetInt32())).IsEqualTo((0, 0));
+        await Assert.That(await _phone.GetRequiredService<IPairingStore>().GetAsync("computer-1", ct)).IsNull();
+        await Assert.That((await _computer.PhonesAsync(Http.Get("backup/phones").FromClient(), ct)).Json().GetArrayLength()).IsEqualTo(0);
+        await Assert.That((_computerPairs.Paired.Count, Directory.GetFiles(Folder).Length)).IsEqualTo((0, 4));
+        await Assert.That((await _kept.EventsAsync(phoneId, 1, ct))[0].Text).IsEqualTo("Forgotten. Its backups stay here");
+
+        // Paired again: the same folder, what is there counted again once the computer says so, and nothing sent twice.
+        await PairedAsync(ct);
+        await _backups.PairedAsync(new Device(phoneId, "Jamie's iPhone"), ct);
+        var again = await BackedUpAsync(ct);
+        await Assert.That((again.GetProperty("total").GetInt32(), again.GetProperty("onComputer").GetInt32(), again.GetProperty("folder").GetString())).IsEqualTo((0, 3, "Pictures/Trovolve/Jamie's iPhone"));
+        await Assert.That((await PhoneOnComputerAsync(ct)).GetProperty("held").GetInt32()).IsEqualTo(4);
+
+        // Not found, it is forgotten on the phone all the same, and still listed on the computer.
+        _computers.Computers.Clear();
+        var alone = await PhoneAsync("POST", "backup/forget", ct);
+        await Assert.That(alone.GetProperty("told").GetBoolean()).IsFalse();
+        await Assert.That((await _computer.PhonesAsync(Http.Get("backup/phones").FromClient(), ct)).Json().GetArrayLength()).IsEqualTo(1);
+        var none = await AskAsync("POST", "backup/forget", ct);
+        await Assert.That(none).IsEqualTo((HttpStatusCode.Conflict, "This phone is not paired with a computer."));
+    }
+
+    [Test]
+    public async Task A_Phone_Forgotten_On_The_Computer_Is_Turned_Away_And_Forgets_The_Computer_Too_Saying_Why(CancellationToken ct)
+    {
+        Library();
+        await PairedAsync(ct);
+        await BackedUpAsync(ct);
+        var phoneId = (await NotedOnComputerAsync("4 items backed up and checked", ct)).GetProperty("id").GetString()!;
+
+        var left = (await _computer.ForgetPhoneAsync(Http.Post("backup/phones/x/forget").FromClient(), phoneId, ct)).Json();
+        await Assert.That((left.GetArrayLength(), _computerPairs.Paired.Count, Directory.GetFiles(Folder).Length)).IsEqualTo((0, 0, 4));
+        var twice = await _computer.ForgetPhoneAsync(Http.Post("backup/phones/x/forget").FromClient(), phoneId, ct);
+        await Assert.That((twice.StatusCode, twice.Text())).IsEqualTo((HttpStatusCode.NotFound, "That phone is not paired with this computer."));
+
+        // The phone learns of it at its next connection, here as it tells the computer the note was accepted.
+        await PhoneAsync("POST", "terms/accept", ct);
+        await Assert.That(await Backup.Telling).IsFalse();
+        var state = await PhoneAsync("GET", "backup", ct);
+        await Assert.That((state.GetProperty("stage").GetString(), state.GetProperty("problem").GetString()))
+            .IsEqualTo(("unpaired", "Studio iMac does not know this phone any more. Pair them again: on the computer, open Phones and choose Pair a phone."));
+        await Assert.That((await PhoneAsync("GET", "backup/safe", ct)).GetProperty("checked").GetProperty("count").GetInt32()).IsEqualTo(0);
+
+        // A backup learns of it the same way.
+        await PairedAsync(ct);
+        await _computerPairs.ForgetAsync(phoneId, ct);
+        var refused = await BackedUpAsync(ct);
+        await Assert.That((refused.GetProperty("stage").GetString(), refused.GetProperty("problem").GetString()))
+            .IsEqualTo(("unpaired", "Studio iMac does not know this phone any more. Pair them again: on the computer, open Phones and choose Pair a phone."));
+        await Assert.That(await _phone.GetRequiredService<IBackupLedger>().ComputerAsync(ct)).IsNull();
+    }
+
+    [Test]
     public async Task The_Note_Accepted_On_The_Phone_Reaches_The_Computer_With_A_Backup(CancellationToken ct)
     {
         Library();
@@ -478,13 +552,14 @@ public sealed class BackupTests : IDisposable
             await neither.StateAsync(Http.Get("backup").FromClient(), ct), await neither.StartAsync(Http.Post("backup/start").FromClient(), ct),
             await neither.PauseAsync(Http.Post("backup/pause").FromClient(), ct), await neither.AutomaticAsync(Http.Post("backup/auto").FromClient(), ct),
             await neither.SettingsAsync(Http.Post("backup/settings", "{}").FromClient(), ct), await neither.LibraryAsync(Http.Get("backup/library").FromClient(), ct),
-            await neither.SafeAsync(Http.Get("backup/safe").FromClient(), ct),
+            await neither.SafeAsync(Http.Get("backup/safe").FromClient(), ct), await neither.ForgetComputerAsync(Http.Post("backup/forget").FromClient(), ct),
         })
             await Assert.That((asked.StatusCode, asked.Text())).IsEqualTo((HttpStatusCode.NotFound, "Only a phone backs up."));
         foreach (var asked in new[]
         {
             await neither.PhonesAsync(Http.Get("backup/phones").FromClient(), ct), await neither.FolderAsync(Http.Post("backup/phones/x/folder", "{}").FromClient(), "x", ct),
             await neither.PausePhoneAsync(Http.Post("backup/phones/x/pause", "{}").FromClient(), "x", ct),
+            await neither.ForgetPhoneAsync(Http.Post("backup/phones/x/forget").FromClient(), "x", ct),
         })
             await Assert.That((asked.StatusCode, asked.Text())).IsEqualTo((HttpStatusCode.NotFound, "Only a computer keeps phones' backups."));
         var notJson = await _computer.FolderAsync(Http.Post("backup/phones/x/folder", "not json").FromClient(), "x", ct);

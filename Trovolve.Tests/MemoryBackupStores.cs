@@ -101,6 +101,19 @@ internal sealed class MemoryBackupLedger : IBackupLedger
     }
 
     /// <inheritdoc />
+    public Task ForgetComputerAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_onComputer)
+        {
+            _onComputer.Clear();
+            _foldersMade.Clear();
+            _computer = null;
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <inheritdoc />
     public Task<BackupSettings> SettingsAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

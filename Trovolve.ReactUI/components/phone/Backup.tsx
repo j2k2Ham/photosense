@@ -110,6 +110,8 @@ export function BackupScreen({ state, notify, onChoose, onPair, locations, onSet
                 <span aria-hidden className="grid h-10 w-10 place-items-center rounded-[12px] bg-acc-soft text-on-acc-soft"><LaptopIcon /></span>
                 <span className="text-[16px] font-semibold">No computer yet</span>
               </span>
+              {/* The computer forgot this phone, which forgot it in turn: said until they are paired again. */}
+              {state.problem && <p role="alert" className="text-[15px] leading-[1.4] text-danger-t">{state.problem}</p>}
               <p className="text-[15px] leading-[1.4] text-t2">Pair this {device} with Trovolve on your Mac or PC. {items(state.waiting)} can then be backed up over Wi-Fi.</p>
               <p className="text-[14px] leading-[1.4] text-t2">{downloadLine(download)}</p>
               <PhoneButton onClick={onPair}>Connect your computer</PhoneButton>

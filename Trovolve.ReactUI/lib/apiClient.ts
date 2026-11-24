@@ -1,6 +1,6 @@
 import useSWR, { mutate } from 'swr';
 import type {
-  AboutDocument, AboutDto, BackupPhoneDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
+  AboutDocument, AboutDto, BackupPhoneDto, ForgottenComputerDto, BackupSettingsDto, BackupStateDto, BulkRemovalResultDto, EraseRemovedDto, FolderListingDto, GroupMode, GroupsPageDto, OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFilesDto, OrganizePlanDto,
   OrganizePlanFile, OrganizeProgressDto, OrganizeUndoDto, PairingStateDto, PhotoAccessDto, PlanBuyResultDto, PlanDto, PlanKind, TermsDto, FindingsDto, RemovePhotoResultDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto, StartScanRequest, LibraryBackupDto, SafeRemovalDto, SafeReviewDto, SwipeFreedDto, SwipeStateDto, BurstDto, CategoryName, CategoryRemovalDto, CategoryReportDto, PhotoDto,
   CompressibleVideoDto, CompressionQuality, CompressionStateDto, NoticeOpenedDto, NoticeStateDto, YearReviewDto, PhotoDetailsDto, SearchResultDto,
   TownDto, TripDetailDto, TripsDto, FileNaming, FixesDto, FixResultDto, RenamingDto, VaultDto, LocationsDto, LocationDetailsDto, ServerConnectionDto,
@@ -488,6 +488,17 @@ export async function removeSafe(atMost?: number): Promise<SafeRemovalDto> {
   return removed;
 }
 
+/**
+ * On a phone: forgets the computer it backs up to, telling it when it can be found. Its copies stop counting toward
+ * Safe to delete until the two are paired again; nothing is deleted on either.
+ */
+export async function forgetComputer(): Promise<ForgottenComputerDto> {
+  const forgotten = await json<ForgottenComputerDto>(`${backupUrl}/forget`, { method: 'POST' });
+  await refreshBackup();
+  await mutate((key: unknown) => typeof key === 'string' && key.startsWith(`${API_BASE}/locations`));
+  return forgotten;
+}
+
 /** On a computer: every phone that backs up to it, asked every two seconds while one is arriving and every ten otherwise. */
 export function useBackupPhones(on: boolean) {
   return useSWR<BackupPhoneDto[]>(on ? phonesUrl : null, json, { refreshInterval: latest => (latest?.some(p => p.arriving) ? 2000 : 10_000) });
@@ -505,6 +516,17 @@ export const moveBackups = (id: string, folder: string) => phoneChange(id, 'fold
 export const tripsGoTo = (id: string, folder: string) => phoneChange(id, 'trips', { folder });
 /** On a computer: pauses a phone's backups, or lets them run again. */
 export const pausePhone = (id: string, paused: boolean) => phoneChange(id, 'pause', { paused });
+
+/**
+ * On a computer: forgets a phone, which must be paired again to back up; a plan it shared is taken back. Its folder and
+ * copies stay. Answers with the phones still listed.
+ */
+export async function forgetPhone(id: string): Promise<BackupPhoneDto[]> {
+  const phones = await json<BackupPhoneDto[]>(`${phonesUrl}/${encodeURIComponent(id)}/forget`, { method: 'POST' });
+  await mutate(phonesUrl, phones, { revalidate: false });
+  await mutate(planUrl);
+  return phones;
+}
 
 
 const swipeUrl = `${API_BASE}/swipe`;

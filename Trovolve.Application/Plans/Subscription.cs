@@ -106,4 +106,15 @@ public sealed class Subscription
         if (plan.Pro) await _store.KeepSharedAsync(plan with { SharedBy = phone }, ct);
         else if (await _store.SharedAsync(ct) is { } shared && shared.SharedBy == phone) await _store.KeepSharedAsync(null, ct);
     }
+
+    /// <summary>
+    /// Takes back the plan a phone shared once this computer has forgotten it: the computer goes back to the free plan
+    /// until another paired phone on Pro next tells it of its plan.
+    /// </summary>
+    /// <param name="phone">What the phone is called, as it named itself when sharing.</param>
+    /// <param name="ct">Stops it before anything changes.</param>
+    public async Task ForgetPhoneAsync(string phone, CancellationToken ct)
+    {
+        if (await _store.SharedAsync(ct) is { } shared && shared.SharedBy == phone) await _store.KeepSharedAsync(null, ct);
+    }
 }

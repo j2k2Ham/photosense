@@ -68,6 +68,21 @@ internal sealed class BackupEndpoints
         return await AnswerAsync(req, Dto(await _phone.StateAsync(ct)), ct);
     }
 
+    /// <summary>
+    /// POST /api/backup/forget: on a phone, forgets the computer it backs up to, telling it when it can be found. Its
+    /// copies stop counting toward Safe to delete; nothing is deleted on either.
+    /// </summary>
+    public async Task<ApiResponse> ForgetComputerAsync(ApiRequest req, CancellationToken ct)
+    {
+        if (Refused(req, _phone, OnlyAPhone, ct) is { } refused) return await refused;
+        try
+        {
+            var (computer, told) = await _phone!.ForgetComputerAsync(ct);
+            return await AnswerAsync(req, new ForgottenComputerDto { Computer = computer.Name, Told = told }, ct);
+        }
+        catch (InvalidOperationException ex) { return await RefuseAsync(req, HttpStatusCode.Conflict, ex.Message, ct); }
+    }
+
     /// <summary>POST /api/backup/settings: on a phone, how it backs up by itself, and what Safe to delete keeps.</summary>
     public async Task<ApiResponse> SettingsAsync(ApiRequest req, CancellationToken ct)
     {
@@ -187,6 +202,18 @@ internal sealed class BackupEndpoints
         var paused = (await req.ReadJsonAsync<BackupPauseRequest>(Json, ct))?.Paused == true;
         try { return await AnswerAsync(req, await DtoAsync(await _computer!.PauseAsync(id, paused, ct), ct), ct); }
         catch (ArgumentException ex) { return await RefuseAsync(req, HttpStatusCode.NotFound, ex.Message, ct); }
+    }
+
+    /// <summary>
+    /// POST /api/backup/phones/{id}/forget: on a computer, forgets a phone: it must be paired again to back up, and a plan
+    /// it shared is taken back. Its folder and copies stay. Answers with the phones still listed.
+    /// </summary>
+    public async Task<ApiResponse> ForgetPhoneAsync(ApiRequest req, string id, CancellationToken ct)
+    {
+        if (Refused(req, _computer, OnlyAComputer, ct) is { } refused) return await refused;
+        try { await _computer!.ForgetAsync(id, ct); }
+        catch (ArgumentException ex) { return await RefuseAsync(req, HttpStatusCode.NotFound, ex.Message, ct); }
+        return await PhonesAsync(req, ct);
     }
 
     private async Task<BackupPhoneDto> DtoAsync(BackupPhone phone, CancellationToken ct)

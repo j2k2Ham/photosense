@@ -90,6 +90,20 @@ public class SubscriptionTests
         await Assert.That(await _computer.Store.SharedAsync(ct)).IsNull();
     }
 
+    [Test]
+    public async Task Forgetting_A_Phone_Takes_Back_The_Plan_Only_When_That_Phone_Shared_It(CancellationToken ct)
+    {
+        var subscription = TestPlans.Subscription(_computer);
+        await subscription.ForgetPhoneAsync("Jamie's iPhone", ct);
+        await subscription.ShareFromAsync("Jamie's iPhone", Pro(null), ct);
+
+        await subscription.ForgetPhoneAsync("Sam's Pixel", ct);
+        await Assert.That((await subscription.CurrentAsync(ct)).Pro).IsTrue();
+
+        await subscription.ForgetPhoneAsync("Jamie's iPhone", ct);
+        await Assert.That(await subscription.CurrentAsync(ct)).IsEqualTo(Entitlement.Free);
+    }
+
     // ---- what is for sale, buying, restoring and managing
 
     [Test]

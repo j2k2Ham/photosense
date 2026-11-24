@@ -454,6 +454,26 @@ test.describe('on a phone', () => {
     await expect(library).toBeVisible();
   });
 
+  test('Settings forgets the computer after a question, and Backup offers to connect one again @phone', async ({ page, isMobile }) => {
+    const phone = new Phone();
+    phone.forgetTold = false;
+    await phone.attach(page);
+    await page.goto('/');
+    const settings = await phoneSettings(page);
+    await settings.getByRole('button', { name: /^DESKTOP-1/ }).click();
+    await page.getByRole('dialog', { name: 'DESKTOP-1' }).getByRole('button', { name: 'Forget this computer' }).click();
+    const asked = page.getByRole('dialog', { name: 'Forget DESKTOP-1?' });
+    await expect(asked).toContainText('The backups on DESKTOP-1 stay there; nothing is deleted.');
+    await asked.getByRole('button', { name: 'Forget DESKTOP-1' }).click();
+    await expect(message(page, /^Forgot DESKTOP-1\. It was not found on this Wi-Fi, so it still lists this (iPhone|iPad): forget it in Phones there too\.$/)).toBeVisible();
+    expect(phone.asked).toContain('forget');
+    await expect(settings.getByRole('button', { name: /^Computer.*Not paired yet/ })).toBeVisible();
+
+    await leaveSettings(page, settings, isMobile, 'Backup');
+    if (isMobile) await phoneTab(page, 'Backup');
+    await expect(page.getByRole('region', { name: 'No computer yet' }).getByRole('button', { name: 'Connect your computer' })).toBeVisible();
+  });
+
   test('Settings turns on a cloud service by signing in, connects a server the person names and renames, and Backup backs up to them @phone', async ({ page, isMobile }) => {
     const phone = new Phone();
     await phone.attach(page);

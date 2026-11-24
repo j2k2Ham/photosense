@@ -23,4 +23,7 @@ public interface IPairingStore
 
     /// <summary>Keeps a pairing, noting when it was made, in place of any earlier one with the same device.</summary>
     Task SaveAsync(PairedDevice device, CancellationToken ct);
+
+    /// <summary>Forgets the pairing with a device, as the person asked: it must be paired afresh to connect again. Nothing when there is none.</summary>
+    Task ForgetAsync(string id, CancellationToken ct);
 }

@@ -29,6 +29,11 @@ public class LiteDbPairingStoreTests
         var found = await pairs.GetAsync("phone-1", ct);
         await Assert.That((found!.Id, found.Name, Convert.ToHexString(found.Key))).IsEqualTo(("phone-1", "Jamie's iPhone", "040506"));
         await Assert.That(db.GetCollection("paired_devices").Count()).IsEqualTo(1);
+
+        // Forgotten, it is gone; forgetting it again, or one never paired, changes nothing.
+        await pairs.ForgetAsync("phone-1", ct);
+        await pairs.ForgetAsync("phone-1", ct);
+        await Assert.That(await db.Pairings(new TestClock()).GetAsync("phone-1", ct)).IsNull();
     }
 
     [Test]
@@ -41,5 +46,6 @@ public class LiteDbPairingStoreTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => pairs.SelfIdAsync(gone));
         await Assert.ThrowsAsync<OperationCanceledException>(() => pairs.GetAsync("phone-1", gone));
         await Assert.ThrowsAsync<OperationCanceledException>(() => pairs.SaveAsync(new PairedDevice("phone-1", "x", []), gone));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => pairs.ForgetAsync("phone-1", gone));
     }
 }

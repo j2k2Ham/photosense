@@ -42,7 +42,7 @@ public sealed class VaultTests : IDisposable
 
     public VaultTests()
     {
-        _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "Trovolve"), _kept, home: In("Home"));
+        _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "Trovolve"), _kept, home: In("Home"), pairs: _computerPairs);
         _door = new ComputerPairing(new TcpTransferListener(0), _telling, _computerPairs, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System);
         _phone = NewPhone("Jamie's iPhone");
     }

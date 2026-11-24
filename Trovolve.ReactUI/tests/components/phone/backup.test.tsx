@@ -40,6 +40,13 @@ describe('Backup', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Connect your computer' }));
     await userEvent.click(screen.getByRole('button', { name: 'Choose photos to send' }));
     expect([onPair.mock.calls.length, onChoose.mock.calls.length]).toEqual([1, 1]);
+    expect(within(card('No computer yet')).queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('with no computer since the computer forgot this phone, says so above Connect your computer', () => {
+    const why = 'Studio iMac does not know this phone any more. Pair them again: on the computer, open Phones and choose Pair a phone.';
+    inFrame(<BackupScreen state={backupState({ stage: 'unpaired', computer: null, problem: why })} notify={vi.fn()} onChoose={vi.fn()} onPair={vi.fn()} />);
+    expect(within(card('No computer yet')).getByRole('alert')).toHaveTextContent(why);
   });
 
   it('says what waits on the computer named, never checked yet, and Back up now starts', async () => {

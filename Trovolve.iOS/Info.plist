@@ -94,7 +94,7 @@
       </dict>
     </array>
     <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
+    <true/>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>

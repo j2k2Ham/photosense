@@ -71,6 +71,14 @@ internal sealed class LiteDbPairingStore : IPairingStore
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
+    public Task ForgetAsync(string id, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        _paired.Delete(id);
+        return Task.CompletedTask;
+    }
+
     private sealed class PairingDocument
     {
         /// <summary>The other device's id.</summary>

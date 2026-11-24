@@ -25,8 +25,9 @@ public enum FileNaming
 /// <param name="TripFolders">The trip folders made on this computer when the phone asked, where its files may be too; null for none.</param>
 /// <param name="TripsFolder">The folder its trip folders are made in, as the person chose; null for the one beside the phones' folders, Pictures/Trovolve.</param>
 /// <param name="Names">How its copies are named here, those arriving among them.</param>
+/// <param name="Forgotten">The person forgot it, here or on the phone: it is not listed, and its folder and copies are kept for when it is paired again.</param>
 public sealed record BackupPhone(string Id, string Name, string? Kind, string Folder, bool Paused, DateTimeOffset Paired, DateTimeOffset? LastBackup, DateTimeOffset? LastChecked, int Safe = 0, long SafeBytes = 0,
-    IReadOnlyList<string>? TripFolders = null, string? TripsFolder = null, FileNaming Names = FileNaming.AsOnPhone);
+    IReadOnlyList<string>? TripFolders = null, string? TripsFolder = null, FileNaming Names = FileNaming.AsOnPhone, bool Forgotten = false);
 
 /// <summary>A file this computer keeps for a phone, by its checksum.</summary>
 /// <param name="PhoneId">The phone it came from.</param>
@@ -102,6 +103,12 @@ public interface IBackupLedger
 
     /// <summary>Keeps the computer backups go to; a computer other than the one before starts with nothing on it.</summary>
     Task SaveComputerAsync(BackupComputer computer, CancellationToken ct);
+
+    /// <summary>
+    /// Forgets the computer, the checksums it held and the trip folders it made, as the person asked: nothing counts as
+    /// on it until the phone is paired with it again and it says once more what it holds.
+    /// </summary>
+    Task ForgetComputerAsync(CancellationToken ct);
 
     /// <summary>How the phone backs up by itself.</summary>
     Task<BackupSettings> SettingsAsync(CancellationToken ct);

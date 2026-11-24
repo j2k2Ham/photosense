@@ -20,6 +20,8 @@ public class LiteDbBackupStoreTests
         await Assert.That(await db.Backups().PhonesAsync(ct)).IsEquivalentTo([iphone, pixel], CollectionOrdering.Matching);
         await store.SavePhoneAsync(pixel with { Paused = true }, ct);
         await Assert.That((await store.PhonesAsync(ct))[1].Paused).IsTrue();
+        await store.SavePhoneAsync(pixel with { Forgotten = true }, ct);
+        await Assert.That((await db.Backups().PhonesAsync(ct))[1].Forgotten).IsTrue();
 
         var held = new HeldFile("iphone", "aa11", @"C:\Pictures\Trovolve\Alex's iPhone\IMG_0001.HEIC", 2_400_000, new DateTime(2026, 11, 10, 9, 0, 0, DateTimeKind.Utc), Day);
         await store.HoldAsync(held, ct);
@@ -68,6 +70,16 @@ public class LiteDbBackupStoreTests
         var settings = new BackupSettings(true, false, false, false, true);
         await ledger.SaveSettingsAsync(settings, ct);
         await Assert.That(await db.Ledger().SettingsAsync(ct)).IsEqualTo(settings);
+
+        // Forgotten, the computer goes with all it held and made; the settings stay the phone's.
+        await ledger.KeepOnComputerAsync(["ee"], all: false, ct);
+        await ledger.KeepFolderMadeAsync("2026-07 Glacier", ct);
+        await ledger.ForgetComputerAsync(ct);
+        await Assert.That((await db.Ledger().ComputerAsync(ct), (await ledger.OnComputerAsync(ct)).Count, (await ledger.FoldersMadeAsync(ct)).Count)).IsEqualTo((null, 0, 0));
+        await Assert.That(await ledger.SettingsAsync(ct)).IsEqualTo(settings);
+        // The same computer paired again starts with nothing on it until it says.
+        await ledger.SaveComputerAsync(new BackupComputer("pc", "Office PC", "Pictures/Trovolve", null, null), ct);
+        await Assert.That((await ledger.OnComputerAsync(ct)).Count).IsEqualTo(0);
     }
 
     [Test]
@@ -110,7 +122,7 @@ public class LiteDbBackupStoreTests
             () => ledger.ComputerAsync(gone), () => ledger.SaveComputerAsync(new BackupComputer("c", "C", "f", null, null), gone), () => ledger.SettingsAsync(gone),
             () => ledger.SaveSettingsAsync(BackupSettings.Default, gone), () => ledger.OnComputerAsync(gone), () => ledger.KeepOnComputerAsync(["aa"], true, gone),
             () => ledger.ChecksumAsync("f", 1, DateTime.UnixEpoch, gone), () => ledger.KeepChecksumAsync("f", 1, DateTime.UnixEpoch, "aa", gone),
-            () => ledger.FoldersMadeAsync(gone), () => ledger.KeepFolderMadeAsync("2026-07 Glacier", gone),
+            () => ledger.FoldersMadeAsync(gone), () => ledger.KeepFolderMadeAsync("2026-07 Glacier", gone), () => ledger.ForgetComputerAsync(gone),
             () => db.TripHome().HomeAsync(gone), () => db.TripHome().SaveHomeAsync(null, gone), () => db.TripHome().NamesAsync(gone), () => db.TripHome().SaveNameAsync("t", null, gone),
         ];
         foreach (var ask in asked) await Assert.That(ask).Throws<OperationCanceledException>();

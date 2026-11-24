@@ -140,6 +140,8 @@ public sealed class PhoneBackup
     private readonly TermsAcceptance _terms;
     private Run? _run;
     private CancellationTokenSource? _stop;
+    // Why the phone forgot its computer by itself, the computer having forgotten it: said until it is paired again.
+    private string? _forgotBecause;
 
     // A backup going on, or the last one: what it sends, and how far it has got.
     private sealed class Run
@@ -212,7 +214,7 @@ public sealed class PhoneBackup
         lock (_lock)
         {
             if (computer is null)
-                return new BackupState(BackupStage.Unpaired, null, null, waiting.Count, waiting.Sum(i => i.Bytes), 0, 0, 0, 0, 0, null, null, [], null, settings);
+                return new BackupState(BackupStage.Unpaired, null, null, waiting.Count, waiting.Sum(i => i.Bytes), 0, 0, 0, 0, 0, null, null, [], _forgotBecause, settings);
             var run = _run;
             var strip = run is null
                 ? [.. waiting.Take(StripSize).Select(i => new BackupTile(i.Main.Id, false))]
@@ -413,6 +415,56 @@ public sealed class PhoneBackup
 
     private const string PairFirst = "Pair with a computer first: in Settings, choose Computer.";
 
+    /// <summary>
+    /// Forgets the computer, as the person asked: a backup going on is paused first, and the computer is told, when it
+    /// can be found, so that it forgets this phone too. Its copies stop counting toward Safe to delete until the two are
+    /// paired again; nothing on the computer or the phone is deleted.
+    /// </summary>
+    /// <returns>The computer forgotten, and whether it heard.</returns>
+    /// <exception cref="InvalidOperationException">No computer has been paired.</exception>
+    public async Task<(BackupComputer Computer, bool Told)> ForgetComputerAsync(CancellationToken ct)
+    {
+        var computer = await _ledger.ComputerAsync(ct) ?? throw new InvalidOperationException("This phone is not paired with a computer.");
+        Pause();
+        await Running.WaitAsync(ct);
+        bool told;
+        try
+        {
+            await SayForgetAsync(computer, ct);
+            told = true;
+        }
+        // Not found, gone quiet or refusing: forgotten here all the same, and the person told to forget the phone there.
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            told = false;
+        }
+        // Once the computer has heard, the phone forgets it too, whoever stops waiting.
+        await ForgetHereAsync(computer, null, CancellationToken.None);
+        return (computer, told);
+    }
+
+    // Connects to the computer only to say it is forgotten; the computer forgets this phone and hangs up.
+    private async Task SayForgetAsync(BackupComputer computer, CancellationToken ct)
+    {
+        var (connection, linked) = await LinkAsync(computer, ct);
+        await using var connected = connection;
+        using var channel = linked.Channel;
+        await channel.SendAsync(new JsonObject { ["t"] = "forget" }, ct);
+        await channel.ReceiveAsync(ct, "forgotten");
+    }
+
+    // Forgets the pairing and all the computer said it holds; why, when the computer forgot this phone first.
+    private async Task ForgetHereAsync(BackupComputer computer, string? because, CancellationToken ct)
+    {
+        await _pairs.ForgetAsync(computer.ComputerId, ct);
+        await _ledger.ForgetComputerAsync(ct);
+        lock (_lock)
+        {
+            _run = null;
+            _forgotBecause = because;
+        }
+    }
+
     /// <summary>What the free plan is told when it asks for a trip folder: the Pro sheet says it too.</summary>
     public const string TripsArePro = "Trip folders on your computer are part of Pro.";
 
@@ -567,6 +619,8 @@ public sealed class PhoneBackup
                 run.Stage = BackupStage.Failed;
                 run.Problem = ex is TransferException ? ex.Message : $"The backup stopped: {ex.Message}";
             }
+            // The computer forgot this phone: the phone forgets it too, and offers to pair again.
+            if (ex is TransferException { Refused: true }) await ForgetHereAsync(computer, ex.Message, CancellationToken.None);
         }
     }
 
@@ -594,6 +648,7 @@ public sealed class PhoneBackup
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
         {
+            if (ex is TransferException { Refused: true }) await ForgetHereAsync(computer, ex.Message, CancellationToken.None);
             return false;
         }
     }

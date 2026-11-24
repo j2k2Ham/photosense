@@ -39,6 +39,8 @@ export class Phone {
   };
   /** What the page asked of the phone's backup, but how it stands. */
   readonly asked: string[] = [];
+  /** Whether the computer is found when the phone forgets it, and so forgets the phone too. */
+  forgetTold = true;
 
   constructor(access: Phone['access'] = 'everything') { this.access = access; }
 
@@ -70,6 +72,12 @@ export class Phone {
       if (what === 'start') this.set({ stage: 'running', total: 2, totalBytes: 6e9 });
       if (what === 'pause') this.set({ stage: 'paused' });
       if (what === 'settings') this.set({ settings: JSON.parse(body!) });
+      if (what === 'forget') {
+        const computer = this.state.computer!;
+        this.set({ stage: 'unpaired', computer: null, folder: null, onComputer: 0, lastChecked: null, lastBackup: null });
+        this.locations.locations = this.locations.locations.map(l => (l.kind === 'computer' ? { ...l, name: 'Computer', on: false, connected: false, settings: {} } : l));
+        return json(route, { computer, told: this.forgetTold });
+      }
       return json(route, this.state);
     });
     // Clean up's categories are the program's own, with the phone's storage, which only a phone knows. Deleting from

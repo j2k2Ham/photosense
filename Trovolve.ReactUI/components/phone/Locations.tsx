@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  backUpToLocations, checkLocations, connectServer, organizeThumbnailUrl, deleteSent, disconnectLocation, locationInstead, pauseLocations, removeLocation, renameLocation, setCountAt,
+  backUpToLocations, checkLocations, connectServer, forgetComputer, organizeThumbnailUrl, deleteSent, disconnectLocation, locationInstead, pauseLocations, removeLocation, renameLocation, setCountAt,
   turnOffLocation, turnOnLocation, useLocationDetails, useLocations, type ApiError,
 } from '../../lib/apiClient';
 import { checkedAt } from '../../lib/backup';
@@ -178,7 +178,7 @@ export function LocationScreen({ location, held, actions, notify, onEdit, onClos
   const inPlace = useInPlace();
   const { platform, tablet, ios } = usePhone();
   const details = useLocationDetails(location.id).data;
-  const [asking, setAsking] = useState<'remove' | 'disconnect'>();
+  const [asking, setAsking] = useState<'remove' | 'disconnect' | 'forget'>();
   const [naming, setNaming] = useState(false);
   const now = new Date();
   const device = deviceWord(platform, tablet);
@@ -189,6 +189,19 @@ export function LocationScreen({ location, held, actions, notify, onEdit, onClos
       await run();
       notify(done, 'ok');
       if (close) onClose();
+    } catch (e) {
+      notify(said(e), 'error');
+    }
+  }
+
+  // The message says whether the computer heard, so the person knows whether to forget the phone there too.
+  async function forget() {
+    setAsking(undefined);
+    try {
+      const { told } = await forgetComputer();
+      notify(told ? `Forgot ${location.name}. It no longer lists this ${device}.`
+        : `Forgot ${location.name}. It was not found on this Wi-Fi, so it still lists this ${device}: forget it in Phones there too.`, 'ok');
+      onClose();
     } catch (e) {
       notify(said(e), 'error');
     }
@@ -240,10 +253,18 @@ export function LocationScreen({ location, held, actions, notify, onEdit, onClos
           {location.on && <PhoneButton kind="secondary" onClick={() => (held ? notify(heldLine(location.name), 'info') : void act(() => turnOffLocation(location.id), `${location.name} is off. Nothing there was deleted.`, false))}>Turn off</PhoneButton>}
           {isCloud(location.kind) && location.connected && <PhoneButton kind="danger" onClick={() => (held ? notify(heldLine(location.name), 'info') : setAsking('disconnect'))}>Disconnect</PhoneButton>}
           {isServer(location.kind) && <PhoneButton kind="danger" onClick={() => (held ? notify(heldLine(location.name), 'info') : setAsking('remove'))}>Remove location</PhoneButton>}
+          {location.kind === 'computer' && location.connected && <PhoneButton kind="danger" onClick={() => setAsking('forget')}>Forget this computer</PhoneButton>}
           <p className="px-1 text-center text-[13px] leading-[1.45] text-t2">Files at {location.name} are not deleted. Photos backed up only here stop counting as safe to delete.</p>
         </div>
       </div>
-      {asking && (
+      {asking === 'forget' && (
+        <ConfirmSheet title={`Forget ${location.name}?`} confirmLabel={`Forget ${location.name}`}
+          lines={[`This ${device} stops backing up to ${location.name}, until you pair them again. The backups on ${location.name} stay there; nothing is deleted.`,
+            'Photos backed up only there stop counting as safe to delete.']}
+          onCancel={() => setAsking(undefined)}
+          onConfirm={() => void forget()} />
+      )}
+      {asking && asking !== 'forget' && (
         <ConfirmSheet title={asking === 'remove' ? `Remove ${location.name}?` : `Disconnect ${location.name}?`} confirmLabel={asking === 'remove' ? 'Remove location' : 'Disconnect'}
           lines={[`Files at ${location.name} are not deleted.`, 'Photos backed up only here stop counting as safe to delete.']}
           onCancel={() => setAsking(undefined)}

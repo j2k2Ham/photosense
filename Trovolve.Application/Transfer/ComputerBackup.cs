@@ -57,6 +57,7 @@ public sealed class ComputerBackup
     private readonly IMediaDetailsReader _reader;
     private readonly IPlaceNameResolver _places;
     private readonly TermsAcceptance _terms;
+    private readonly IPairingStore _pairs;
     private readonly object _lock = new();
     private readonly Dictionary<string, ArrivingBackup> _arriving = [];
     private readonly SemaphoreSlim _changing = new(1, 1);
@@ -72,9 +73,11 @@ public sealed class ComputerBackup
     /// <param name="reader">When and where each copy was taken, as its file says, for naming it by date.</param>
     /// <param name="places">The towns and landmarks places are at, for naming a copy by where it was taken.</param>
     /// <param name="terms">Whether the person accepted the note asking for a backup: a phone and this computer tell each other.</param>
+    /// <param name="pairs">The phones this computer is paired with, whose pairing forgetting a phone forgets.</param>
     public ComputerBackup(IBackupStore store, IPhotoFileSystem files, FileChanges changes, Subscription plan, string root, string home, TimeProvider clock,
-        IMediaDetailsReader reader, IPlaceNameResolver places, TermsAcceptance terms)
+        IMediaDetailsReader reader, IPlaceNameResolver places, TermsAcceptance terms, IPairingStore pairs)
     {
+        _pairs = pairs;
         _terms = terms;
         _reader = reader;
         _places = places;
@@ -100,8 +103,24 @@ public sealed class ComputerBackup
         lock (_lock) return _arriving.GetValueOrDefault(phoneId);
     }
 
-    /// <summary>Every phone that backs up to this computer.</summary>
-    public Task<IReadOnlyList<BackupPhone>> PhonesAsync(CancellationToken ct) => _store.PhonesAsync(ct);
+    /// <summary>Every phone that backs up to this computer, less those the person forgot.</summary>
+    public async Task<IReadOnlyList<BackupPhone>> PhonesAsync(CancellationToken ct) => [.. (await _store.PhonesAsync(ct)).Where(p => !p.Forgotten)];
+
+    /// <summary>
+    /// Forgets a phone, as the person asked here or on the phone: its pairing goes, so it must be paired again to back up,
+    /// and a plan it shared is taken back. Its folder and the copies in it stay, and count again once it is paired again.
+    /// </summary>
+    /// <returns>The phone forgotten.</returns>
+    /// <exception cref="ArgumentException">No such phone.</exception>
+    public async Task<BackupPhone> ForgetAsync(string phoneId, CancellationToken ct)
+    {
+        var phone = (await PhonesAsync(ct)).FirstOrDefault(p => p.Id == phoneId) ?? throw new ArgumentException("That phone is not paired with this computer.");
+        await _pairs.ForgetAsync(phoneId, ct);
+        await _plan.ForgetPhoneAsync(phone.Name, ct);
+        var forgotten = await ChangePhoneAsync(phoneId, p => p with { Forgotten = true }, ct);
+        await NoteAsync(phoneId, "Forgotten. Its backups stay here", ct);
+        return forgotten;
+    }
 
     /// <summary>What happened to a phone's backups, the latest first.</summary>
     public Task<IReadOnlyList<BackupEvent>> EventsAsync(string phoneId, CancellationToken ct) => _store.EventsAsync(phoneId, 20, ct);
@@ -119,7 +138,7 @@ public sealed class ComputerBackup
         var known = await PhoneAsync(phone.Id, ct);
         var kept = known is null
             ? new BackupPhone(phone.Id, phone.Name, null, Path.Combine(_root, PhoneReceiving.Plain(phone.Name)), false, _clock.GetUtcNow(), null, null)
-            : known with { Name = phone.Name };
+            : known with { Name = phone.Name, Forgotten = false };
         await _store.SavePhoneAsync(kept, ct);
         await NoteAsync(phone.Id, "Paired with this computer", ct);
         return Named(kept.Folder);
@@ -247,7 +266,15 @@ public sealed class ComputerBackup
     /// </summary>
     public async Task ServeAsync(SecureChannel channel, Device phone, CancellationToken ct)
     {
-        var asked = await channel.ReceiveAsync(ct, "backup", "bye");
+        var asked = await channel.ReceiveAsync(ct, "backup", "bye", "forget");
+        if (Wire.Text(asked, "t") == "forget")
+        {
+            // The phone forgot this computer: it is forgotten here too, as one it no longer knows.
+            if ((await PhonesAsync(ct)).Any(p => p.Id == phone.Id)) await ForgetAsync(phone.Id, ct);
+            else await _pairs.ForgetAsync(phone.Id, ct);
+            await channel.SendAsync(new JsonObject { ["t"] = "forgotten" }, ct);
+            return;
+        }
         // Until Family, every phone paired with this computer is its owner's: accepted there, it is accepted here.
         await _terms.HeardAsync(TermsAcceptance.Read(asked["accepted"]), ct);
         if (Wire.Text(asked, "t") == "bye") return;

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { moveBackups, organizeThumbnailUrl, pausePhone, tripsGoTo, useBackupPhones } from '../lib/apiClient';
+import { forgetPhone, moveBackups, organizeThumbnailUrl, pausePhone, tripsGoTo, useBackupPhones } from '../lib/apiClient';
+import { ConfirmDialog } from './ConfirmDialog';
 import { checkedAt, gigabytes } from '../lib/backup';
 import { formatBytes } from '../lib/format';
 import { items } from '../lib/library';
@@ -16,6 +17,9 @@ interface Props {
 }
 
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** "phone" or "tablet", as the phone said it is. */
+const phoneWord = (phone: BackupPhoneDto) => (/iPad|tablet/.test(phone.kind ?? '') ? 'tablet' : 'phone');
 
 /** A phone or tablet, drawn small, for its tile in the list. */
 const DeviceIcon = ({ tablet }: { readonly tablet: boolean }) => (
@@ -45,12 +49,13 @@ export function activityTime(iso: string, now: Date): string {
 /**
  * Phones (D1): every phone and tablet that backs up to this computer, with Pair a phone under them, and the one chosen
  * beside: its backup arriving now, with the last files checked; what is on this computer, that every file matched its
- * checksum, and what the phone can delete; the folder its backups go to, which can be changed; and what happened.
+ * checksum, and what the phone can delete; the folder its backups go to, which can be changed; what happened; and
+ * Forget this phone, after a question.
  */
 export function PhonesView({ notify, onPair }: Props) {
   const phones = useBackupPhones(true).data;
   const [chosenId, setChosenId] = useState<string>();
-  const [picking, setPicking] = useState<'backups' | 'trips' | 'names'>();
+  const [picking, setPicking] = useState<'backups' | 'trips' | 'names' | 'forget'>();
   const [busy, setBusy] = useState(false);
   const chosen = phones?.find(p => p.id === chosenId) ?? phones?.[0];
   const now = new Date();
@@ -81,7 +86,7 @@ export function PhonesView({ notify, onPair }: Props) {
               <li key={p.id}>
                 <button type="button" aria-current={p.id === chosen?.id} onClick={() => setChosenId(p.id)}
                   className={`flex w-full items-center gap-3 rounded-[12px] px-3 py-2.5 text-left ${p.id === chosen?.id ? 'bg-s3' : 'hover:bg-s2'}`}>
-                  <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-s2 text-t1"><DeviceIcon tablet={/iPad|tablet/.test(p.kind ?? '')} /></span>
+                  <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-[10px] bg-s2 text-t1"><DeviceIcon tablet={phoneWord(p) === 'tablet'} /></span>
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate text-[14px] font-semibold">{p.name}</span>
                     <span className="flex items-center gap-1.5 truncate text-[12.5px] text-t2">
@@ -108,13 +113,22 @@ export function PhonesView({ notify, onPair }: Props) {
             </div>
           ) : <Detail phone={chosen} now={now} busy={busy}
             onPause={() => void act(() => pausePhone(chosen.id, !chosen.paused), chosen.paused ? `Backups from ${chosen.name} run again.` : `Backups from ${chosen.name} are paused.`)}
-            onChangeFolder={() => setPicking('backups')} onChangeTrips={() => setPicking('trips')} onRename={() => setPicking('names')} />}
+            onChangeFolder={() => setPicking('backups')} onChangeTrips={() => setPicking('trips')} onRename={() => setPicking('names')} onForget={() => setPicking('forget')} />}
       </section>
 
       {picking === 'backups' && chosen && (
         <FolderPicker title={`Where backups from ${chosen.name} go`} startAt={chosen.path} pickLabel="Back up here"
           onPick={folder => { setPicking(undefined); void act(() => moveBackups(chosen.id, folder), `Backups from ${chosen.name} now go to ${folder}.`); }}
           onCancel={() => setPicking(undefined)} />
+      )}
+      {picking === 'forget' && chosen && (
+        <ConfirmDialog title={`Forget ${chosen.name}?`} confirmLabel={`Forget ${chosen.name}`} tone="brand" busy={busy}
+          note={`Its backups stay in ${chosen.folder}. Nothing is deleted, here or on the ${phoneWord(chosen)}.`}
+          onCancel={() => setPicking(undefined)}
+          onConfirm={() => { setPicking(undefined); void act(() => forgetPhone(chosen.id), `Forgot ${chosen.name}. Its backups stay in ${chosen.folder}.`); }}>
+          <p>{chosen.name} can no longer back up to this computer until you pair them again. On the {phoneWord(chosen)}, photos backed up only here stop counting as safe to delete.</p>
+          <p>If Pro on this computer came from {chosen.name}, this computer goes back to the free plan.</p>
+        </ConfirmDialog>
       )}
       {picking === 'names' && chosen && <RenameWindow phone={chosen} notify={notify} onClose={() => setPicking(undefined)} />}
       {picking === 'trips' && chosen && (
@@ -136,10 +150,12 @@ interface DetailProps {
   onChangeTrips(): void;
   /** Opens Rename files by date. */
   onRename(): void;
+  /** Asks before forgetting the phone. */
+  onForget(): void;
 }
 
 /** One phone, as Phones shows it beside the list. */
-function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips, onRename }: DetailProps) {
+function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips, onRename, onForget }: DetailProps) {
   const arriving = phone.arriving;
   const percent = arriving && arriving.totalBytes > 0 ? arriving.bytes / arriving.totalBytes * 100 : 0;
   const stat = 'flex flex-col gap-1 rounded-[16px] border border-line bg-s1 p-4';
@@ -238,6 +254,10 @@ function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips, onRe
             </ul>
           )}
         </section>
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" disabled={busy} onClick={onForget} className="pill-quiet h-9 px-4 text-[13px]">Forget this {phoneWord(phone)}…</button>
+          <p className="min-w-0 flex-1 text-[12.5px] text-t2">It must be paired again to back up. Its backups stay here.</p>
+        </div>
       </div>
     </>
   );
