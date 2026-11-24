@@ -9,6 +9,7 @@ import { FolderMap } from './FolderMap';
 import { RecentMovesWindow } from './RecentMoves';
 import { SuggestionCard } from './SuggestionCard';
 import { countFiles, useDrop } from './shared';
+import { FeatureIcon } from '../FeatureIcons';
 
 export type { OwnFolder } from './CustomFolderCard';
 
@@ -108,7 +109,7 @@ export function SuggestionsPanel(p: Props) {
       <div className="flex shrink-0 flex-col gap-3.5 border-b border-line px-5 pb-4 pt-[18px]">
         <div className="flex items-center gap-3">
           <div className="flex min-w-0 flex-1 items-baseline gap-2.5">
-            <h2 className="whitespace-nowrap text-[17px] font-semibold">Suggested folders</h2>
+            <h2 className="flex items-center gap-2 whitespace-nowrap text-[17px] font-semibold"><FeatureIcon name="organize" size={20} className="text-brand" />Suggested folders</h2>
             <span className="truncate text-[13px] text-t3">{suggestions.length > 0 && `${suggestions.length} · ${countFiles(suggestedFiles)}`}</span>
           </div>
           {byPlace && (
@@ -121,7 +122,7 @@ export function SuggestionsPanel(p: Props) {
         </div>
         <div className="flex flex-col gap-2.5 text-[13px]">
           <Row label="Group by">
-            <Segmented label="Group by" value={s.group} onChange={group => p.onSettings({ group })} options={[{ value: 'place', name: 'Place' }, { value: 'date', name: 'Date' }]} />
+            <Segmented label="Group by" value={s.group} onChange={group => p.onSettings({ group })} options={[{ value: 'place', name: <><FeatureIcon name="places" size={15} />Place</> }, { value: 'date', name: <><FeatureIcon name="timeline" size={15} />Date</> }]} />
           </Row>
           {!byPlace && (
             <Row label="One folder per">

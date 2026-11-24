@@ -1,4 +1,5 @@
 import React from 'react';
+import { FeatureIcon } from './FeatureIcons';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto } from '../types';
 import { formatBytes, groupSummary } from '../lib/format';
 import { DiffTable } from './Differences';
@@ -85,7 +86,7 @@ export function ReviewPanel({ group, mode, busy, copyIndex, onSelectCopy, onComp
         <div className="grid grid-cols-2 gap-3 lg:gap-5">
           <div className="flex min-w-0 flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13.5px] text-t2">
-              <span className="badge bg-keep-bg text-keep">{similar ? 'Best' : 'Original'}</span>
+              <span className="badge gap-1 bg-keep-bg text-keep"><FeatureIcon name="best" size={12} />{similar ? 'Best' : 'Original'}</span>
               {similar ? 'The best of these similar shots.' : `The best copy of this ${noun}. It stays.`}
             </div>
             <Pane photo={original} original onCompare={onCompare} onOpenInViewer={onOpenInViewer} />

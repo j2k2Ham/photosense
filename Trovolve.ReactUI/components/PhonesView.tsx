@@ -9,6 +9,7 @@ import { FolderPicker } from './FolderPicker';
 import { RenameWindow } from './RenameWindow';
 import { NAMING } from '../lib/fixes';
 import type { ToastKind } from './Toaster';
+import { FeatureIcon } from './FeatureIcons';
 
 interface Props {
   notify(message: string, kind: ToastKind): void;
@@ -99,7 +100,7 @@ export function PhonesView({ notify, onPair }: Props) {
           })}
         </ul>
         <div className="p-4">
-          <button type="button" onClick={onPair} className="pill-outline h-10 w-full text-[13.5px]">+ Pair a phone</button>
+          <button type="button" onClick={onPair} className="pill-outline h-10 w-full gap-2 text-[13.5px]"><FeatureIcon name="phones" size={18} />Pair a phone</button>
         </div>
       </aside>
 
@@ -109,7 +110,7 @@ export function PhonesView({ notify, onPair }: Props) {
             <div className="mx-auto flex max-w-[440px] flex-col items-center gap-3 py-16 text-center">
               <h2 className="text-[22px] font-bold">No phones yet</h2>
               <p className="text-[14px] leading-[1.5] text-t2">Pair a phone with Trovolve on it, and it backs up its photos and videos to this computer over Wi-Fi. Each file is checked by its SHA-256 checksum as it arrives.</p>
-              <button type="button" onClick={onPair} className="pill-brand h-10 px-5 text-[14px]">Pair a phone</button>
+              <button type="button" onClick={onPair} className="pill-brand h-10 gap-2 px-5 text-[14px]"><FeatureIcon name="phones" size={18} />Pair a phone</button>
             </div>
           ) : <Detail phone={chosen} now={now} busy={busy}
             onPause={() => void act(() => pausePhone(chosen.id, !chosen.paused), chosen.paused ? `Backups from ${chosen.name} run again.` : `Backups from ${chosen.name} are paused.`)}
@@ -226,6 +227,7 @@ function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips, onRe
             <button type="button" onClick={onChangeFolder} className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">Change…</button>
           </div>
           <div className="flex items-center gap-3 border-t border-line px-4 py-3">
+            <FeatureIcon name="fix" size={20} className="shrink-0 text-brand" />
             <div className="min-w-0 flex-1">
               <p className="text-[13.5px]">File names</p>
               <p className="text-[12.5px] text-t2">{NAMING[phone.names]}</p>
@@ -233,6 +235,7 @@ function Detail({ phone, now, busy, onPause, onChangeFolder, onChangeTrips, onRe
             <button type="button" onClick={onRename} className="pill-quiet h-8 shrink-0 px-3 text-[12.5px]">{phone.names === 'asOnPhone' ? 'Rename by date…' : 'Change names…'}</button>
           </div>
           <div className="flex items-center gap-3 border-t border-line px-4 py-3">
+            <FeatureIcon name="places" size={20} className="shrink-0 text-brand" />
             <div className="min-w-0 flex-1">
               <p className="text-[13.5px]">Trip folders</p>
               <p className="truncate font-mono text-[12.5px] text-t2" title={phone.tripsPath}>{phone.tripsFolder}</p>

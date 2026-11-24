@@ -36,7 +36,8 @@ export function TopBar({ plan, area, fresh, onArea, showScan, folders, files, sc
     // What a narrow screen has no room for is left to the menu: the scanned folders' chip (the menu changes them)
     // and the note that nothing leaves the device.
     <header className="flex h-16 shrink-0 items-center gap-2.5 border-b border-line px-3 sm:gap-4 sm:px-6">
-      <div className="flex items-center gap-[11px]">
+      {/* The name keeps its width; the scanned folders' chip gives way first, cutting its words short. */}
+      <div className="flex shrink-0 items-center gap-[11px]">
         <img src={appIconUrl} alt="" className="h-[26px] w-[26px] rounded-lg" />
 
         {/* The wordmark is a picture of the name, so the heading says it in words for a screen reader. */}

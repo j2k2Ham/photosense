@@ -50,6 +50,9 @@
     <!-- The app's icon is kept once, for every program, in branding/. Android 8 and later draw the adaptive icon in
          mipmap-anydpi-v26 instead, each launcher giving it its own shape; this is the plain picture behind it. -->
     <AndroidResource Include="..\branding\app-icon.png" Link="Resources\mipmap\appicon.png" LogicalName="mipmap\appicon.png" />
+    <!-- The widgets' feature icons, kept once in branding/ with the others; each widget tints its own. -->
+    <AndroidResource Include="..\branding\android\feature-icons\ic_feature_swipe.xml" Link="Resources\drawable\feature_swipe.xml" LogicalName="drawable\feature_swipe.xml" />
+    <AndroidResource Include="..\branding\android\feature-icons\ic_feature_storage.xml" Link="Resources\drawable\feature_storage.xml" LogicalName="drawable\feature_storage.xml" />
     <!-- Photos for the self-check to add to the phone, in the copy GitHub's emulator checks only. -->
     <AndroidAsset Include="$(TrovolveSamples)\*" Link="Assets\samples\%(Filename)%(Extension)" Condition="'$(TrovolveSamples)' != ''" />
     <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->

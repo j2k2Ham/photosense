@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { FeatureIcon } from './FeatureIcons';
 import { binName } from '../lib/format';
 import type { Theme } from '../lib/theme';
 import { useDismiss } from '../lib/useDismiss';
@@ -66,8 +67,8 @@ export function AppMenu({ theme, errorCount, onTheme, onErrors, onChangeFolders,
       <button type="button" role="menuitem" onClick={pick(onHelp)} className={item}>Help</button>
       <button type="button" role="menuitem" onClick={pick(onAbout)} className={item}>About Trovolve</button>
       <div role="separator" className="my-1 border-t border-line" />
-      <button type="button" role="menuitem" onClick={pick(onDeletePermanently)} className={`${item} text-rose-t hover:bg-rose-bg`}
-        title={`Removed files wait in _Trovolve_Removed inside each folder they were removed from. Move to ${binName()} sends them there.`}>Move to {binName()}…</button>
+      <button type="button" role="menuitem" onClick={pick(onDeletePermanently)} className={`${item} gap-2.5 text-rose-t hover:bg-rose-bg`}
+        title={`Removed files wait in _Trovolve_Removed inside each folder they were removed from. Move to ${binName()} sends them there.`}><FeatureIcon name="removed" size={18} />Move to {binName()}…</button>
       {/* Where the bar has no room for it, the note that nothing leaves the device is here. */}
       <p className="flex items-center gap-2 px-3 pb-1 pt-2 text-[12.5px] text-t2 xl:hidden">
         <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full bg-keep" />Runs on this device. Nothing is uploaded.

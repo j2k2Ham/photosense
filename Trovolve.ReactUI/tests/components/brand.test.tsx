@@ -13,7 +13,7 @@ function nameRisen(container: HTMLElement) {
 describe('FeatureIcon', () => {
   it('draws every feature in the text colour, hidden from screen readers, 24 pixels unless told', () => {
     const names = Object.keys(FEATURE_NAMES) as FeatureIconName[];
-    expect(names).toHaveLength(12);
+    expect(names).toHaveLength(22);
     for (const name of names) {
       const { container, unmount } = render(<FeatureIcon name={name} />);
       const svg = container.querySelector('svg')!;

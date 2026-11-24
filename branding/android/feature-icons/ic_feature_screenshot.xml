@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trovolve feature icon: Screenshots. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+  <path android:fillColor="#006874" android:fillAlpha="0.3" android:pathData="M8.3 2.5H15.7A2.8 2.8 0 0 1 18.5 5.3V18.7A2.8 2.8 0 0 1 15.7 21.5H8.3A2.8 2.8 0 0 1 5.5 18.7V5.3A2.8 2.8 0 0 1 8.3 2.5Z" />
+  <path android:fillColor="#00000000" android:strokeColor="#006874" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M8.6 9.4V6.6H11.2M12.8 6.6H15.4V9.4M15.4 14.6V17.4H12.8M11.2 17.4H8.6V14.6" />
+</vector>

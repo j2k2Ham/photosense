@@ -38,6 +38,7 @@ import { useSkin } from '../lib/skin';
 import { tellSystemBars } from '../lib/systemBars';
 import { useTheme } from '../lib/theme';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, PhotoDto, RemovedFilesDto } from '../types';
+import { FeatureIcon } from '../components/FeatureIcons';
 
 // Removed files are moved here, inside the scanned folder, rather than erased.
 const REMOVED_FOLDER = '_Trovolve_Removed';
@@ -379,13 +380,13 @@ export default function HomePage() {
                 {(['duplicates', 'similar'] as const).map(m => (
                   <button key={m} type="button" role="tab" aria-selected={!categories && mode === m} onClick={() => switchMode(m)}
                     className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${!categories && mode === m ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
-                    {m === 'duplicates' ? 'Duplicates' : 'Similar'}
+                    <FeatureIcon name={m} size={18} />{m === 'duplicates' ? 'Duplicates' : 'Similar'}
                     <span className="font-mono text-[12px] font-normal text-t3">{totals[m]?.toLocaleString()}</span>
                   </button>
                 ))}
                 <button type="button" role="tab" aria-selected={categories} onClick={() => setCategories(true)}
                   className={`flex items-center gap-2 border-b-2 text-[16px] font-semibold ${categories ? 'border-t1 text-t1' : 'border-transparent text-t2'}`}>
-                  Categories
+                  <FeatureIcon name="storage" size={18} />Categories
                   <span className="font-mono text-[12px] font-normal text-t3">{categoryCount?.toLocaleString()}</span>
                 </button>
               </div>
@@ -393,7 +394,7 @@ export default function HomePage() {
                 <p className="my-auto flex-1 text-[13px] text-t2 max-lg:order-2 lg:text-right lg:text-[14px]">Large videos, screenshots, bursts, blurry shots and what messaging apps saved. Deleted files move to {REMOVED_FOLDER}, and Undo puts them back.</p>
               ) : (<>
               <label className="my-auto flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-4 max-lg:order-1 lg:w-[clamp(220px,22vw,380px)]">
-                <span aria-hidden className="h-3 w-3 shrink-0 rounded-full border-2 border-t3" />
+                <FeatureIcon name="search" size={16} className="shrink-0 text-t3" />
                 <input value={filter} onChange={e => { setFilter(e.target.value); turnPage(1); }} placeholder="Search by file name or folder" aria-label="Search by file name or folder"
                   className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-t3" />
               </label>

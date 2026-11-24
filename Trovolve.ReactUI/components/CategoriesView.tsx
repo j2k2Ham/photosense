@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { deleteChosen, undoChange, useBursts, useCategories, useCategoryPhotos } from '../lib/apiClient';
-import { bytesOf, FIND_LABELS, findRows, largestIds, namesOf, resolution, rowLine, sizeOf, type FindId } from '../lib/categories';
+import { FeatureIcon } from './FeatureIcons';
+import { bytesOf, FIND_ICONS, FIND_LABELS, findRows, largestIds, namesOf, resolution, rowLine, sizeOf, type FindId } from '../lib/categories';
 import { binName, formatBytes } from '../lib/format';
 import { shortDate } from '../lib/organize';
 import { limitLine } from '../lib/plan';
@@ -49,9 +50,12 @@ export function CategoriesView({ plan, notify }: Props) {
         {!report && <p role="status" className="px-3 py-2 text-[14px] text-t2">Loading…</p>}
         {rows.map(row => (
           <button key={row.id} type="button" aria-current={row.id === shown ? 'true' : undefined} onClick={() => setPicked(row.id)}
-            className={`flex flex-col rounded-xl px-3.5 py-2.5 text-left ${row.id === shown ? 'bg-s2' : 'hover:bg-s1'}`}>
-            <span className="text-[15px] font-semibold">{FIND_LABELS[row.id]}</span>
-            <span className="text-[13px] text-t2">{rowLine(row, report!.unmeasured)}</span>
+            className={`flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-left ${row.id === shown ? 'bg-s2' : 'hover:bg-s1'}`}>
+            <FeatureIcon name={FIND_ICONS[row.id]} size={22} className="shrink-0 text-brand" />
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[15px] font-semibold">{FIND_LABELS[row.id]}</span>
+              <span className="text-[13px] text-t2">{rowLine(row, report!.unmeasured)}</span>
+            </span>
           </button>
         ))}
       </nav>

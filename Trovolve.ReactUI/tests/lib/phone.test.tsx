@@ -92,8 +92,8 @@ describe('Back', () => {
     expect(history.length).toBe(before);
     expect(next).not.toHaveBeenCalled();
     await act(async () => { history.back(); });
-    await settle();
-    expect([first.mock.calls.length, next.mock.calls.length]).toEqual([0, 1]);
+    // The browser goes back when it gets to it, which under a full run's load can take a while.
+    await waitFor(() => expect([first.mock.calls.length, next.mock.calls.length]).toEqual([0, 1]));
   });
 
   it('something opened while the page is still taking an entry out is put in after, so it stays open, and Back then closes it', async () => {

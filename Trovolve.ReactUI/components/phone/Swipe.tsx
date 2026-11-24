@@ -12,7 +12,7 @@ import {
 import type { OrganizeFileDto, SwipeCardDto, SwipeFreedDto, SwipeStateDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { PhoneButton } from './Controls';
-import { CheckIcon, CloseIcon, ShareIcon, TrashIcon, UndoIcon } from './Icons';
+import { CheckIcon, CloseIcon, ShareIcon, SwipeIcon, TrashIcon, UndoIcon } from './Icons';
 import { ShareRow } from './Share';
 import { usePlanGate } from './ProSheet';
 
@@ -74,7 +74,7 @@ export function SwipePanel({ state, library, onOpen }: PanelProps) {
       </div>
       <div className="flex flex-col gap-3 p-4">
         <div>
-          <h2 className="text-[18px] font-semibold">Swipe to clean</h2>
+          <h2 className="flex items-center gap-2 text-[18px] font-semibold"><span aria-hidden className="text-acc"><SwipeIcon size={22} /></span>Swipe to clean</h2>
           <p className="text-[14px] leading-[1.4] text-t2">{line.text}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">

@@ -43,6 +43,16 @@
     <ImageAsset Include="..\branding\app-icon.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon.png" />
     <!-- iOS 18's dark home screen: the mark alone, on no background. -->
     <ImageAsset Include="..\branding\png\app-icons\ios\AppIcon-dark-1024.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon-dark.png" />
+    <!-- The icon menu's icons: the brand's Search, Swipe and Backup, as template images iOS tints itself. -->
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-search.png" Link="Assets.xcassets\ShortcutSearch.imageset\shortcut-search.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-search@2x.png" Link="Assets.xcassets\ShortcutSearch.imageset\shortcut-search@2x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-search@3x.png" Link="Assets.xcassets\ShortcutSearch.imageset\shortcut-search@3x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-swipe.png" Link="Assets.xcassets\ShortcutSwipe.imageset\shortcut-swipe.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-swipe@2x.png" Link="Assets.xcassets\ShortcutSwipe.imageset\shortcut-swipe@2x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-swipe@3x.png" Link="Assets.xcassets\ShortcutSwipe.imageset\shortcut-swipe@3x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-backup.png" Link="Assets.xcassets\ShortcutBackup.imageset\shortcut-backup.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-backup@2x.png" Link="Assets.xcassets\ShortcutBackup.imageset\shortcut-backup@2x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-backup@3x.png" Link="Assets.xcassets\ShortcutBackup.imageset\shortcut-backup@3x.png" />
   </ItemGroup>
   <ItemGroup>
     <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->

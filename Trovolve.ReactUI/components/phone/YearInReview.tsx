@@ -6,7 +6,7 @@ import { deviceWord, usePhone } from '../../lib/phone';
 import { CARD_COLOURS, cardPng, drawYearSlide, yearLine, yearSlides, type YearSlide } from '../../lib/shareCard';
 import type { YearReviewDto } from '../../types';
 import type { ToastKind } from '../Toaster';
-import { CloseIcon, ShareIcon } from './Icons';
+import { CloseIcon, ShareIcon, YearIcon } from './Icons';
 
 type Notify = (message: string, kind: ToastKind) => void;
 
@@ -15,7 +15,7 @@ export function YearCard({ review, onWatch, inRow }: { readonly review: YearRevi
   return (
     <section aria-label="Year in review" className={`flex gap-3 rounded-[20px] px-4 py-4 ${inRow ? 'min-w-0 flex-1 flex-col items-start' : 'mx-4 mb-3 items-center'}`} style={{ background: 'oklch(0.28 0.05 205)', color: CARD_COLOURS.text }}>
       <div className="min-w-0 flex-1">
-        <p className="text-[12.5px] font-semibold" style={{ color: CARD_COLOURS.line }}>Year in review</p>
+        <p className="flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: CARD_COLOURS.line }}><YearIcon size={15} />Year in review</p>
         <p className="text-[18px] font-bold">Your {review.year} in photos</p>
         <p className="text-[13px] opacity-85">{yearLine(review)}</p>
       </div>

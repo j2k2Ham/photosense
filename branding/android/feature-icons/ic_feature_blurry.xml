@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trovolve feature icon: Blurry. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+  <path android:fillColor="#006874" android:fillAlpha="0.18" android:pathData="M2.5 12a9.5 9.5 0 1 0 19 0a9.5 9.5 0 1 0 -19 0Z" />
+  <path android:fillColor="#006874" android:fillAlpha="0.38" android:pathData="M5 12a7 7 0 1 0 14 0a7 7 0 1 0 -14 0Z" />
+  <path android:fillColor="#006874" android:pathData="M7.6 12a4.4 4.4 0 1 0 8.8 0a4.4 4.4 0 1 0 -8.8 0Z" />
+</vector>

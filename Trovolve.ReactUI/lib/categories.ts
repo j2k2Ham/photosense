@@ -1,8 +1,14 @@
 import type { CategoryName, CategoryReportDto, PhotoDto } from '../types';
 import { formatBytes } from './format';
+import type { FeatureIconName } from '../components/FeatureIcons';
 
 /** A row of Find: a category of Clean up, or the similar shots, which Clean up lists by group. */
 export type FindId = CategoryName | 'similar';
+
+/** The brand's icon for each of Find's rows, on the phone and on the computer. */
+export const FIND_ICONS: Record<FindId, FeatureIconName> = {
+  largeVideos: 'video', screenshots: 'screenshot', bursts: 'burst', blurry: 'blurry', messaging: 'messaging', duplicates: 'duplicates', similar: 'similar',
+};
 
 /** What each of Find's rows, and the screen it opens, is called. */
 export const FIND_LABELS: Record<FindId, string> = {

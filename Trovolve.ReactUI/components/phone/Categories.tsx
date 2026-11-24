@@ -11,7 +11,7 @@ import { deviceWord, usePhone } from '../../lib/phone';
 import type { BurstDto, CompressibleVideoDto, CompressionQuality, PhotoDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { ListGroup, ListRow, PhoneButton, Segmented, StickyFooter } from './Controls';
-import { TickIcon } from './Icons';
+import { CompressIcon, TickIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { PushedHeader } from './Screens';
 
@@ -234,6 +234,7 @@ export function LargeVideosScreen({ notify, onBack }: { notify: Notify; onBack?(
                 </>
               ) : (
                 <>
+                  <span aria-hidden className="shrink-0"><CompressIcon size={28} /></span>
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-[15px] font-semibold">
                       Compress all {balanced.count.toLocaleString()}

@@ -14,7 +14,7 @@ import { deviceWord, usePhone } from '../../lib/phone';
 import type { LocationDto, LocationsDto, OrganizeFileDto, SendResultDto } from '../../types';
 import type { ToastKind } from '../Toaster';
 import { HeaderTextButton, ListGroup, ListRow, PhoneButton, Radio, Segmented, StickyFooter } from './Controls';
-import { LaptopIcon } from './Icons';
+import { CloudIcon, LaptopIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { PhotoGrid } from './PhotoGrid';
 import { LayerScreen, PlaceContext, PushedHeader, useInPlace } from './Screens';
@@ -25,7 +25,7 @@ type Notify = (message: string, kind: ToastKind) => void;
 const said = (e: unknown) => (e instanceof Error ? e.message : String(e));
 const status = (e: unknown) => (e as Partial<ApiError>).status;
 
-/** A location's tile: the computer's or a server's glyph, or a cloud service's letter on its colour. */
+/** A location's tile: the computer's glyph, the brand's Locations for a server, or a cloud service's letter on its colour. */
 export function LocationTile({ location }: { readonly location: Pick<LocationDto, 'kind'> }) {
   const tile = CLOUD_TILES[location.kind];
   if (tile) {
@@ -33,16 +33,10 @@ export function LocationTile({ location }: { readonly location: Pick<LocationDto
   }
   return (
     <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-acc-soft text-on-acc-soft">
-      {location.kind === 'computer' ? <LaptopIcon /> : <ServerGlyph />}
+      {location.kind === 'computer' ? <LaptopIcon /> : <CloudIcon size={20} />}
     </span>
   );
 }
-
-const ServerGlyph = () => (
-  <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round">
-    <rect x="4" y="4" width="16" height="7" rx="2" /><rect x="4" y="13" width="16" height="7" rx="2" /><path d="M8 7.5h.01M8 16.5h.01" />
-  </svg>
-);
 
 /**
  * Settings' Locations (53): the computer, Google Drive, OneDrive and Dropbox, and every location Connect to server

@@ -77,7 +77,7 @@ describe('Phones, on the computer', () => {
     render(<PhonesView notify={vi.fn()} onPair={vi.fn()} />);
     const list = screen.getByRole('complementary', { name: 'Phones and tablets' });
     expect(within(list).getAllByRole('button').map(b => b.textContent)).toEqual([
-      expect.stringMatching(/^Alex's iPhoneBacked up today at /), "Alex's iPadNot backed up yet", "Sam's Pixel 9Not backed up yet", '+ Pair a phone',
+      expect.stringMatching(/^Alex's iPhoneBacked up today at /), "Alex's iPadNot backed up yet", "Sam's Pixel 9Not backed up yet", 'Pair a phone',
     ]);
     expect(within(list).getByRole('button', { name: /^Alex's iPhone/ })).toHaveAttribute('aria-current', 'true');
     expect(detail()).toHaveTextContent('iPhone · paired Nov 10, 2026');

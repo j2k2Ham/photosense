@@ -65,7 +65,7 @@
         </array>
       </dict>
     </array>
-    <!-- 36: the app icon's menu. -->
+    <!-- 36: the app icon's menu, with the brand's feature icons from the asset catalog. -->
     <key>UIApplicationShortcutItems</key>
     <array>
       <dict>
@@ -73,24 +73,24 @@
         <string>search</string>
         <key>UIApplicationShortcutItemTitle</key>
         <string>Search photos</string>
-        <key>UIApplicationShortcutItemIconSymbolName</key>
-        <string>magnifyingglass</string>
+        <key>UIApplicationShortcutItemIconFile</key>
+        <string>ShortcutSearch</string>
       </dict>
       <dict>
         <key>UIApplicationShortcutItemType</key>
         <string>swipe</string>
         <key>UIApplicationShortcutItemTitle</key>
         <string>Start swipe</string>
-        <key>UIApplicationShortcutItemIconSymbolName</key>
-        <string>rectangle.on.rectangle</string>
+        <key>UIApplicationShortcutItemIconFile</key>
+        <string>ShortcutSwipe</string>
       </dict>
       <dict>
         <key>UIApplicationShortcutItemType</key>
         <string>backup</string>
         <key>UIApplicationShortcutItemTitle</key>
         <string>Back up now</string>
-        <key>UIApplicationShortcutItemIconSymbolName</key>
-        <string>arrow.up.to.line.compact</string>
+        <key>UIApplicationShortcutItemIconFile</key>
+        <string>ShortcutBackup</string>
       </dict>
     </array>
     <key>ITSAppUsesNonExemptEncryption</key>

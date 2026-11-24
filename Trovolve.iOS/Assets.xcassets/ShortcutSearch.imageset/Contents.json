@@ -1,0 +1,26 @@
+{
+  "images": [
+    {
+      "filename": "shortcut-search.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "shortcut-search@2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    },
+    {
+      "filename": "shortcut-search@3x.png",
+      "idiom": "universal",
+      "scale": "3x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "properties": {
+    "template-rendering-intent": "template"
+  }
+}

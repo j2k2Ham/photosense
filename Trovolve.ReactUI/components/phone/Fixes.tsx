@@ -4,7 +4,7 @@ import { datesLine, dayWritten, items, namesLine, placesNote } from '../../lib/f
 import { deviceWord, usePhone } from '../../lib/phone';
 import type { FixesDto, PhotoDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
-import { CalendarIcon, CheckIcon, ImageIcon, PinIcon, VideoIcon } from './Icons';
+import { CalendarIcon, CheckIcon, FixIcon, ImageIcon, PinIcon, VideoIcon } from './Icons';
 import { usePlanGate } from './ProSheet';
 import { CollectionTile } from './CollectionTile';
 import { LayerScreen, PushedHeader, useInPlace } from './Screens';
@@ -18,7 +18,7 @@ export function FixesTile({ fixes, onOpen }: { readonly fixes: FixesDto | undefi
   const count = fixes === undefined ? 'Looking…' : fixes.total === 0 ? 'All fixed' : items(fixes.total);
   return (
     <CollectionTile label="Needs fixing" line={count} onOpen={onOpen}>
-      <span className="text-t2"><CalendarIcon /></span>
+      <span className="text-t2"><FixIcon /></span>
     </CollectionTile>
   );
 }

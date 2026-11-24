@@ -1,9 +1,10 @@
 import React from 'react';
+import { FeatureIcon, type FeatureIconName } from './FeatureIcons';
 
 /** What Trovolve does on a computer: clearing out duplicates, putting files into folders, and keeping phones' backups. */
 export type Area = 'clean' | 'organize' | 'phones';
 
-const areas: { id: Area; name: string }[] = [{ id: 'clean', name: 'Clean up' }, { id: 'organize', name: 'Organize' }, { id: 'phones', name: 'Phones' }];
+const areas: { id: Area; name: string; icon: FeatureIconName }[] = [{ id: 'clean', name: 'Clean up', icon: 'duplicates' }, { id: 'organize', name: 'Organize', icon: 'organize' }, { id: 'phones', name: 'Phones', icon: 'phones' }];
 
 /** The switch in the header between the areas; one that is new has a dot until it is first opened. */
 export function ModeSwitch({ area, fresh = [], onArea }: { readonly area: Area; readonly fresh?: readonly Area[]; onArea(area: Area): void }) {
@@ -12,7 +13,7 @@ export function ModeSwitch({ area, fresh = [], onArea }: { readonly area: Area; 
       {areas.map(a => (
         <button key={a.id} type="button" aria-pressed={area === a.id} onClick={() => onArea(a.id)}
           className={`pill h-8 gap-1.5 px-4 text-[13.5px] max-sm:px-3 ${area === a.id ? 'bg-t1 text-bg' : 'text-t2'}`}>
-          {a.name}
+          <FeatureIcon name={a.icon} size={16} className="max-sm:hidden" />{a.name}
           {fresh.includes(a.id) && <span role="img" aria-label="New" className="h-1.5 w-1.5 rounded-full bg-brand" />}
         </button>
       ))}

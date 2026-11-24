@@ -42,13 +42,13 @@ function group(more: Partial<LocationsDto> = {}, tier: 'free' | 'pro' = 'free') 
 }
 
 describe('the tiles', () => {
-  it('draw a cloud service by its letter on its colour, and the computer and a location added by a glyph', () => {
+  it('draw a cloud service by its letter on its colour, the computer by a glyph, and a location added by the brand icon for locations', () => {
     const { again, container } = inFrame(<LocationTile location={{ kind: 'dropbox' }} />);
     expect(container.textContent).toBe('D');
     again(<LocationTile location={{ kind: 'computer' }} />);
     expect(container.querySelector('svg')).not.toBeNull();
     again(<LocationTile location={{ kind: 'webDav' }} />);
-    expect(container.querySelectorAll('rect')).toHaveLength(2);
+    expect(container.querySelector('svg')?.innerHTML).toContain('A4.3 4.3 0 0 1 7.6 11.95');
   });
 });
 

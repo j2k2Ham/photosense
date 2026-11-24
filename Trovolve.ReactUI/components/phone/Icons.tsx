@@ -17,7 +17,7 @@ function Line({ size = 24, stroke = 1.9, children }: IconProps & { readonly chil
 }
 
 /** One of the brand's feature icons, taking a size as the line icons do, so a list or bar can hold either. */
-const feature = (name: FeatureIconName) => function Feature({ size }: IconProps) {
+const feature = (name: FeatureIconName, fallback?: number) => function Feature({ size = fallback }: IconProps) {
   return <FeatureIcon name={name} size={size} />;
 };
 
@@ -41,6 +41,30 @@ export const PlacesIcon = feature('places');
 
 /** The hidden vault: the brand's Vault, a padlock with the mark's gem. */
 export const VaultIcon = feature('vault');
+
+/** Swipe to clean: the brand's Swipe, a card tipped off another. */
+export const SwipeIcon = feature('swipe');
+
+/** Compressing videos: the brand's Compress, a small square inside a dashed one. */
+export const CompressIcon = feature('compress');
+
+/** The original or best shot that stays: the brand's Best copy, the gem. */
+export const BestIcon = feature('best');
+
+/** Large videos: a video camera, drawn in the brand's way. */
+export const LargeVideosIcon = feature('video');
+
+/** Free up space and the phone's storage: a gauge, drawn in the brand's way. */
+export const StorageIcon = feature('storage');
+
+/** Fix dates and places, Needs fixing: a calendar with a tick, drawn in the brand's way. */
+export const FixIcon = feature('fix');
+
+/** Year in review: stars, drawn in the brand's way. */
+export const YearIcon = feature('year');
+
+/** Backup locations: a cloud, drawn in the brand's way. */
+export const CloudIcon = feature('cloud');
 
 /** Library: a grid of four rounded squares. */
 export const LibraryIcon = (p: IconProps) => (
@@ -138,23 +162,23 @@ export const WifiIcon = (p: IconProps) => (
 /** Large videos: a film camera. */
 export const VideoIcon = (p: IconProps) => <Line {...p}><rect x="3" y="6.5" width="12.5" height="11" rx="2.5" /><path d="m15.5 10.5 5-3v9l-5-3" /></Line>;
 
-/** Bursts: three frames, one behind another. */
-export const BurstIcon = (p: IconProps) => <Line {...p}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M5.5 16V6.5a1 1 0 0 1 1-1H16" /><path d="M3 13.5V4a1 1 0 0 1 1-1h9.5" /></Line>;
+/** Bursts: three shots side by side, drawn in the brand's way. */
+export const BurstIcon = feature('burst');
 
-/** Screenshots: a phone's screen. */
-export const ScreenshotIcon = (p: IconProps) => <Line {...p}><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M10.5 18.5h3" /></Line>;
+/** Screenshots: a phone's screen within a capture's corners, drawn in the brand's way. */
+export const ScreenshotIcon = feature('screenshot');
 
-/** Blurry: a picture's outline, doubled as if shaken. */
-export const BlurryIcon = (p: IconProps) => <Line {...p}><circle cx="10.5" cy="12" r="6" /><path d="M16.5 7.5a6 6 0 0 1 0 9" opacity=".6" /><path d="M19 9a6 6 0 0 1 0 6" opacity=".35" /></Line>;
+/** Blurry: a dot with its blur around it, drawn in the brand's way. */
+export const BlurryIcon = feature('blurry');
 
-/** Messaging apps: a speech bubble. */
-export const ChatIcon = (p: IconProps) => <Line {...p}><path d="M4 11.5a7.5 7 0 1 1 3.5 6l-3.5 1 1-3.2A6.8 6.8 0 0 1 4 11.5z" /></Line>;
+/** Messaging apps: two speech bubbles, drawn in the brand's way. */
+export const ChatIcon = feature('messaging');
 
 /** Share: an arrow rising out of a tray. */
 export const ShareIcon = (p: IconProps) => <Line size={20} stroke={2} {...p}><path d="M12 3.5v11M7.5 8 12 3.5 16.5 8" /><path d="M5 12.5v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></Line>;
 
-/** Search: a magnifying glass. */
-export const SearchIcon = (p: IconProps) => <Line size={19} {...p}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Line>;
+/** Search: the brand's Search, a magnifying glass. */
+export const SearchIcon = feature('search', 19);
 
 /** A past search: a clock. */
 export const ClockIcon = (p: IconProps) => <Line size={18} {...p}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Line>;

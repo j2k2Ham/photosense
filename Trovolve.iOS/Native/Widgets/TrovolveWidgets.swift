@@ -61,6 +61,32 @@ extension View {
     }
 }
 
+/// The brand's Swipe to clean: a card tipped off another, the one behind lighter.
+struct SwipeMark: View {
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 2.5 * 18 / 24).fill(accent.opacity(0.35))
+                .frame(width: 11 * 18 / 24, height: 15 * 18 / 24).rotationEffect(.degrees(-12)).offset(x: -2.5 * 18 / 24, y: 0.5 * 18 / 24)
+            RoundedRectangle(cornerRadius: 2.5 * 18 / 24).fill(accent)
+                .frame(width: 11 * 18 / 24, height: 15 * 18 / 24).rotationEffect(.degrees(10)).offset(x: 2.5 * 18 / 24, y: -0.5 * 18 / 24)
+        }
+        .frame(width: 18, height: 18)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The brand's Free up space: a gauge, partly filled.
+struct StorageMark: View {
+    var body: some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 3.2 * 16 / 24).fill(accent.opacity(0.3)).frame(width: 19 * 16 / 24, height: 10 * 16 / 24).padding(.leading, 2.5 * 16 / 24)
+            RoundedRectangle(cornerRadius: 1.7 * 16 / 24).fill(accent).frame(width: 9.4 * 16 / 24, height: 5.8 * 16 / 24).padding(.leading, 4.6 * 16 / 24)
+        }
+        .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
+    }
+}
+
 /// 35: how full the phone is, what can be freed, and backing up, with Back up now.
 struct StorageView: View {
     let entry: Entry
@@ -75,7 +101,10 @@ struct StorageView: View {
             }
             Spacer(minLength: 4)
             Text(s?.Freeable ?? "Trovolve").font(.system(size: 28, weight: .bold)).minimumScaleFactor(0.6).lineLimit(1)
-            Text("can be freed").font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                StorageMark()
+                Text("can be freed").font(.caption).foregroundStyle(.secondary)
+            }
             Spacer(minLength: 4)
             HStack {
                 Text(s?.BackupLine ?? "Open Trovolve to start").font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -98,7 +127,10 @@ struct SwipeView: View {
     var body: some View {
         let s = entry.snapshot
         VStack(alignment: .leading, spacing: 2) {
-            Text("Swipe to clean").font(.caption.bold()).foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                SwipeMark()
+                Text("Swipe to clean").font(.caption.bold()).foregroundStyle(.secondary)
+            }
             Text(s.map { "\($0.Ready)" } ?? "–").font(.system(size: 34, weight: .bold))
             Text(s?.ReadyLine ?? "Open Trovolve to start").font(.caption).foregroundStyle(.secondary).lineLimit(2)
             Spacer(minLength: 4)

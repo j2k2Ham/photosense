@@ -14,7 +14,7 @@ import { usePhone } from '../../lib/phone';
 import type { DuplicateGroupDto, GroupMemberDto, GroupMode, GroupsPageDto, PhotoDto, ScanStatusDto, SwipeStateDto } from '../../types';
 import type { ToastAction, ToastKind } from '../Toaster';
 import { Chip, ListGroup, ListRow, PhoneButton, PhoneSwitch, StickyFooter } from './Controls';
-import { BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, ScreenshotIcon, SimilarIcon, VideoIcon } from './Icons';
+import { BestIcon, BlurryIcon, BurstIcon, ChatIcon, ChevronBackIcon, ChevronIcon, CleanUpIcon, CloseIcon, LargeVideosIcon, ScreenshotIcon, SimilarIcon, StorageIcon } from './Icons';
 import { BurstsScreen, CategoryGrid, FreeUpSpace, LargeVideosScreen } from './Categories';
 import { PushedHeader, PushedScreen, RootHeader, Screen, SplitView } from './Screens';
 import { usePlanGate } from './ProSheet';
@@ -242,7 +242,7 @@ function FreeRow() {
 const similarRow = (page: GroupsPageDto | undefined) => page && { count: page.removableCount, bytes: page.reclaimableBytes };
 
 const FIND_ICONS: Record<FindId, typeof CleanUpIcon> = {
-  largeVideos: VideoIcon, similar: SimilarIcon, messaging: ChatIcon, duplicates: CleanUpIcon, bursts: BurstIcon, screenshots: ScreenshotIcon, blurry: BlurryIcon,
+  largeVideos: LargeVideosIcon, similar: SimilarIcon, messaging: ChatIcon, duplicates: CleanUpIcon, bursts: BurstIcon, screenshots: ScreenshotIcon, blurry: BlurryIcon,
 };
 
 /**
@@ -282,7 +282,7 @@ function Storage({ found, total, free, onOpen }: { readonly found: number; reado
         <span className="bg-acc" style={{ width: `${(Math.min(found, used) / total) * 100}%` }} />
         <span className="bg-t3" style={{ width: `${(Math.max(0, used - found) / total) * 100}%` }} />
       </span>
-      <span className="flex justify-between text-[12.5px] text-t2"><span>{amountOf(found)} found</span><span>{ofStorage(used, total)} used</span></span>
+      <span className="flex justify-between text-[12.5px] text-t2"><span className="flex items-center gap-1.5"><span aria-hidden className="text-acc"><StorageIcon size={14} /></span>{amountOf(found)} found</span><span>{ofStorage(used, total)} used</span></span>
     </button>
   );
 }
@@ -408,7 +408,7 @@ function Picture({ photo, label, keeper, where, onOpen }: PictureProps) {
         className={`relative w-full overflow-hidden rounded-2xl bg-fill ${photo.isVideo ? 'aspect-[16/11]' : 'aspect-[3/4]'}`}>
         <Full photo={photo} fit="cover" />
         {keeper && <span aria-hidden className="absolute inset-0 rounded-2xl shadow-[inset_0_0_0_2.5px_var(--keep)]" />}
-        <Badge label={label} className={`left-2 top-2 ${keeper ? 'bg-keep text-on-keep' : 'bg-black/55 text-white'}`} />
+        <Badge label={label} icon={keeper} className={`left-2 top-2 ${keeper ? 'bg-keep text-on-keep' : 'bg-black/55 text-white'}`} />
         <Badge label={`${photo.format ?? '?'} · ${formatBytes(photo.fileSizeBytes)}`} className="bottom-2 right-2 bg-black/55 text-white" />
       </button>
       <p className="truncate pt-1 font-code text-[12.5px]" title={photo.fileName}>{photo.fileName}</p>
@@ -417,8 +417,9 @@ function Picture({ photo, label, keeper, where, onOpen }: PictureProps) {
   );
 }
 
-const Badge = ({ label, className }: { readonly label: string; readonly className: string }) => (
-  <span aria-hidden className={`absolute flex h-6 max-w-[calc(100%-16px)] items-center truncate rounded-full px-2.5 text-[11.5px] font-semibold ${className}`}>{label}</span>
+/** A label over a picture; the one that stays has the brand's Best copy beside its word. */
+const Badge = ({ label, icon, className }: { readonly label: string; readonly icon?: boolean; readonly className: string }) => (
+  <span aria-hidden className={`absolute flex h-6 max-w-[calc(100%-16px)] items-center gap-1 truncate rounded-full px-2.5 text-[11.5px] font-semibold ${className}`}>{icon && <BestIcon size={13} />}{label}</span>
 );
 
 /** The whole picture over its small preview, which shows at once while the whole one arrives; a play mark for a video. */

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { appIconUrl } from '../../lib/apiClient';
 import { PhoneContext, useForm, WORDS, type Collection, type Foot, type PhoneFrame, type Place, type Platform, type TabId } from '../../lib/phone';
 import type { Toast } from '../Toaster';
-import { BackupIcon, CalendarIcon, CleanUpIcon, GearIcon, OrganizeIcon, PlacesIcon, SidebarIcon, TimelineIcon, VaultIcon } from './Icons';
+import { BackupIcon, CleanUpIcon, FixIcon, GearIcon, OrganizeIcon, PlacesIcon, SidebarIcon, TimelineIcon, VaultIcon } from './Icons';
 import { PlaceContext } from './Screens';
 import { PhoneToaster } from './PhoneToaster';
 
@@ -17,7 +17,7 @@ export const TABS: readonly { readonly id: TabId; readonly name: string; readonl
 /** Library's collections, listed on a tablet under the tabs, with their names and icons. */
 export const COLLECTIONS: readonly { readonly id: Collection; readonly name: string; readonly Icon: (p: { size?: number }) => React.ReactElement }[] = [
   { id: 'trips', name: 'Trips', Icon: PlacesIcon },
-  { id: 'fixes', name: 'Needs fixing', Icon: CalendarIcon },
+  { id: 'fixes', name: 'Needs fixing', Icon: FixIcon },
   { id: 'hidden', name: 'Hidden', Icon: VaultIcon },
 ];
 
