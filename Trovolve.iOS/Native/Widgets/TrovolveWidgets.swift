@@ -75,15 +75,52 @@ struct SwipeMark: View {
     }
 }
 
-/// The brand's Free up space: a gauge, partly filled.
-struct StorageMark: View {
+/// Trovolve's Free up space icon, drawn the same as branding/svg/feature-icons/storage.svg:
+/// on the brand's 24-unit grid, in one colour with lighter layers.
+/// The colour comes from the foreground style, e.g. `.foregroundStyle(.tint)`.
+struct FreeUpSpaceIcon: View {
     var body: some View {
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 3.2 * 16 / 24).fill(accent.opacity(0.3)).frame(width: 19 * 16 / 24, height: 10 * 16 / 24).padding(.leading, 2.5 * 16 / 24)
-            RoundedRectangle(cornerRadius: 1.7 * 16 / 24).fill(accent).frame(width: 9.4 * 16 / 24, height: 5.8 * 16 / 24).padding(.leading, 4.6 * 16 / 24)
+        ZStack {
+            FreeUpSpaceShape(part: .track).opacity(0.3)
+            FreeUpSpaceShape(part: .used)
+            FreeUpSpaceShape(part: .sparkle).opacity(0.6)
         }
-        .frame(width: 16, height: 16)
+        .aspectRatio(1, contentMode: .fit)
         .accessibilityHidden(true)
+    }
+}
+
+/// One layer of the Free up space icon, drawn in 24-unit grid coordinates and scaled to fit, centred.
+private struct FreeUpSpaceShape: Shape {
+    enum Part { case track, used, sparkle }
+
+    let part: Part
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let corner = CGSize(width: 2.5, height: 2.5)
+        switch part {
+        case .track:
+            // The whole storage bar.
+            p.addRoundedRect(in: CGRect(x: 3, y: 6, width: 18, height: 12), cornerSize: corner, style: .circular)
+        case .used:
+            // The space still used, flush with the bar's left end.
+            p.addRoundedRect(in: CGRect(x: 3, y: 6, width: 7, height: 12), cornerSize: corner, style: .circular)
+        case .sparkle:
+            // A four-point star in the space that was freed, the same curve as the brand's stars.
+            let cx = 16.0, cy = 12.0, r = 3.4
+            let a = 0.14 * r, b = 0.28 * r
+            p.move(to: CGPoint(x: cx, y: cy - r))
+            p.addCurve(to: CGPoint(x: cx + r, y: cy), control1: CGPoint(x: cx + a, y: cy - b), control2: CGPoint(x: cx + b, y: cy - a))
+            p.addCurve(to: CGPoint(x: cx, y: cy + r), control1: CGPoint(x: cx + b, y: cy + a), control2: CGPoint(x: cx + a, y: cy + b))
+            p.addCurve(to: CGPoint(x: cx - r, y: cy), control1: CGPoint(x: cx - a, y: cy + b), control2: CGPoint(x: cx - b, y: cy + a))
+            p.addCurve(to: CGPoint(x: cx, y: cy - r), control1: CGPoint(x: cx - b, y: cy - a), control2: CGPoint(x: cx - a, y: cy - b))
+            p.closeSubpath()
+        }
+        let scale = min(rect.width, rect.height) / 24
+        let transform = CGAffineTransform(translationX: rect.midX - 12 * scale, y: rect.midY - 12 * scale)
+            .scaledBy(x: scale, y: scale)
+        return p.applying(transform)
     }
 }
 
@@ -102,7 +139,9 @@ struct StorageView: View {
             Spacer(minLength: 4)
             Text(s?.Freeable ?? "Trovolve").font(.system(size: 28, weight: .bold)).minimumScaleFactor(0.6).lineLimit(1)
             HStack(spacing: 5) {
-                StorageMark()
+                FreeUpSpaceIcon()
+                    .foregroundStyle(accent)
+                    .frame(width: 24, height: 24)
                 Text("can be freed").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)

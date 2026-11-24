@@ -48,7 +48,7 @@ describe('the tiles', () => {
     again(<LocationTile location={{ kind: 'computer' }} />);
     expect(container.querySelector('svg')).not.toBeNull();
     again(<LocationTile location={{ kind: 'webDav' }} />);
-    expect(container.querySelector('svg')?.innerHTML).toContain('A4.3 4.3 0 0 1 7.6 11.95');
+    expect(container.querySelector('svg')?.innerHTML).toContain('A3.5 3.5 0 0 1 7 13.05');
   });
 });
 
