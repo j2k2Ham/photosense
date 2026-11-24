@@ -167,16 +167,30 @@ describe('which screen is shown', () => {
     expect(tab(/Duplicates/)).toBeInTheDocument();
   });
 
-  it('is the results, saying it is loading, until the service has said what it holds', () => {
+  it('is neither, saying it is loading, until the service has said what it holds, then the scan page when nothing was scanned', () => {
     statusNow = {};
+    groupsFor = () => ({ data: groupsPage([]) });
+    const { refresh } = open();
+    expect(setupHeading()).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    statusNow = { data: { instanceId: '', totalPhotos: 0 } };
+    refresh();
+    expect(setupHeading()).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    // Nothing was scanned, so no duplicates are said to be waiting, then or after.
+    expect(screen.queryByText('No duplicates waiting to be removed.')).not.toBeInTheDocument();
+  });
+
+  it('is the results, saying they are loading, once the service holds a scan whose groups are still coming', () => {
     groupsFor = () => ({});
     open();
     expect(setupHeading()).not.toBeInTheDocument();
     expect(gallery()).toHaveTextContent('Loading…');
     expect(screen.getAllByText('Loading…')).toHaveLength(2);
     expect(button('Delete all duplicates')).toBeDisabled();
-    expect(screen.getByText('Select a group to review')).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
 

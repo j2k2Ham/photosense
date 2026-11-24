@@ -6,8 +6,17 @@ test.describe('scanning', () => {
     photos.picture('Trips/IMG_0001.JPG', { seed: 1 });
     photos.copy('Trips/IMG_0001.JPG', 'Backup/IMG_0001.JPG');
     photos.picture('Trips/IMG_0002.JPG', { seed: 2 });
+    // Clean up's results never show before the scan page, and no duplicates are said to wait with nothing scanned.
+    const tabs: string[] = [];
+    await page.exposeFunction('sawTabs', () => tabs.push('Duplicates'));
+    await page.addInitScript(() => new MutationObserver(() => {
+      if (document.querySelector('[role=tab]')) (window as unknown as { sawTabs(): void }).sawTabs();
+    }).observe(document, { childList: true, subtree: true }));
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'Find duplicate photos and videos' })).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(tabs).toHaveLength(0);
+    await expect(message(page, 'No duplicates waiting to be removed.')).toHaveCount(0);
     // That nothing is uploaded is in the FAQ, not on the screen; with no results, the scan offers neither Start over nor Back to results.
     await expect(page.getByText('Runs on this device. Nothing is uploaded.')).toHaveCount(0);
     await expect(page.getByText('Start over')).toHaveCount(0);

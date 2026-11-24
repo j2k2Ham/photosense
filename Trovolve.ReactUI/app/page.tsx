@@ -161,7 +161,9 @@ export default function HomePage() {
 
   const scanning = !!instanceId && !progress.data?.completedUtc;
   const hasResults = (status.data?.totalPhotos ?? 0) > 0;
-  const screen = scanning ? 'setup' : chosen ?? (status.data && !hasResults ? 'setup' : 'results');
+  // Until the service has said whether anything was scanned, neither screen shows: Clean up's results would flash up
+  // before the scan page when there are none (Jamie, 2026-11-24).
+  const screen = scanning ? 'setup' : chosen ?? (!status.data ? 'waiting' : hasResults ? 'results' : 'setup');
 
   // While the other tab's groups are still loading, the previous tab's are not shown in its place.
   const data = groups.data?.mode === mode ? groups.data : undefined;
@@ -178,8 +180,8 @@ export default function HomePage() {
   const reclaimable = data?.reclaimableBytes ?? 0;
 
   // That no duplicates wait to be removed is said in a message, once each time it comes to be so (Jamie, 2026-11-24),
-  // while the duplicates show. The count is the whole scan's, whatever the search.
-  const nothingWaits = data !== undefined && removable === 0;
+  // while the duplicates of a scan that read something show. The count is the whole scan's, whatever the search.
+  const nothingWaits = data !== undefined && hasResults && removable === 0;
   const saidNothing = useRef(false);
   useEffect(() => {
     if (!nothingWaits) { saidNothing.current = false; return; }
@@ -384,7 +386,9 @@ export default function HomePage() {
           <button type="button" onClick={() => void retryNow()} className="pill-rose-outline h-8 px-4 text-[13px]">Retry</button>
         </div>
   );
-  const cleanScreen = screen === 'setup' ? (
+  const cleanScreen = screen === 'waiting' ? (
+          <p className="flex flex-1 items-center justify-center text-t2">Loading…</p>
+        ) : screen === 'setup' ? (
           <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
         ) : (
           <>

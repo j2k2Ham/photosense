@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TrovolveSplash } from './TrovolveBrand';
-import { LAUNCH_FADE, LAUNCH_SECONDS, launchedBefore } from '../lib/launch';
+import { LAUNCH_FADE, LAUNCH_SECONDS, launchedBefore, noteLaunched } from '../lib/launch';
 
 /**
  * The launch: the brand's animation on teal black over everything when the app first loads, drawn before anything
@@ -13,6 +13,7 @@ export function Launch() {
     if (stage === 'gone') return;
     // A reload is hidden before it is painted (`data-launched`, set by the layout); here it goes at once.
     const next = stage === 'leaving' ? 'gone' : launchedBefore() ? 'gone' : 'leaving';
+    if (stage === 'playing') noteLaunched();
     const wait = stage === 'leaving' ? LAUNCH_FADE : next === 'gone' ? 0 : LAUNCH_SECONDS * 1000 - LAUNCH_FADE;
     const id = setTimeout(() => setStage(next), wait);
     return () => clearTimeout(id);
