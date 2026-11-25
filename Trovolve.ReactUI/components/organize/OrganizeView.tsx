@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { applyOrganize, openOrganizeFile, removeOrganize, undoChange, useAbout, useOrganizeBatches, useOrganizeFiles, usePlan } from '../../lib/apiClient';
 import { largest, limitLine, overLimit } from '../../lib/plan';
 import { binName, formatBytes, leaf, sameFolder } from '../../lib/format';
@@ -30,6 +30,10 @@ interface Props {
   readonly unit: DistanceUnit;
   /** Told the folder whose files are shown, or nothing while none are, so that the menu can offer to clear them. */
   onShowing?(root: string | undefined): void;
+  /** Start with no folder, as Trovolve opening fresh does, rather than the one last organized or scanned. */
+  readonly fresh?: boolean;
+  /** Told when a folder chosen here has been read through, as Clean up is when a scan finishes. */
+  onRead?(): void;
   notify(message: string, kind?: ToastKind, action?: ToastAction): void;
 }
 
@@ -55,12 +59,12 @@ const Named = ({ children }: { readonly children: string }) => <span className="
 const Where = ({ children }: { readonly children: string }) => <span className="font-mono text-[13.5px] [overflow-wrap:anywhere]">{children}</span>;
 
 /** Organize: every file of a folder, the folders it could be sorted into, and the way to look before anything moves. */
-export function OrganizeView({ startRoot, unit, onShowing, notify }: Props) {
+export function OrganizeView({ startRoot, unit, onShowing, fresh, onRead, notify }: Props) {
   const [chosen, setChosen] = useState<string>();
   // What this browser remembers is read once the page is in the browser.
   const remembered = useOrganizeRoot();
   // Cleared (kept empty), no folder stands in until one is chosen.
-  const root = chosen ?? (remembered === '' ? undefined : remembered ?? startRoot);
+  const root = chosen ?? (fresh || remembered === '' ? undefined : remembered ?? startRoot);
   const listing = useOrganizeFiles(root);
   const batches = useOrganizeBatches();
   // A phone keeps each picture once, in one of Trovolve's albums at a time: there it can be moved, not copied.
@@ -117,10 +121,12 @@ export function OrganizeView({ startRoot, unit, onShowing, notify }: Props) {
   const whole = listing.data;
   // The whole list is in another order than the files came in: a range is counted from a click in the list as it now is.
   useEffect(() => { lastPick.current = -1; }, [whole]);
+  const wasRead = useEffectEvent(() => onRead?.());
   useEffect(() => {
     if (!whole || announce.current === undefined) return;
     announce.current = undefined;
     notify(`Read dates and places for ${countFiles(whole.files.length)} in ${leaf(whole.root)}. No scan was needed.`, 'ok');
+    wasRead();
   }, [whole, notify]);
 
   // What the folders take while one kind is shown. A Live Photo's video is never taken on its own: it goes

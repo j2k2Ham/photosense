@@ -39,6 +39,7 @@ npm run typecheck
 - **What to check:** what the person sees, and what is on the disk afterwards (`photos.files()`, `photos.exists()`). A removal checks `_Trovolve_Removed`; an undo checks that every file is back.
 - **What only a phone or another device answers:** stand in for it with `fixtures/phone.ts` (`Phone`, `PhoneNearby`). Everything else stays the program's own.
 - **The note asking for a backup** is accepted through the program before every test (`noteAccepted`, on by default in `fixtures/app.ts`, which posts `terms/accept`); a test of the note itself says `test.use({ noteAccepted: false })`.
+- **Continue where you left off** is answered yes before every test (`continueAnswered`, on by default, added to the page's settings at each visit), so its question after the first scan is not in the way; its own test says `test.use({ continueAnswered: false })`.
 - **The launch** covers the page for minutes when the app first loads; the fixture starts every page as a reload would, with it played (`launch`, off by default), and only `launch.spec.ts` says `test.use({ launch: true })`.
 - **`@phone`:** add it to a test's name when it must also work at a phone's size and in WebKit.
 

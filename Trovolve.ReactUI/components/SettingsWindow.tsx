@@ -51,6 +51,11 @@ export function SettingsWindow({ settings, onChange, notify, onClose }: Props) {
             about={`After the first question, Move to ${binName()} asks “Are you sure?” once more. Turned off, the files go as soon as the first question is confirmed.`} />
         </div>
         <div className="flex flex-col gap-3">
+          <div className="label-caps">Opening Trovolve</div>
+          <Switch title="Continue where you left off" on={settings.continueWhereLeftOff !== false} onChange={continueWhereLeftOff => onChange({ continueWhereLeftOff })}
+            about="Clean up shows your last results, and Organize your last folder. Turned off, Trovolve forgets them each time it opens, and starts on the scan screen. Your photos are not touched." />
+        </div>
+        <div className="flex flex-col gap-3">
           <div className="label-caps">Distances</div>
           <div className="flex flex-wrap items-center gap-4">
             <p className="min-w-0 flex-1 text-[13px] text-t2">How far apart places are, in Organize and on its map.</p>

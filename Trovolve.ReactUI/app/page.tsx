@@ -1,5 +1,5 @@
 "use client";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { AppMenu } from '../components/AppMenu';
 import { BackupNoteDialog } from '../components/BackupNoteDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -19,6 +19,7 @@ import { PhonesView } from '../components/PhonesView';
 import { PhotoWindow } from '../components/PhotoWindow';
 import { ReviewPanel } from '../components/ReviewPanel';
 import { SettingsWindow } from '../components/SettingsWindow';
+import { ContinueQuestion } from '../components/ContinueQuestion';
 import { SetupScreen } from '../components/SetupScreen';
 import { PHONE_TOAST_MS, Toaster, TOAST_MS, useToasts, type ToastAction } from '../components/Toaster';
 import { TopBar } from '../components/TopBar';
@@ -32,8 +33,8 @@ import { fromScanned } from '../lib/organize';
 import { binName, formatBytes, leaf, linkedFiles } from '../lib/format';
 import { limitLine, overLimit } from '../lib/plan';
 import type { GuidePlace } from '../lib/guide';
-import { forgetOrganizeRoot, loadLastScan, loadOrganizeRoot, useLastScan } from '../lib/lastScan';
-import { useAppSettings } from '../lib/settings';
+import { forgetOrganizeRoot, loadLastScan, loadOrganizeRoot, saveLastScan, useLastScan } from '../lib/lastScan';
+import { startsFresh, useAppSettings } from '../lib/settings';
 import { platformOf, type TabId } from '../lib/phone';
 import { useSkin } from '../lib/skin';
 import { tellSystemBars } from '../lib/systemBars';
@@ -80,12 +81,35 @@ export default function HomePage() {
   // On a phone or tablet the page is laid out as its own apps are, with tabs; on a computer, as it always was.
   const platform = platformOf(program);
   const onPhone = platform !== undefined;
-  // A phone follows its system's light or dark until told otherwise, as its own apps do; a computer starts dark.
+  // Every device follows its system's light or dark until told otherwise, as a phone's own apps do.
   const [theme, setTheme, themeChoice] = useTheme();
   useSkin(program, theme);
   useEffect(() => { if (onPhone) tellSystemBars(theme); }, [onPhone, theme]);
   const [settings, changeSettings] = useAppSettings();
+  // Read once, as the app opens: turned off, Continue where you left off has Clean up and Organize start fresh.
+  const [fresh] = useState(startsFresh);
   const { toasts, errors, push, remove, clearError, clearErrors } = useToasts(onPhone ? PHONE_TOAST_MS : TOAST_MS);
+  // After a scan on a computer (a phone's never asks), whether to continue where the person left off is asked until it is answered.
+  const [askContinue, setAskContinue] = useState(false);
+  const askToContinue = () => { if (settings.continueWhereLeftOff === undefined) setAskContinue(true); };
+  const scanDone = useEffectEvent(askToContinue);
+  // Starting fresh forgets the last results and the folders chosen, as Clear results does in each (Jamie, 2026-11-25).
+  // Once only, though React runs an effect twice in development.
+  const clearedFresh = useRef(false);
+  useEffect(() => {
+    if (!fresh || clearedFresh.current) return;
+    clearedFresh.current = true;
+    forgetOrganizeRoot();
+    saveLastScan({ root: '', second: '', recursive: true });
+    clearResults().then(
+      result => { if (result.forgotten > 0) push(`Started fresh: the last results, ${files(result.forgotten)}, were forgotten. Your photos were not touched.`, 'ok'); },
+      e => push(messageOf(e), 'error'));
+  }, [fresh, push]);
+  const answerContinue = (carryOn: boolean) => {
+    changeSettings({ continueWhereLeftOff: carryOn });
+    setAskContinue(false);
+    push(carryOn ? 'Trovolve will continue where you left off. Change it in Settings.' : 'Trovolve will start fresh each time it opens. Change it in Settings.', 'ok');
+  };
 
   // Clean up or Organize. Organize is made the first time it is turned to and then kept, with all that was arranged in it.
   const [area, setArea] = useState<Area>('clean');
@@ -163,7 +187,7 @@ export default function HomePage() {
   const hasResults = (status.data?.totalPhotos ?? 0) > 0;
   // Until the service has said whether anything was scanned, neither screen shows: Clean up's results would flash up
   // before the scan page when there are none (Jamie, 2026-11-24).
-  const screen = scanning ? 'setup' : chosen ?? (!status.data ? 'waiting' : hasResults ? 'results' : 'setup');
+  const screen = scanning ? 'setup' : chosen ?? (!status.data ? 'waiting' : hasResults && !fresh ? 'results' : 'setup');
 
   // While the other tab's groups are still loading, the previous tab's are not shown in its place.
   const data = groups.data?.mode === mode ? groups.data : undefined;
@@ -225,7 +249,7 @@ export default function HomePage() {
     void retryNow();
     fetchGroupTotals().then(
       t => {
-        if (!onPhone) { push(`Scan finished: ${groupsOf(t.duplicates, 'duplicate')} and ${groupsOf(t.similar, 'similar')}`, 'ok'); return; }
+        if (!onPhone) { push(`Scan finished: ${groupsOf(t.duplicates, 'duplicate')} and ${groupsOf(t.similar, 'similar')}`, 'ok'); scanDone(); return; }
         // First launch says what its first scan found on a screen of its own.
         if (firstScanShown()) return;
         // A phone shows its library once the scan is done, and Review takes the person to what was found.
@@ -401,7 +425,7 @@ export default function HomePage() {
   const cleanScreen = screen === 'waiting' ? (
           <p className="flex flex-1 items-center justify-center text-t2">Loading…</p>
         ) : screen === 'setup' ? (
-          <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} onStarted={started} onBack={() => setChosen('results')} notify={push} />
+          <SetupScreen scanning={scanning} progress={progress.data} log={logs} hasResults={hasResults} blank={fresh && chosen === undefined} onStarted={started} onBack={() => setChosen('results')} notify={push} />
         ) : (
           <>
             {/* On a narrow screen the bar wraps: the tabs and the switch, then the search, then what deleting would free. */}
@@ -502,7 +526,7 @@ export default function HomePage() {
 
         <main className="flex min-h-0 flex-1 flex-col">
           {organizing && (
-            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView key={organizeRun} startRoot={folders[0]} unit={settings.distanceUnit} onShowing={setOrganizeShows} notify={push} /></div>
+            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView key={organizeRun} startRoot={folders[0]} unit={settings.distanceUnit} onShowing={setOrganizeShows} fresh={fresh} onRead={askToContinue} notify={push} /></div>
           )}
 
           {area === 'phones' && <PhonesView notify={push} onPair={() => setPairOpen(true)} />}
@@ -599,6 +623,7 @@ export default function HomePage() {
       {/* The guide and the errors take Support's place, as both open beneath a window of its kind. */}
       {supportOpen && <SupportWindow errors={errors} notify={push} onClose={() => setSupportOpen(false)}
         onHelp={() => { setSupportOpen(false); setHelpOpen(true); }} onErrors={() => { setSupportOpen(false); setErrorsOpen(true); }} />}
+      {askContinue && <ContinueQuestion onAnswer={answerContinue} onClose={() => setAskContinue(false)} />}
       {settingsOpen && <SettingsWindow settings={settings} onChange={changeSettings} notify={push} onClose={() => setSettingsOpen(false)} />}
       {pairOpen && <PairWindow notify={push} onClose={() => setPairOpen(false)} />}
 

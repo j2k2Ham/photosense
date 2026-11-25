@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import type { DistanceUnit } from './distance';
+import { launchedBefore } from './launch';
 import { readStored, useStored } from './stored';
 
 /** How the person has set Trovolve to behave. Kept in this browser. */
@@ -12,6 +13,11 @@ export interface AppSettings {
   phonesSeen: boolean;
   /** On a phone, Share photo starts with Remove location on. */
   removeLocationWhenSharing: boolean;
+  /**
+   * When Trovolve opens, Clean up shows the last results and Organize the last folder. Not set until the person
+   * answers the question asked after their first scan, or changes it in Settings; not set, it is on.
+   */
+  continueWhereLeftOff?: boolean;
 }
 
 /** The settings until the person changes them. */
@@ -22,6 +28,15 @@ const KEY = 'trovolve-settings';
 // The settings in what was kept, with the default of any added since; the defaults when nothing readable was.
 function settingsIn(kept: string | null | undefined): AppSettings {
   try { return { ...defaultAppSettings, ...JSON.parse(kept ?? '{}') }; } catch { return defaultAppSettings; }
+}
+
+/**
+ * Whether this load of the app starts fresh, the last results and folders forgotten: its first load in this tab, not
+ * a reload, with Continue where you left off turned off. False where there is no browser storage to ask, as when the
+ * page is made ahead on the server.
+ */
+export function startsFresh(): boolean {
+  return loadAppSettings().continueWhereLeftOff === false && !launchedBefore();
 }
 
 /** The settings as this browser remembers them, with the default of any added since. */

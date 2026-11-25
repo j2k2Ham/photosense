@@ -104,6 +104,26 @@ describe('choosing the folder', () => {
     expect(onShowing).toHaveBeenLastCalledWith(ROOT);
   });
 
+  it('starts with no folder when Trovolve opens fresh, though one was organized and one scanned before', () => {
+    saveOrganizeRoot(OTHER);
+    render(<OrganizeView startRoot={ROOT} unit="miles" fresh notify={notify} />);
+    expect(chip()).toHaveTextContent('No folder chosen yet');
+    expect(api.useOrganizeFiles).toHaveBeenLastCalledWith(undefined);
+  });
+
+  it('says when a folder chosen here has been read through, as a scan finishing is said', async () => {
+    const onRead = vi.fn();
+    listings[OTHER] = { data: listing(OTHER, [at('x', 0, { folder: OTHER })], false) };
+    render(<OrganizeView startRoot={ROOT} unit="miles" onRead={onRead} notify={notify} />);
+    expect(onRead).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Choose folder' }));
+    const picker = screen.getByRole('dialog', { name: 'Choose a folder to organize' });
+    await userEvent.click(await within(picker).findByRole('button', { name: 'Phone 2022' }));
+    await waitFor(() => expect(within(picker).getByRole('button', { name: 'Use this folder' })).toBeEnabled());
+    await userEvent.click(within(picker).getByRole('button', { name: 'Use this folder' }));
+    expect(onRead).toHaveBeenCalledOnce();
+  });
+
   it('once its results were cleared, asks for a folder, though a scan\u2019s folder could stand in', () => {
     forgetOrganizeRoot();
     open();

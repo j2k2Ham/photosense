@@ -15,6 +15,8 @@ interface Props {
   readonly log: string[];
   /** There are results to go back to. */
   readonly hasResults: boolean;
+  /** Start with no folder chosen, as Trovolve opening fresh does, rather than with the folders last scanned. */
+  readonly blank?: boolean;
   onStarted(instanceId: string): void;
   onBack(): void;
   notify(message: string, kind: ToastKind): void;
@@ -26,8 +28,8 @@ const TILES = 120;
 const NOT_FOUND = /^Folder not found on the server: (.*)$/;
 
 /** The first screen, and the one for changing folders: choose what to scan, start it, and watch it run. */
-export function SetupScreen({ scanning, progress, log, hasResults, onStarted, onBack, notify }: Props) {
-  const [last] = useState(loadLastScan);
+export function SetupScreen({ scanning, progress, log, hasResults, blank, onStarted, onBack, notify }: Props) {
+  const [last] = useState(() => (blank ? { root: '', second: '', recursive: true } : loadLastScan()));
   const [root, setRoot] = useState(last.root);
   const [second, setSecond] = useState(last.second);
   const [recursive, setRecursive] = useState(last.recursive);

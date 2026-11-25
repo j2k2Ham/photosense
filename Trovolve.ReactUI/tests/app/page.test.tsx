@@ -26,12 +26,13 @@ vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOrigin
 vi.mock('../../components/organize/OrganizeView', async () => {
   const { useState } = await import('react');
   return {
-    OrganizeView: ({ startRoot, unit, onShowing, notify }: { startRoot?: string; unit: string; onShowing(root?: string): void; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => {
+    OrganizeView: ({ startRoot, unit, onShowing, fresh, onRead, notify }: { startRoot?: string; unit: string; onShowing(root?: string): void; fresh?: boolean; onRead(): void; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => {
       const [videos, setVideos] = useState(false);
       return (
         <section aria-label="Organize">
-          Organizing {startRoot ?? 'no folder'}
+          Organizing {startRoot ?? 'no folder'}{fresh && ', fresh'}
           <span>Distances in {unit}</span>
+          <button type="button" onClick={onRead}>Read a folder</button>
           <button type="button" onClick={() => notify('Moved 13 files to Butte', 'ok', { label: 'Undo', run: () => notify('Moved 13 files back', 'ok') })}>Move some</button>
           <button type="button" onClick={() => onShowing('C:\\Photos\\Butte')}>Show Butte</button>
           <button type="button" aria-pressed={videos} onClick={() => setVideos(true)}>Videos only</button>
@@ -118,6 +119,7 @@ const question = () => screen.getByRole('alertdialog');
 const removedNone = (changes: Partial<{ removed: number; bytes: number; skipped: number; companions: number; problems: string[] }> = {}) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], ...changes });
 const toast = (name: string | RegExp) => screen.findByText(name);
 const setupHeading = () => screen.queryByRole('heading', { name: 'Find duplicate photos and videos' });
+const area = (name: string) => within(screen.getByRole('group', { name: 'Area' })).getByRole('button', { name });
 
 describe('on a narrow screen', () => {
   // The two panes are told apart by their display classes: below the wide breakpoint only one of them shows.
@@ -465,6 +467,66 @@ describe('scanning', () => {
     refresh();
     expect(await toast('Scan finished: 263 duplicate groups and 170 similar groups')).toBeInTheDocument();
     expect(tab(/Duplicates/)).toBeInTheDocument();
+  });
+
+  it('then asks once whether to continue where the person left off, keeping the answer, which is not asked again', async () => {
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await click('Change or rescan');
+    await userEvent.type(screen.getByLabelText('Base folder'), 'C:\\photos');
+    await click('Scan');
+    const asked = await screen.findByRole('alertdialog', { name: 'Continue where you left off?' });
+    await userEvent.click(within(asked).getByRole('button', { name: 'Start fresh each time' }));
+    expect(await toast('Trovolve will start fresh each time it opens. Change it in Settings.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ continueWhereLeftOff: false });
+    // Answered, it is not asked after a folder is read in Organize either.
+    await userEvent.click(area('Organize'));
+    await click('Read a folder');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('asks too once Organize has read a folder, and asks again next time when put away unanswered', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    await click('Read a folder');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(localStorage.getItem('trovolve-settings')).toBeNull();
+    await click('Read a folder');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Continue where I left off' }));
+    expect(await toast('Trovolve will continue where you left off. Change it in Settings.')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ continueWhereLeftOff: true });
+  });
+
+  it('opens fresh when told to, once: the last results and folders forgotten, the scan screen with no folder chosen, and Organize with none', async () => {
+    localStorage.setItem('trovolve-settings', JSON.stringify({ continueWhereLeftOff: false }));
+    saveLastScan({ root: 'C:\\photos', second: '', recursive: true });
+    saveOrganizeRoot('C:\\photos\\2024');
+    api.clearResults.mockResolvedValue({ forgotten: 12 });
+    const { refresh } = open();
+    // Until the service has forgotten them, the results are not shown.
+    expect(setupHeading()).toBeInTheDocument();
+    expect(screen.getByLabelText('Base folder')).toHaveValue('');
+    expect(await toast('Started fresh: the last results, 12 files, were forgotten. Your photos were not touched.')).toBeInTheDocument();
+    expect(api.clearResults).toHaveBeenCalledOnce();
+    expect(JSON.parse(localStorage.getItem('trovolve-last-scan')!)).toEqual({ root: '', second: '', recursive: true });
+    expect(localStorage.getItem('trovolve-organize-root')).toBe('');
+    await userEvent.click(area('Organize'));
+    expect(screen.getByRole('region', { name: 'Organize' })).toHaveTextContent(/, fresh/);
+    refresh();
+    expect(api.clearResults).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing on opening fresh when there was nothing to forget, and says so when it could not', async () => {
+    localStorage.setItem('trovolve-settings', JSON.stringify({ continueWhereLeftOff: false }));
+    const { unmount } = open();
+    await waitFor(() => expect(api.clearResults).toHaveBeenCalledOnce());
+    expect(screen.queryByText(/^Started fresh/)).not.toBeInTheDocument();
+    unmount();
+    api.clearResults.mockRejectedValue(new Error('Cannot reach the Trovolve server.'));
+    open();
+    expect(await within(screen.getByRole('log', { name: 'Messages' })).findByText('Cannot reach the Trovolve server.')).toBeInTheDocument();
   });
 
   it('keeps a failed start as an error, in the toast and in the list', async () => {
@@ -1367,9 +1429,9 @@ describe('deleting permanently', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
     const settings = screen.getByRole('dialog', { name: 'Settings' });
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-    expect(within(settings).getByRole('switch')).not.toBeChecked();
-    await userEvent.click(within(settings).getByRole('switch'));
-    expect(within(settings).getByRole('switch')).toBeChecked();
+    expect(within(settings).getByRole('switch', { name: /^Ask a second time/ })).not.toBeChecked();
+    await userEvent.click(within(settings).getByRole('switch', { name: /^Ask a second time/ }));
+    expect(within(settings).getByRole('switch', { name: /^Ask a second time/ })).toBeChecked();
     await userEvent.click(within(settings).getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
 
@@ -1469,7 +1531,6 @@ describe('deleting permanently', () => {
 });
 
 describe('the two areas', () => {
-  const area = (name: string) => within(screen.getByRole('group', { name: 'Area' })).getByRole('button', { name });
   const organize = () => screen.queryByRole('region', { name: 'Organize', hidden: true });
 
   it('are switched between in the header; Organize starts with the folder last scanned and is kept once opened', async () => {

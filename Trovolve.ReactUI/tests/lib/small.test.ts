@@ -4,7 +4,7 @@ import { hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { forgetOrganizeRoot, loadLastScan, loadOrganizeRoot, saveLastScan, saveOrganizeRoot, useLastScan, useOrganizeRoot } from '../../lib/lastScan';
-import { loadAppSettings, useAppSettings } from '../../lib/settings';
+import { loadAppSettings, startsFresh, useAppSettings } from '../../lib/settings';
 import { skinOf, useSkin } from '../../lib/skin';
 import { useTheme } from '../../lib/theme';
 import { SYSTEM_LIGHT, THEME_KEY } from '../../lib/themeKey';
@@ -139,6 +139,18 @@ describe('the skin', () => {
 });
 
 describe('the settings', () => {
+  it('start fresh only on a first load with Continue where you left off turned off, not on a reload, and not while it is unanswered', () => {
+    expect(startsFresh()).toBe(false);
+    localStorage.setItem('trovolve-settings', JSON.stringify({ continueWhereLeftOff: true }));
+    expect(startsFresh()).toBe(false);
+    localStorage.setItem('trovolve-settings', JSON.stringify({ continueWhereLeftOff: false }));
+    expect(startsFresh()).toBe(true);
+    // A reload, the layout having marked the launch as played, carries on where the page was.
+    document.documentElement.setAttribute('data-launched', '');
+    expect(startsFresh()).toBe(false);
+    document.documentElement.removeAttribute('data-launched');
+  });
+
   it('ask twice before deleting permanently until told not to, and the change is remembered', () => {
     const { result } = renderHook(() => useAppSettings());
     expect(result.current[0]).toEqual({ eraseAskTwice: true, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });

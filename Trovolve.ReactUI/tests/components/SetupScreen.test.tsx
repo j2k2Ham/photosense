@@ -95,6 +95,14 @@ describe('choosing what to scan', () => {
     expect(screen.getByLabelText(/^Recursive/)).not.toBeChecked();
   });
 
+  it('starts with no folder chosen when Trovolve opens fresh, though one was scanned before', () => {
+    saveLastScan({ root: 'C:\\photos', second: 'D:\\backup', recursive: false });
+    show({ blank: true, hasResults: true });
+    expect([root().value, second().value]).toEqual(['', '']);
+    expect(screen.getByLabelText(/^Recursive/)).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Back to results' })).toBeInTheDocument();
+  });
+
   it('starts over when asked to, once: the scan after it builds on its results again', async () => {
     show({ hasResults: true });
     expect(screen.getByLabelText(/^Start over/)).not.toBeChecked();

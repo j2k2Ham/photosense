@@ -439,6 +439,17 @@ describe('the settings window', () => {
     await userEvent.click(ask);
     expect(onChange).toHaveBeenLastCalledWith({ eraseAskTwice: true });
 
+    // Continue where you left off is on until it is answered, then as answered.
+    const carryOn = within(dialog).getByRole('switch', { name: /^Continue where you left off/ });
+    expect(dialog).toHaveTextContent('Clean up shows your last results, and Organize your last folder. Turned off, Trovolve forgets them each time it opens, and starts on the scan screen. Your photos are not touched.');
+    expect(carryOn).toBeChecked();
+    await userEvent.click(carryOn);
+    expect(onChange).toHaveBeenLastCalledWith({ continueWhereLeftOff: false });
+    rerender(<SettingsWindow settings={{ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true, continueWhereLeftOff: false }} onChange={onChange} notify={vi.fn()} onClose={onClose} />);
+    expect(carryOn).not.toBeChecked();
+    await userEvent.click(carryOn);
+    expect(onChange).toHaveBeenLastCalledWith({ continueWhereLeftOff: true });
+
     fireEvent.keyDown(window, { key: 'Enter' });
     fireEvent.mouseDown(dialog);
     expect(onClose).not.toHaveBeenCalled();

@@ -91,6 +91,40 @@ test.describe('scanning', () => {
     await expect(page.getByRole('textbox', { name: /^Secondary folder/ })).toHaveValue('');
   });
 
+  test.describe('continuing where the person left off', () => {
+    test.use({ continueAnswered: false });
+
+    test('is asked after the first scan, and answered Start fresh, the next opening forgets the results and the folder, the photos where they were', async ({ page, photos }) => {
+      photos.picture('IMG_0001.JPG', { seed: 1 });
+      photos.copy('IMG_0001.JPG', 'Backup/IMG_0001.JPG');
+      await page.goto('/');
+      await page.getByRole('textbox', { name: 'Base folder' }).fill(photos.root);
+      await page.getByRole('button', { name: 'Scan' }).click();
+      const asked = page.getByRole('alertdialog', { name: 'Continue where you left off?' });
+      await expect(asked).toBeVisible({ timeout: 60_000 });
+      await asked.getByRole('button', { name: 'Start fresh each time' }).click();
+      await expect(message(page, 'Trovolve will start fresh each time it opens. Change it in Settings.')).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Duplicates 1' })).toBeVisible();
+
+      // A reload carries on where it was.
+      await page.reload();
+      await expect(page.getByRole('tab', { name: 'Duplicates 1' })).toBeVisible();
+
+      // A new tab is the app opening again: fresh, and not asked again.
+      const next = await page.context().newPage();
+      // Its launch plays, as on any first load, and Back to results waits for it to go.
+      await next.goto(page.url());
+      await expect(message(next, 'Started fresh: the last results, 2 files, were forgotten. Your photos were not touched.')).toBeVisible();
+      await expect(next.getByRole('heading', { name: 'Find duplicate photos and videos' })).toBeVisible();
+      await expect(next.getByRole('textbox', { name: 'Base folder' })).toHaveValue('');
+      await expect(next.getByRole('button', { name: 'Back to results' })).toHaveCount(0);
+      await next.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
+      await expect(next.getByText('Choose a folder to organize')).toBeVisible();
+      await expect(next.getByRole('alertdialog')).toHaveCount(0);
+      expect(photos.files()).toEqual(['Backup/IMG_0001.JPG', 'IMG_0001.JPG']);
+    });
+  });
+
   test('scanning again finds a copy made since the last scan', async ({ page, photos, service }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     await service.scan(photos.root);

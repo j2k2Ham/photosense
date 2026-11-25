@@ -128,17 +128,27 @@ export class Service {
   }
 }
 
-export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean; launch: boolean }>({
+export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean; launch: boolean; continueAnswered: boolean }>({
   // Nearly every test is of what comes after the note asking for a backup; the note's own tests leave it to be asked.
   noteAccepted: [true, { option: true }],
   // The launch covers the page for minutes when the app first loads; every test but the launch's own starts as a reload
   // would, with it played already.
   launch: [false, { option: true }],
+  // Whether to continue where the person left off is asked after the first scan until answered; every test but the
+  // question's own starts with it answered yes, as Trovolve's default is, so that it is not in the way.
+  continueAnswered: [true, { option: true }],
   // Accepted through the program, which keeps it, as the page would.
-  page: async ({ page, noteAccepted, launch, service }, use) => {
+  page: async ({ page, noteAccepted, launch, continueAnswered, service }, use) => {
     if (noteAccepted) await service.post('terms/accept');
     if (!launch) {
       await page.addInitScript(() => sessionStorage.setItem('trovolve-launched', 'yes'));
+    }
+    if (continueAnswered) {
+      // Added to the settings as they stand, at every visit, so a setting a test changes is kept.
+      await page.addInitScript(() => {
+        const settings = JSON.parse(localStorage.getItem('trovolve-settings') ?? '{}');
+        if (settings.continueWhereLeftOff === undefined) localStorage.setItem('trovolve-settings', JSON.stringify({ ...settings, continueWhereLeftOff: true }));
+      });
     }
     await use(page);
     // A stand-in answer still being fetched as the test ends (the page asking again in the background) is dropped, not
