@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Trovolve.Infrastructure.Locations;
 using AuthenticationServices;
 using Trovolve.Domain.Services;
 using Security;
@@ -20,7 +20,7 @@ internal sealed class KeychainLocationSecrets : ILocationSecrets
         ct.ThrowIfCancellationRequested();
         var found = SecKeyChain.QueryAsRecord(Query(id), out var status);
         IReadOnlyDictionary<string, string> secrets = status == SecStatusCode.Success && found?.ValueData is { } data
-            ? JsonSerializer.Deserialize<Dictionary<string, string>>(data.ToArray()) ?? []
+            ? LocationSecretsFormat.Read(data.ToArray())
             : new Dictionary<string, string>();
         return Task.FromResult(secrets);
     }
@@ -32,7 +32,7 @@ internal sealed class KeychainLocationSecrets : ILocationSecrets
         // Replaced whole: a location's secrets go together.
         SecKeyChain.Remove(Query(id));
         var record = Query(id);
-        record.ValueData = NSData.FromArray(JsonSerializer.SerializeToUtf8Bytes(secrets));
+        record.ValueData = NSData.FromArray(LocationSecretsFormat.Write(secrets));
         record.Accessible = SecAccessible.AfterFirstUnlockThisDeviceOnly;
         var status = SecKeyChain.Add(record);
         if (status != SecStatusCode.Success) throw new IOException($"The iPhone's Keychain would not keep the location's keys ({status}).");

@@ -1,4 +1,4 @@
-using System.Text.Json;
+using Trovolve.Infrastructure.Locations;
 using Android.App;
 using Android.Content;
 using Android.OS;
@@ -34,7 +34,7 @@ internal sealed class KeystoreLocationSecrets(Context context) : ILocationSecret
         {
             var cipher = Cipher.GetInstance("AES/GCM/NoPadding")!;
             cipher.Init(CipherMode.DecryptMode, Key(), new GCMParameterSpec(128, bytes[..NonceSize]));
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(cipher.DoFinal(bytes[NonceSize..])!) ?? [];
+            return LocationSecretsFormat.Read(cipher.DoFinal(bytes[NonceSize..])!);
         }
         catch (GeneralSecurityException ex) { throw new IOException($"The location's keys kept on this phone could not be opened: {ex.Message}"); }
     }
@@ -47,7 +47,7 @@ internal sealed class KeystoreLocationSecrets(Context context) : ILocationSecret
         {
             var cipher = Cipher.GetInstance("AES/GCM/NoPadding")!;
             cipher.Init(CipherMode.EncryptMode, Key());
-            sealedSecrets = [.. cipher.GetIV()!, .. cipher.DoFinal(JsonSerializer.SerializeToUtf8Bytes(secrets))!];
+            sealedSecrets = [.. cipher.GetIV()!, .. cipher.DoFinal(LocationSecretsFormat.Write(secrets))!];
         }
         catch (GeneralSecurityException ex) { throw new IOException($"The phone would not keep the location's keys: {ex.Message}"); }
         Directory.CreateDirectory(Folder);

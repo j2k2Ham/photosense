@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Trovolve.Application.Vault;
 
@@ -32,6 +33,14 @@ public sealed record VaultMeta(string Name, string Folder, DateTime? Taken, doub
     /// <summary>One of its previews; null when none was made, as for a video.</summary>
     public VaultPart? Preview(string kind) => Parts.FirstOrDefault(p => p.Kind == kind);
 }
+
+/// <summary>
+/// What an item of the hidden vault is, as JSON, written by code made when Trovolve is built rather than found by
+/// reflection as it runs, so that a phone's trimmed app keeps every type it needs. The options are the defaults, as
+/// files sealed before were written with.
+/// </summary>
+[JsonSerializable(typeof(VaultMeta))]
+internal sealed partial class VaultJson : JsonSerializerContext;
 
 /// <summary>
 /// How an item of the hidden vault is sealed in its file. A header says which key sealed it; then what it holds, in
@@ -131,7 +140,7 @@ public static class VaultBox
         /// <summary>Writes what the item is, last, and seals the last piece.</summary>
         public async Task CompleteAsync(VaultMeta meta, CancellationToken ct)
         {
-            var said = JsonSerializer.SerializeToUtf8Bytes(meta);
+            var said = JsonSerializer.SerializeToUtf8Bytes(meta, VaultJson.Default.VaultMeta);
             var length = new byte[4];
             BinaryPrimitives.WriteInt32LittleEndian(length, said.Length);
             await WriteAsync(said, ct);
@@ -193,7 +202,7 @@ public static class VaultBox
         {
             var length = BinaryPrimitives.ReadInt32LittleEndian(await ReadAsync(Length - 4, 4, ct));
             if (length <= 0 || length > Length - 4) throw new InvalidDataException("This file of the hidden vault is damaged.");
-            return JsonSerializer.Deserialize<VaultMeta>(await ReadAsync(Length - 4 - length, length, ct))
+            return JsonSerializer.Deserialize(await ReadAsync(Length - 4 - length, length, ct), VaultJson.Default.VaultMeta)
                 ?? throw new InvalidDataException("This file of the hidden vault is damaged.");
         }
 
