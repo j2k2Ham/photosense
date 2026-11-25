@@ -40,7 +40,7 @@ The page fits whatever window it is in, and follows a window as it is resized. F
 - **Clean up** shows the groups; tapping one shows its review in their place, with **All groups** to go back.
 - **Organize** has **Files** and **Folders** at the top to switch between the gallery and the panel of folders; tapping a folder shows its files.
 - The large windows (comparing, previewing a move, names already taken, the guide, the map) fill the screen, with their details under the picture instead of beside it.
-- The header keeps the logo, **Clean up | Organize**, the errors and the menu; the scanned folders' chip is in the menu as **Change folders or rescan**.
+- The header keeps the logo, **Clean up | Organize**, the errors and the menu; the scanned folders' chip is in the menu as **Change folders or rescan**. It is in the menu only while Clean up shows a scan's results, not on the scan screen, Organize or Phones; **Clear results** too, and also while Organize shows a folder's files, where it puts the folder away with its search, filters and folders of the person's own, and Organize asks for a folder again (the last scanned folder no longer standing in), nothing on the disk changing.
 
 Opening Trovolve from a phone needs more than the layout: as set up, the UI asks for the service at `http://localhost:7071/api`, which on a phone is the phone itself, and the service lets only `http://localhost:3000` call it (`Cors:Origins` in `Trovolve.Server/appsettings.json`). Reaching it from another device means serving both on the computer's network address, with `NEXT_PUBLIC_API_BASE`, the CORS list and `AllowedHosts` (below) changed to match, and `TROVOLVE_API_KEY` set so that other devices on the network cannot use the service: it has no other login.
 

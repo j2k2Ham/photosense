@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizeView } from '../../components/organize/OrganizeView';
-import { saveOrganizeRoot } from '../../lib/lastScan';
+import { forgetOrganizeRoot, saveOrganizeRoot } from '../../lib/lastScan';
 import type { OrganizeReading } from '../../lib/useOrganizeReading';
 import type { OrganizeApplyDto, OrganizeApplyRequest, OrganizeBatchDto, OrganizeDestination, OrganizeFileDto, OrganizeFilesDto, OrganizePlanDto, OrganizePlanFile, PlanDto } from '../../types';
 import { deferred } from '../deferred';
@@ -92,6 +92,23 @@ describe('choosing the folder', () => {
     listings[OTHER] = { data: listing(OTHER, [at('x', 0, { folder: OTHER })], false) };
     open();
     expect(chip()).toHaveTextContent('Phone 2022 · 1 file · read just now');
+  });
+
+  it('tells the page the folder whose files it shows, once they are in', () => {
+    const onShowing = vi.fn();
+    listings[ROOT] = {};
+    const view = render(<OrganizeView startRoot={ROOT} unit="miles" onShowing={onShowing} notify={notify} />);
+    expect(onShowing).toHaveBeenLastCalledWith(undefined);
+    listings[ROOT] = { data: listing(ROOT) };
+    view.rerender(<OrganizeView startRoot={ROOT} unit="miles" onShowing={onShowing} notify={notify} />);
+    expect(onShowing).toHaveBeenLastCalledWith(ROOT);
+  });
+
+  it('once its results were cleared, asks for a folder, though a scan\u2019s folder could stand in', () => {
+    forgetOrganizeRoot();
+    open();
+    expect(chip()).toHaveTextContent('No folder chosen yet');
+    expect(screen.getByText('Choose a folder to organize')).toBeInTheDocument();
   });
 
   it('asks for a folder when there is none to start with', async () => {

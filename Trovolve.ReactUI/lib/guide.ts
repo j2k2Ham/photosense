@@ -64,7 +64,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Finding your way',
         tips: [
           'The switch at the top left, **Clean up | Organize | Phones**, moves between the three areas. Each keeps what you were doing in it. A dot on **Phones** says it is new, until you first open it.',
-          'The menu, the three lines at the top right, has **Theme**, **Change folders or rescan**, **Clear results**, **Settings**, **Support** (with **Errors** and the **Support page** under it), **Help**, **About Trovolve** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
+          'The menu, the three lines at the top right, has **Theme**, **Change folders or rescan** (only while Clean up shows a scan’s results), **Clear results** (while Clean up shows a scan’s results, or Organize a folder’s files), **Settings**, **Support** (with **Errors** and the **Support page** under it), **Help**, **About Trovolve** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
           'Beside the menu, your plan: **Trovolve Free**, with how many free removals are left today, or **Trovolve Pro**. Point at it for more.',
           'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors**, in the menu’s **Support**, until you clear it.',
           'In a narrow window the screen rearranges itself to fit. In **Clean up**, click a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and clicking a folder shows its files. Make the window wider and the two sit side by side again.',
@@ -233,6 +233,7 @@ export const GUIDE: GuideTopic[] = [
       {
         steps: [
           'Switch to **Organize**. It starts with the folder you last scanned; **Choose root folder** takes any other. No scan is needed.',
+          '**Clear results**, in the menu while Organize shows a folder’s files, puts that folder away with its search, filters and folders of your own, and Organize asks for a folder again. Nothing on the disk changes.',
           'Wait while the folder is read. Only the date and the place of each file are read. A large folder takes minutes the first time, and the files appear as they are read; after that it is quick.',
           'Choose how to group, on the right: **Group by** Place or Date, and **Then by** what each folder is split by inside. Place then Year gives folders such as Butte\\2022; Date then Place gives 2022\\Butte.',
           'For places, **Nearby places** decides whether places within 1, 5, 15, 25 or 50 miles of each other share a folder, and **Folder names** how a place’s folder is named. Choose kilometers instead under **Distances** in Settings.',

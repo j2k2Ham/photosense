@@ -29,10 +29,10 @@ import {
 import { useBackupNote } from '../lib/backupNote';
 import { originalsStay, someGroups } from '../lib/cleanup';
 import { fromScanned } from '../lib/organize';
-import { binName, formatBytes, linkedFiles } from '../lib/format';
+import { binName, formatBytes, leaf, linkedFiles } from '../lib/format';
 import { limitLine, overLimit } from '../lib/plan';
 import type { GuidePlace } from '../lib/guide';
-import { loadLastScan, loadOrganizeRoot, useLastScan } from '../lib/lastScan';
+import { forgetOrganizeRoot, loadLastScan, loadOrganizeRoot, useLastScan } from '../lib/lastScan';
 import { useAppSettings } from '../lib/settings';
 import { platformOf, type TabId } from '../lib/phone';
 import { useSkin } from '../lib/skin';
@@ -182,6 +182,18 @@ export default function HomePage() {
   // That no duplicates wait to be removed is said in a message, once each time it comes to be so (Jamie, 2026-11-24),
   // while the duplicates of a scan that read something show. The count is the whole scan's, whatever the search.
   const nothingWaits = data !== undefined && hasResults && removable === 0;
+  // Changing the folders and clearing the results are offered only while Clean up shows a scan's results.
+  const showingResults = area === 'clean' && hasResults && screen === 'results';
+  // The folder whose files Organize shows, which Clear results there forgets, starting Organize afresh, its filters and all.
+  const [organizeShows, setOrganizeShows] = useState<string>();
+  const [organizeRun, setOrganizeRun] = useState(0);
+  const clearOrganize = (folder: string) => () => {
+    forgetOrganizeRoot();
+    setOrganizeShows(undefined);
+    setOrganizeRun(run => run + 1);
+    push(`Cleared Organize's results for ${leaf(folder)}. Your photos were not touched.`, 'ok');
+  };
+  const offerToClear = showingResults ? () => setPending({ scope: 'clear' }) : area === 'organize' && organizeShows ? clearOrganize(organizeShows) : undefined;
   const saidNothing = useRef(false);
   useEffect(() => {
     if (!nothingWaits) { saidNothing.current = false; return; }
@@ -476,13 +488,13 @@ export default function HomePage() {
           onErrors={() => setErrorsOpen(true)} onSupport={() => setSupportOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={topic => setAboutOpen(topic ?? 'about')} reading={aboutOpen !== undefined} />
       ) : (
         <>
-        <TopBar plan={plan} area={area} fresh={settings.phonesSeen ? [] : ['phones']} onArea={turnTo} showScan={area === 'clean' && hasResults && screen === 'results'} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
+        <TopBar plan={plan} area={area} fresh={settings.phonesSeen ? [] : ['phones']} onArea={turnTo} showScan={showingResults} folders={folders} files={status.data?.totalPhotos} scanned={status.data?.completed}
           errorCount={errors.length} menuOpen={menuOpen} onChangeFolders={changeFolders}
           onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
           {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
           {menuOpen && (
             <AppMenu theme={themeChoice} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)} onSupport={() => setSupportOpen(true)}
-              onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase} />
+              onChangeFolders={showingResults ? changeFolders : undefined} onClearResults={offerToClear} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase} />
           )}
           {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>
 
@@ -490,7 +502,7 @@ export default function HomePage() {
 
         <main className="flex min-h-0 flex-1 flex-col">
           {organizing && (
-            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView startRoot={folders[0]} unit={settings.distanceUnit} notify={push} /></div>
+            <div className={area === 'organize' ? 'flex min-h-0 flex-1 flex-col' : 'hidden'}><OrganizeView key={organizeRun} startRoot={folders[0]} unit={settings.distanceUnit} onShowing={setOrganizeShows} notify={push} /></div>
           )}
 
           {area === 'phones' && <PhonesView notify={push} onPair={() => setPairOpen(true)} />}

@@ -28,6 +28,8 @@ interface Props {
   readonly startRoot?: string;
   /** The unit distances are said in, from Settings. */
   readonly unit: DistanceUnit;
+  /** Told the folder whose files are shown, or nothing while none are, so that the menu can offer to clear them. */
+  onShowing?(root: string | undefined): void;
   notify(message: string, kind?: ToastKind, action?: ToastAction): void;
 }
 
@@ -53,11 +55,12 @@ const Named = ({ children }: { readonly children: string }) => <span className="
 const Where = ({ children }: { readonly children: string }) => <span className="font-mono text-[13.5px] [overflow-wrap:anywhere]">{children}</span>;
 
 /** Organize: every file of a folder, the folders it could be sorted into, and the way to look before anything moves. */
-export function OrganizeView({ startRoot, unit, notify }: Props) {
+export function OrganizeView({ startRoot, unit, onShowing, notify }: Props) {
   const [chosen, setChosen] = useState<string>();
   // What this browser remembers is read once the page is in the browser.
   const remembered = useOrganizeRoot();
-  const root = chosen ?? (remembered || undefined) ?? startRoot;
+  // Cleared (kept empty), no folder stands in until one is chosen.
+  const root = chosen ?? (remembered === '' ? undefined : remembered ?? startRoot);
   const listing = useOrganizeFiles(root);
   const batches = useOrganizeBatches();
   // A phone keeps each picture once, in one of Trovolve's albums at a time: there it can be moved, not copied.
@@ -105,6 +108,8 @@ export function OrganizeView({ startRoot, unit, notify }: Props) {
   const listed = listing.data ?? soFar?.listing;
   const data = useMemo(() => (listed && gone.size > 0 ? { ...listed, files: listed.files.filter(f => !gone.has(f.id)) } : listed), [listed, gone]);
   const files = data?.files ?? NO_FILES, places = data?.places ?? NO_PLACES;
+  const showing = data ? root : undefined;
+  useEffect(() => { onShowing?.(showing); }, [showing, onShowing]);
 
   useEffect(() => {
     if (listing.error) notify(messageOf(listing.error), 'error');

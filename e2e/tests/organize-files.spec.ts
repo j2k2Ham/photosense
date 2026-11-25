@@ -24,6 +24,29 @@ test.describe('Organize: the files', () => {
     await expect(gallery(page).getByRole('listitem')).toHaveCount(3);
   });
 
+  test('Clear results, in the menu once a folder is shown, forgets the folder and its filters, and asks for a folder again, the files where they were', async ({ page, photos }) => {
+    mixed(photos);
+    await page.goto('/');
+    await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Clear results' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await openOrganize(page, photos.root);
+    await page.getByRole('group', { name: 'Type' }).getByRole('button', { name: /^Videos/ }).click();
+    await page.getByRole('textbox', { name: 'Search by name, place or month' }).fill('Butte');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Change folders or rescan' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Clear results' }).click();
+    await expect(message(page, "Cleared Organize's results for Phone Pictures. Your photos were not touched.")).toBeVisible();
+    await expect(page.getByLabel('Folder being organized')).toHaveText('No folder chosen yet');
+    await expect(page.getByText('Choose a folder to organize')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Search by name, place or month' })).toHaveValue('');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Clear results' })).toHaveCount(0);
+    expect(photoFiles(photos).sort()).toEqual(['Trips/IMG_0001.JPG', 'Trips/IMG_0002.JPG', 'Trips/IMG_0003.JPG', 'Trips/IMG_0004.MOV']);
+  });
+
   test('files are found by name, by place and by month', async ({ page, photos }) => {
     mixed(photos);
     await openOrganize(page, photos.root);

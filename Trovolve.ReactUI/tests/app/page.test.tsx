@@ -22,15 +22,24 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
 // The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
-vi.mock('../../components/organize/OrganizeView', () => ({
-  OrganizeView: ({ startRoot, unit, notify }: { startRoot?: string; unit: string; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => (
-    <section aria-label="Organize">
-      Organizing {startRoot ?? 'no folder'}
-      <span>Distances in {unit}</span>
-      <button type="button" onClick={() => notify('Moved 13 files to Butte', 'ok', { label: 'Undo', run: () => notify('Moved 13 files back', 'ok') })}>Move some</button>
-    </section>
-  ),
-}));
+// It can say it shows a folder's files, and has a filter of its own, which starting it afresh puts back.
+vi.mock('../../components/organize/OrganizeView', async () => {
+  const { useState } = await import('react');
+  return {
+    OrganizeView: ({ startRoot, unit, onShowing, notify }: { startRoot?: string; unit: string; onShowing(root?: string): void; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => {
+      const [videos, setVideos] = useState(false);
+      return (
+        <section aria-label="Organize">
+          Organizing {startRoot ?? 'no folder'}
+          <span>Distances in {unit}</span>
+          <button type="button" onClick={() => notify('Moved 13 files to Butte', 'ok', { label: 'Undo', run: () => notify('Moved 13 files back', 'ok') })}>Move some</button>
+          <button type="button" onClick={() => onShowing('C:\\Photos\\Butte')}>Show Butte</button>
+          <button type="button" aria-pressed={videos} onClick={() => setVideos(true)}>Videos only</button>
+        </section>
+      );
+    },
+  };
+});
 
 // Pairing a phone is tested on its own; here it can be closed.
 vi.mock('../../components/PairWindow', () => ({
@@ -1505,13 +1514,39 @@ describe('the two areas', () => {
     expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ distanceUnit: 'km' });
   });
 
-  it('go back to Clean up when the folders are to be changed or scanned again', async () => {
+  it('offer changing the folders and clearing the results only while Clean up shows a scan’s results', async () => {
+    const offered = () => ['Change folders or rescan', 'Clear results'].filter(name => screen.queryByRole('menuitem', { name }));
     open();
+    await click('Menu');
+    expect(offered()).toEqual(['Change folders or rescan', 'Clear results']);
+    fireEvent.keyDown(window, { key: 'Escape' });
     await userEvent.click(area('Organize'));
     await click('Menu');
+    expect(offered()).toEqual([]);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await userEvent.click(area('Clean up'));
+    await click('Menu');
     await userEvent.click(screen.getByRole('menuitem', { name: 'Change folders or rescan' }));
-    expect(area('Clean up')).toHaveAttribute('aria-pressed', 'true');
     expect(setupHeading()).toBeInTheDocument();
+    // Not on the scan screen.
+    await click('Menu');
+    expect(offered()).toEqual([]);
+  });
+
+  it('offer clearing Organize\u2019s results once it shows a folder\u2019s files, which starts Organize afresh, its filters too, with no folder', async () => {
+    const offered = () => ['Change folders or rescan', 'Clear results'].filter(name => screen.queryByRole('menuitem', { name }));
+    open();
+    await userEvent.click(area('Organize'));
+    await userEvent.click(screen.getByRole('button', { name: 'Show Butte' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Videos only' }));
+    await click('Menu');
+    expect(offered()).toEqual(['Clear results']);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Clear results' }));
+    await toast("Cleared Organize's results for Butte. Your photos were not touched.");
+    expect(localStorage.getItem('trovolve-organize-root')).toBe('');
+    expect(screen.getByRole('button', { name: 'Videos only' })).toHaveAttribute('aria-pressed', 'false');
+    await click('Menu');
+    expect(offered()).toEqual([]);
   });
 });
 

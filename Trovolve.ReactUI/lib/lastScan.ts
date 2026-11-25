@@ -36,12 +36,20 @@ export function loadOrganizeRoot(): string {
   return readStored(ORGANIZE_KEY) ?? '';
 }
 
-/** The folder last chosen to organize in this browser; empty when none was, or until the browser's storage is read. */
-export function useOrganizeRoot(): string {
-  return useStored(ORGANIZE_KEY)[0] ?? '';
+/**
+ * The folder last chosen to organize in this browser: empty once Organize's results were cleared, so that no folder is
+ * shown until one is chosen; null when none was ever chosen, or until the browser's storage is read.
+ */
+export function useOrganizeRoot(): string | null {
+  return useStored(ORGANIZE_KEY)[0] ?? null;
 }
 
 /** Remembers the folder last organized, in this browser. */
 export function saveOrganizeRoot(root: string): void {
   keep(ORGANIZE_KEY, root);
+}
+
+/** Forgets the folder organized, so that Organize asks for one again, even where a scan's folder could stand in. */
+export function forgetOrganizeRoot(): void {
+  keep(ORGANIZE_KEY, '');
 }

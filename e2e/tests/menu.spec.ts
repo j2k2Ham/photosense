@@ -72,6 +72,11 @@ test.describe('the menu', () => {
     // With no results left, there is nothing to start over from or go back to.
     await expect(page.getByText('Start over')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Back to results' })).toHaveCount(0);
+    // Nor anything in the menu to change or clear: they show only beside a scan's results.
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Change folders or rescan' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Clear results' })).toHaveCount(0);
     expect(photos.files()).toEqual(['Backup/IMG_0001.JPG', 'IMG_0001.JPG']);
   });
 

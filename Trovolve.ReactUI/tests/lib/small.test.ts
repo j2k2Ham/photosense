@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup, renderToString } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { loadLastScan, loadOrganizeRoot, saveLastScan, saveOrganizeRoot, useLastScan, useOrganizeRoot } from '../../lib/lastScan';
+import { forgetOrganizeRoot, loadLastScan, loadOrganizeRoot, saveLastScan, saveOrganizeRoot, useLastScan, useOrganizeRoot } from '../../lib/lastScan';
 import { loadAppSettings, useAppSettings } from '../../lib/settings';
 import { skinOf, useSkin } from '../../lib/skin';
 import { useTheme } from '../../lib/theme';
@@ -193,6 +193,14 @@ describe('the folder last organized', () => {
     saveOrganizeRoot('D:\\other');
     expect(loadOrganizeRoot()).toBe('');
   });
+
+  it('is kept empty once forgotten, which is not the same as never chosen', () => {
+    const organized = renderHook(() => useOrganizeRoot());
+    expect(organized.result.current).toBeNull();
+    act(() => saveOrganizeRoot('C:\\Phone Pictures'));
+    act(() => forgetOrganizeRoot());
+    expect([organized.result.current, loadOrganizeRoot()]).toEqual(['', '']);
+  });
 });
 
 describe('the last scan', () => {
@@ -205,7 +213,7 @@ describe('the last scan', () => {
   it('is shown again as soon as a scan is started, and the folder last organized too', () => {
     const scan = renderHook(() => useLastScan());
     const organized = renderHook(() => useOrganizeRoot());
-    expect([scan.result.current.root, organized.result.current]).toEqual(['', '']);
+    expect([scan.result.current.root, organized.result.current]).toEqual(['', null]);
     act(() => { saveLastScan({ root: 'C:\\photos', second: '', recursive: true }); saveOrganizeRoot('C:\\photos\\2024'); });
     expect([scan.result.current.root, organized.result.current]).toEqual(['C:\\photos', 'C:\\photos\\2024']);
   });

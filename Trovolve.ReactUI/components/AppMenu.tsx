@@ -13,8 +13,10 @@ interface Props {
   onErrors(): void;
   /** Opens the support page. */
   onSupport(): void;
-  onChangeFolders(): void;
-  onClearResults(): void;
+  /** Goes to the scan screen; left out where there are no results to change from. */
+  onChangeFolders?(): void;
+  /** Asks to forget the results; left out where there are none. */
+  onClearResults?(): void;
   onSettings(): void;
   onHelp(): void;
   onAbout(): void;
@@ -102,8 +104,8 @@ export function AppMenu({ theme, errorCount, onTheme, onErrors, onSupport, onCha
         </div>
       )}
       <div role="separator" className="my-1 border-t border-line" />
-      <button type="button" role="menuitem" onClick={pick(onChangeFolders)} className={item}>Change folders or rescan</button>
-      <button type="button" role="menuitem" onClick={pick(onClearResults)} className={item}>Clear results</button>
+      {onChangeFolders && <button type="button" role="menuitem" onClick={pick(onChangeFolders)} className={item}>Change folders or rescan</button>}
+      {onClearResults && <button type="button" role="menuitem" onClick={pick(onClearResults)} className={item}>Clear results</button>}
       <button type="button" role="menuitem" onClick={pick(onSettings)} className={item}>Settings</button>
       <button ref={supportItem} type="button" role="menuitem" aria-haspopup="menu" aria-expanded={open === 'support'} onClick={toggle('support')} className={item}>
         Support

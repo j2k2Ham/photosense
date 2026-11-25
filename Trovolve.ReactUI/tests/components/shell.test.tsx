@@ -300,6 +300,11 @@ describe('AppMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Help' })).toHaveFocus();
   });
 
+  it('leaves out changing the folders and clearing the results when the page does not offer them', () => {
+    render(<AppMenu theme="dark" errorCount={0} onTheme={vi.fn()} onErrors={vi.fn()} onSupport={vi.fn()} onSettings={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onDeletePermanently={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['ThemeDark', 'Settings', 'Support', 'Help', 'About Trovolve', 'Move to Recycle Bin…']);
+  });
+
   it('says nothing of errors on Support while there are none', () => {
     render(<AppMenu theme="dark" errorCount={0} onTheme={vi.fn()} onErrors={vi.fn()} onSupport={vi.fn()} onChangeFolders={vi.fn()} onClearResults={vi.fn()}
       onSettings={vi.fn()} onHelp={vi.fn()} onAbout={vi.fn()} onDeletePermanently={vi.fn()} onClose={vi.fn()} />);
