@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Removal;
@@ -106,7 +107,7 @@ public sealed class ChangesTogetherTests
     public ChangesTogetherTests()
     {
         _batches = new MemoryBatchStore();
-        _changes = new FileChanges(_batches, new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, _files, TestPlans.Unlimited());
+        _changes = new FileChanges(_batches, new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, _files, TestPlans.Unlimited(), NullLogger<FileChanges>.Instance);
     }
 
     private string In(params string[] parts) => Path.Combine([_root, .. parts]);
@@ -167,7 +168,7 @@ public sealed class ChangesTogetherTests
     {
         var plan = new PlanParts();
         var repo = new InMemoryPhotoRepository();
-        var changes = new FileChanges(_batches, repo, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals(plan));
+        var changes = new FileChanges(_batches, repo, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals(plan), NullLogger<FileChanges>.Instance);
 
         // The person says no to the phone's question: nothing goes, nothing is counted, and nothing is written down.
         _files.FailErasing = true;
@@ -226,7 +227,7 @@ public sealed class ChangesTogetherTests
         var removed = In("_Trovolve_Removed");
         _files.Put(Path.Combine(removed, "IMG_1.JPG"), "one");
         _files.Put(Path.Combine(removed, "Trips", "IMG_2.JPG"), "two!");
-        var erasing = new RemovedFiles(new InMemoryPhotoRepository(), _batches, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals(), null);
+        var erasing = new RemovedFiles(new InMemoryPhotoRepository(), _batches, new Mock<IAuditRepository>().Object, _files, TestPlans.Removals(), null, NullLogger<RemovedFiles>.Instance);
 
         _files.FailErasing = true;
         var refused = await erasing.EraseAsync([removed], ct);

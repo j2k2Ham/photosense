@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks>$(TrovolveSharedTargets)</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
@@ -10,5 +10,7 @@
   <ItemGroup>
     <!-- Its services register themselves (AddTrovolveApplication), with the settings they read. -->
     <PackageReference Include="Microsoft.Extensions.Options" Version="11.0.0" />
+    <!-- What its services write to the program's log; each host decides where that goes. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
   </ItemGroup>
 </Project>

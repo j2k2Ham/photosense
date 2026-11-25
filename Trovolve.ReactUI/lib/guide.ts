@@ -112,7 +112,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Starting afresh',
         tips: [
           '**Start over**, on the scan screen, forgets what earlier scans recorded and reads every file again. It, and **Back to results**, are offered once a scan has found something.',
-          '**Clear results**, in the menu, forgets it all without scanning.',
+          '**Clear results**, in the menu, forgets it all without scanning, and Clean up goes back to the scan screen, ready for the next scan.',
           'Neither touches your pictures, or anything already in **_Trovolve_Removed**.',
           'Files in **_Trovolve_Removed** are never scanned, so a deleted copy does not turn up as a duplicate again.',
         ],

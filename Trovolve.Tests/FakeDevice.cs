@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.DependencyInjection;
 using Trovolve.Application;
 using Trovolve.Application.Changes;
@@ -59,7 +60,7 @@ internal static class TestBackups
         TermsAcceptance? terms = null, IPairingStore? pairs = null)
     {
         var disk = files ?? new DiskFileSystem();
-        var changes = new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), Moq.Mock.Of<IAuditRepository>(), disk, TestPlans.Unlimited());
+        var changes = new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), Moq.Mock.Of<IAuditRepository>(), disk, TestPlans.Unlimited(), NullLogger<FileChanges>.Instance);
         // The computer's own readers of what a file says and where places are, as AddTrovolveCore makes them.
         var core = new ServiceCollection().AddSingleton(disk).AddTrovolveApplication().AddTrovolveCore().AddStandInStores().BuildServiceProvider();
         return new ComputerBackup(store ?? new MemoryBackupStore(), disk, changes, plan ?? TestPlans.Subscription(), root, home ?? Path.GetDirectoryName(root)!, clock ?? new TestClock(),

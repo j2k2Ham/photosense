@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Trovolve.Application.Locations;
@@ -134,6 +135,7 @@ public sealed class PhoneBackup
     private readonly string _name;
     private readonly string _root;
     private readonly TimeProvider _clock;
+    private readonly ILogger<PhoneBackup> _log;
     private readonly object _lock = new();
     private readonly IVaultFiles _vault;
     private readonly ILocationStore _locations;
@@ -180,9 +182,12 @@ public sealed class PhoneBackup
     /// <param name="vault">The hidden vault's files, which a backup sends as they are kept, sealed.</param>
     /// <param name="locations">The other places the phone backs up to, whose checked copies count toward Safe to delete too, and whether the computer is on.</param>
     /// <param name="terms">Whether the person accepted the note asking for a backup, which the phone and the computer tell each other.</param>
+    /// <param name="log">The program's log, told how each backup ended.</param>
     public PhoneBackup(IBackupLedger ledger, IComputerFinder finder, IPairingStore pairs, OrganizeLibrary library, IPhotoFileSystem files, Subscription plan, DailyRemovals removals,
-        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault, ILocationStore locations, TermsAcceptance terms)
+        IDeviceStatus device, IFavoritePhotos favorites, string name, string root, TimeProvider clock, IVaultFiles vault, ILocationStore locations, TermsAcceptance terms,
+        ILogger<PhoneBackup> log)
     {
+        _log = log;
         _terms = terms;
         _vault = vault;
         _locations = locations;
@@ -608,17 +613,21 @@ public sealed class PhoneBackup
             var safe = await SafeAsync(stop);
             await channel.SendAsync(new JsonObject { ["t"] = "bye", ["safe"] = safe.Removable.Count, ["safeBytes"] = safe.Removable.Bytes }, stop);
             await _ledger.SaveComputerAsync(computer with { LastBackup = _clock.GetUtcNow() }, CancellationToken.None);
-            lock (_lock) run.Stage = BackupStage.Ready;
+            int count;
+            lock (_lock) (run.Stage, count) = (BackupStage.Ready, run.Done.Count);
+            TrovolveLog.BackupFinished(_log, computer.Name, count);
         }
         catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
         {
+            string problem;
             lock (_lock)
             {
                 // Paused: Pause said so, and what is on the computer stays known.
                 if (run.Stage == BackupStage.Paused) return;
                 run.Stage = BackupStage.Failed;
-                run.Problem = ex is TransferException ? ex.Message : $"The backup stopped: {ex.Message}";
+                problem = run.Problem = ex is TransferException ? ex.Message : $"The backup stopped: {ex.Message}";
             }
+            TrovolveLog.DeviceTalkStopped(_log, ex, "Backup to the computer", problem);
             // The computer forgot this phone: the phone forgets it too, and offers to pair again.
             if (ex is TransferException { Refused: true }) await ForgetHereAsync(computer, ex.Message, CancellationToken.None);
         }

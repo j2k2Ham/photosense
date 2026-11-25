@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -160,7 +161,7 @@ public class PlanEndpointsTests
         var services = new TestApi().Services;
         var backup = new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("phone"), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
             TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "Jamie's iPhone", Path.GetTempPath(), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(),
-            TestPlans.Terms());
+            TestPlans.Terms(), NullLogger<PhoneBackup>.Instance);
         var before = backup.Telling;
 
         var accepted = await new PlanApi(new TestApi(s => s.AddSingleton(backup))).AcceptAsync(Http.Post("terms/accept").FromClient(), ct);

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Trovolve.Domain.Configuration;
 using Trovolve.Application.Organizing;
@@ -129,6 +130,8 @@ public static class TrovolvePhoneServices
             DatabasePath = Path.Combine(dataFolder, "trovolve.db"),
             ThumbnailPath = Path.Combine(cacheFolder, "thumbnails"),
         }));
+        // A phone has no console to read: its log is kept in files beside what Trovolve records.
+        s.AddTrovolveLogFile(_ => Path.Combine(dataFolder, "logs"));
         s.AddSingleton<IPhotoFileSystem>(photos);
         s.AddSingleton(access);
         s.AddSingleton(analyzer);
@@ -144,12 +147,12 @@ public static class TrovolvePhoneServices
         s.AddSingleton(device);
         s.AddSingleton(sp => new PhoneBackup(sp.GetRequiredService<IBackupLedger>(), computers, sp.GetRequiredService<IPairingStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos,
             sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, photos, name, Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>(), vault,
-            sp.GetRequiredService<ILocationStore>(), sp.GetRequiredService<TermsAcceptance>()));
+            sp.GetRequiredService<ILocationStore>(), sp.GetRequiredService<TermsAcceptance>(), sp.GetRequiredService<ILogger<PhoneBackup>>()));
         // The other places it backs up to: cloud services and those Connect to server adds.
         s.AddSingleton(sp => new BackupLocations(sp.GetRequiredService<ILocationStore>(), sp.GetRequiredService<ILocationSecrets>(), sp.GetRequiredService<IRemoteFolders>(),
             sp.GetRequiredService<ICloudAccounts>(), sp.GetRequiredService<IWebSignIn>(), sp.GetRequiredService<PhoneBackup>(), sp.GetRequiredService<IBackupLedger>(),
             sp.GetRequiredService<OrganizeLibrary>(), photos, photos, sp.GetRequiredService<Subscription>(), sp.GetRequiredService<DailyRemovals>(), device, Path.TrimEndingDirectorySeparator(root),
-            sp.GetRequiredService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<ILogger<BackupLocations>>()));
         // Swipe to clean: a set a day, what is marked deleted together at the end.
         s.AddSingleton(sp => new SwipeToClean(sp.GetRequiredService<ISwipeStore>(), sp.GetRequiredService<OrganizeLibrary>(), photos, sp.GetRequiredService<PhoneBackup>(),
             sp.GetRequiredService<DailyRemovals>(), Path.TrimEndingDirectorySeparator(root), sp.GetRequiredService<TimeProvider>()));

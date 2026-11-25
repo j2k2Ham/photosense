@@ -17,6 +17,9 @@
 
 ## Traps already met
 
+- A new store interface needs a stand-in in `AddStandInStores` the day it is added. Without one, every test built on the stand-ins falls through to the LiteDB store, which opens the real database file under the default settings (`%LOCALAPPDATA%\Trovolve\trovolve.db`): on 2026-11-25 the usage store's missing stand-in did, failing 205 tests with "the file is being used by another process".
+- A test of something that logs passes `NullLogger<T>.Instance`, or `ListLogger<T>` (`Tests/ListLogger.cs`) to check a line's level, event id and words. The `[LoggerMessage]` code is generated (`*.g.cs`) and left out of coverage.
+
 - `IsEquivalentTo` compares objects member by member through reflection. Some types throw when read that way (an `IPAddress`'s `ScopeId` does), and one holding a `Func` cannot be compared. Compare their strings or keys instead.
 - coverlet counts more branches than the source shows. A `?.` is one, and a list pattern (`parts is [a, b, ..]`) checks for null and for length, so one that can never be null leaves a branch no test can reach. Write `parts.Length >= 2 && …`, or a `!` when the value cannot be null.
 - A branch that depends on the OS cannot be covered on one machine. Put the OS's answer behind a seam (see `patterns.md`).

@@ -25,7 +25,15 @@
 
 ## Building on Jamie's PC
 
-- **What is missing:** the android workload, a JDK (`C:\Program Files\Android\openjdk\jdk-21.0.8`) and the SDK (`C:\Program Files (x86)\Android\android-sdk`) came with Visual Studio. The Mono pack the build needs did not, and installing it into Program Files needs admin.
+- **On .NET 11 (since 2026-11-25):** the .NET 11 SDK is in `%LOCALAPPDATA%\Microsoft\dotnet`, put first on the path (`DOTNET_ROOT` and `PATH`), with its own `android` workload, installed there without admin. The app targets Android 37, whose platform is fetched into `%LOCALAPPDATA%\Android\sdk` (`-t:InstallAndroidDependencies -f net11.0-android -p:AndroidSdkDirectory=… -p:AcceptAndroidSDKLicenses=True`). It runs on CoreCLR, and Mono's `RunAOTCompilation` is refused (XA1044); `-p:PublishReadyToRun=false` makes the quicker local build:
+
+  ```sh
+  dotnet build Trovolve.Android -c Release -nodeReuse:false -p:TrovolvePage=<page out> -p:AndroidSdkDirectory="$LOCALAPPDATA/Android/sdk" \
+    "-p:JavaSdkDirectory=C:\Program Files\Android\openjdk\jdk-21.0.8" -p:PublishReadyToRun=false
+  ```
+
+  For a check of the build alone, `<page out>` can be a folder holding a stand-in `index.html`. The Mono-pack workaround below was for .NET 10.
+- **What is missing (on .NET 10):** the android workload, a JDK (`C:\Program Files\Android\openjdk\jdk-21.0.8`) and the SDK (`C:\Program Files (x86)\Android\android-sdk`) came with Visual Studio. The Mono pack the build needs did not, and installing it into Program Files needs admin.
 - **The workaround:** give it from a folder of its own.
   1. Unzip `Microsoft.NET.Runtime.MonoTargets.Sdk` 10.0.8 from nuget.org into `<scratch>/packs/Microsoft.NET.Runtime.MonoTargets.Sdk/10.0.8`, and `Microsoft.NET.Runtime.MonoAOTCompiler.Task` beside it.
   2. Set `DOTNETSDK_WORKLOAD_PACK_ROOTS=<scratch>`.

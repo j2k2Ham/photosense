@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -23,7 +24,7 @@ public sealed class ScanStartEndpointsTests : IDisposable
     public ScanStartEndpointsTests()
     {
         _scans = new HeldScans(_progress);
-        _runner = new ScanRunner(_scans, _progress, _log.Object);
+        _runner = new ScanRunner(_scans, _progress, _log.Object, NullLogger<ScanRunner>.Instance);
     }
 
     public void Dispose() => TestFiles.Remove(_root);

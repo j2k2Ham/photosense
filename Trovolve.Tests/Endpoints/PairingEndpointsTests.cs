@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +21,7 @@ public sealed class PairingEndpointsTests : IDisposable
 
     public PairingEndpointsTests()
     {
-        _computerPairing = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "trovolve-home", "Pictures", "Trovolve")), new TestClock());
+        _computerPairing = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "trovolve-home", "Pictures", "Trovolve")), new TestClock(), NullLogger<ComputerPairing>.Instance);
         _computer = new PairingApi(new TestApi(s => s.AddSingleton(_computerPairing)));
         var phone = new PhonePairing(_scanner, new FakeComputerFinder(), new TcpComputerConnector(), new MemoryPairs("phone-1"), new MemoryBackupLedger(), "Jamie's iPhone", new TestClock(), TestPlans.Terms());
         _phone = new PairingApi(new TestApi(s => s.AddSingleton(phone)));
@@ -46,7 +47,7 @@ public sealed class PairingEndpointsTests : IDisposable
         _computerPairing.StopListening();
         var closed = (await _computer.NameAsync(Http.Post("pairing/name", "{\"name\":\"Office PC\"}").FromClient(), ct)).Json();
         await Assert.That((closed.GetProperty("name").GetString(), closed.GetProperty("link").ValueKind, _telling.Telling)).IsEqualTo(("Office PC", JsonValueKind.Null, ((string, string, int)?)null));
-        var again = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "trovolve-home", "Pictures", "Trovolve")), new TestClock());
+        var again = new ComputerPairing(new TcpTransferListener(0), _telling, _pairs, "DESKTOP-4K2J9", () => ["127.0.0.1"], TestBackups.Computer(Path.Combine(Path.GetTempPath(), "trovolve-home", "Pictures", "Trovolve")), new TestClock(), NullLogger<ComputerPairing>.Instance);
         await again.ListenAsync(ct);
         await Assert.That((again.State.Name, _telling.Telling!.Value.Name)).IsEqualTo(("Office PC", "Office PC"));
         again.StopListening();

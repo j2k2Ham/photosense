@@ -33,6 +33,8 @@ public class PairingInvitationTests
     [Arguments("https://example.com/?v=1")]
     [Arguments("trovolve:pair?v=2&id=a&name=b&hosts=1.2.3.4&port=1&key=AAAAAAAAAAAAAAAAAAAAAA")]
     [Arguments("trovolve:pair?v=1&id=&name=b&hosts=1.2.3.4&port=1&key=AAAAAAAAAAAAAAAAAAAAAA")]
+    [Arguments("trovolve:pair?v=1&name=b&hosts=1.2.3.4&port=1&key=AAAAAAAAAAAAAAAAAAAAAA")]
+    [Arguments("trovolve:pair?v=1&id=a&name=b&port=1&key=AAAAAAAAAAAAAAAAAAAAAA")]
     [Arguments("trovolve:pair?v=1&id=a&hosts=1.2.3.4&port=1&key=AAAAAAAAAAAAAAAAAAAAAA")]
     [Arguments("trovolve:pair?v=1&id=a&name=b&hosts=&port=1&key=AAAAAAAAAAAAAAAAAAAAAA")]
     [Arguments("trovolve:pair?v=1&id=a&name=b&hosts=1.2.3.4&port=0&key=AAAAAAAAAAAAAAAAAAAAAA")]

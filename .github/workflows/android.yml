@@ -13,7 +13,7 @@ permissions:
 
 env:
   PACKAGE: com.j2k2ham.trovolve
-  DOTNET_SDK: '10.0.401'
+  DOTNET_SDK: '11.0.100'
 
 defaults:
   run:
@@ -81,7 +81,7 @@ jobs:
           ls -l samples
 
       - name: Get what the build needs of Android's SDK
-        run: dotnet build Trovolve.Android/Trovolve.Android.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+        run: dotnet build Trovolve.Android/Trovolve.Android.csproj -t:InstallAndroidDependencies -f net11.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
 
       # The restore above, for both of the app's runtimes, wrote packages.lock.json again, from which the app's third-party
       # notices are written (tools/notices.mjs): it must be the list committed. The linker's own tasks are left out, as the

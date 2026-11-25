@@ -26,6 +26,7 @@
 - **`PrivacyInfo.xcprivacy`:** App Store Connect refuses an upload without it.
 - **`iphone.yml`:**
   - Pins Xcode 26.6, .NET SDK 10.0.401 and the iOS workload set 10.0.401; each workload release needs one Xcode.
+  - The rest of Trovolve is on .NET 11, whose iOS workload (27.2.11039, workload set 11.0.100.1) needs Xcode 27.2, which GitHub's `macos-26` machines lack (2026-11-25). So the workflow rewrites `global.json` for the .NET 10 SDK and builds with `-p:TrovolveSharedTargets=net10.0`. Once an image has Xcode 27.2: `net11.0-ios` (`$(TrovolveTarget)-ios`), SDK 11.0.100, workload set 11.0.100.1, and both steps go.
   - Makes a HEIC, an exact copy of it and a JPEG with `sips`, and adds them to the simulator's library.
   - Grants photo access, then rewrites the TCC row to 2/2/2, because simctl's grant reads as never asked on Xcode 26.
   - Launches the app with `TROVOLVE_SELF_CHECK=1` and waits for `self-check.json` to say `"finished":true`.

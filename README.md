@@ -222,7 +222,7 @@ One folder is enough: copies inside it, in the folder itself or in its subfolder
 
 A scan builds on the one before it: files that have not changed since are skipped, files that have gone are forgotten at the end, and copies marked keep stay marked. That makes a second scan of a large library take seconds rather than minutes.
 
-To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan (it, and **Back to results**, are shown only while there are results): everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only Trovolve's record goes, with its previews and keep marks; the photos, and anything already moved to `_Trovolve_Removed`, stay where they are.
+To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan (it, and **Back to results**, are shown only while there are results): everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning, and Clean up goes back to the scan screen, the last folders still filled in. Either way only Trovolve's record goes, with its previews and keep marks; the photos, and anything already moved to `_Trovolve_Removed`, stay where they are.
 
 A scan runs in the service, not in the page. A page that is loaded again while one is running, or opened in another tab, shows that scan's progress and says when it has finished, as the page that started it does.
 
@@ -450,7 +450,7 @@ and with coverage (options for the test program go after the `--`):
 dotnet run --project Trovolve.Tests -c Release -- --coverlet --coverlet-output-format opencover --coverlet-include "[Trovolve.*]*" --coverlet-exclude "[Trovolve.Tests]*" --coverlet-exclude-by-file "**/*.g.cs" --results-directory Trovolve.Tests/coverage
 ```
 
-`dotnet test --project Trovolve.Tests -c Release` runs them too on the .NET 10 SDK, which `global.json` tells to use the new test platform. One test can be picked out with `--treenode-filter "/*/*/ClassName/*"`.
+`dotnet test --project Trovolve.Tests -c Release` runs them too on the .NET 11 SDK, which `global.json` tells to use the new test platform. One test can be picked out with `--treenode-filter "/*/*/ClassName/*"`.
 
 In a test, every assertion is awaited (`await Assert.That(actual).IsEqualTo(expected)`); one that is not awaited is never checked, so the build treats a forgotten `await` as an error. Tests run side by side, including those of one class; the few that share the in-memory log queue are marked `[NotInParallel("ScanLogQueue")]`.
 
@@ -498,7 +498,7 @@ npm test
 
 ## Quick Local Run (service + React)
 
-Needs the .NET 10 SDK (every project targets `net10.0`, and `global.json` asks for a 10.0 SDK) and Node. Nothing else: no emulator, no Functions tools. On a Mac, the script needs PowerShell 7 (`brew install --cask powershell`) and is started as `pwsh ./dev-start.ps1`.
+Needs the .NET 11 SDK (the program, the tests and the Android app target `net11.0`, C# 15, and `global.json` asks for an 11.0 SDK) and Node. The libraries the iPhone app shares (Domain, Application, Infrastructure, Api, Contracts) are built for `net10.0` too, as the iPhone app stays on .NET 10 until GitHub's Macs have the Xcode that .NET 11's iOS workload needs (below). Nothing else: no emulator, no Functions tools. On a Mac, the script needs PowerShell 7 (`brew install --cask powershell`) and is started as `pwsh ./dev-start.ps1`.
 
 The PowerShell helper script builds the service and starts it with the React (Next.js) UI:
 
@@ -660,8 +660,10 @@ The app builds only where Apple's tools are. The `iPhone app` workflow (`.github
 ```bash
 cd Trovolve.ReactUI && npm ci && NEXT_PUBLIC_API_BASE=/api npm run build && cd ..
 dotnet workload install ios
-dotnet build Trovolve.iOS/Trovolve.iOS.csproj -c Release -r iossimulator-arm64
+dotnet build Trovolve.iOS/Trovolve.iOS.csproj -c Release -r iossimulator-arm64 -p:TrovolveSharedTargets=net10.0
 ```
+
+The iPhone app is still built with the .NET 10 SDK and its iOS workload (`net10.0-ios`), as .NET 11's iOS workload needs Xcode 27.2 and GitHub's Macs have Xcode 26.6 at most (2026-11-25). `iphone.yml` points `global.json` at the .NET 10 SDK before building, and `-p:TrovolveSharedTargets=net10.0` builds the shared libraries for .NET 10 alone, which that SDK can. Once GitHub has Xcode 27.2, the app moves to `$(TrovolveTarget)-ios` and both go.
 
 ### Putting it on an iPhone or iPad
 
@@ -705,7 +707,7 @@ Only the parts that talk to Android are in `Trovolve.Android`: the media store (
 
 ### Building it
 
-The `android` workload, a JDK and Android's SDK build it (Visual Studio installs all three). First build the page for the app, as for the iPhone: in `Trovolve.ReactUI`, `NEXT_PUBLIC_API_BASE=/api npm run build`. A page built elsewhere can be named instead with `-p:TrovolvePage=<folder>`; that keeps this computer's own `.env.local` out of the app. Then `dotnet build Trovolve.Android -c Release`.
+The `android` workload, a JDK and Android's SDK build it (Visual Studio installs all three). First build the page for the app, as for the iPhone: in `Trovolve.ReactUI`, `NEXT_PUBLIC_API_BASE=/api npm run build`. A page built elsewhere can be named instead with `-p:TrovolvePage=<folder>`; that keeps this computer's own `.env.local` out of the app. Then `dotnet build Trovolve.Android -c Release`. On .NET 11 the app targets Android 37 and runs on CoreCLR; `-t:InstallAndroidDependencies -p:AndroidSdkDirectory=<folder>` fetches the Android platform it needs into a folder of your own, and `-p:PublishReadyToRun=false` leaves out the ahead-of-time compiling for a quicker build (`RunAOTCompilation`, Mono's switch, is refused on .NET 11).
 
 The check is `.github/workflows/android.yml`: it builds the app for an emulator with three sample pictures built in (`-p:TrovolveSamples`), starts Android 14 on GitHub's machine, and the app checks itself (`SelfCheck`, started with the extra `selfcheck`), each step written on the run.
 
@@ -797,6 +799,44 @@ Behavior:
 - Global rate limiting: simple token bucket (capacity 20, refill 1/sec). Exceeding this returns HTTP 429 with text body.
 - Clients should treat 429 as a signal to back off (e.g. double poll interval briefly).
 
+### In the program's log
+
+Each line of the scan log, and of what was done (`audit`), is also written to the program's log, below, at its level: `Info` as Information, `Warn` and `Warning` as Warning, `Error` as Error.
+
 ### In the UI
 
 `connectLogStream` in `Trovolve.ReactUI/lib/apiClient.ts` follows the log for the setup screen, asking the endpoint above every second and a half.
+
+## The program's log
+
+Every program writes a log through .NET's `ILogger`, its lines written by `[LoggerMessage]` methods so that nothing is put together for a level that is off (`TrovolveLog` in Application, ids by area: scans 1000, changes 1100, removed files 1200, the plan 1300, backup and pairing 1400, locations 1500, usage 1600; `ApiLog` in Api, from 2000). It says when a scan starts, finishes, is stopped or fails; each move, copy and removal carried out, undone, refused or put back; what emptying the removed files did; a store that cannot be reached; a backup finished or stopped, a pairing or a phone's backup stopped on the computer, a location that failed; each request answered (at Debug), and on a phone an error nothing else caught. Lines name files only where the person would need them to find what went wrong, and the log never leaves the device.
+
+- **Where it goes:** on a computer to the console, as ASP.NET Core sends it, and to a file a day, `logs/trovolve-2026-11-25.log` beside the database (`%LOCALAPPDATA%\Trovolve\logs` on Windows), the last 7 days kept (`FileLoggerProvider`). On a phone to the same files in the app's data folder, as it has no console.
+- **Levels:** `Logging:LogLevel` for the console and `Logging:File:LogLevel` for the file, in `Trovolve.Server/appsettings.json`. The file takes Information and above, and only Warning and above from Microsoft's own parts. `Logging__LogLevel__Default=Debug` shows every request answered, with how long it took.
+- A line that cannot be written (a full disk) is dropped: the log never stops what it describes.
+
+## Usage metrics (off)
+
+Trovolve can note which of its features are used, when, in what order, and how each ended, and send them to a usage server. **It is off**, and stays off until the server is set up: while off, nothing is noted, kept or sent. It is set in `Trovolve.Server/appsettings.json`, or on the command line:
+
+```json
+"UsageMetrics": {
+  "Enabled": false,
+  "Endpoint": "",
+  "SendEvery": "01:00:00",
+  "BatchSize": 500,
+  "MaxKept": 10000
+}
+```
+
+- **What a use is:** the route the page used, by method and template, never with the values in its address (`POST scan/start`, `GET trips/{id}`), when (UTC), its number among every use on the device, from 1, so the order is known even when two share a time, the answer's status (200, or 401, 402 and so on when refused), and the run of the program it was in. Routes the page asks again and again while a screen shows, or once for every picture, are left out (`TrovolveRoutes.NotUses`). No file, folder, photo, place, name or anything typed is noted.
+- **Who:** each installation has a random id made the first time a use is noted, which names no person or device, and each report says the program (`server`, `iphone`, `android`), its version and the system.
+- **Kept, then sent:** uses wait in the database (`usage_uses`) until the server takes them, at most `MaxKept`, the oldest forgotten first. They are sent at most once every `SendEvery` (a minute at least), oldest first, `BatchSize` at a time: by the computer's program while it runs (`SendUsage`), and by a phone when the system wakes it for its background work. A server that cannot be reached is said in the log, and nothing is lost until `MaxKept`.
+- **The server:** `Endpoint` must be HTTPS, or HTTP to this machine itself for testing; with anything else uses are kept but not sent. Each batch is one `POST` of JSON, sent whole with its length, and any answer from 200 to 299 means it was taken:
+
+```json
+{ "install": "d4a3e4de-…", "source": { "program": "server", "version": "1.2.0.57", "system": "Microsoft Windows 10.0.26300" },
+  "uses": [ { "sequence": 1, "at": "2026-11-25T16:10:55.51+00:00", "feature": "POST scan/start", "status": 202, "session": "5b8f2dbf-…" } ] }
+```
+
+- **Before turning it on:** the privacy policy and the FAQ say today that nothing leaves the device, and must say what is sent first; the phones need a way to turn it on, as their settings are in code (`UsageMetricsOptions`), not a settings file.

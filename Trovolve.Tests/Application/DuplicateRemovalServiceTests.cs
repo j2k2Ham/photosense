@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Scanning.Interfaces;
@@ -23,7 +24,7 @@ public sealed class DuplicateRemovalServiceTests : IDisposable
 
     public DuplicateRemovalServiceTests()
     {
-        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk, TestPlans.Unlimited());
+        _changes = new FileChanges(new MemoryBatchStore(), _repo, Mock.Of<IAuditRepository>(), _disk, TestPlans.Unlimited(), NullLogger<FileChanges>.Instance);
         _service = Service(new CompanionFileFinder(_disk, (_, _) => Task.FromResult<string?>(null)));
     }
 

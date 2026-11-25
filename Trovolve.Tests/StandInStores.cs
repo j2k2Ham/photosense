@@ -279,6 +279,56 @@ internal sealed class MemoryNoticeStore : INoticeStore
     }
 }
 
+/// <summary>The uses of Trovolve's features waiting to be sent, in memory, numbered as the database numbers them.</summary>
+internal sealed class MemoryUsageStore : IUsageStore
+{
+    private readonly Guid _install = Guid.NewGuid();
+    private readonly List<FeatureUse> _uses = [];
+    private long _last;
+
+    /// <inheritdoc />
+    public Task<Guid> InstallAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_install);
+    }
+
+    /// <inheritdoc />
+    public Task<FeatureUse> AddAsync(DateTimeOffset at, string feature, int status, Guid session, int keepAtMost, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_uses)
+        {
+            var use = new FeatureUse(++_last, at, feature, status, session);
+            _uses.Add(use);
+            _uses.RemoveAll(u => u.Sequence <= _last - keepAtMost);
+            return Task.FromResult(use);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<FeatureUse>> OldestAsync(int max, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_uses) return Task.FromResult<IReadOnlyList<FeatureUse>>([.. _uses.Take(max)]);
+    }
+
+    /// <inheritdoc />
+    public Task<int> CountAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_uses) return Task.FromResult(_uses.Count);
+    }
+
+    /// <inheritdoc />
+    public Task ForgetThroughAsync(long sequence, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_uses) _uses.RemoveAll(u => u.Sequence <= sequence);
+        return Task.CompletedTask;
+    }
+}
+
 /// <summary>The home chosen for Trips, and the names given trips, in memory.</summary>
 internal sealed class MemoryTripStore : ITripStore
 {
@@ -378,6 +428,7 @@ internal static class StandInStores
             .AddSingleton<ITripStore>(new MemoryTripStore())
             .AddSingleton<IDetailsFixStore>(new MemoryDetailsFixStore())
             .AddSingleton<ILocationStore>(new MemoryLocationStore())
+            .AddSingleton<IUsageStore>(new MemoryUsageStore())
             // The computer's door for phones waits on a free port of its own, and tells no network.
             .AddSingleton(new PhoneDoor(new TcpTransferListener(0), new FakeAdvertiser()));
 }

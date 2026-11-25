@@ -224,12 +224,13 @@ LiteDB 5.0.21 (MIT)
 MetadataExtractor 2.9.3 (Apache-2.0)
 Microsoft.Bcl.AsyncInterfaces 10.0.9 (MIT)
 Microsoft.Extensions.Configuration.Abstractions 10.0.9 (MIT)
-Microsoft.Extensions.DependencyInjection 10.0.15 (MIT)
+Microsoft.Extensions.DependencyInjection 11.0.0 (MIT)
 Microsoft.Extensions.DependencyInjection.Abstractions 11.0.0 (MIT)
 Microsoft.Extensions.Diagnostics.Abstractions 10.0.9 (MIT)
 Microsoft.Extensions.FileProviders.Abstractions 10.0.9 (MIT)
 Microsoft.Extensions.Hosting.Abstractions 10.0.9 (MIT)
-Microsoft.Extensions.Logging.Abstractions 10.0.9 (MIT)
+Microsoft.Extensions.Logging 11.0.0 (MIT)
+Microsoft.Extensions.Logging.Abstractions 11.0.0 (MIT)
 Microsoft.Extensions.Options 11.0.0 (MIT)
 Microsoft.Extensions.Primitives 11.0.0 (MIT)
 Microsoft.Identity.Client 4.84.2 (MIT)
@@ -237,6 +238,7 @@ Microsoft.Identity.Client.Extensions.Msal 4.84.2 (MIT)
 Microsoft.IdentityModel.Abstractions 8.14.0 (MIT)
 SSH.NET 2026.0.0 (MIT)
 System.ClientModel 1.14.0 (MIT)
+System.Diagnostics.DiagnosticSource 11.0.0 (MIT)
 System.IO.Hashing 10.0.9 (MIT)
 System.Memory.Data 10.0.9 (MIT)
 System.Security.Cryptography.ProtectedData 4.5.0 (https://github.com/dotnet/corefx/blob/master/LICENSE.TXT)
@@ -684,7 +686,7 @@ Microsoft.Extensions.Configuration.Abstractions 10.0.9 (MIT)
 Its licence is word for word that of .NET, above.
 
 ------------------------------------------------------------------------
-Microsoft.Extensions.DependencyInjection 10.0.15 (MIT)
+Microsoft.Extensions.DependencyInjection 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 Its licence is word for word that of .NET, above.
@@ -714,7 +716,13 @@ Microsoft.Extensions.Hosting.Abstractions 10.0.9 (MIT)
 Its licence is word for word that of .NET, above.
 
 ------------------------------------------------------------------------
-Microsoft.Extensions.Logging.Abstractions 10.0.9 (MIT)
+Microsoft.Extensions.Logging 11.0.0 (MIT)
+------------------------------------------------------------------------
+
+Its licence is word for word that of .NET, above.
+
+------------------------------------------------------------------------
+Microsoft.Extensions.Logging.Abstractions 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 Its licence is word for word that of .NET, above.
@@ -777,6 +785,12 @@ SOFTWARE.
 
 ------------------------------------------------------------------------
 System.ClientModel 1.14.0 (MIT)
+------------------------------------------------------------------------
+
+Its licence is word for word that of Azure.Core 1.60.0, above.
+
+------------------------------------------------------------------------
+System.Diagnostics.DiagnosticSource 11.0.0 (MIT)
 ------------------------------------------------------------------------
 
 Its licence is word for word that of Azure.Core 1.60.0, above.

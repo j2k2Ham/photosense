@@ -35,7 +35,7 @@
   ./dev-start.ps1 -Stop
 
 .NOTES
-  Needs the .NET 10 SDK and Node. Runs in PowerShell 7 (pwsh) on Windows and on a Mac, and in Windows PowerShell.
+  Needs the .NET 11 SDK and Node. Runs in PowerShell 7 (pwsh) on Windows and on a Mac, and in Windows PowerShell.
   On a Mac, PowerShell comes from 'brew install --cask powershell'; start this with 'pwsh ./dev-start.ps1'.
 #>
 param(
@@ -218,7 +218,7 @@ function Get-FreePort([int]$start,[int]$count){
 $reactPort = Get-FreePort -start $ReactBasePort -count $ReactPortScan
 
 # The service answers the page's address only, so it is told which port the page was given.
-$serviceDll = Join-Path $serviceProject (Join-Path 'bin' (Join-Path 'Debug' (Join-Path 'net10.0' 'Trovolve.Server.dll')))
+$serviceDll = Join-Path $serviceProject (Join-Path 'bin' (Join-Path 'Debug' (Join-Path 'net11.0' 'Trovolve.Server.dll')))
 $serviceProc = Start-ProcessLogged -Name 'SERVICE' -FileName 'dotnet' -WorkingDirectory $root -Color Yellow -Arguments @(
   $serviceDll, '--urls', "http://localhost:$ServicePort",
   "--Cors:Origins:0=http://localhost:$reactPort", "--Cors:Origins:1=http://127.0.0.1:$reactPort")

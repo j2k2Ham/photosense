@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Trovolve.Application.Changes;
 using Trovolve.Domain.Entities;
@@ -119,7 +120,7 @@ internal sealed class ChangesFixture : IDisposable
     {
         var audit = new Mock<IAuditRepository>();
         audit.Setup(a => a.AddAsync(It.IsAny<AuditEntry>(), It.IsAny<CancellationToken>())).Callback<AuditEntry, CancellationToken>((e, _) => Audited.Add(e)).Returns(Task.CompletedTask);
-        Changes = new FileChanges(Batches, Repo, audit.Object, Disk, TestPlans.Removals(Plan));
+        Changes = new FileChanges(Batches, Repo, audit.Object, Disk, TestPlans.Removals(Plan), NullLogger<FileChanges>.Instance);
     }
 
     /// <summary>A path in the test's folder.</summary>

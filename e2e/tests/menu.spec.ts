@@ -59,16 +59,21 @@ test.describe('the menu', () => {
     await expect(errors).toContainText(/nothing|no errors/i);
   });
 
-  test('Clear results forgets what the scan found and leaves the photos as they are', async ({ page, photos, service }) => {
+  test('Clear results forgets what the scan found, goes to the scan page, and leaves the photos as they are', async ({ page, photos }) => {
     photos.picture('IMG_0001.JPG', { seed: 1 });
     photos.copy('IMG_0001.JPG', 'Backup/IMG_0001.JPG');
-    await service.scan(photos.root);
+    // Scanned from the page, as a person does, which chooses to show the results it found.
     await page.goto('/');
+    await page.getByRole('textbox', { name: 'Base folder' }).fill(photos.root);
+    await page.getByRole('button', { name: 'Scan' }).click();
+    await expect(page.getByRole('tab', { name: 'Duplicates 1' })).toBeVisible({ timeout: 60_000 });
     await menu(page, 'Clear results');
     await expect(question(page)).toHaveAccessibleName('Clear the scan results?');
     await question(page).getByRole('button', { name: 'Clear results' }).click();
     await expect(message(page, 'Cleared the results: 2 files forgotten. Your photos were not touched.')).toBeVisible();
+    // The scan page, ready for the next scan.
     await expect(page.getByRole('heading', { name: 'Find duplicate photos and videos' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Scan' })).toBeVisible();
     // With no results left, there is nothing to start over from or go back to.
     await expect(page.getByText('Start over')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Back to results' })).toHaveCount(0);

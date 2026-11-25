@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Changes;
 using Trovolve.Domain.Configuration;
@@ -39,6 +40,7 @@ public sealed class RemovedFiles
     private readonly IPhotoFileSystem _files;
     private readonly DailyRemovals _removals;
     private readonly IRecycleBin? _bin;
+    private readonly ILogger<RemovedFiles> _log;
 
     /// <summary>The removed files where the photos are kept, with the records of what scans and changes did.</summary>
     /// <param name="repo">What the scans recorded.</param>
@@ -47,8 +49,11 @@ public sealed class RemovedFiles
     /// <param name="files">Where the photos are.</param>
     /// <param name="removals">Where the bytes erased are noted, for Year in review.</param>
     /// <param name="bin">The computer's Recycle Bin or Trash; null on a phone, which has its own, and where there is none.</param>
-    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals, IRecycleBin? bin)
+    /// <param name="log">The program's log, told what was emptied and what could not be.</param>
+    public RemovedFiles(IPhotoRepository repo, IOrganizeBatchStore batches, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals, IRecycleBin? bin,
+        ILogger<RemovedFiles> log)
     {
+        _log = log;
         _bin = bin;
         _repo = repo;
         _batches = batches;
@@ -119,6 +124,7 @@ public sealed class RemovedFiles
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
+                    TrovolveLog.RemovedProblem(_log, ex);
                     skipped += files.Count;
                     problems.Add(ex.Message);
                 }
@@ -126,7 +132,11 @@ public sealed class RemovedFiles
             else if (_bin is { } bin && bin.Holds(path))
             {
                 try { bin.Recycle([.. files.Select(f => f.Path)]); }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException) { problems.Add(ex.Message); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+                {
+                    TrovolveLog.RemovedProblem(_log, ex);
+                    problems.Add(ex.Message);
+                }
                 // What went is what is no longer there: the bin can take some files and refuse the rest.
                 var left = 0;
                 foreach (var (file, size) in files)
@@ -151,6 +161,7 @@ public sealed class RemovedFiles
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                     {
+                        TrovolveLog.RemovedProblem(_log, ex);
                         skipped++;
                         problems.Add($"{Path.GetFileName(file)}: {ex.Message}");
                     }
@@ -165,6 +176,7 @@ public sealed class RemovedFiles
             if (!batch.Items.Exists(i => _files.FileExists(i.To))) await _batches.MarkUndoneAsync(batch.Id, CancellationToken.None);
         await _audit.AddAsync(new AuditEntry { Action = "EraseRemoved", Details = $"{erased} files gone from {emptied} folders, {recycled} of them to a bin, {skipped} left" }, CancellationToken.None);
         await _removals.FreedAsync(bytes, CancellationToken.None);
+        TrovolveLog.RemovedEmptied(_log, recycled, erased - recycled, bytes, problems.Count);
         return new EraseResult(erased, bytes, skipped, problems, recycled);
     }
 

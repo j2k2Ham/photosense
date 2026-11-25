@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Trovolve.Application.Plans;
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Services;
@@ -88,7 +89,7 @@ internal sealed class FakeAppStore : IAppStore
 internal static class TestPlans
 {
     /// <summary>The plan made of <paramref name="holder"/>: a computer's, with no store, when none is given.</summary>
-    public static Subscription Subscription(PlanParts? holder = null) => new((holder ?? new PlanParts()).Store, holder?.Clock ?? new TestClock(), holder?.App, holder?.Dev);
+    public static Subscription Subscription(PlanParts? holder = null) => new((holder ?? new PlanParts()).Store, holder?.Clock ?? new TestClock(), holder?.App, NullLogger<Subscription>.Instance, holder?.Dev);
 
     /// <summary>Whether the terms of use were accepted, kept in a store of its own that says they have not been, dated by the test's clock.</summary>
     public static TermsAcceptance Terms() => new(new MemoryPlanStore(), new TestClock());

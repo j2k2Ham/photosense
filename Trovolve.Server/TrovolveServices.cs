@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Trovolve.Api.About;
 using Trovolve.Desktop.Browsing;
@@ -28,7 +29,11 @@ internal static class TrovolveServices
     public static IServiceCollection AddTrovolveComputer(this IServiceCollection s, IConfiguration cfg)
     {
         s.Configure<PhotoStorageOptions>(cfg.GetSection("PhotoStorage"));
+        // Off unless the settings turn it on (UsageMetrics:Enabled), with the usage server's address.
+        s.Configure<UsageMetricsOptions>(cfg.GetSection(UsageMetricsOptions.Section));
         s.AddSingleton<IValidateOptions<PhotoStorageOptions>, PhotoStorageOptionsValidator>();
+        // The log goes to the console, as ASP.NET Core sends it, and to a file a day beside the database.
+        s.AddTrovolveLogFile(sp => Path.Combine(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveDatabaseFolder(), "logs"));
 #if DEBUG
         // A development build (dev-start.ps1 makes one) offers plans for testing; a Release build, as made for others, never does.
         s.AddSingleton(new DevMode(true));
@@ -56,8 +61,13 @@ internal static class TrovolveServices
             sp.GetRequiredService<IPlaceNameResolver>(), sp.GetRequiredService<TermsAcceptance>(), sp.GetRequiredService<IPairingStore>()));
         // Pair a phone: the computer shows a code, and a phone it does not know may pair with it.
         s.AddSingleton(sp => new ComputerPairing(sp.GetRequiredService<PhoneDoor>().Listener, sp.GetRequiredService<PhoneDoor>().Advertiser, sp.GetRequiredService<IPairingStore>(),
-            Environment.MachineName, () => [.. MdnsPhoneFinder.Networks().Select(a => a.ToString())], sp.GetRequiredService<ComputerBackup>(), sp.GetRequiredService<TimeProvider>()));
+            Environment.MachineName, () => [.. MdnsPhoneFinder.Networks().Select(a => a.ToString())], sp.GetRequiredService<ComputerBackup>(), sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<ComputerPairing>>()));
         s.AddHostedService<OpenToPhones>();
+        s.AddHostedService<SendUsage>();
+        // Sending uses is never worth stopping the program for: an error it did not expect is written to the log by the
+        // host, which carries on, and sending waits for the next start.
+        s.Configure<HostOptions>(o => o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
         return s.AddTrovolveApplication().AddTrovolveCore();
     }
 }

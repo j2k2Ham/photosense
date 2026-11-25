@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -292,7 +293,7 @@ public sealed class SwipeTests : IDisposable
         var services = computer.Services;
         var onDisk = new SwipeToClean(new MemorySwipeStore(), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
             new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<OrganizeLibrary>(), TestFiles.Disk,
-                TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(), TestPlans.Terms()),
+                TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(), TestPlans.Terms(), NullLogger<PhoneBackup>.Instance),
             TestPlans.Removals(), In("Pictures"), new TestClock());
         var asked = await new TestApi(s => s.AddSingleton(onDisk)).SendAsync(Http.Post("swipe/delete").FromClient(), ct, "swipe/delete");
         await Assert.That((asked.StatusCode, asked.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is swiped."));
