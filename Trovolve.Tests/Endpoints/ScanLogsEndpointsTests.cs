@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using Trovolve.Application.Scanning;
@@ -8,7 +9,7 @@ namespace Trovolve.Tests.Endpoints;
 /// <summary>A scan's log lines, handed over once each, at a measured pace.</summary>
 public class ScanLogsEndpointsTests
 {
-    private readonly InMemoryScanLogSink _sink = new(new TestClock());
+    private readonly InMemoryScanLogSink _sink = new(new TestClock(), NullLogger<InMemoryScanLogSink>.Instance);
 
     private ScanApi Logs(TimeProvider? time = null) => new(new TestApi(s => s.AddSingleton<IScanLogSink>(_sink).AddSingleton(time ?? new TestClock())));
 

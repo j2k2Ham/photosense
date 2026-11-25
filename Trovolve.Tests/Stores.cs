@@ -54,6 +54,8 @@ internal static class Stores
 
     /// <summary>A phone's backup locations and what each holds, on this database.</summary>
     public static ILocationStore Locations(this LiteDatabase db) => On(db).GetRequiredService<ILocationStore>();
+    /// <summary>The uses of Trovolve's features waiting to be sent, kept in <paramref name="db"/>.</summary>
+    public static IUsageStore Usage(this LiteDatabase db) => On(db).GetRequiredService<IUsageStore>();
     /// <summary>What has been read from each file for Organize.</summary>
     public static IMediaDetailsStore MediaDetails(this LiteDatabase db) => On(db).GetRequiredService<IMediaDetailsStore>();
 }

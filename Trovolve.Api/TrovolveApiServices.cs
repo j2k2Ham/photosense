@@ -1,5 +1,10 @@
+using System.Runtime.InteropServices;
 using Trovolve.Application.Organizing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Trovolve.Api.Http;
+using Trovolve.Application.Usage;
+using Trovolve.Domain.Entities;
 using Trovolve.Application.Transfer;
 using Trovolve.Application.Vault;
 using Trovolve.Application.Locations;
@@ -24,8 +29,13 @@ public static class TrovolveApiServices
         s.AddSingleton<PhotoDtoMapper>();
         s.AddSingleton<ScanGroupingFacade>();
         s.AddSingleton<OrganizeListingMapper>();
-        s.AddSingleton<ScanRunner>();
         s.AddSingleton(ProductInfo.Bundled);
+        // The program noting uses of its features, as the usage server is told it.
+        s.AddSingleton(sp =>
+        {
+            var program = sp.GetRequiredService<ProgramInfo>();
+            return new UsageSource(program.Program, program.Version, RuntimeInformation.OSDescription);
+        });
         s.AddSingleton<HealthEndpoints>();
         s.AddSingleton<AboutEndpoints>();
         s.AddSingleton<FoldersEndpoints>();
@@ -57,15 +67,16 @@ public static class TrovolveApiServices
             sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<PhotoDtoMapper>()));
         // Only a phone fixes dates and places.
         s.AddSingleton(sp => new FixEndpoints(sp.GetService<PhotoFixes>(), sp.GetService<PhoneBackup>(), sp.GetRequiredService<IPhotoRepository>(), sp.GetRequiredService<PhotoDtoMapper>()));
-        // Only a phone has Trips.
+        // Only a phone has the hidden vault.
         s.AddSingleton(sp => new VaultEndpoints(sp.GetService<HiddenVault>()));
         // Only a phone backs up to locations.
         s.AddSingleton(sp => new LocationEndpoints(sp.GetService<BackupLocations>()));
+        // Only a phone has Trips.
         s.AddSingleton(sp => new TripEndpoints(sp.GetService<Trips>(), sp.GetService<PhoneBackup>(), sp.GetRequiredService<PhotoDtoMapper>()));
         // A phone sends and a computer receives: each program has the one half.
         s.AddSingleton(sp => new TransferEndpoints(sp.GetService<PhoneSending>(), sp.GetService<PhoneReceiving>()));
         // Made here: the endpoints it is given are this project's own.
-        s.AddSingleton(sp => new TrovolveRoutes(
+        s.AddSingleton(sp => new TrovolveRoutes(sp.GetRequiredService<ILogger<ApiRouter>>(), sp.GetRequiredService<TimeProvider>(), sp.GetRequiredService<UsageMetrics>(),
             sp.GetRequiredService<HealthEndpoints>(), sp.GetRequiredService<AboutEndpoints>(), sp.GetRequiredService<FoldersEndpoints>(),
             sp.GetRequiredService<PhotosEndpoints>(), sp.GetRequiredService<DuplicateGroupsEndpoints>(), sp.GetRequiredService<ScanStatusEndpoints>(),
             sp.GetRequiredService<ScanStartEndpoints>(), sp.GetRequiredService<ScanResetEndpoints>(), sp.GetRequiredService<ScanProgressEndpoints>(),

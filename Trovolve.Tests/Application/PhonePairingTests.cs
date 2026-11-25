@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Net.Sockets;
 using Trovolve.Application.Plans;
@@ -34,7 +35,7 @@ public sealed class PhonePairingTests : IDisposable
     private ComputerPairing Computer(string name = "Studio iMac", MemoryPairs? pairs = null, TermsAcceptance? terms = null)
     {
         var computer = new ComputerPairing(new TcpTransferListener(0), _advertiser, pairs ?? _computerPairs, name, () => ["not-an-address", "203.0.113.7", "127.0.0.1"],
-            TestBackups.Computer(Path.Combine(_home, "Pictures", "Trovolve"), home: _home, terms: terms), _clock);
+            TestBackups.Computer(Path.Combine(_home, "Pictures", "Trovolve"), home: _home, terms: terms), _clock, NullLogger<ComputerPairing>.Instance);
         _computers.Add(computer);
         return computer;
     }

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
@@ -58,7 +59,7 @@ public sealed class BackupTests : IDisposable
             .BuildServiceProvider();
         _router = _phone.GetRequiredService<TrovolveRoutes>().Router;
         _backups = TestBackups.Computer(Path.Combine(In("Home"), "Pictures", "Trovolve"), _kept, home: In("Home"), terms: _computerTerms, pairs: _computerPairs);
-        _door = new ComputerPairing(new TcpTransferListener(0), _telling, _computerPairs, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System);
+        _door = new ComputerPairing(new TcpTransferListener(0), _telling, _computerPairs, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System, NullLogger<ComputerPairing>.Instance);
         _computer = new BackupApi(new TestApi(s => s.AddSingleton(_backups)));
     }
 
@@ -295,7 +296,7 @@ public sealed class BackupTests : IDisposable
 
         var stranger = new MemoryPairs("computer-1");
         var told = new FakeAdvertiser();
-        var door = new ComputerPairing(new TcpTransferListener(0), told, stranger, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System);
+        var door = new ComputerPairing(new TcpTransferListener(0), told, stranger, "Studio iMac", () => ["127.0.0.1"], _backups, TimeProvider.System, NullLogger<ComputerPairing>.Instance);
         await door.ListenAsync(ct);
         _computers.Computers.Clear();
         var port = told.Telling!.Value.Port;
@@ -669,7 +670,7 @@ public sealed class BackupTests : IDisposable
     {
         var services = new TestApi().Services;
         var computer = new PhoneBackup(new MemoryBackupLedger(), new FakeComputerFinder(), new MemoryPairs("pc"), services.GetRequiredService<Trovolve.Application.Organizing.OrganizeLibrary>(),
-            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(), TestPlans.Terms());
+            TestFiles.Disk, TestPlans.Subscription(), TestPlans.Removals(), new FakeDevice(), new FakeFavorites(), "PC", In("Pictures"), new TestClock(), new MemoryVaultFiles(), new MemoryLocationStore(), TestPlans.Terms(), NullLogger<PhoneBackup>.Instance);
         var refused = await new BackupApi(new TestApi(s => s.AddSingleton(computer))).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);
         await Assert.That((refused.StatusCode, refused.Text())).IsEqualTo((HttpStatusCode.Conflict, "Only a phone deletes what is on its computer."));
         var neither = await new BackupApi(new TestApi()).RemoveAsync(Http.Post("backup/remove").FromClient(), ct);

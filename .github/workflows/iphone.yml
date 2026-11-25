@@ -15,10 +15,14 @@ env:
   BUNDLE: com.j2k2ham.trovolve
   # Each release of .NET for iOS needs one Xcode, and is installed by its workload set on a matching .NET SDK; the
   # three move together, as each release's notes at https://github.com/dotnet/macios/releases say. GitHub's
-  # macos-26 machines have Xcode 26.x only, so the newest workload (for Xcode 27) cannot build there yet.
+  # macos-26 machines have Xcode 26.x only, so the newest workload (for Xcode 27) cannot build there yet. So the app
+  # stays on .NET 10 while the rest of Trovolve is on .NET 11, whose iOS workload needs Xcode 27.2 (2026-11-25): this
+  # workflow points global.json at the .NET 10 SDK, and the libraries the app shares are built for net10.0 alone
+  # (TrovolveSharedTargets in Directory.Build.props).
   XCODE: '26.6'
   DOTNET_SDK: '10.0.401'
   IOS_WORKLOAD_SET: '10.0.401'
+  SHARED_TARGETS: 'net10.0'
 
 defaults:
   run:
@@ -55,6 +59,12 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_SDK }}
 
+      - name: Use the .NET SDK the iOS workload needs
+        run: |
+          # global.json asks for .NET 11's SDK, whose iOS workload needs an Xcode this machine does not have.
+          printf '{ "sdk": { "version": "%s", "rollForward": "latestPatch" } }\n' "$DOTNET_SDK" > global.json
+          echo "::notice title=.NET SDK::$(dotnet --version)"
+
       - name: Install the iOS workload
         run: |
           dotnet workload install ios --version "$IOS_WORKLOAD_SET"
@@ -69,7 +79,7 @@ jobs:
           npm run build
 
       - name: Build the app for the simulator
-        run: dotnet build Trovolve.iOS/Trovolve.iOS.csproj --configuration Release -r iossimulator-arm64 2>&1 | tee build.log
+        run: dotnet build Trovolve.iOS/Trovolve.iOS.csproj --configuration Release -r iossimulator-arm64 -p:TrovolveSharedTargets="$SHARED_TARGETS" 2>&1 | tee build.log
 
       - name: Say what the build warned of
         if: always()
@@ -250,6 +260,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_SDK }}
 
+      - name: Use the .NET SDK the iOS workload needs
+        if: env.READY == 'true'
+        run: |
+          printf '{ "sdk": { "version": "%s", "rollForward": "latestPatch" } }\n' "$DOTNET_SDK" > global.json
+
       - name: Install the iOS workload
         if: env.READY == 'true'
         run: dotnet workload install ios --version "$IOS_WORKLOAD_SET"
@@ -288,7 +303,7 @@ jobs:
       - name: Build the signed app
         if: env.READY == 'true'
         run: >-
-          dotnet publish Trovolve.iOS/Trovolve.iOS.csproj --configuration Release -r ios-arm64
+          dotnet publish Trovolve.iOS/Trovolve.iOS.csproj --configuration Release -r ios-arm64 -p:TrovolveSharedTargets="$SHARED_TARGETS"
           -p:ArchiveOnBuild=false -p:BuildIpa=true
           -p:CodesignKey="Apple Distribution"
           -p:CodesignProvision="$PROFILE_UUID"

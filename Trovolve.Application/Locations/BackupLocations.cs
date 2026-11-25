@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Trovolve.Application.Organizing;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Transfer;
@@ -134,6 +135,7 @@ public sealed class BackupLocations
     private readonly IDeviceStatus _device;
     private readonly string _root;
     private readonly TimeProvider _clock;
+    private readonly ILogger<BackupLocations> _log;
     private readonly object _lock = new();
     private Run? _run;
     private CancellationTokenSource? _stop;
@@ -173,9 +175,12 @@ public sealed class BackupLocations
     /// <param name="device">Whether the phone is charging, for automatic backup.</param>
     /// <param name="root">The library's folder.</param>
     /// <param name="clock">When things happen.</param>
+    /// <param name="log">The program's log, told when a location cannot be reached or refuses a file.</param>
     public BackupLocations(ILocationStore store, ILocationSecrets secrets, IRemoteFolders remotes, ICloudAccounts accounts, IWebSignIn signIn, PhoneBackup computer,
-        IBackupLedger ledger, OrganizeLibrary library, IPhotoFileSystem files, IPhotoChangesTogether together, Subscription plan, DailyRemovals removals, IDeviceStatus device, string root, TimeProvider clock)
+        IBackupLedger ledger, OrganizeLibrary library, IPhotoFileSystem files, IPhotoChangesTogether together, Subscription plan, DailyRemovals removals, IDeviceStatus device, string root, TimeProvider clock,
+        ILogger<BackupLocations> log)
     {
+        _log = log;
         _store = store;
         _secrets = secrets;
         _remotes = remotes;
@@ -589,6 +594,7 @@ public sealed class BackupLocations
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
+                    TrovolveLog.LocationFailed(_log, ex, location.Name, ex.Message);
                     lock (_lock) part.Problem = ex.Message;
                     await _store.SaveAsync(location with { Problem = ex.Message }, stop);
                 }
@@ -648,6 +654,7 @@ public sealed class BackupLocations
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
+                    TrovolveLog.LocationFailed(_log, ex, location.Name, ex.Message);
                     lock (_lock) part.Problem = ex.Message;
                     await _store.SaveAsync(location with { Problem = ex.Message }, stop);
                 }

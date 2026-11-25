@@ -2,7 +2,7 @@
   <!-- What only a computer has: Magick.NET to decode pictures, its own programs to open a file in, its
        disks to browse. A phone has its own ways of doing these, and none of this goes into its app. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>$(TrovolveTarget)</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>

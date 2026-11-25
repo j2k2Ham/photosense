@@ -37,7 +37,11 @@ public static class InProcessApi
         }
         // One of the catches of every error Trovolve keeps (CLAUDE.md): a web server answers an endpoint that fails with
         // an error of its own, but here nothing else would, and the page would wait for ever. A request given up on is no failure.
-        catch (Exception ex) when (ex is not OperationCanceledException) { return Text(HttpStatusCode.InternalServerError, ex.Message); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            ApiLog.Failed(router.Log, ex, method, url.AbsolutePath);
+            return Text(HttpStatusCode.InternalServerError, ex.Message);
+        }
 
         var said = answer.Headers.ToDictionary(h => h.Key, h => string.Join(", ", h.Value), StringComparer.OrdinalIgnoreCase);
         return new InProcessAnswer((int)answer.StatusCode, said, ((MemoryStream)answer.Body).ToArray());

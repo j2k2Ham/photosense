@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Organizing;
@@ -94,7 +95,7 @@ internal sealed class OrganizeFixture : IDisposable
         Finder = new CompanionFileFinder(Disk, (path, _) => Task.FromResult(ContentAsId(path)));
         Planner = new OrganizePlanner(Library, Finder, Places, Disk);
         Batches = new MemoryBatchStore();
-        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk, TestPlans.Removals(Plan));
+        Changes = new FileChanges(Batches, Repo, _audit.Object, Disk, TestPlans.Removals(Plan), NullLogger<FileChanges>.Instance);
     }
 
     /// <summary>Finds companions, reading a file's content as its Live Photo identifier.</summary>
@@ -111,7 +112,7 @@ internal sealed class OrganizeFixture : IDisposable
 
     /// <param name="files">The file system it erases through; the fixture's own disk when not given.</param>
     /// <param name="bin">The computer's Recycle Bin, if any.</param>
-    public Trovolve.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null, IRecycleBin? bin = null) => new(Repo, Batches, _audit.Object, files ?? Disk, TestPlans.Removals(), bin);
+    public Trovolve.Application.Removal.RemovedFiles Removed(IPhotoFileSystem? files = null, IRecycleBin? bin = null) => new(Repo, Batches, _audit.Object, files ?? Disk, TestPlans.Removals(), bin, NullLogger<Trovolve.Application.Removal.RemovedFiles>.Instance);
 
     public void Dispose()
     {

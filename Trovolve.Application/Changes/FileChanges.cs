@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Trovolve.Application.Organizing;
 using Trovolve.Application.Plans;
 using Trovolve.Domain.Entities;
@@ -47,6 +48,7 @@ public sealed class FileChanges
     private readonly IAuditRepository _audit;
     private readonly IPhotoFileSystem _files;
     private readonly DailyRemovals _removals;
+    private readonly ILogger<FileChanges> _log;
     // One change at a time: two at once could each find a name free and both take it.
     private readonly SemaphoreSlim _one = new(1, 1);
 
@@ -56,8 +58,10 @@ public sealed class FileChanges
     /// <param name="audit">Where each change is recorded once made.</param>
     /// <param name="files">Where the photos are kept.</param>
     /// <param name="removals">The free plan's limit on removals each day, which every removal is held to and counted against.</param>
-    public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals)
+    /// <param name="log">The program's log, told of each change carried out, undone or put back.</param>
+    public FileChanges(IOrganizeBatchStore batches, IPhotoRepository repo, IAuditRepository audit, IPhotoFileSystem files, DailyRemovals removals, ILogger<FileChanges> log)
     {
+        _log = log;
         _batches = batches;
         _repo = repo;
         _audit = audit;
@@ -171,7 +175,9 @@ public sealed class FileChanges
                 // Putting back is finished whatever happens, a cancelled change above all.
                 var stuck = await PutBackAsync(batch, done, made, CancellationToken.None);
                 if (ex is OperationCanceledException) throw;
-                return new ChangeResult(false, stuck ?? Problem(batch, at, folder, ex), []);
+                var problem = stuck ?? Problem(batch, at, folder, ex);
+                TrovolveLog.ChangeFailed(_log, ex, Kind(batch), batch.Id, problem);
+                return new ChangeResult(false, problem, []);
             }
 
             // Every file has gone: the change is finished and written down whatever happens (see the remarks above).
@@ -188,6 +194,7 @@ public sealed class FileChanges
             // The files have gone, so they count, whatever happens.
             // Into the folder of removed files: nothing is freed until Delete permanently.
             if (batch.Counted > 0) await _removals.RecordAsync(batch.Counted, 0, allowance!, CancellationToken.None);
+            TrovolveLog.ChangeCarriedOut(_log, Kind(batch), batch.Id, batch.Files, batch.Bytes);
             return new ChangeResult(true, null, left);
         }
         finally
@@ -267,7 +274,9 @@ public sealed class FileChanges
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     var stuck = await PutBackUndoAsync(batch, moved, made, CancellationToken.None);
-                    return new UndoResult(true, false, batch.Copy, going, [], stuck ?? UndoProblem(batch, at, folder, ex));
+                    var problem = stuck ?? UndoProblem(batch, at, folder, ex);
+                    TrovolveLog.UndoFailed(_log, ex, Kind(batch), batch.Id, problem);
+                    return new UndoResult(true, false, batch.Copy, going, [], problem);
                 }
                 // The files are back: the undo is finished and written down whatever happens.
                 await RecordsGoBackAsync(batch, going, CancellationToken.None);
@@ -283,6 +292,7 @@ public sealed class FileChanges
                     if (DeleteSetAside(item) is { } why) { left.Add(why); going.Remove(item); }
             // The folders that were made for the files go again, where the undo has left them empty.
             EmptyFolders.TakeAway(_files, batch.CreatedFolders);
+            TrovolveLog.ChangeUndone(_log, Kind(batch), batch.Id, going.Count, left.Count);
             return new UndoResult(true, true, batch.Copy, going, left, null);
         }
         finally
@@ -340,6 +350,7 @@ public sealed class FileChanges
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            TrovolveLog.EraseRefused(_log, ex, batch.Id);
             return new ChangeResult(false, $"{Sentence(ex.Message)} Nothing was deleted.", []);
         }
         // Gone to the phone's bin: forgotten and counted whatever happens.
@@ -347,8 +358,12 @@ public sealed class FileChanges
         batch.Files = batch.Items.Count(i => !i.Companion);
         batch.Bytes = records.Sum(r => r.FileSizeBytes);
         await _removals.RecordAsync(batch.Files, batch.Bytes, allowance, CancellationToken.None);
+        TrovolveLog.ChangeErased(_log, batch.Id, batch.Files, batch.Bytes);
         return new ChangeResult(true, null, [], Erased: true);
     }
+
+    // What a change is, as the log names it.
+    private static string Kind(OrganizeBatch batch) => batch.Copy ? "Copy" : batch.Removed ? "Removal" : "Move";
 
     // Where the photos are kept by something that takes many changes as one, a move is handed over whole; a copy never is.
     private IPhotoChangesTogether? Together(OrganizeBatch batch) => batch.Copy ? null : _files as IPhotoChangesTogether;

@@ -7,6 +7,7 @@ using Google.Common.Util.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Transfer;
+using Trovolve.Application.Usage;
 
 namespace Trovolve.AndroidApp;
 
@@ -72,6 +73,8 @@ public sealed class BackupWorker : ListenableWorker
                 await PhoneApp.Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(stop);
                 // And the home screen widgets are told how things stand.
                 await PhoneApp.Services.GetRequiredService<PhoneWidgets>().RefreshAsync(stop);
+                // And the uses of Trovolve's features go to the usage server, when usage metrics are on and they are due.
+                await PhoneApp.Services.GetRequiredService<UsageMetrics>().SendDueAsync(stop);
             }
             // Stopped by Android, or the backup could not start: it is tried again at the next hour, and the app shows why.
             catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)

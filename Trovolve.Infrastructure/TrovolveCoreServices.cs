@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using LiteDB;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Organizing;
@@ -11,10 +12,12 @@ using Trovolve.Domain.Configuration;
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
 using Trovolve.Infrastructure.Hashing;
+using Trovolve.Infrastructure.Logging;
 using Trovolve.Infrastructure.Metadata;
 using Trovolve.Infrastructure.Persistence;
 using Trovolve.Infrastructure.Places;
 using Trovolve.Infrastructure.Thumbnails;
+using Trovolve.Infrastructure.Usage;
 
 namespace Trovolve.Infrastructure;
 
@@ -33,6 +36,8 @@ public static class TrovolveCoreServices
     {
         // The stores stamp what they keep with this clock; tests give their own.
         s.TryAddSingleton(TimeProvider.System);
+        // Every service can write to the program's log; where it goes is the host's to say (AddTrovolveLogFile, a console).
+        s.AddLogging();
         s.AddSingleton(sp => OpenDatabase(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value));
         // Every store shares the one database connection.
         s.AddSingleton<IPhotoRepository>(sp => new LiteDbPhotoRepository(sp.GetRequiredService<LiteDatabase>()));
@@ -48,6 +53,9 @@ public static class TrovolveCoreServices
         s.AddSingleton<ITripStore>(sp => new LiteDbTripStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<ILocationStore>(sp => new LiteDbLocationStore(sp.GetRequiredService<LiteDatabase>()));
         s.AddSingleton<IDetailsFixStore>(sp => new LiteDbDetailsFixStore(sp.GetRequiredService<LiteDatabase>()));
+        s.AddSingleton<IUsageStore>(sp => new LiteDbUsageStore(sp.GetRequiredService<LiteDatabase>()));
+        // The usage server, reached only while usage metrics are on: one client for every request, given up after 30 seconds.
+        s.AddSingleton<IUsageSender>(_ => new HttpUsageSender(new HttpClient { Timeout = TimeSpan.FromSeconds(30) }));
         s.AddSingleton<IImageHashingService, Sha256ImageHashingService>();
         s.AddSingleton<IThumbnailStore>(sp =>
             new FileSystemThumbnailStore(sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveThumbnailPath()));
@@ -64,6 +72,15 @@ public static class TrovolveCoreServices
         s.AddSingleton<IMediaDetailsStore>(sp => new LiteDbMediaDetailsStore(sp.GetRequiredService<LiteDatabase>()));
         return s;
     }
+
+    /// <summary>
+    /// Keeps the program's log in a file a day in <paramref name="folder"/>, beside what it records (<see cref="FileLoggerProvider"/>).
+    /// Each host adds it with its own data folder; tests that give no folder of their own leave it out.
+    /// </summary>
+    /// <param name="s">The services to add to.</param>
+    /// <param name="folder">Where the log files go, worked out once the program's settings are known.</param>
+    public static IServiceCollection AddTrovolveLogFile(this IServiceCollection s, Func<IServiceProvider, string> folder)
+        => s.AddSingleton<ILoggerProvider>(sp => new FileLoggerProvider(folder(sp), sp.GetRequiredService<TimeProvider>()));
 
     // The database file every store shares, in a folder made for it if there is none yet. No test opens a database file
     // (Jamie, 2026-11-10): the store tests use one in memory, and the end-to-end tests run the program with its own.

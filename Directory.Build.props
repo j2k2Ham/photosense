@@ -3,5 +3,15 @@
        file generated, the compiler reports each one missing as CS1591, and CI builds with warnings as errors. -->
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- The newest C# the SDK in global.json knows (C# 15 with .NET 11). -->
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <!-- Which .NET each project is built for. Everything runs on .NET 11. The libraries the iPhone app shares are also
+       built for .NET 10, as .NET 11's iOS workload needs Xcode 27.2, which GitHub's Mac machines do not have yet
+       (2026-11-25): the iPhone app stays on .NET 10's until they do, then moves to net11.0-ios and this goes. -->
+  <PropertyGroup>
+    <TrovolveTarget>net11.0</TrovolveTarget>
+    <TrovolveSharedTargets>net11.0;net10.0</TrovolveSharedTargets>
   </PropertyGroup>
 </Project>

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Trovolve.Application.Scanning.Interfaces;
 
 namespace Trovolve.Application.Scanning;
@@ -11,6 +12,7 @@ public sealed class ScanRunner
     private readonly IScanExecutionService _scans;
     private readonly IScanProgressStore _progress;
     private readonly IScanLogSink _log;
+    private readonly ILogger<ScanRunner> _logger;
     // Requests are taken one at a time, so a second click cannot slip in before the first scan is marked as started.
     private readonly object _gate = new();
     // The scan running, and what stops it; both null once it has ended.
@@ -18,11 +20,16 @@ public sealed class ScanRunner
     private CancellationTokenSource? _stop;
 
     /// <summary>Runs the scans of <paramref name="scans"/>, with their progress in <paramref name="progress"/> and what stops one in <paramref name="log"/>.</summary>
-    public ScanRunner(IScanExecutionService scans, IScanProgressStore progress, IScanLogSink log)
+    /// <param name="scans">What runs a scan.</param>
+    /// <param name="progress">Where each scan's progress is kept.</param>
+    /// <param name="log">Where the page is told what stopped a scan.</param>
+    /// <param name="logger">The program's log, told when a scan starts and ends.</param>
+    public ScanRunner(IScanExecutionService scans, IScanProgressStore progress, IScanLogSink log, ILogger<ScanRunner> logger)
     {
         _scans = scans;
         _progress = progress;
         _log = log;
+        _logger = logger;
     }
 
     /// <summary>The scan last started, while it runs; a finished one stays here to be waited for.</summary>
@@ -40,6 +47,7 @@ public sealed class ScanRunner
             if (IsRunning(_progress.GetLatest())) return null;
             var instanceId = Guid.NewGuid().ToString("N");
             _progress.ScanStarted(instanceId);
+            TrovolveLog.ScanStarted(_logger, instanceId);
             var stop = new CancellationTokenSource();
             (_current, _stop) = (instanceId, stop);
             // A scan runs on its own once started: the request that started it is answered at once, and only Stop ends it part way.
@@ -65,9 +73,14 @@ public sealed class ScanRunner
 
     private async Task RunAsync(ScanRequest request, string instanceId, CancellationTokenSource stop)
     {
-        try { await _scans.RunAsync(request, instanceId, stop.Token); }
+        try
+        {
+            await _scans.RunAsync(request, instanceId, stop.Token);
+            TrovolveLog.ScanFinished(_logger, instanceId);
+        }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
+            TrovolveLog.ScanStopped(_logger, instanceId);
             _log.Log(instanceId, "Info", "Scan stopped. What was read so far is kept.");
         }
         // One of the catches of every error Trovolve keeps (CLAUDE.md): the scan runs where nothing waits for it, so an
@@ -75,6 +88,7 @@ public sealed class ScanRunner
         // finished whatever happens; what stopped it is told in its log.
         catch (Exception ex)
         {
+            TrovolveLog.ScanFailed(_logger, ex, instanceId);
             _log.Log(instanceId, "Error", $"The scan stopped: {ex.Message}");
         }
         finally

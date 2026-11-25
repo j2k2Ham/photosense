@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -63,7 +64,7 @@ public sealed class TransferTests : IDisposable
     private PhoneReceiving Receiving(IPhoneFinder finder, DiskFileSystem? disk = null, TimeProvider? clock = null)
     {
         disk ??= new DiskFileSystem();
-        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk, TestPlans.Unlimited()),
+        return new PhoneReceiving(finder, _computerPairs, disk, new FileChanges(new MemoryBatchStore(), new InMemoryPhotoRepository(), new Mock<IAuditRepository>().Object, disk, TestPlans.Unlimited(), NullLogger<FileChanges>.Instance),
             TestPlans.Subscription(_computerPlan), "DESKTOP-1", clock ?? TimeProvider.System);
     }
 

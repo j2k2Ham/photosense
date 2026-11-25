@@ -9,6 +9,7 @@ using Trovolve.Application.Locations;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Scanning.Interfaces;
 using Trovolve.Application.Transfer;
+using Trovolve.Application.Usage;
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Repositories;
 using Trovolve.Infrastructure.Library;
@@ -105,6 +106,8 @@ public static class PhoneApp
             else Say.Line("automatic backup waits for Wi-Fi");
             await Services.GetRequiredService<PhoneNotices>().CheckStorageAsync(stop);
             await Services.GetRequiredService<PhoneWidgets>().RefreshAsync(stop);
+            // And the uses of Trovolve's features go to the usage server, when usage metrics are on and they are due.
+            await Services.GetRequiredService<UsageMetrics>().SendDueAsync(stop);
         }
         // Stopped by iOS, no network to be had, or the backup could not start: it is tried again next time, and the app shows why.
         catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or IOException or InvalidOperationException)

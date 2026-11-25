@@ -1,19 +1,35 @@
+using Microsoft.Extensions.Logging;
 using Trovolve.Api.Endpoints;
 using Trovolve.Api.Http;
 using Trovolve.Api.Scanning;
+using Trovolve.Application.Usage;
 
 namespace Trovolve.Api;
 
 /// <summary>Every address of the service below /api, with the endpoint that answers it.</summary>
 public sealed class TrovolveRoutes
 {
+    /// <summary>
+    /// The routes that are no use of a feature: those the page asks again and again while a screen shows, and those it
+    /// asks once for every picture it draws. Every other route answered is noted as a use, when usage metrics are on.
+    /// </summary>
+    public static readonly IReadOnlySet<string> NotUses = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "GET health", "GET about/icon", "GET library/access", "GET plan", "GET terms", "GET removed", "GET notices/opened",
+        "GET scan/status", "GET scan/progress/{instanceId}", "GET scan/logs", "GET organize/progress",
+        "GET backup", "GET compress", "GET pairing/state", "GET send/state", "GET receive/state",
+        "GET photos/{id:guid}/thumbnail", "GET photos/{id:guid}/image", "GET photos/{id:guid}/video",
+        "GET organize/files/{id}/thumbnail", "GET organize/files/{id}/image", "GET vault/{id}/thumbnail", "GET vault/{id}/image",
+    };
+
     /// <summary>The addresses, each answered by one of the endpoints given; <see cref="TrovolveApiServices.AddTrovolveApi"/> makes it.</summary>
-    internal TrovolveRoutes(HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
+    /// <remarks>Each answer is written to <paramref name="log"/>, and each use of a feature noted in <paramref name="usage"/>, which notes nothing while it is off.</remarks>
+    internal TrovolveRoutes(ILogger<ApiRouter> log, TimeProvider time, UsageMetrics usage, HealthEndpoints health, AboutEndpoints about, FoldersEndpoints folders, PhotosEndpoints photos, DuplicateGroupsEndpoints groups, ScanStatusEndpoints status,
         ScanStartEndpoints start, ScanResetEndpoints reset, ScanProgressEndpoints progress, ScanLogsEndpoints logs, OrganizeEndpoints organize, LibraryEndpoints library,
         RemovedEndpoints removed, TransferEndpoints transfer, PlanEndpoints plan, ScanFoundEndpoints found, PairingEndpoints pairing, BackupEndpoints backup, SwipeEndpoints swipe, CategoryEndpoints categories,
         CompressionEndpoints compress, NoticeEndpoints notices, YearEndpoints year, ViewerEndpoints viewer, TripEndpoints trips, FixEndpoints fixes, VaultEndpoints vault, LocationEndpoints locations)
     {
-        Router = new ApiRouter()
+        Router = new ApiRouter(log, time, (route, status, ct) => NotUses.Contains(route) ? Task.CompletedTask : usage.RecordAsync(route, status, ct))
             .Get("health", (r, _, ct) => health.GetAsync(r, ct))
             .Get("about", (r, _, ct) => about.GetAsync(r, ct))
             .Get("about/icon", (r, _, ct) => about.IconAsync(r, ct))

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
@@ -20,6 +21,7 @@ public sealed class Subscription
     private readonly TimeProvider _time;
     private readonly IAppStore? _app;
     private readonly DevMode _dev;
+    private readonly ILogger<Subscription> _log;
     // What the store last said was bought, for when it cannot be reached: a store gone quiet does not take Pro away.
     private Entitlement _lastBought = Entitlement.Free;
 
@@ -27,9 +29,11 @@ public sealed class Subscription
     /// <param name="store">What this device keeps of the plan.</param>
     /// <param name="time">The clock a plan's end is compared with.</param>
     /// <param name="app">The phone's own store; null on a computer.</param>
+    /// <param name="log">The program's log, told when the store cannot be reached.</param>
     /// <param name="dev">Whether this is a development build, in which a plan can be chosen for testing; off when not given.</param>
-    public Subscription(IPlanStore store, TimeProvider time, IAppStore? app, DevMode? dev = null)
+    public Subscription(IPlanStore store, TimeProvider time, IAppStore? app, ILogger<Subscription> log, DevMode? dev = null)
     {
+        _log = log;
         _store = store;
         _time = time;
         _app = app;
@@ -76,8 +80,9 @@ public sealed class Subscription
         {
             return _lastBought = PlanProducts.PlanFrom(await _app.PurchasesAsync(ct), now);
         }
-        catch (StoreException)
+        catch (StoreException ex)
         {
+            TrovolveLog.StoreUnreachable(_log, ex);
             return _lastBought.StandsAt(now) ? _lastBought : Entitlement.Free;
         }
     }
@@ -89,7 +94,11 @@ public sealed class Subscription
         IReadOnlyList<StoreProduct> products;
         try { products = await _app.ProductsAsync(PlanProducts.All, ct); }
         // No price is shown that the store has not given: without one, nothing is offered.
-        catch (StoreException) { return []; }
+        catch (StoreException ex)
+        {
+            TrovolveLog.StoreUnreachable(_log, ex);
+            return [];
+        }
         return [.. products.Select(p => new PlanOffer(PlanProducts.KindOf(p.Id), p)).Where(o => o.Kind != PlanKind.None)];
     }
 

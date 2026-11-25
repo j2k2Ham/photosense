@@ -44,7 +44,10 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Logic that needs no outside world goes in Domain; logic over Domain's interfaces in Application. Infrastructure holds only adapters to LiteDB, MetadataExtractor, the disk, the network and the phones.
 - **Photos go through `IPhotoFileSystem` only:** `DiskFileSystem` on a computer, `PhotoLibraryFileSystem` on an iPhone, `MediaFileSystem` on Android. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on a photo.
 - **The stack:**
-  - .NET 10 with one ASP.NET Core program. Endpoints are methods taking an `ApiRequest`: no minimal APIs and no controllers.
+  - .NET 11 and C# 15 (Jamie, 2026-11-25), with one ASP.NET Core program. Endpoints are methods taking an `ApiRequest`: no minimal APIs and no controllers.
+  - The iPhone app stays on .NET 10 (`net10.0-ios`) until GitHub's Macs have Xcode 27.2, which .NET 11's iOS workload needs; the libraries it shares build for both (`TrovolveSharedTargets` in `Directory.Build.props`), and `iphone.yml` builds them for `net10.0` alone with the .NET 10 SDK. Their code must therefore compile as C# 14 too.
+  - Logging through `ILogger<T>`, a required constructor parameter, each line a `[LoggerMessage]` method in `TrovolveLog` (Application) or `ApiLog` (Api); Domain has no logging. Each host decides where it goes: the computer to the console and a file a day, a phone to the file (`AddTrovolveLogFile`). Tests pass `NullLogger<T>.Instance`, or `ListLogger<T>` to check a line.
+  - Usage metrics (`UsageMetrics`, `UsageMetricsOptions`) are built and **off** (Jamie, 2026-11-25) until Jamie sets up the server; turning them on needs the privacy policy and FAQ to say what is sent first.
   - LiteDB in one file: no EF Core and no migrations. No auth: `RequestGuard` is the only gate.
   - TUnit with Moq and coverlet: no xUnit, FluentAssertions or Testcontainers.
   - Magick.NET on a computer, the phone's own decoder on a phone. Generic .NET advice that assumes another stack does not apply.

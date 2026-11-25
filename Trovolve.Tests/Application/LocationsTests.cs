@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -302,7 +303,7 @@ public sealed class LocationsTests : IDisposable
     {
         var locations = new BackupLocations(Store, _secrets, folders, _accounts, _signIn, _phone.GetRequiredService<PhoneBackup>(), _phone.GetRequiredService<IBackupLedger>(),
             _phone.GetRequiredService<OrganizeLibrary>(), _phone.GetRequiredService<IPhotoFileSystem>(), (IPhotoChangesTogether)_phone.GetRequiredService<IPhotoFileSystem>(),
-            _phone.GetRequiredService<Subscription>(), _phone.GetRequiredService<DailyRemovals>(), _device, In("Photo Library"), new TestClock());
+            _phone.GetRequiredService<Subscription>(), _phone.GetRequiredService<DailyRemovals>(), _device, In("Photo Library"), new TestClock(), NullLogger<BackupLocations>.Instance);
         var failed = await Assert.ThrowsAsync<IOException>(() => locations.ConnectServerAsync(new ServerConnection(null, LocationKind.AmazonS3, "Archive", S3Settings,
             new Dictionary<string, string> { ["secret"] = "s" }), ct));
         return failed!.Message;

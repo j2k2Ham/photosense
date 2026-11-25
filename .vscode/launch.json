@@ -6,7 +6,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build (service)",
-            "program": "${workspaceFolder}/Trovolve.Server/bin/Debug/net10.0/Trovolve.Server.dll",
+            "program": "${workspaceFolder}/Trovolve.Server/bin/Debug/net11.0/Trovolve.Server.dll",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal"
         },

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using Trovolve.Application.Plans;
@@ -72,6 +73,7 @@ public sealed class ComputerPairing
     private TaskCompletionSource<bool>? _answer;
     // What the person named this computer, once known; until then its own name on the network.
     private string? _named;
+    private readonly ILogger<ComputerPairing> _log;
 
     /// <summary>Pairing through the listener and advertiser given.</summary>
     /// <param name="listener">Waits for phones to connect.</param>
@@ -81,8 +83,11 @@ public sealed class ComputerPairing
     /// <param name="hosts">This computer's addresses on its networks, for the QR code.</param>
     /// <param name="backup">Keeps the backups of the phones paired with this computer.</param>
     /// <param name="clock">When the codes change, and how long a phone may stay silent.</param>
-    public ComputerPairing(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, string name, Func<IReadOnlyList<string>> hosts, ComputerBackup backup, TimeProvider clock)
+    /// <param name="log">The program's log, told when a pairing or a phone's backup stops part way.</param>
+    public ComputerPairing(ITransferListener listener, ITransferAdvertiser advertiser, IPairingStore pairs, string name, Func<IReadOnlyList<string>> hosts, ComputerBackup backup, TimeProvider clock,
+        ILogger<ComputerPairing> log)
     {
+        _log = log;
         _listener = listener;
         _advertiser = advertiser;
         _pairs = pairs;
@@ -214,7 +219,9 @@ public sealed class ComputerPairing
         {
             // A phone turned away, or one that failed before anyone compared numbers, leaves Pair a phone waiting for the next.
             if (!compared) return;
-            lock (_lock) _state = _state with { Stage = ComputerPairingStage.Failed, Check = null, Problem = ex is TransferException ? ex.Message : "Pairing stopped. Try again." };
+            var problem = ex is TransferException ? ex.Message : "Pairing stopped. Try again.";
+            TrovolveLog.DeviceTalkStopped(_log, ex, "Pairing with a phone", problem);
+            lock (_lock) _state = _state with { Stage = ComputerPairingStage.Failed, Check = null, Problem = problem };
             return;
         }
         using var channel = linked.Channel;
@@ -232,6 +239,7 @@ public sealed class ComputerPairing
         // A phone gone part way through a backup backs up again later; what arrived whole is kept.
         catch (Exception ex) when (ex is IOException or OperationCanceledException or UnauthorizedAccessException)
         {
+            TrovolveLog.DeviceTalkStopped(_log, ex, $"The backup from {linked.Other.Name}", ex.Message);
             await _backup.StoppedAsync(linked.Other, ex);
         }
     }
