@@ -94,7 +94,7 @@ export const GUIDE: GuideTopic[] = [
       {
         steps: [
           'Open **Clean up**. The first time, it shows the scan screen; later, press **Change or rescan** at the top, or choose **Change folders or rescan** in the menu.',
-          'Give the **Root folder**: type its path, or press **Browse** and pick it. The folders listed are those of this computer.',
+          'Give the **Base folder**: type its path, or press **Browse** and pick it. The folders listed are those of this computer.',
           'If you like, give a **Secondary folder** too, a backup for example. Copies are then found between the two as well as inside each.',
           'Leave **Recursive** ticked to include the folders inside the folder.',
           'Press **Scan**.',
@@ -232,7 +232,7 @@ export const GUIDE: GuideTopic[] = [
     sections: [
       {
         steps: [
-          'Switch to **Organize**. It starts with the folder you last scanned; **Choose root folder** takes any other. No scan is needed.',
+          'Switch to **Organize**. It starts with the folder you last scanned; **Choose base folder** takes any other. No scan is needed.',
           '**Clear results**, in the menu while Organize shows a folder’s files, puts that folder away with its search, filters and folders of your own, and Organize asks for a folder again. Nothing on the disk changes.',
           'Wait while the folder is read. Only the date and the place of each file are read. A large folder takes minutes the first time, and the files appear as they are read; after that it is quick.',
           'Choose how to group, on the right: **Group by** Place or Date, and **Then by** what each folder is split by inside. Place then Year gives folders such as Butte\\2022; Date then Place gives 2022\\Butte.',

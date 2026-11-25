@@ -43,12 +43,12 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
     if (missing === which) setMissing(undefined);
   }
 
-  // The root folder given a second time adds nothing: it is scanned once, and copies inside it are found all the same.
+  // The base folder given a second time adds nothing: it is scanned once, and copies inside it are found all the same.
   const twice = sameFolder(root, second);
   const other = twice ? '' : second.trim();
 
   async function scan() {
-    if (!root.trim()) { notify('Choose a root folder to scan.', 'error'); return; }
+    if (!root.trim()) { notify('Choose a base folder to scan.', 'error'); return; }
     setStarting(true);
     setMissing(undefined);
     try {
@@ -89,14 +89,14 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
       {/* The two folders and the scan side by side on a wide screen, one under another on a narrow one. */}
       <div className="grid w-[min(1240px,100%)] grid-cols-1 items-end gap-4 rounded-[20px] border border-line bg-s1 p-4 shadow-setup sm:p-[22px] lg:grid-cols-[1fr_1fr_auto]">
         <div className="flex min-w-0 flex-col gap-2">
-          <label htmlFor="rootPath" className="text-[13px] text-t2">Root folder</label>
+          <label htmlFor="rootPath" className="text-[13px] text-t2">Base folder</label>
           <div className={field('root')}>
             <input id="rootPath" value={root} onChange={e => change('root', e.target.value)} aria-invalid={missing === 'root'} placeholder="C:\Users\you\Pictures" className={input} />
-            <button type="button" onClick={() => setBrowsing('root')} aria-label="Browse for the root folder" className="pill-quiet h-[38px] shrink-0 px-4 text-[14px]">Browse</button>
+            <button type="button" onClick={() => setBrowsing('root')} aria-label="Browse for the base folder" className="pill-quiet h-[38px] shrink-0 px-4 text-[14px]">Browse</button>
           </div>
         </div>
         <div className="flex min-w-0 flex-col gap-2">
-          <label htmlFor="secondPath" className="text-[13px] text-t2">Secondary folder <span className="text-t3">{twice ? '· the same as the root folder, so it is scanned once. Copies inside it are still found.' : '· optional, for example a backup'}</span></label>
+          <label htmlFor="secondPath" className="text-[13px] text-t2">Secondary folder <span className="text-t3">{twice ? '· the same as the base folder, so it is scanned once. Copies inside it are still found.' : '· optional, for example a backup'}</span></label>
           <div className={field('second')}>
             <input id="secondPath" value={second} onChange={e => change('second', e.target.value)} aria-invalid={missing === 'second'} placeholder="D:\Backup" className={input} />
             <button type="button" onClick={() => setBrowsing('second')} aria-label="Browse for the secondary folder" className="pill-quiet h-[38px] shrink-0 px-4 text-[14px]">Browse</button>
@@ -155,7 +155,7 @@ export function SetupScreen({ scanning, progress, log, hasResults, onStarted, on
       {hasResults && !scanning && <button type="button" onClick={onBack} className="pill-outline h-11 px-5 text-[15px]">Back to results</button>}
 
       {browsing && (
-        <FolderPicker title={browsing === 'root' ? 'Choose the root folder' : 'Choose the secondary folder'} startAt={browsing === 'root' ? root : second}
+        <FolderPicker title={browsing === 'root' ? 'Choose the base folder' : 'Choose the secondary folder'} startAt={browsing === 'root' ? root : second}
           onPick={path => { change(browsing, path); setBrowsing(undefined); }} onCancel={() => setBrowsing(undefined)} />
       )}
     </div>

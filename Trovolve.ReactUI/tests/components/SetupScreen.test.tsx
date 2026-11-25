@@ -31,7 +31,7 @@ function show(props: Partial<React.ComponentProps<typeof SetupScreen>> = {}) {
   const view = render(<SetupScreen scanning={false} log={[]} hasResults={false} {...handlers} {...props} />);
   return { ...handlers, ...view };
 }
-const root = () => screen.getByLabelText<HTMLInputElement>('Root folder');
+const root = () => screen.getByLabelText<HTMLInputElement>('Base folder');
 const second = () => screen.getByLabelText<HTMLInputElement>(/^Secondary folder/);
 const scan = () => screen.getByRole('button', { name: /^(Scan|Starting…|Scanning…)$/ });
 
@@ -48,11 +48,11 @@ describe('choosing what to scan', () => {
     expect(screen.queryByLabelText('Scan progress')).not.toBeInTheDocument();
   });
 
-  it('will not scan without a root folder, and says so', async () => {
+  it('will not scan without a base folder, and says so', async () => {
     const { notify } = show();
     await userEvent.type(root(), '   ');
     await userEvent.click(scan());
-    expect(notify).toHaveBeenCalledExactlyOnceWith('Choose a root folder to scan.', 'error');
+    expect(notify).toHaveBeenCalledExactlyOnceWith('Choose a base folder to scan.', 'error');
     expect(api.startScan).not.toHaveBeenCalled();
   });
 
@@ -74,7 +74,7 @@ describe('choosing what to scan', () => {
     await userEvent.type(root(), 'C:\\Users\\jamie\\Phone Pictures');
     expect(screen.getByText('· optional, for example a backup')).toBeInTheDocument();
     await userEvent.type(second(), ' c:\\users\\jamie\\phone pictures\\ ');
-    expect(screen.getByText('· the same as the root folder, so it is scanned once. Copies inside it are still found.')).toBeInTheDocument();
+    expect(screen.getByText('· the same as the base folder, so it is scanned once. Copies inside it are still found.')).toBeInTheDocument();
 
     api.startScan.mockRejectedValueOnce(new Error('Folder not found on the server: C:\\Users\\jamie\\Phone Pictures'));
     await userEvent.click(scan());
@@ -165,8 +165,8 @@ describe('choosing what to scan', () => {
     expect(root()).toHaveValue('');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Browse for the root folder' }));
-    picker = screen.getByRole('dialog', { name: 'Choose the root folder' });
+    await userEvent.click(screen.getByRole('button', { name: 'Browse for the base folder' }));
+    picker = screen.getByRole('dialog', { name: 'Choose the base folder' });
     await userEvent.click(within(picker).getByRole('button', { name: 'Cancel' }));
     expect(root()).toHaveValue('');
 

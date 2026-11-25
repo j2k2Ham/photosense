@@ -125,7 +125,7 @@ describe('choosing the folder', () => {
   it('reads another folder when one is chosen, starting afresh, and says when it has', async () => {
     const { refresh } = open();
     await userEvent.click(tile('a1.JPG'));
-    await userEvent.click(screen.getByRole('button', { name: 'Choose root folder' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Choose folder' }));
     const dialog = screen.getByRole('dialog', { name: 'Choose a folder to organize' });
     await userEvent.click(await within(dialog).findByRole('button', { name: 'Phone 2022' }));
     await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Use this folder' })).toBeEnabled());

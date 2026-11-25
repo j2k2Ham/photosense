@@ -113,7 +113,7 @@ test.describe('Organize: the files', () => {
     mixed(photos);
     photos.picture('Other/IMG_0009.JPG', { seed: 9 });
     await openOrganize(page, photos.path('Trips'));
-    await page.getByRole('button', { name: 'Choose root folder' }).click();
+    await page.getByRole('button', { name: 'Choose folder' }).click();
     const picker = page.getByRole('dialog', { name: 'Choose a folder to organize' });
     await picker.getByRole('button', { name: /^Up|^Back/ }).first().click();
     await picker.getByRole('button', { name: /^Other/ }).click();

@@ -409,7 +409,7 @@ describe('scanning', () => {
     const { refresh, unmount } = open();
     act(() => emitLog('11:59:00 Info left over from before'));
 
-    await userEvent.type(screen.getByLabelText('Root folder'), 'C:\\photos');
+    await userEvent.type(screen.getByLabelText('Base folder'), 'C:\\photos');
     await click('Scan');
     expect(await screen.findByLabelText('Scan progress')).toHaveTextContent('34%34 of 100 files');
     expect(api.useScanProgress).toHaveBeenLastCalledWith('scan-7');
@@ -443,7 +443,7 @@ describe('scanning', () => {
     progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
     open();
     await click('Change or rescan');
-    await userEvent.type(screen.getByLabelText('Root folder'), 'C:\\photos');
+    await userEvent.type(screen.getByLabelText('Base folder'), 'C:\\photos');
     await click('Scan');
     expect(await toast(message)).toBeInTheDocument();
   });
@@ -471,10 +471,10 @@ describe('scanning', () => {
     statusNow = { data: { instanceId: '', totalPhotos: 0 } };
     open();
     await click('Scan');
-    expect(await within(screen.getByRole('log', { name: 'Messages' })).findByText('Choose a root folder to scan.')).toBeInTheDocument();
-    expect(screen.getByRole('log', { name: 'Messages' })).toHaveTextContent('Error: Choose a root folder to scan.Kept in Errors');
+    expect(await within(screen.getByRole('log', { name: 'Messages' })).findByText('Choose a base folder to scan.')).toBeInTheDocument();
+    expect(screen.getByRole('log', { name: 'Messages' })).toHaveTextContent('Error: Choose a base folder to scan.Kept in Errors');
     await click('1 error');
-    expect(screen.getByRole('dialog', { name: 'Errors' })).toHaveTextContent('Choose a root folder to scan.');
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toHaveTextContent('Choose a base folder to scan.');
   });
 });
 

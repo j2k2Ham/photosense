@@ -344,7 +344,7 @@ export function OrganizeView({ startRoot, unit, onShowing, notify }: Props) {
               ? <><span className="font-medium text-t1" title={root}>{leaf(root)}</span>{data && <> · {reading ? `${files.length.toLocaleString()} of ${soFar!.total.toLocaleString()} files so far` : `${countFiles(files.length)} · ${data.fromScan ? 'from your last scan' : 'read just now'}`}</>}</>
               : 'No folder chosen yet'}
           </span>
-          <button type="button" onClick={() => setBrowsing(true)} className="pill-quiet h-[30px] shrink-0 px-3.5 text-[13px] font-medium">Choose root folder</button>
+          <button type="button" onClick={() => setBrowsing(true)} className="pill-quiet h-[30px] shrink-0 px-3.5 text-[13px] font-medium">Choose folder</button>
         </div>
         <label className="flex h-[42px] w-full items-center gap-2.5 rounded-full border border-line bg-s1 px-3.5 sm:w-[clamp(200px,20vw,340px)] sm:shrink-0">
           <span aria-hidden className="h-[11px] w-[11px] shrink-0 rounded-full border-[1.5px] border-t3" />
