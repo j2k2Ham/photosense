@@ -222,7 +222,7 @@ One folder is enough: copies inside it, in the folder itself or in its subfolder
 
 A scan builds on the one before it: files that have not changed since are skipped, files that have gone are forgotten at the end, and copies marked keep stay marked. That makes a second scan of a large library take seconds rather than minutes.
 
-To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan (it, and **Back to results**, are shown only while there are results): everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning. Either way only Trovolve's record goes, with its previews and keep marks; the photos, and anything already moved to `_Trovolve_Removed`, stay where they are.
+To run a scan from nothing instead, tick **Start over** on the setup screen before pressing Scan (it, and **Back to results**, are shown only while there are results): everything recorded by earlier scans is forgotten first, and every file is read again. **Clear results**, in the menu, does the forgetting on its own, without scanning, and Clean up goes back to the scan screen, the last folders still filled in. Either way only Trovolve's record goes, with its previews and keep marks; the photos, and anything already moved to `_Trovolve_Removed`, stay where they are.
 
 A scan runs in the service, not in the page. A page that is loaded again while one is running, or opened in another tab, shows that scan's progress and says when it has finished, as the page that started it does.
 

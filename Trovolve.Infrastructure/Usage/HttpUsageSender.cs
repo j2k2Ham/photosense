@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Services;
 
@@ -14,15 +15,13 @@ namespace Trovolve.Infrastructure.Usage;
 /// <param name="http">One client for every request, given by the program; a request is stopped by its time limit or its token.</param>
 public sealed class HttpUsageSender(HttpClient http) : IUsageSender
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-
     /// <inheritdoc />
     public async Task SendAsync(Uri to, UsageReport report, CancellationToken ct)
     {
         HttpResponseMessage answer;
         try
         {
-            using var body = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(report, Json));
+            using var body = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(report, UsageJson.Default.UsageReport));
             body.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
             answer = await http.PostAsync(to, body, ct);
         }
@@ -39,3 +38,11 @@ public sealed class HttpUsageSender(HttpClient http) : IUsageSender
             if (!answer.IsSuccessStatusCode) throw new IOException($"The usage server answered {(int)answer.StatusCode} and did not take the uses.");
     }
 }
+
+/// <summary>
+/// The usage report's JSON, written by code made when Trovolve is built rather than found by reflection as it runs, so that
+/// a phone's trimmed app keeps every type it needs. Names are camelCased, as the web writes them.
+/// </summary>
+[JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[JsonSerializable(typeof(UsageReport))]
+internal sealed partial class UsageJson : JsonSerializerContext;

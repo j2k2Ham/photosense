@@ -1349,6 +1349,21 @@ describe('clearing the results', () => {
     await userEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
     expect(api.clearResults).not.toHaveBeenCalled();
   });
+
+  it('goes to the scan page once cleared, even when the results were chosen to be shown, as a scan finished here does', async () => {
+    const { refresh } = open();
+    // Back to results chooses the results, as a scan started from the page does when it finishes.
+    await click('Change or rescan');
+    await click('Back to results');
+    expect(setupHeading()).not.toBeInTheDocument();
+
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Clear results' }));
+    statusNow = { data: { instanceId: '', totalPhotos: 0 } };
+    refresh();
+    expect(await screen.findByRole('heading', { name: 'Find duplicate photos and videos' })).toBeInTheDocument();
+    // Nothing is left to go back to.
+    expect(screen.queryByRole('button', { name: 'Back to results' })).not.toBeInTheDocument();
+  });
 });
 
 describe('deleting permanently', () => {

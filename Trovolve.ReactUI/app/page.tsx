@@ -368,6 +368,8 @@ export default function HomePage() {
     setComparing(undefined);
     setSelection({ index: 0 });
     setPage(1);
+    // The results chosen to be shown are gone, and with them every way back to the scan page: go there (Jamie, 2026-11-25).
+    setChosen('setup');
     push(`Cleared the results: ${files(result.forgotten)} forgotten. Your photos were not touched.`, 'ok');
   });
 
