@@ -5,17 +5,38 @@ test.describe('the menu', () => {
   test('the light theme is chosen there without closing it, and kept for the next visit @phone', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('menuitem', { name: /^Theme/ }).click();
     await page.getByRole('menuitemradio', { name: 'Light' }).click();
     await expect(page.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.locator('html')).toHaveClass(/\blight\b/);
     await page.reload();
     await expect(page.locator('html')).toHaveClass(/\blight\b/);
     await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('menuitem', { name: /^Theme/ }).click();
     await page.getByRole('menuitemradio', { name: 'Dark' }).click();
     await expect(page.locator('html')).not.toHaveClass(/\blight\b/);
     // Esc puts the menu away.
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu')).toBeHidden();
+  });
+
+  test('the theme follows the device until another is chosen, and Follow device setting goes back to that, changing with the system and kept for the next visit @phone', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveClass(/\blight\b/);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: /^Theme/ })).toHaveText(/Follow device setting/);
+    await page.getByRole('menuitem', { name: /^Theme/ }).click();
+    await page.getByRole('menuitemradio', { name: 'Dark' }).click();
+    await expect(page.locator('html')).not.toHaveClass(/\blight\b/);
+    await page.getByRole('menuitemradio', { name: 'Follow device setting' }).click();
+    await expect(page.getByRole('menuitemradio', { name: 'Follow device setting' })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.locator('html')).toHaveClass(/\blight\b/);
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await expect(page.locator('html')).not.toHaveClass(/\blight\b/);
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.reload();
+    await expect(page.locator('html')).toHaveClass(/\blight\b/);
   });
 
   test('what went wrong is listed under Errors, counted on the page, until cleared', async ({ page, photos, service }) => {

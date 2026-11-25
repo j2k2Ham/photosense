@@ -81,7 +81,7 @@ export default function HomePage() {
   const platform = platformOf(program);
   const onPhone = platform !== undefined;
   // A phone follows its system's light or dark until told otherwise, as its own apps do; a computer starts dark.
-  const [theme, setTheme, themeChoice] = useTheme(onPhone ? 'auto' : 'dark');
+  const [theme, setTheme, themeChoice] = useTheme();
   useSkin(program, theme);
   useEffect(() => { if (onPhone) tellSystemBars(theme); }, [onPhone, theme]);
   const [settings, changeSettings] = useAppSettings();
@@ -481,7 +481,7 @@ export default function HomePage() {
           onToggleErrors={() => { setErrorsOpen(o => !o); setMenuOpen(false); }} onToggleMenu={() => { setMenuOpen(o => !o); setErrorsOpen(false); }}>
           {/* The header holds its own popovers, so that they belong to it for a screen reader. */}
           {menuOpen && (
-            <AppMenu theme={theme} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)} onSupport={() => setSupportOpen(true)}
+            <AppMenu theme={themeChoice} errorCount={errors.length} onTheme={setTheme} onClose={() => setMenuOpen(false)} onErrors={() => setErrorsOpen(true)} onSupport={() => setSupportOpen(true)}
               onChangeFolders={changeFolders} onClearResults={() => setPending({ scope: 'clear' })} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} onAbout={() => setAboutOpen('about')} onDeletePermanently={askToErase} />
           )}
           {errorsOpen && <ErrorsPanel errors={errors} onClear={clearError} onClearAll={clearErrors} onClose={() => setErrorsOpen(false)} />}       </TopBar>

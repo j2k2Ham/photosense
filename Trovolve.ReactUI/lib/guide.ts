@@ -64,7 +64,7 @@ export const GUIDE: GuideTopic[] = [
         heading: 'Finding your way',
         tips: [
           'The switch at the top left, **Clean up | Organize | Phones**, moves between the three areas. Each keeps what you were doing in it. A dot on **Phones** says it is new, until you first open it.',
-          'The menu, the three lines at the top right, has the theme, **Change folders or rescan**, **Clear results**, **Settings**, **Support** (with **Errors** and the **Support page** under it), **Help**, **About Trovolve** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
+          'The menu, the three lines at the top right, has **Theme**, **Change folders or rescan**, **Clear results**, **Settings**, **Support** (with **Errors** and the **Support page** under it), **Help**, **About Trovolve** and **Move to Recycle Bin** (**Move to Trash** on a Mac).',
           'Beside the menu, your plan: **Trovolve Free**, with how many free removals are left today, or **Trovolve Pro**. Point at it for more.',
           'Messages appear at the bottom right. One that offers **Undo** stays a little longer; an error is also kept under **Errors**, in the menu’s **Support**, until you clear it.',
           'In a narrow window the screen rearranges itself to fit. In **Clean up**, click a group to review it, and **All groups** goes back to the list. In **Organize**, **Files** and **Folders** at the top switch between the files and the folders, and clicking a folder shows its files. Make the window wider and the two sit side by side again.',
@@ -484,11 +484,11 @@ export const GUIDE: GuideTopic[] = [
     title: 'Settings, theme, support and About',
     summary: 'What the menu holds besides the things described elsewhere.',
     go: { label: 'Open Settings', place: 'settings' },
-    keywords: ['preferences', 'options', 'dark mode', 'light mode', 'version', 'privacy', 'terms', 'support', 'faq', 'licences', 'kilometers', 'miles', 'contact', 'email', 'help me', 'report a problem', 'errors'],
+    keywords: ['preferences', 'options', 'dark mode', 'light mode', 'system theme', 'version', 'privacy', 'terms', 'support', 'faq', 'licences', 'kilometers', 'miles', 'contact', 'email', 'help me', 'report a problem', 'errors'],
     sections: [
       {
         tips: [
-          '**Theme** switches between dark and light.',
+          '**Theme** says the theme in use and opens beneath itself (or press the right arrow) to show **Dark**, **Light** and **Follow device setting**. Dark or Light keeps one; Follow device setting, what Trovolve starts on, follows the computer’s own light or dark setting, and changes when it does.',
           '**Support** opens beneath itself (or press the right arrow) to show **Errors** and the **Support page**. While there are errors, Support says how many.',
           '**Errors** lists everything that went wrong, with the time, until you clear it. While there are any, a red count shows at the top of the page too.',
           'The **Support page** opens the guide or the errors, and has **Email support**: an email to Trovolve’s support with its version and your system already in it, and the last three errors, if any. **Copy details** copies the same, for a message written elsewhere. Beside them are answers to common questions.',

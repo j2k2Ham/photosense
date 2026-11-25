@@ -15,11 +15,11 @@ export const metadata = {
   icons: { icon: appIconUrl },
 };
 
-// Runs before the first paint, so a page saved in the light theme, or in Auto on a light system, never flashes dark.
-// In a phone app, which it knows by the app's own bridge, it marks the page as the app's (data-app), so that nothing is
-// shown until the page has learned it is the phone app; and a theme never chosen is Auto, as it is there. On a reload
+// Runs before the first paint, so a page saved in the light theme, or following a light system (Auto, also what a
+// theme never chosen is), never flashes dark. In a phone app, which it knows by the app's own bridge, it marks the page
+// as the app's (data-app), so that nothing is shown until the page has learned it is the phone app. On a reload
 // it marks the launch as played (data-launched), so that it is never painted again.
-const applySavedTheme = `try{var d=document.documentElement,w=window,app=w.TrovolveBars||(w.webkit&&w.webkit.messageHandlers&&w.webkit.messageHandlers.trovolveBars);if(app)d.setAttribute('data-app','');var t=localStorage.getItem('${THEME_KEY}');if(t==='light'||((t==='auto'||(app&&!t))&&matchMedia('${SYSTEM_LIGHT}').matches))d.classList.add('light');if(sessionStorage.getItem('${LAUNCH_KEY}'))d.setAttribute('data-launched','')}catch(e){}`;
+const applySavedTheme = `try{var d=document.documentElement,w=window,app=w.TrovolveBars||(w.webkit&&w.webkit.messageHandlers&&w.webkit.messageHandlers.trovolveBars);if(app)d.setAttribute('data-app','');var t=localStorage.getItem('${THEME_KEY}');if(t==='light'||(t!=='dark'&&matchMedia('${SYSTEM_LIGHT}').matches))d.classList.add('light');if(sessionStorage.getItem('${LAUNCH_KEY}'))d.setAttribute('data-launched','')}catch(e){}`;
 
 /** The page fills a phone's whole screen, under its bars and round its corners; the phone layout keeps clear of them itself. */
 export const viewport = { width: 'device-width', initialScale: 1, viewportFit: 'cover' };

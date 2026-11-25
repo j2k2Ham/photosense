@@ -480,6 +480,7 @@ describe('the menu and the errors', () => {
 
     await click('Menu');
     expect(screen.getByRole('menu')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Theme/ }));
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
     expect(document.documentElement).toHaveClass('light');
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'Dark' }));

@@ -280,7 +280,7 @@ Trovolve shows HEIC pictures itself, whatever the computer can open. Outside it,
 
 ### Looking at a file before deciding
 
-The look and layout follow the design handoff in `docs/design_handoff_trovolve_redesign` (dark and light themes, chosen from the menu and remembered in the browser). The review desk shows the original beside one copy, with a table of what differs between them; clicking either opens the comparison window, where Space flips between the copy and the original in the same spot. When a group has several copies, the window says which one is showing ("Copy 2 of 3") and the arrows over the copy's picture, or the left and right arrow keys, move to the one before or after it. Deleting a copy from the window closes it when that was the group's only copy; otherwise the copy that took its place is shown.
+The look and layout follow the design handoff in `docs/design_handoff_trovolve_redesign` (dark and light themes, chosen under the menu's **Theme**, or **Follow device setting**, which it starts on, following the computer's own light or dark setting and changing with it; remembered in the browser). The review desk shows the original beside one copy, with a table of what differs between them; clicking either opens the comparison window, where Space flips between the copy and the original in the same spot. When a group has several copies, the window says which one is showing ("Copy 2 of 3") and the arrows over the copy's picture, or the left and right arrow keys, move to the one before or after it. Deleting a copy from the window closes it when that was the group's only copy; otherwise the copy that took its place is shown.
 
 
 A copy and its original are always two files, and each is shown under its own name with the folder it is in: under the two pictures on the review desk, under each thumbnail, and in the heading of the comparison window ("`IMG_0648.JPG`, a copy of `IMG_0377.JPG`"). Two files holding the very same picture can sit side by side in one folder under unrelated names, and look like one file until the names are read.
@@ -762,7 +762,7 @@ On an iPhone the version people see is the three numbers (`1.3.0`), and the buil
 
 - The page is linted with every rule of `eslint-plugin-jsx-a11y`'s strict set (`npm run lint`, run in CI), besides Next's own.
 - Each window and question stands on `Scrim`: Tab and Shift+Tab go round its own controls, Escape or a press outside it puts it away, and focus goes back to what had it before. A question raised over a window has Tab to itself.
-- The menu is a menu: it opens on its first item, and the arrow keys, Home and End go through it. The theme is chosen among its items.
+- The menu is a menu: it opens on its first item, and the arrow keys, Home and End go through it. Theme and Support each open beneath themselves, one at a time: the right arrow opens one on its first item, the left goes back.
 - The header, the page's content (`<main>`) and the menu are landmarks a screen reader can jump between. Messages are added to one region that is always there (`role="log"`), so each is read out; an error says it is one.
 - The keyboard's place is always shown, in the brand's colour on both themes, and a text field drawn without an outline shows it on its frame. With less motion asked for, nothing slides, sweeps or fades.
 - Every screen was checked with [axe](https://github.com/dequelabs/axe-core) in Chrome, in both themes, with nothing found: the results, a group, Organize, the scan screen, the menu with Support open, Support, Help, Settings and About.

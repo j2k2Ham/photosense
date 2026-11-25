@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import RootLayout, { metadata } from '../../app/layout';
@@ -17,7 +17,7 @@ import { TopBar } from '../../components/TopBar';
 vi.mock('next/font/google', () => ({ DM_Sans: () => ({ variable: 'font-sans-var' }), DM_Mono: () => ({ variable: 'font-mono-var' }) }));
 
 describe('the page frame', () => {
-  it('carries the fonts and applies a saved light theme, or Auto on a light system, before anything is painted', () => {
+  it('carries the fonts and applies a saved light theme, or Auto on a light system as with none chosen, before anything is painted', () => {
     const html = renderToStaticMarkup(<RootLayout><p>the page itself</p></RootLayout>);
     expect(html).toMatch(/^<html lang="en" class="font-sans-var font-mono-var">/);
     expect(html.indexOf('<script>')).toBeLessThan(html.indexOf('the page itself'));
@@ -30,6 +30,12 @@ describe('the page frame', () => {
       return document.documentElement.classList.contains('light');
     };
     expect([lightBefore('light', false), lightBefore('auto', true), lightBefore('auto', false), lightBefore('dark', true)]).toEqual([true, true, false, false]);
+    // A theme never chosen follows the system, on a computer as on a phone.
+    localStorage.clear();
+    document.documentElement.classList.remove('light');
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    paint();
+    expect(document.documentElement.classList.contains('light')).toBe(true);
     expect(document.documentElement.hasAttribute('data-app')).toBe(false);
 
     // In a phone app the page is marked as the app's before it is painted, and with no theme chosen it follows the system.
@@ -118,21 +124,41 @@ describe('TopBar', () => {
 });
 
 describe('AppMenu', () => {
-  function show(theme: 'dark' | 'light' = 'dark') {
+  function show(theme: 'dark' | 'light' | 'auto' = 'dark') {
     const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onSupport: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
     render(<div><span>elsewhere</span><AppMenu theme={theme} errorCount={2} {...handlers} /></div>);
     return handlers;
   }
 
-  it('switches the theme without closing', async () => {
+  // Theme opens beneath itself, as Support does.
+  const themes = () => userEvent.click(screen.getByRole('menuitem', { name: /^Theme/ }));
+
+  it('switches the theme without closing, from beneath Theme, which says the theme chosen and folds away when pressed again', async () => {
     const { onTheme, onClose } = show();
-    expect(screen.queryByRole('menuitem', { name: 'Receive from phone' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Pair a phone' })).not.toBeInTheDocument();
+    const theme = screen.getByRole('menuitem', { name: /^Theme/ });
+    expect(theme).toHaveTextContent(/^ThemeDark$/);
+    expect(theme).toHaveAttribute('aria-haspopup', 'menu');
+    expect(theme).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument();
+    await themes();
+    expect(theme).toHaveAttribute('aria-expanded', 'true');
+    expect(within(screen.getByRole('menu', { name: 'Theme' })).getAllByRole('menuitemradio').map(i => i.textContent)).toEqual(['Dark', 'Light', 'Follow device setting']);
     expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute('aria-checked', 'false');
     await userEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
     expect(onTheme).toHaveBeenCalledExactlyOnceWith('light');
     expect(onClose).not.toHaveBeenCalled();
+    await themes();
+    expect(screen.queryByRole('menu', { name: 'Theme' })).not.toBeInTheDocument();
+  });
+
+  it('opens one of Theme and Support at a time', async () => {
+    show();
+    await themes();
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Support/ }));
+    expect(screen.queryByRole('menu', { name: 'Theme' })).not.toBeInTheDocument();
+    expect(screen.getByRole('menu', { name: 'Support' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /^Theme/ })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('says nothing of uploading, which the FAQ says', () => {
@@ -146,9 +172,24 @@ describe('AppMenu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Pair a phone' })).not.toBeInTheDocument();
   });
 
-  it('marks light as chosen when it is', () => {
+  it('marks light as chosen when it is', async () => {
     show('light');
+    expect(screen.getByRole('menuitem', { name: /^Theme/ })).toHaveTextContent(/^ThemeLight$/);
+    await themes();
     expect(screen.getByRole('menuitemradio', { name: 'Light' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('offers to follow the device’s own setting, and marks it as chosen when it is', async () => {
+    const { onTheme } = show();
+    await themes();
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Follow device setting' }));
+    expect(onTheme).toHaveBeenCalledExactlyOnceWith('auto');
+    cleanup();
+    show('auto');
+    expect(screen.getByRole('menuitem', { name: /^Theme/ })).toHaveTextContent(/^ThemeFollow device setting$/);
+    await themes();
+    expect(screen.getByRole('menuitemradio', { name: 'Follow device setting' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'false');
   });
 
   it('gives focus back to what opened it once it closes, if that is still there', () => {
@@ -156,7 +197,7 @@ describe('AppMenu', () => {
     screen.getByRole('button', { name: 'Menu' }).focus();
     const handlers = { onTheme: vi.fn(), onErrors: vi.fn(), onSupport: vi.fn(), onChangeFolders: vi.fn(), onClearResults: vi.fn(), onSettings: vi.fn(), onHelp: vi.fn(), onAbout: vi.fn(), onDeletePermanently: vi.fn(), onClose: vi.fn() };
     rerender(<><button type="button">Menu</button><AppMenu theme="dark" errorCount={0} {...handlers} /></>);
-    expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveFocus();
+    expect(screen.getByRole('menuitem', { name: /^Theme/ })).toHaveFocus();
     rerender(<button type="button">Menu</button>);
     expect(screen.getByRole('button', { name: 'Menu' })).toHaveFocus();
 
@@ -168,21 +209,19 @@ describe('AppMenu', () => {
   it('opens on its first item, and goes through the items with the arrow keys, Home and End, round from either end', async () => {
     show();
     const names = () => (document.activeElement as HTMLElement).textContent;
-    expect(names()).toBe('Dark');
-    await userEvent.keyboard('{ArrowDown}');
-    expect(names()).toBe('Light');
+    expect(names()).toBe('ThemeDark');
     await userEvent.keyboard('{ArrowDown}');
     expect(names()).toBe('Change folders or rescan');
     await userEvent.keyboard('{End}');
     expect(names()).toBe('Move to Recycle Bin…');
     await userEvent.keyboard('{ArrowDown}');
-    expect(names()).toBe('Dark');
+    expect(names()).toBe('ThemeDark');
     await userEvent.keyboard('{ArrowUp}');
     expect(names()).toBe('Move to Recycle Bin…');
     await userEvent.keyboard('{Home}');
-    expect(names()).toBe('Dark');
+    expect(names()).toBe('ThemeDark');
     await userEvent.keyboard('{ArrowLeft}');
-    expect(names()).toBe('Dark');
+    expect(names()).toBe('ThemeDark');
     // From nowhere in the menu, up is its last item.
     (document.activeElement as HTMLElement).blur();
     fireEvent.keyDown(screen.getByRole('menu'), { key: 'ArrowUp' });
@@ -202,7 +241,7 @@ describe('AppMenu', () => {
   it('shows the error count on Support, and says on hovering Move to Recycle Bin where removed files wait', () => {
     show();
     expect(screen.getByRole('menuitem', { name: /^Support/ })).toHaveTextContent('Support2 errors');
-    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['Change folders or rescan', 'Clear results', 'Settings', 'Support2 errors', 'Help', 'About Trovolve', 'Move to Recycle Bin…']);
+    expect(screen.getAllByRole('menuitem').map(i => i.textContent)).toEqual(['ThemeDark', 'Change folders or rescan', 'Clear results', 'Settings', 'Support2 errors', 'Help', 'About Trovolve', 'Move to Recycle Bin…']);
     // The one thing in the menu that erases files is marked as such.
     expect(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' })).toHaveClass('text-rose-t');
     expect(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' })).toHaveAttribute('title', 'Removed files wait in _Trovolve_Removed inside each folder they were removed from. Move to Recycle Bin sends them there.');
@@ -231,7 +270,7 @@ describe('AppMenu', () => {
     expect(screen.queryByRole('menu', { name: 'Support' })).not.toBeInTheDocument();
   });
 
-  it('opens Support on its first item with the right arrow, and goes back to it with the left', async () => {
+  it('opens Support and Theme on their first item with the right arrow, and goes back to them with the left', async () => {
     show();
     const support = screen.getByRole('menuitem', { name: /^Support/ });
     support.focus();
@@ -242,6 +281,19 @@ describe('AppMenu', () => {
     await userEvent.keyboard('{ArrowLeft}');
     expect(support).toHaveFocus();
     expect(screen.queryByRole('menu', { name: 'Support' })).not.toBeInTheDocument();
+    // Theme opens the same way, on the theme's first choice, and the arrows go through its choices.
+    const theme = screen.getByRole('menuitem', { name: /^Theme/ });
+    theme.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+    expect(screen.getByRole('menuitemradio', { name: 'Follow device setting' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(theme).toHaveFocus();
+    expect(screen.queryByRole('menu', { name: 'Theme' })).not.toBeInTheDocument();
+    // The left arrow outside an open menu beneath does nothing.
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(theme).toHaveFocus();
     // The right arrow anywhere else does nothing.
     screen.getByRole('menuitem', { name: 'Help' }).focus();
     await userEvent.keyboard('{ArrowRight}');

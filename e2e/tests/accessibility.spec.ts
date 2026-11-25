@@ -70,6 +70,8 @@ test.describe('every screen can be used with assistive technology and read in ei
   test('the menu, Support, Settings, Help and About', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('menuitem', { name: /^Theme/ }).click();
+    await accessible(page, 'The menu, Theme open');
     await page.getByRole('menuitem', { name: /^Support/ }).click();
     await accessible(page, 'The menu, Support open');
     await page.getByRole('menuitem', { name: 'Support page' }).click();

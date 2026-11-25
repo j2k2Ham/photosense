@@ -36,9 +36,9 @@ function refuseStorage() {
 }
 
 describe('the theme', () => {
-  it('is dark until the person chooses light, and the choice is remembered and applied at once', () => {
+  it('follows the device until the person chooses light, and the choice is remembered and applied at once', () => {
     const { result } = renderHook(() => useTheme());
-    expect(result.current[0]).toBe('dark');
+    expect(result.current.slice(0, 1).concat(result.current[2])).toEqual(['dark', 'auto']);
 
     act(() => result.current[1]('light'));
     expect(result.current[0]).toBe('light');
@@ -76,18 +76,18 @@ describe('the theme', () => {
     expect(light.listening()).toBe(0);
   });
 
-  it('starts as the caller says until the person chooses, as a phone starts in Auto, and a saved choice wins', () => {
+  it('starts in Auto on a light system, on a computer as on a phone, and a saved choice wins', () => {
     system(true);
-    expect(renderHook(() => useTheme('auto')).result.current).toEqual(['light', expect.any(Function), 'auto']);
+    expect(renderHook(() => useTheme()).result.current).toEqual(['light', expect.any(Function), 'auto']);
     localStorage.setItem(THEME_KEY, 'dark');
-    expect(renderHook(() => useTheme('auto')).result.current[0]).toBe('dark');
-    localStorage.setItem(THEME_KEY, 'auto');
-    expect(renderHook(() => useTheme('dark')).result.current[0]).toBe('light');
+    expect(renderHook(() => useTheme()).result.current[0]).toBe('dark');
+    localStorage.setItem(THEME_KEY, 'something else');
+    expect(renderHook(() => useTheme()).result.current[0]).toBe('light');
   });
 
   it('is dark when the page is made ahead on the server, which has no system to follow', () => {
     system(true);
-    function Probe() { return createElement('p', null, useTheme('auto')[0]); }
+    function Probe() { return createElement('p', null, useTheme()[0]); }
     expect(renderToStaticMarkup(createElement(Probe))).toBe('<p>dark</p>');
   });
 

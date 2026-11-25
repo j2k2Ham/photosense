@@ -5,7 +5,7 @@ import { SYSTEM_LIGHT, THEME_KEY } from './themeKey';
 /** The page's colours: dark or light. */
 export type Theme = 'dark' | 'light';
 
-/** What the person chose: dark, light, or Auto, which follows the system's own setting. */
+/** What the person chose: dark, light, or Auto (Follow device setting on a computer), which follows the system's own setting. */
 export type ThemeChoice = Theme | 'auto';
 
 const CHOICES: readonly string[] = ['dark', 'light', 'auto'];
@@ -24,16 +24,16 @@ const lightOnTheServer = () => false;
 
 /**
  * The theme in use, a way to change it, and what was chosen. Auto follows the system's own setting, and changes
- * with it. With nothing chosen yet it is `unchosen`: dark on a computer, Auto on a phone.
+ * with it; it is what every device starts on until the person chooses (Jamie, 2026-11-25).
  */
-export function useTheme(unchosen: ThemeChoice = 'dark'): [Theme, (choice: ThemeChoice) => void, ThemeChoice] {
+export function useTheme(): [Theme, (choice: ThemeChoice) => void, ThemeChoice] {
   // Null until the saved choice is read: the server has none to render with, and the page must not change theme
   // before it knows, or a page saved light would flash dark.
   const [kept, keepChoice] = useStored(THEME_KEY);
   const chosen = kept === undefined ? null : choiceIn(kept);
   const systemLight = useSyncExternalStore(watchSystem, systemIsLight, lightOnTheServer);
 
-  const choice = chosen ?? unchosen;
+  const choice = chosen ?? 'auto';
   const theme: Theme = choice === 'auto' ? (systemLight ? 'light' : 'dark') : choice;
   const known = chosen !== null;
   useEffect(() => {
