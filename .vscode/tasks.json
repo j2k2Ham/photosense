@@ -12,7 +12,7 @@
 			"type": "process",
 			"problemMatcher": "$msCompile",
 			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Server"
+				"cwd": "${workspaceFolder}/Trovolve.Server"
 			}
 		},
 		{
@@ -30,13 +30,13 @@
 			},
 			"problemMatcher": "$msCompile",
 			"options": {
-				"cwd": "${workspaceFolder}/PhotoSense.Server"
+				"cwd": "${workspaceFolder}/Trovolve.Server"
 			}
 		},
 		{
 			"label": "build:solution",
 			"type": "shell",
-			"command": "dotnet build PhotoSense.sln",
+			"command": "dotnet build Trovolve.sln",
 			"group": "build",
 			"problemMatcher": ["$msCompile"],
 			"presentation": { "reveal": "silent", "panel": "dedicated" }
@@ -44,14 +44,14 @@
 		{
 			"label": "run:service",
 			"type": "shell",
-			"command": "dotnet run --project PhotoSense.Server",
+			"command": "dotnet run --project Trovolve.Server",
 			"problemMatcher": []
 		},
 		{
 			"label": "run:react",
 			"type": "shell",
 			"command": "npm run dev",
-			"options": { "cwd": "${workspaceFolder}/PhotoSense.ReactUI" },
+			"options": { "cwd": "${workspaceFolder}/Trovolve.ReactUI" },
 			"problemMatcher": []
 		},
 		{

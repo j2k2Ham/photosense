@@ -1,0 +1,113 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- The app on an iPhone or iPad: the page, in a web view whose requests are answered inside the app, on the
+       phone's own photo library. Only what talks to Apple's frameworks is here; everything else is shared with
+       the computer and tested there. It builds only where Apple's tools are (a Mac, or GitHub's), so it is not
+       part of Trovolve.sln. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-ios</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>true</ImplicitUsings>
+    <SupportedOSPlatformVersion>16.0</SupportedOSPlatformVersion>
+    <RootNamespace>Trovolve.iOS</RootNamespace>
+    <ApplicationTitle>Trovolve</ApplicationTitle>
+    <ApplicationId>com.j2k2ham.trovolve</ApplicationId>
+    <!-- Its version, and the build number Apple asks to rise with every upload, come from version.json
+         (Directory.Build.targets). -->
+    <TrovolvePart>iphone</TrovolvePart>
+    <!-- The answers are written as JSON by reflection, as they are on the computer, and LiteDB maps its records the
+         same way: only the framework's own assemblies are trimmed, and reflection stays on. -->
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+    <!-- LiteDB makes its queries from compiled expressions, code made while the app runs, which iOS allows only through
+         .NET's interpreter: everything is still compiled ahead of time, and only code made that way is interpreted. -->
+    <MtouchInterpreter>-all</MtouchInterpreter>
+    <!-- The App Group (Entitlements.plist) has to be signed into the app even on the simulator, which takes an ad-hoc
+         signature, as Xcode gives it; a build for a phone is signed with the developer's key. -->
+    <CodesignKey Condition="$(RuntimeIdentifier.StartsWith('iossimulator'))">-</CodesignKey>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Trovolve.Api\Trovolve.Api.csproj" />
+    <ProjectReference Include="..\Trovolve.Infrastructure\Trovolve.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The page, built for a program that hands it out itself: in Trovolve.ReactUI,
+         NEXT_PUBLIC_API_BASE=/api npm run build, which leaves it in out/. -->
+    <BundleResource Include="..\Trovolve.ReactUI\out\**\*" LogicalName="wwwroot/%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Without it, App Store Connect refuses the upload. -->
+    <BundleResource Include="PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
+    <!-- The app's icon is kept once, for every program, in branding/; Xcode makes every size the phone needs from it. -->
+    <ImageAsset Include="..\branding\app-icon.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon.png" />
+    <!-- iOS 18's dark home screen: the mark alone, on no background. -->
+    <ImageAsset Include="..\branding\png\app-icons\ios\AppIcon-dark-1024.png" Link="Assets.xcassets\AppIcon.appiconset\AppIcon-dark.png" />
+    <!-- The icon menu's icons: the brand's Search, Swipe and Backup, as template images iOS tints itself. -->
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-search.png" Link="Assets.xcassets\ShortcutSearch.imageset\shortcut-search.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-search@2x.png" Link="Assets.xcassets\ShortcutSearch.imageset\shortcut-search@2x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-search@3x.png" Link="Assets.xcassets\ShortcutSearch.imageset\shortcut-search@3x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-swipe.png" Link="Assets.xcassets\ShortcutSwipe.imageset\shortcut-swipe.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-swipe@2x.png" Link="Assets.xcassets\ShortcutSwipe.imageset\shortcut-swipe@2x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-swipe@3x.png" Link="Assets.xcassets\ShortcutSwipe.imageset\shortcut-swipe@3x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-backup.png" Link="Assets.xcassets\ShortcutBackup.imageset\shortcut-backup.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-backup@2x.png" Link="Assets.xcassets\ShortcutBackup.imageset\shortcut-backup@2x.png" />
+    <ImageAsset Include="..\branding\png\feature-icons\ios\shortcut-backup@3x.png" Link="Assets.xcassets\ShortcutBackup.imageset\shortcut-backup@3x.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shown under About: what this app ships that others made (node tools/notices.mjs writes it). -->
+    <EmbeddedResource Include="..\notices\iphone.txt" LogicalName="Trovolve.ThirdPartyNotices.txt" />
+  </ItemGroup>
+  <!-- StoreKit 2 is Swift alone: Trovolve's own small bridge to it (Native/StoreKitBridge.swift) is built here into a
+       static library for the phone or the simulator being built for, and linked into the app with the Swift libraries
+       it needs. StoreKitStore calls it. -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <StoreBridgeSdk Condition="$(RuntimeIdentifier.StartsWith('iossimulator'))">iphonesimulator</StoreBridgeSdk>
+    <StoreBridgeSdk Condition="'$(StoreBridgeSdk)' == ''">iphoneos</StoreBridgeSdk>
+    <StoreBridgeArch Condition="$(RuntimeIdentifier.EndsWith('x64'))">x86_64</StoreBridgeArch>
+    <StoreBridgeArch Condition="'$(StoreBridgeArch)' == ''">arm64</StoreBridgeArch>
+    <StoreBridgeTarget>$(StoreBridgeArch)-apple-ios$(SupportedOSPlatformVersion)</StoreBridgeTarget>
+    <StoreBridgeTarget Condition="'$(StoreBridgeSdk)' == 'iphonesimulator'">$(StoreBridgeTarget)-simulator</StoreBridgeTarget>
+  </PropertyGroup>
+  <Target Name="BuildStoreBridge" BeforeTargets="BeforeBuild" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <StoreBridgeLibrary>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)libTrovolveStore.a</StoreBridgeLibrary>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <Exec Command="xcrun --sdk $(StoreBridgeSdk) swiftc -parse-as-library -emit-library -static -O -module-name TrovolveStore -target $(StoreBridgeTarget) -o &quot;$(StoreBridgeLibrary)&quot; Native/StoreKitBridge.swift Native/WidgetsBridge.swift" />
+    <!-- Where Xcode keeps the Swift libraries an older iOS needs beside the system's own. -->
+    <Exec Command="xcode-select -p" ConsoleToMSBuild="true" StandardOutputImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="StoreBridgeDeveloperDir" />
+    </Exec>
+    <ItemGroup>
+      <NativeReference Include="$(StoreBridgeLibrary)" Kind="Static" ForceLoad="true" SmartLink="false" Frameworks="StoreKit Foundation UIKit WidgetKit"
+        LinkerFlags="-L/usr/lib/swift -L$(StoreBridgeDeveloperDir)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(StoreBridgeSdk)" />
+    </ItemGroup>
+  </Target>
+  <!-- The home screen widgets (Native/Widgets) are a WidgetKit extension, Swift and SwiftUI alone: built here into
+       TrovolveWidgets.appex for the phone or the simulator being built for, with its own Info.plist and the App Group
+       it shares with the app, and put in the app's PlugIns, where iOS finds it. -->
+  <PropertyGroup>
+    <WidgetsOutput>$(MSBuildProjectDirectory)/obj/widgets/$(Configuration)-$(RuntimeIdentifier)</WidgetsOutput>
+    <WidgetsBundle>$(WidgetsOutput)/TrovolveWidgets.appex</WidgetsBundle>
+    <WidgetsPlatform Condition="'$(StoreBridgeSdk)' == 'iphonesimulator'">iPhoneSimulator</WidgetsPlatform>
+    <WidgetsPlatform Condition="'$(WidgetsPlatform)' == ''">iPhoneOS</WidgetsPlatform>
+  </PropertyGroup>
+  <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <AdditionalAppExtensions Include="$(WidgetsOutput)">
+      <Name>TrovolveWidgets</Name>
+      <BuildOutput></BuildOutput>
+    </AdditionalAppExtensions>
+  </ItemGroup>
+  <Target Name="BuildWidgets" BeforeTargets="BeforeBuild" DependsOnTargets="BuildStoreBridge;TrovolveVersion" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+    <MakeDir Directories="$(WidgetsBundle)" />
+    <Exec Command="xcrun --sdk $(StoreBridgeSdk) swiftc -parse-as-library -application-extension -O -module-name TrovolveWidgets -target $(StoreBridgeTarget) -o &quot;$(WidgetsBundle)/TrovolveWidgets&quot; Native/Widgets/TrovolveWidgets.swift" />
+    <WriteLinesToFile File="$(WidgetsBundle)/Info.plist" Overwrite="true" Lines="&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;;&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;;&lt;plist version=&quot;1.0&quot;&gt;&lt;dict&gt;;&lt;key&gt;CFBundleDevelopmentRegion&lt;/key&gt;&lt;string&gt;en&lt;/string&gt;;&lt;key&gt;CFBundleDisplayName&lt;/key&gt;&lt;string&gt;Trovolve&lt;/string&gt;;&lt;key&gt;CFBundleExecutable&lt;/key&gt;&lt;string&gt;TrovolveWidgets&lt;/string&gt;;&lt;key&gt;CFBundleIdentifier&lt;/key&gt;&lt;string&gt;$(ApplicationId).widgets&lt;/string&gt;;&lt;key&gt;CFBundleInfoDictionaryVersion&lt;/key&gt;&lt;string&gt;6.0&lt;/string&gt;;&lt;key&gt;CFBundleName&lt;/key&gt;&lt;string&gt;TrovolveWidgets&lt;/string&gt;;&lt;key&gt;CFBundlePackageType&lt;/key&gt;&lt;string&gt;XPC!&lt;/string&gt;;&lt;key&gt;CFBundleShortVersionString&lt;/key&gt;&lt;string&gt;$(ApplicationDisplayVersion)&lt;/string&gt;;&lt;key&gt;CFBundleVersion&lt;/key&gt;&lt;string&gt;$(ApplicationVersion)&lt;/string&gt;;&lt;key&gt;CFBundleSupportedPlatforms&lt;/key&gt;&lt;array&gt;&lt;string&gt;$(WidgetsPlatform)&lt;/string&gt;&lt;/array&gt;;&lt;key&gt;MinimumOSVersion&lt;/key&gt;&lt;string&gt;$(SupportedOSPlatformVersion)&lt;/string&gt;;&lt;key&gt;UIDeviceFamily&lt;/key&gt;&lt;array&gt;&lt;integer&gt;1&lt;/integer&gt;&lt;integer&gt;2&lt;/integer&gt;&lt;/array&gt;;&lt;key&gt;NSExtension&lt;/key&gt;&lt;dict&gt;&lt;key&gt;NSExtensionPointIdentifier&lt;/key&gt;&lt;string&gt;com.apple.widgetkit-extension&lt;/string&gt;&lt;/dict&gt;;&lt;/dict&gt;&lt;/plist&gt;" />
+    <!-- Signed with the App Group it shares with the app; a build for a phone is signed again, with the app, by the publish. -->
+    <Exec Command="codesign --force --sign - --entitlements Native/Widgets/TrovolveWidgets.entitlements &quot;$(WidgetsBundle)&quot;" />
+  </Target>
+  <Target Name="RequireThePage" BeforeTargets="Build" Condition="!Exists('..\Trovolve.ReactUI\out\index.html')">
+    <Error Text="Build the page first: in Trovolve.ReactUI, run npm ci, then npm run build with NEXT_PUBLIC_API_BASE set to /api." />
+  </Target>
+</Project>

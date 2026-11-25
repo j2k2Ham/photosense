@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- The service on a Windows or Mac computer: one program, with no emulator or tools beside it. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- Its version comes from version.json (Directory.Build.targets). -->
+    <TrovolvePart>server</TrovolvePart>
+    <!-- The program's icon on Windows (16 to 256 pixels), drawn from branding/app-icon.svg. -->
+    <ApplicationIcon>..\branding\trovolve.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Trovolve.Api\Trovolve.Api.csproj" />
+    <ProjectReference Include="..\Trovolve.Application\Trovolve.Application.csproj" />
+    <ProjectReference Include="..\Trovolve.Contracts\Trovolve.Contracts.csproj" />
+    <ProjectReference Include="..\Trovolve.Desktop\Trovolve.Desktop.csproj" />
+    <ProjectReference Include="..\Trovolve.Domain\Trovolve.Domain.csproj" />
+    <ProjectReference Include="..\Trovolve.Infrastructure\Trovolve.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Shown under About: what this program ships that others made (node tools/notices.mjs writes it). -->
+    <EmbeddedResource Include="..\notices\server.txt" LogicalName="Trovolve.ThirdPartyNotices.txt" />
+  </ItemGroup>
+</Project>

@@ -1,11 +1,11 @@
 <#!
 .SYNOPSIS
-  Starts PhotoSense for local development: the service and the page, on Windows or on a Mac.
+  Starts Trovolve for local development: the service and the page, on Windows or on a Mac.
 
 .DESCRIPTION
   - Optionally cleans build outputs
   - Builds the service (unless -NoBuild)
-  - Starts the service (PhotoSense.Server) and the page's development server (Next.js)
+  - Starts the service (Trovolve.Server) and the page's development server (Next.js)
   - Streams what both print, coloured by which one printed it
   - Stops both on Ctrl+C
   - Takes over from a copy that is still running: starting again is how to restart
@@ -23,7 +23,7 @@
   After startup, open the default browser to the page.
 
 .PARAMETER Stop
-  Stop a copy of PhotoSense that is running, then exit.
+  Stop a copy of Trovolve that is running, then exit.
 
 .EXAMPLE
   ./dev-start.ps1
@@ -125,13 +125,13 @@ function Get-CommandLines {
 
 # What a run of this script leaves running: the service and the page's dev server. They are recognised by what
 # they are running out of this folder, never by port alone, so another program on the same port is left alone.
-function Get-PhotoSenseProcesses {
+function Get-TrovolveProcesses {
   $here = [regex]::Escape($root)
   Get-CommandLines | Where-Object {
     $cmd = $_.Command
     $_.Id -ne $PID -and $cmd -match $here -and (
-      ($cmd -match 'PhotoSense\.Server(\.dll|\.exe)?(\s|"|$)') -or
-      ($cmd -match 'PhotoSense\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]'))
+      ($cmd -match 'Trovolve\.Server(\.dll|\.exe)?(\s|"|$)') -or
+      ($cmd -match 'Trovolve\.ReactUI[\\/]+node_modules.*[\\/]next[\\/]'))
   }
 }
 
@@ -142,8 +142,8 @@ function Stop-Tree([int]$processId){
   Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
 }
 
-function Stop-PhotoSense {
-  $found = @(Get-PhotoSenseProcesses)
+function Stop-Trovolve {
+  $found = @(Get-TrovolveProcesses)
   foreach($p in $found){ Stop-Tree $p.Id }
   if($found.Count -gt 0){ Start-Sleep -Milliseconds 800 }   # the ports take a moment to come free
   return $found.Count
@@ -161,19 +161,19 @@ function Get-PortOwner([int]$port){
 }
 
 if($Stop){
-  $stopped = Stop-PhotoSense
-  if($stopped -gt 0){ Write-Host "Stopped PhotoSense ($stopped processes)." -ForegroundColor Cyan }
-  else { Write-Host 'PhotoSense is not running.' -ForegroundColor Cyan }
+  $stopped = Stop-Trovolve
+  if($stopped -gt 0){ Write-Host "Stopped Trovolve ($stopped processes)." -ForegroundColor Cyan }
+  else { Write-Host 'Trovolve is not running.' -ForegroundColor Cyan }
   return
 }
 
 # Starting again takes over from a copy that is still running. Two copies cannot share the ports, and a
 # running service keeps its program files locked, which would fail the build below.
-$earlier = Stop-PhotoSense
-if($earlier -gt 0){ Write-Host "Stopped the copy of PhotoSense that was already running ($earlier processes)." -ForegroundColor DarkYellow }
+$earlier = Stop-Trovolve
+if($earlier -gt 0){ Write-Host "Stopped the copy of Trovolve that was already running ($earlier processes)." -ForegroundColor DarkYellow }
 
 $busy = Get-PortOwner $ServicePort
-if($busy){ throw "Port $ServicePort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not PhotoSense. Close it, or start with -ServicePort <another port>." }
+if($busy){ throw "Port $ServicePort is in use by $($busy.ProcessName) (process $($busy.Id)), which is not Trovolve. Close it, or start with -ServicePort <another port>." }
 
 # A build leaves worker processes waiting to be used again, and after building the service they go on
 # holding its program files. The next build then cannot replace those files and fails ("Could not copy ...
@@ -191,16 +191,16 @@ function Stop-IdleBuildWorkers {
   if($idle.Count -gt 0){ Write-Host "Ended $($idle.Count) idle build worker(s) left by an earlier build." -ForegroundColor DarkGray }
 }
 
-if($Clean){ Write-Section 'Cleaning solution'; Stop-IdleBuildWorkers; dotnet clean PhotoSense.sln -nodeReuse:false }
+if($Clean){ Write-Section 'Cleaning solution'; Stop-IdleBuildWorkers; dotnet clean Trovolve.sln -nodeReuse:false }
 
-$serviceProject = Join-Path $root 'PhotoSense.Server'
+$serviceProject = Join-Path $root 'Trovolve.Server'
 if(-not $NoBuild){
   Write-Section 'Building'
   Stop-IdleBuildWorkers
   # The service's project brings the projects it is built from with it. No workers are left waiting
   # afterwards (-nodeReuse:false), so this build does not get in the way of the next one.
-  dotnet build (Join-Path $serviceProject 'PhotoSense.Server.csproj') -nodeReuse:false
-  if($LASTEXITCODE -ne 0){ throw 'The build failed; PhotoSense was not started.' }
+  dotnet build (Join-Path $serviceProject 'Trovolve.Server.csproj') -nodeReuse:false
+  if($LASTEXITCODE -ne 0){ throw 'The build failed; Trovolve was not started.' }
 }
 
 Write-Section 'Starting services'
@@ -218,7 +218,7 @@ function Get-FreePort([int]$start,[int]$count){
 $reactPort = Get-FreePort -start $ReactBasePort -count $ReactPortScan
 
 # The service answers the page's address only, so it is told which port the page was given.
-$serviceDll = Join-Path $serviceProject (Join-Path 'bin' (Join-Path 'Debug' (Join-Path 'net10.0' 'PhotoSense.Server.dll')))
+$serviceDll = Join-Path $serviceProject (Join-Path 'bin' (Join-Path 'Debug' (Join-Path 'net10.0' 'Trovolve.Server.dll')))
 $serviceProc = Start-ProcessLogged -Name 'SERVICE' -FileName 'dotnet' -WorkingDirectory $root -Color Yellow -Arguments @(
   $serviceDll, '--urls', "http://localhost:$ServicePort",
   "--Cors:Origins:0=http://localhost:$reactPort", "--Cors:Origins:1=http://127.0.0.1:$reactPort")
@@ -226,7 +226,7 @@ Wait-Showing 700
 if($serviceProc.HasExited){ Show-Output; throw "The service stopped as it started (code $($serviceProc.ExitCode))." }
 
 # React UI
-$reactDir = Join-Path $root 'PhotoSense.ReactUI'
+$reactDir = Join-Path $root 'Trovolve.ReactUI'
 if(!(Test-Path (Join-Path $reactDir 'node_modules'))){
   Write-Section 'Installing React UI dependencies'
   Push-Location $reactDir
@@ -240,7 +240,7 @@ $reactProc = Start-ProcessLogged -Name 'WEB' -FileName 'node' -WorkingDirectory 
 Write-Section 'Startup summary'
 Write-Host "Service:    http://localhost:$ServicePort" -ForegroundColor Yellow
 Write-Host ("React UI:   http://localhost:{0}" -f $reactPort) -ForegroundColor Green
-Write-Host "Press Ctrl+C here to stop PhotoSense, or run ./dev-start.ps1 -Stop from another terminal." -ForegroundColor Cyan
+Write-Host "Press Ctrl+C here to stop Trovolve, or run ./dev-start.ps1 -Stop from another terminal." -ForegroundColor Cyan
 
 if($Open){ Start-Process ("http://localhost:{0}" -f $reactPort) | Out-Null }
 
@@ -276,7 +276,7 @@ try {
   }
 }
 finally {
-  Write-Host "`nStopping PhotoSense..." -ForegroundColor Cyan
+  Write-Host "`nStopping Trovolve..." -ForegroundColor Cyan
   Stop-Started
   Write-Host 'Stopped.' -ForegroundColor Cyan
 }

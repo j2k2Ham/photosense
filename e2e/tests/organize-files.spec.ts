@@ -24,6 +24,29 @@ test.describe('Organize: the files', () => {
     await expect(gallery(page).getByRole('listitem')).toHaveCount(3);
   });
 
+  test('Clear results, in the menu once a folder is shown, forgets the folder and its filters, and asks for a folder again, the files where they were', async ({ page, photos }) => {
+    mixed(photos);
+    await page.goto('/');
+    await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Clear results' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await openOrganize(page, photos.root);
+    await page.getByRole('group', { name: 'Type' }).getByRole('button', { name: /^Videos/ }).click();
+    await page.getByRole('textbox', { name: 'Search by name, place or month' }).fill('Butte');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Change folders or rescan' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Clear results' }).click();
+    await expect(message(page, "Cleared Organize's results for Phone Pictures. Your photos were not touched.")).toBeVisible();
+    await expect(page.getByLabel('Folder being organized')).toHaveText('No folder chosen yet');
+    await expect(page.getByText('Choose a folder to organize')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Search by name, place or month' })).toHaveValue('');
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Clear results' })).toHaveCount(0);
+    expect(photoFiles(photos).sort()).toEqual(['Trips/IMG_0001.JPG', 'Trips/IMG_0002.JPG', 'Trips/IMG_0003.JPG', 'Trips/IMG_0004.MOV']);
+  });
+
   test('files are found by name, by place and by month', async ({ page, photos }) => {
     mixed(photos);
     await openOrganize(page, photos.root);
@@ -64,16 +87,16 @@ test.describe('Organize: the files', () => {
     await expect(bar).toBeHidden();
   });
 
-  test('selected files are deleted into _PhotoSense_Removed after a question, and Undo in Recently moved puts them back @phone', async ({ page, photos }) => {
+  test('selected files are deleted into _Trovolve_Removed after a question, and Undo in Recently moved puts them back @phone', async ({ page, photos }) => {
     mixed(photos);
     await openOrganize(page, photos.root);
     await tile(page, 'IMG_0003.JPG').click();
     await page.getByRole('region', { name: 'Selection' }).getByRole('button', { name: 'Delete the 1 selected file' }).click();
     await expect(question(page)).toHaveAccessibleName('Delete IMG_0003.JPG?');
-    await expect(question(page)).toContainText('_PhotoSense_Removed');
+    await expect(question(page)).toContainText('_Trovolve_Removed');
     await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
     await expect(message(page, /IMG_0003\.JPG|1 file/)).toBeVisible();
-    expect(photos.files('_PhotoSense_Removed')).toEqual(['_PhotoSense_Removed/Trips/IMG_0003.JPG']);
+    expect(photos.files('_Trovolve_Removed')).toEqual(['_Trovolve_Removed/Trips/IMG_0003.JPG']);
     await expect(tile(page, 'IMG_0003.JPG')).toBeHidden();
 
     await pane(page, 'Folders');
@@ -90,7 +113,7 @@ test.describe('Organize: the files', () => {
     mixed(photos);
     photos.picture('Other/IMG_0009.JPG', { seed: 9 });
     await openOrganize(page, photos.path('Trips'));
-    await page.getByRole('button', { name: 'Choose root folder' }).click();
+    await page.getByRole('button', { name: 'Choose folder' }).click();
     const picker = page.getByRole('dialog', { name: 'Choose a folder to organize' });
     await picker.getByRole('button', { name: /^Up|^Back/ }).first().click();
     await picker.getByRole('button', { name: /^Other/ }).click();

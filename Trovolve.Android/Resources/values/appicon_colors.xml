@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Behind the Trovolve mark on the app icon: teal black, the dark theme's on-brand colour. -->
+  <color name="appicon_background">#061415</color>
+</resources>

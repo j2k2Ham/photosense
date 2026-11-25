@@ -1,0 +1,116 @@
+using Trovolve.Domain.Services;
+using Trovolve.Domain.ValueObjects;
+
+namespace Trovolve.Infrastructure.Library;
+
+/// <summary>What one of the files a picture or video is kept as holds.</summary>
+public enum LibraryFileKind
+{
+    /// <summary>The picture as it was taken, before any edit.</summary>
+    Photo,
+
+    /// <summary>A video as it was taken.</summary>
+    Video,
+
+    /// <summary>The moving part of a Live Photo.</summary>
+    PairedVideo,
+}
+
+/// <summary>One file a picture or video is kept as, under the name it was taken with.</summary>
+/// <param name="Kind">What the file holds.</param>
+/// <param name="FileName">The name it was taken with.</param>
+/// <param name="Length">Its size.</param>
+public sealed record LibraryFile(LibraryFileKind Kind, string FileName, long Length);
+
+/// <summary>A picture or video in a phone's photo library, and the files it is kept as.</summary>
+/// <param name="Id">The library's own id for it.</param>
+/// <param name="CreatedUtc">When it was taken or added.</param>
+/// <param name="ModifiedUtc">When it last changed.</param>
+/// <param name="Files">The files it is kept as.</param>
+/// <param name="Favorite">The person marked it as a favorite in Photos.</param>
+/// <param name="Screenshot">Photos marks it as a picture of the screen.</param>
+/// <param name="BurstId">The burst Photos says it was taken in; null for none.</param>
+public sealed record LibraryItem(string Id, DateTime CreatedUtc, DateTime ModifiedUtc, IReadOnlyList<LibraryFile> Files, bool Favorite = false, bool Screenshot = false, string? BurstId = null);
+
+/// <summary>An album Trovolve made: the names of the folders it is in, outermost first, then its own; and what is in it.</summary>
+/// <param name="Path">The names of the folders it is in, outermost first, then its own.</param>
+/// <param name="ItemIds">The pictures and videos in it.</param>
+public sealed record LibraryAlbum(IReadOnlyList<string> Path, IReadOnlyList<string> ItemIds);
+
+/// <summary>
+/// Changes to a photo library, made together. An album is named by its path: the folders it is in, then its own name.
+/// One that is not there yet is made, with the folders it names, when something is put in it.
+/// </summary>
+public sealed class LibraryChange
+{
+    /// <summary>Pictures and videos to put in an album of Trovolve's.</summary>
+    public List<(string Item, IReadOnlyList<string> Album)> Add { get; } = [];
+
+    /// <summary>Pictures and videos to take out of an album of Trovolve's. They stay in the library.</summary>
+    public List<(string Item, IReadOnlyList<string> Album)> Take { get; } = [];
+
+    /// <summary>Pictures and videos to delete. A phone keeps what is deleted in its own bin for a while, Recently Deleted on an iPhone.</summary>
+    public List<string> Delete { get; } = [];
+
+    /// <summary>There is nothing to change.</summary>
+    public bool IsEmpty => Add.Count == 0 && Take.Count == 0 && Delete.Count == 0;
+}
+
+/// <summary>
+/// A phone's photo library as the phone's own photo framework gives it. Only this differs from one kind of phone
+/// to another; how its pictures are shown to the rest of Trovolve is decided once, in <see cref="PhotoLibraryFileSystem"/>.
+/// </summary>
+public interface IPhotoLibrary
+{
+    /// <summary>Every picture and video the app has been allowed to see, oldest first.</summary>
+    IReadOnlyList<LibraryItem> Items();
+
+    /// <summary>
+    /// One file of a picture or video as it was taken, fetched from the cloud first when it is kept there. A fetch
+    /// that goes a minute without getting any further is given up, as the phone may have lost its connection.
+    /// </summary>
+    /// <exception cref="FileNotFoundException">The picture or video is no longer in the library.</exception>
+    /// <exception cref="IOException">It could not be fetched from the cloud.</exception>
+    Task<Stream> OpenAsync(string id, LibraryFileKind kind, CancellationToken ct);
+
+    /// <summary>The albums Trovolve has made, empty ones too. Albums of the person's own are never among them.</summary>
+    IReadOnlyList<LibraryAlbum> Albums();
+
+    /// <summary>
+    /// Makes every change given, at once: all of them, or none. The phone may ask the person first, as it does before
+    /// it deletes anything, and asks once for all of them.
+    /// </summary>
+    /// <exception cref="IOException">Nothing was changed: the person said no, or the library could not make one of the changes.</exception>
+    void Change(LibraryChange change);
+
+    /// <summary>
+    /// Writes a smaller copy of the video <paramref name="id"/>, made into <paramref name="target"/> as HEVC, as a new
+    /// item with the original's date and place, fetching it from the cloud first when it is kept there; answers how many
+    /// bytes the copy takes. The original is left as it is.
+    /// </summary>
+    /// <exception cref="IOException">The video could not be fetched, read or written; nothing is kept.</exception>
+    Task<long> CompressAsync(string id, VideoTarget target, IProgress<double> progress, CancellationToken ct);
+
+    /// <summary>Marks a picture or video a favorite in Photos, or takes the mark away.</summary>
+    /// <exception cref="IOException">The library could not change it.</exception>
+    void SetFavorite(string id, bool favorite);
+
+    /// <summary>Gives pictures and videos, by their ids, the dates and places asked, all together, after iOS asks; the files are left as they are.</summary>
+    /// <exception cref="IOException">The person said no, or the library could not change them: none changed.</exception>
+    void ChangeDetails(IReadOnlyList<(string Id, DateTime? Taken, PlaceChange? Place)> changes);
+
+    /// <summary>
+    /// Adds a picture or video to the library as a new item, its files together (a Live Photo's picture and its
+    /// video), dated and placed as given. Returns the library's id for it.
+    /// </summary>
+    /// <exception cref="IOException">The library could not take it.</exception>
+    /// <exception cref="UnauthorizedAccessException">Trovolve may not add to the library.</exception>
+    Task<string> ImportAsync(IReadOnlyList<(LibraryFileKind Kind, string FileName, Stream Content)> files, DateTime? taken, PlaceChange? place, CancellationToken ct);
+
+    /// <summary>
+    /// A copy of one file of a picture or video for sharing, in the app's temporary folder, without its place and camera
+    /// details as asked, fetched from the cloud first when it is kept there.
+    /// </summary>
+    /// <exception cref="IOException">It could not be fetched or copied.</exception>
+    Task<SharedCopy> CopyForSharingAsync(string id, LibraryFileKind kind, bool removeLocation, bool removeCamera, CancellationToken ct);
+}

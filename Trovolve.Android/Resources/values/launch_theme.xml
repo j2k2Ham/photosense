@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Behind the page as the app opens: the brand's teal black, which the page's launch plays on. -->
+  <color name="launch_background">#061415</color>
+  <!-- The system's own look, with no action bar, on teal black until the page draws. -->
+  <style name="Trovolve.Launch" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <item name="android:windowBackground">@color/launch_background</item>
+  </style>
+</resources>

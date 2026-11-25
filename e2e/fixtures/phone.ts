@@ -13,7 +13,7 @@ export interface BackupState {
 
 /** What Safe to delete could free on the phone stood in for: 2 photos on a 128 GB phone with 16 GB free. */
 export const SAFE = {
-  computer: 'DESKTOP-1', folder: "Pictures/PhotoSense/Jamie's iPhone", lastChecked: null, checked: { count: 2, bytes: 6e9 }, favorites: { count: 0, bytes: 0 },
+  computer: 'DESKTOP-1', folder: "Pictures/Trovolve/Jamie's iPhone", lastChecked: null, checked: { count: 2, bytes: 6e9 }, favorites: { count: 0, bytes: 0 },
   recent: { count: 0, bytes: 0 }, removable: { count: 2, bytes: 6e9 }, storageTotal: 128e9, storageFree: 16e9, cloudPhotos: false,
 };
 
@@ -26,26 +26,28 @@ const IDLE = { stage: 'idle', quality: 'balanced', total: 0, done: 0, current: n
  */
 export class Phone {
   access: 'everything' | 'selected' | 'nothing';
-  /** What the person answers when the phone asks what PhotoSense may see. */
+  /** What the person answers when the phone asks what Trovolve may see. */
   answer: Phone['access'] = 'everything';
   /** The folder the phone's library is shown as, which Scan again reads; none unless the test gives one. */
   root?: string;
   /** Whether this is the phone's first run, with Welcome; otherwise it has been through it already. */
   firstRun = false;
   state: BackupState = {
-    stage: 'ready', computer: 'DESKTOP-1', folder: "Pictures/PhotoSense/Jamie's iPhone", waiting: 2, waitingBytes: 6e9, onComputer: 0, done: 0, total: 0, bytes: 0, totalBytes: 0,
+    stage: 'ready', computer: 'DESKTOP-1', folder: "Pictures/Trovolve/Jamie's iPhone", waiting: 2, waitingBytes: 6e9, onComputer: 0, done: 0, total: 0, bytes: 0, totalBytes: 0,
     lastChecked: null, lastBackup: null, strip: [], problem: null,
     settings: { automatic: false, onlyWhileCharging: true, includeVideos: true, keepFavorites: true, keepRecent: true },
   };
   /** What the page asked of the phone's backup, but how it stands. */
   readonly asked: string[] = [];
+  /** Whether the computer is found when the phone forgets it, and so forgets the phone too. */
+  forgetTold = true;
 
   constructor(access: Phone['access'] = 'everything') { this.access = access; }
 
   set(changes: Partial<BackupState>) { this.state = { ...this.state, ...changes }; }
 
   async attach(page: Page) {
-    if (!this.firstRun) await page.addInitScript(() => { if (!localStorage.getItem('photosense-first-run')) localStorage.setItem('photosense-first-run', 'done'); });
+    if (!this.firstRun) await page.addInitScript(() => { if (!localStorage.getItem('trovolve-first-run')) localStorage.setItem('trovolve-first-run', 'done'); });
     await page.route(url => url.pathname.endsWith('/api/folders') && !url.search,
       route => json(route, { path: null, parent: null, folders: this.root ? [{ name: 'Photo Library', path: this.root }] : [] }));
     await page.route('**/api/about', async route => {
@@ -70,10 +72,16 @@ export class Phone {
       if (what === 'start') this.set({ stage: 'running', total: 2, totalBytes: 6e9 });
       if (what === 'pause') this.set({ stage: 'paused' });
       if (what === 'settings') this.set({ settings: JSON.parse(body!) });
+      if (what === 'forget') {
+        const computer = this.state.computer!;
+        this.set({ stage: 'unpaired', computer: null, folder: null, onComputer: 0, lastChecked: null, lastBackup: null });
+        this.locations.locations = this.locations.locations.map(l => (l.kind === 'computer' ? { ...l, name: 'Computer', on: false, connected: false, settings: {} } : l));
+        return json(route, { computer, told: this.forgetTold });
+      }
       return json(route, this.state);
     });
     // Clean up's categories are the program's own, with the phone's storage, which only a phone knows. Deleting from
-    // them goes through the program too, into _PhotoSense_Removed, where a phone would use its own bin.
+    // them goes through the program too, into _Trovolve_Removed, where a phone would use its own bin.
     await page.route(url => url.pathname.endsWith('/api/cleanup/categories'), async route => {
       // The test may have ended while the program was answering.
       let real: object;
@@ -201,7 +209,7 @@ export class Phone {
         this.asked.push(`trips/folder ${id}`);
         const trip = this.trips.trips.find(t => t.id === id)!;
         this.trips = { ...this.trips, folder: { id, stage: 'running', problem: null, made: null } };
-        this.made = { ...this.trips, trips: this.trips.trips.map(t => (t.id === id ? { ...t, folderMade: true } : t)), folder: { id, stage: 'ready', problem: null, made: `Pictures/PhotoSense/${trip.folder}` } };
+        this.made = { ...this.trips, trips: this.trips.trips.map(t => (t.id === id ? { ...t, folderMade: true } : t)), folder: { id, stage: 'ready', problem: null, made: `Pictures/Trovolve/${trip.folder}` } };
         return route.fulfill({ status: 202 });
       }
       if (what) return json(route, this.tripDays[what] ?? { trip: this.trips.trips.find(t => t.id === what), days: [] });
@@ -274,7 +282,7 @@ export class Phone {
       const [id, action] = what.split('/');
       const location = l.locations.find(x => x.id === id);
       if (!location) return route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ error: 'There is no such location.' }) });
-      if (!action) return json(route, { location, where: location.settings.folder ?? 'Apps/PhotoSense', space: { total: 2e12, used: 5e11 }, problem: null });
+      if (!action) return json(route, { location, where: location.settings.folder ?? 'Apps/Trovolve', space: { total: 2e12, used: 5e11 }, problem: null });
       if (action === 'on') change(id, { on: true, connected: true, account: location.kind === 'computer' ? null : 'alex.m@example.com' });
       if (action === 'off') change(id, { on: false });
       if (action === 'name') change(id, { name: asked.name });
@@ -287,7 +295,7 @@ export class Phone {
   /** Where the phone backs up, as it would say: the computer paired and on, the four cloud services off, on Pro, unless the test says otherwise. */
   locations: { locations: StandInLocation[]; countAt: number; pro: boolean; activity: Record<string, unknown> | null; held: string | null } = {
     locations: [
-      { ...standIn('computer', 'computer', 'DESKTOP-1'), on: true, connected: true, settings: { folder: "Pictures/PhotoSense/Jamie's iPhone" } },
+      { ...standIn('computer', 'computer', 'DESKTOP-1'), on: true, connected: true, settings: { folder: "Pictures/Trovolve/Jamie's iPhone" } },
       standIn('googleDrive', 'googleDrive', 'Google Drive'), standIn('oneDrive', 'oneDrive', 'OneDrive'), standIn('dropbox', 'dropbox', 'Dropbox'),
     ],
     countAt: 1, pro: true, activity: null, held: null,
@@ -332,7 +340,7 @@ export class Phone {
 
   /** The phone's notifications, as the person turned them. */
   notices = { lowStorage: false, trialReminder: false, allowed: false };
-  /** What the person answers when the phone asks whether PhotoSense may send notifications. */
+  /** What the person answers when the phone asks whether Trovolve may send notifications. */
   allowNotices = true;
   /** What a notification tapped asks to open, next time the page asks. */
   opens: string | null = null;

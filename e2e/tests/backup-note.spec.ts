@@ -11,15 +11,15 @@ test.describe('the note asking for a backup', () => {
   test('on a computer, reads the terms of use over it, goes only once accepted, and is not asked again', async ({ page, service }) => {
     await page.goto('/');
     const note = page.getByRole('alertdialog', { name: NOTE });
-    await expect(note).toContainText('Before you use PhotoSense, keep a backup of the photos and videos you care about, and keep it up to date.');
-    await expect(note).toContainText('Accepted it on your phone already? Pair the phone with this computer, and PhotoSense does not ask here.');
+    await expect(note).toContainText('Before you use Trovolve, keep a backup of the photos and videos you care about, and keep it up to date.');
+    await expect(note).toContainText('Accepted it on your phone already? Pair the phone with this computer, and Trovolve does not ask here.');
     await expect(service.get<{ accepted: string | null }>('terms')).resolves.toEqual({ accepted: null });
     await page.keyboard.press('Escape');
     await expect(note).toBeVisible();
     await note.getByRole('button', { name: 'Read the terms of use' }).click();
-    const about = page.getByRole('dialog', { name: 'About PhotoSense' });
+    const about = page.getByRole('dialog', { name: 'About Trovolve' });
     await expect(about.getByRole('button', { name: 'Terms of use' })).toHaveAttribute('aria-current', 'page');
-    await expect(about).toContainText('Keep a backup of photos you care about before you use PhotoSense');
+    await expect(about).toContainText('Keep a backup of photos you care about before you use Trovolve');
     await expect(note).toBeHidden();
     await page.keyboard.press('Escape');
     await note.getByRole('button', { name: 'Accept and continue' }).click();
@@ -49,7 +49,7 @@ test.describe('the note asking for a backup', () => {
     await new Phone().attach(page);
     await page.goto('/');
     const note = page.getByRole('region', { name: NOTE });
-    await expect(note).toContainText('Using PhotoSense means you accept its terms of use.');
+    await expect(note).toContainText('Using Trovolve means you accept its terms of use.');
     await note.getByRole('button', { name: 'Accept and continue' }).click();
     // Nothing covers the tabs now: one can be tapped.
     await phoneTab(page, 'Clean up');

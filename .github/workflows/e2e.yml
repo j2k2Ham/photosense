@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   browsers:
-    # PhotoSense as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
+    # Trovolve as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
     # test makes for itself (e2e/README.md). Ubuntu 24.04, as Playwright 1.56 has no browsers for the 26.04 that
     # ubuntu-latest now is.
     runs-on: ubuntu-24.04
@@ -31,7 +31,7 @@ jobs:
           node-version: 26
           cache: 'npm'
           cache-dependency-path: |
-            PhotoSense.ReactUI/package.json
+            Trovolve.ReactUI/package.json
             e2e/package.json
 
       - name: Setup .NET
@@ -48,7 +48,7 @@ jobs:
         # five minutes, three times, with half a minute's pause after a failed try.
         run: |
           npm ci
-          echo 'DPkg::Lock::Timeout "600"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/90photosense-wait
+          echo 'DPkg::Lock::Timeout "600"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/90trovolve-wait
           timeout 600 bash -c 'while pgrep -x "apt|apt-get|dpkg|unattended-upgr" > /dev/null; do sleep 5; done' || true
           npx playwright install-deps chromium webkit
           for try in 1 2 3; do
@@ -71,21 +71,21 @@ jobs:
       - name: Start the program once
         working-directory: e2e/.cache/server
         env:
-          PhotoStorage__DatabasePath: ${{ runner.temp }}/photosense/photosense.db
-          PhotoStorage__ThumbnailPath: ${{ runner.temp }}/photosense/thumbnails
-          PhotoStorage__BackupPath: ${{ runner.temp }}/photosense/backups
+          PhotoStorage__DatabasePath: ${{ runner.temp }}/trovolve/trovolve.db
+          PhotoStorage__ThumbnailPath: ${{ runner.temp }}/trovolve/thumbnails
+          PhotoStorage__BackupPath: ${{ runner.temp }}/trovolve/backups
         run: |
-          dotnet PhotoSense.Server.dll --urls http://localhost:7199 > "$RUNNER_TEMP/said.txt" 2>&1 &
+          dotnet Trovolve.Server.dll --urls http://localhost:7199 > "$RUNNER_TEMP/said.txt" 2>&1 &
           program=$!
           for second in $(seq 60); do
             if curl -sf --max-time 2 http://localhost:7199/api/health > /dev/null; then
-              echo "PhotoSense answered after about $second seconds."
+              echo "Trovolve answered after about $second seconds."
               kill $program; wait $program || true
               exit 0
             fi
             sleep 1
           done
-          echo "::error::PhotoSense did not answer within a minute."
+          echo "::error::Trovolve did not answer within a minute."
           echo "It said:"; cat "$RUNNER_TEMP/said.txt"
           dotnet tool install --global dotnet-stack > /dev/null && "$HOME/.dotnet/tools/dotnet-stack" report --process-id $program || true
           kill -9 $program

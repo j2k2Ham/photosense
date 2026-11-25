@@ -11,7 +11,7 @@ version: 2
 updates:
   - package-ecosystem: nuget
     # The solution, and the phone apps, which are not in it.
-    directories: [ "/", "/PhotoSense.iOS", "/PhotoSense.Android" ]
+    directories: [ "/", "/Trovolve.iOS", "/Trovolve.Android" ]
     schedule:
       interval: weekly
     groups:
@@ -19,7 +19,7 @@ updates:
         update-types: [ minor, patch ]
 
   - package-ecosystem: npm
-    directories: [ "/PhotoSense.ReactUI", "/e2e" ]
+    directories: [ "/Trovolve.ReactUI", "/e2e" ]
     schedule:
       interval: weekly
     ignore:

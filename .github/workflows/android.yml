@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  PACKAGE: com.j2k2ham.photosense
+  PACKAGE: com.j2k2ham.trovolve
   DOTNET_SDK: '10.0.401'
 
 defaults:
@@ -38,7 +38,7 @@ jobs:
         with:
           node-version: 26
           cache: 'npm'
-          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+          cache-dependency-path: 'Trovolve.ReactUI/package.json'
 
       - name: Setup Java
         uses: actions/setup-java@v6
@@ -57,7 +57,7 @@ jobs:
           echo "::notice title=Android workload::$(dotnet workload list | grep -E '^android ' | tr -s ' ')"
 
       - name: Build the page for the app
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         env:
           NEXT_PUBLIC_API_BASE: /api
         run: |
@@ -81,7 +81,7 @@ jobs:
           ls -l samples
 
       - name: Get what the build needs of Android's SDK
-        run: dotnet build PhotoSense.Android/PhotoSense.Android.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
+        run: dotnet build Trovolve.Android/Trovolve.Android.csproj -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=True
 
       # The restore above, for both of the app's runtimes, wrote packages.lock.json again, from which the app's third-party
       # notices are written (tools/notices.mjs): it must be the list committed. The linker's own tasks are left out, as the
@@ -89,15 +89,15 @@ jobs:
       - name: Check the app's list of packages is up to date
         run: |
           same='walk(if type == "object" then del(."Microsoft.NET.ILLink.Tasks") else . end)'
-          if ! diff <(git show HEAD:PhotoSense.Android/packages.lock.json | jq -S "$same") <(jq -S "$same" PhotoSense.Android/packages.lock.json); then
-            echo "::error title=Packages::PhotoSense.Android/packages.lock.json is out of date with the app's packages: restore the app (dotnet restore PhotoSense.Android/PhotoSense.Android.csproj --force), run node tools/notices.mjs, and commit both."
+          if ! diff <(git show HEAD:Trovolve.Android/packages.lock.json | jq -S "$same") <(jq -S "$same" Trovolve.Android/packages.lock.json); then
+            echo "::error title=Packages::Trovolve.Android/packages.lock.json is out of date with the app's packages: restore the app (dotnet restore Trovolve.Android/Trovolve.Android.csproj --force), run node tools/notices.mjs, and commit both."
             exit 1
           fi
 
       - name: Build the app for the emulator
         run: |
-          dotnet build PhotoSense.Android/PhotoSense.Android.csproj --configuration Release -r android-x64 \
-            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:PhotoSenseSamples="$PWD/samples" 2>&1 | tee build.log
+          dotnet build Trovolve.Android/Trovolve.Android.csproj --configuration Release -r android-x64 \
+            -p:AndroidSdkDirectory="$ANDROID_HOME" -p:TrovolveSamples="$PWD/samples" 2>&1 | tee build.log
 
       - name: Say what the build warned of
         if: always()
@@ -121,7 +121,7 @@ jobs:
           # The emulator's step runs one line at a time, so what it does is a script of its own.
           cat > self-check.sh <<'EOF'
           set -u
-          apk=$(find PhotoSense.Android/bin/Release -name '*-Signed.apk' | head -1)
+          apk=$(find Trovolve.Android/bin/Release -name '*-Signed.apk' | head -1)
           echo "::notice title=App::${apk:-none built} ($(du -h "$apk" | cut -f1))"
           # -g allows at once what the app asks to see: the photos and videos, and where they were taken.
           if ! out=$(adb install -r -g "$apk" 2>&1); then
@@ -176,7 +176,7 @@ jobs:
           set +o pipefail
           [ -f app.log ] || exit 0
           # The app's own lines, each request with its answer, and anything that ended it.
-          grep -E ' PhotoSense|AndroidRuntime|FATAL|mono-rt|DOTNET' app.log | tail -40 | while read -r line; do echo "::error title=App said::${line:0:500}"; done
+          grep -E ' Trovolve|AndroidRuntime|FATAL|mono-rt|DOTNET' app.log | tail -40 | while read -r line; do echo "::error title=App said::${line:0:500}"; done
           tail -150 app.log
 
       - name: Keep the report and the log

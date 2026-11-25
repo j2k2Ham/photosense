@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    <PackageReference Include="Moq" Version="4.21.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Trovolve.Application\Trovolve.Application.csproj" />
+    <ProjectReference Include="..\Trovolve.Domain\Trovolve.Domain.csproj" />
+  </ItemGroup>
+</Project>

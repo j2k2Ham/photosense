@@ -11,11 +11,11 @@ const repo = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const made = [];
 after(() => { for (const dir of made) rmSync(dir, { recursive: true, force: true }); });
 
-const product = { name: 'PhotoSense', publisher: 'Jamie Hamman', copyright: '© 2026 Jamie Hamman', supportEmail: 'help@photosense.example', governingLaw: 'the State of Example' };
+const product = { name: 'Trovolve', publisher: 'Jamie Hamman', copyright: '© 2026 Jamie Hamman', supportEmail: 'help@trovolve.example', governingLaw: 'the State of Example' };
 
 /** A copy of the site's sources, with product.json as given. */
 function fixture(details) {
-  const root = mkdtempSync(join(tmpdir(), 'photosense-site-'));
+  const root = mkdtempSync(join(tmpdir(), 'trovolve-site-'));
   made.push(root);
   cpSync(join(repo, 'site', 'pages'), join(root, 'site', 'pages'), { recursive: true });
   mkdirSync(join(root, 'branding'));
@@ -27,18 +27,18 @@ function fixture(details) {
 describe('the documents', () => {
   it('are filled in with product.json\'s details, saying what is not set yet', () => {
     const text = '{{name}} by {{publisher}}: {{supportEmail}}, {{governingLaw}}. {{name}}.';
-    assert.equal(fill(text, product), 'PhotoSense by Jamie Hamman: help@photosense.example, the State of Example. PhotoSense.');
+    assert.equal(fill(text, product), 'Trovolve by Jamie Hamman: help@trovolve.example, the State of Example. Trovolve.');
     assert.equal(fill(text, { ...product, supportEmail: '', governingLaw: undefined }),
-      'PhotoSense by Jamie Hamman: (the support address is not set yet), (the place whose law applies is not set yet). PhotoSense.');
+      'Trovolve by Jamie Hamman: (the support address is not set yet), (the place whose law applies is not set yet). Trovolve.');
   });
 
   it('are written as HTML, every character of the text shown as it is', () => {
     assert.equal(html([
       { kind: 'heading', level: 2, text: 'Q & A' },
-      { kind: 'paragraph', inline: [{ kind: 'text', text: 'Use <b>' }, { kind: 'strong', text: 'Undo' }, { kind: 'code', text: 'a"b' }, { kind: 'link', text: 'us', href: 'mailto:help@photosense.example' }] },
+      { kind: 'paragraph', inline: [{ kind: 'text', text: 'Use <b>' }, { kind: 'strong', text: 'Undo' }, { kind: 'code', text: 'a"b' }, { kind: 'link', text: 'us', href: 'mailto:help@trovolve.example' }] },
       { kind: 'list', ordered: false, items: [[{ kind: 'text', text: 'one' }]] },
       { kind: 'list', ordered: true, items: [[{ kind: 'text', text: 'first' }], [{ kind: 'text', text: 'second' }]] },
-    ]), '<h2>Q &amp; A</h2>\n<p>Use &lt;b&gt;<strong>Undo</strong><code>a&quot;b</code><a href="mailto:help@photosense.example">us</a></p>\n<ul><li>one</li></ul>\n<ol><li>first</li><li>second</li></ol>');
+    ]), '<h2>Q &amp; A</h2>\n<p>Use &lt;b&gt;<strong>Undo</strong><code>a&quot;b</code><a href="mailto:help@trovolve.example">us</a></p>\n<ul><li>one</li></ul>\n<ol><li>first</li><li>second</li></ol>');
   });
 
   it('write the frequently asked questions as ones the browser opens and closes, each answer under its question', () => {
@@ -50,7 +50,7 @@ describe('the documents', () => {
 
   it('each make a page that says which it is, with the way to the others, and marks a draft as one', () => {
     const terms = page({ title: 'Terms of Use', file: 'terms.html', body: '<p>Body</p>', product, draft: false });
-    assert.match(terms, /<title>Terms of Use \| PhotoSense<\/title>/);
+    assert.match(terms, /<title>Terms of Use \| Trovolve<\/title>/);
     assert.match(terms, /<a href="terms.html" aria-current="page">Terms of Use<\/a>/);
     assert.match(terms, /<a href="privacy.html">Privacy Policy<\/a>/);
     assert.match(terms, /<footer>© 2026 Jamie Hamman<\/footer>/);
@@ -66,12 +66,12 @@ describe('the site', () => {
     assert.equal(main([], { root, print: s => said.push(s), fail: () => {} }), 0);
     assert.deepEqual(said, [`Wrote the site to ${join(root, 'site', 'out')}`]);
     const out = name => readFileSync(join(root, 'site', 'out', name), 'utf8');
-    assert.match(out('index.html'), /<h1>PhotoSense<\/h1>/);
+    assert.match(out('index.html'), /<h1>Trovolve<\/h1>/);
     assert.match(out('privacy.html'), /<h1>Privacy Policy<\/h1>/);
-    assert.match(out('privacy.html'), /<a href="mailto:help@photosense.example">help@photosense.example<\/a>/);
+    assert.match(out('privacy.html'), /<a href="mailto:help@trovolve.example">help@trovolve.example<\/a>/);
     assert.match(out('terms.html'), /governed by the laws of the State of Example/);
     assert.match(out('support.html'), /<h2>Frequently asked questions<\/h2>\n<div class="questions"><details><summary>Where do the files I delete go\?<\/summary>/);
-    assert.match(out('support.html'), /<summary>Why does PhotoSense not show all my photos on my iPhone or iPad\?<\/summary>/);
+    assert.match(out('support.html'), /<summary>Why does Trovolve not show all my photos on my iPhone or iPad\?<\/summary>/);
     assert.doesNotMatch(out('support.html') + out('terms.html') + out('privacy.html'), /\{\{|not set yet/);
     assert.deepEqual(readFileSync(join(root, 'site', 'out', 'icon.png')), readFileSync(join(repo, 'branding', 'app-icon.png')));
   });

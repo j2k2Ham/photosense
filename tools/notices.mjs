@@ -10,9 +10,9 @@ const DOTNET = 'Copyright (c) .NET Foundation and Contributors';
 
 /** What each program is built from: the projects whose packages it ships, and the platform it runs on. */
 export const PROGRAMS = {
-  server: { title: 'PhotoSense for Windows and Mac', projects: ['PhotoSense.Server', 'PhotoSense.Desktop', 'PhotoSense.Infrastructure', 'PhotoSense.Api'], platform: ['dotnet', 'aspnetcore'] },
-  iphone: { title: 'PhotoSense for iPhone and iPad', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], references: 'PhotoSense.iOS/PhotoSense.iOS.csproj', platform: ['dotnet', 'ios'] },
-  android: { title: 'PhotoSense for Android', projects: ['PhotoSense.Infrastructure', 'PhotoSense.Api'], locked: 'PhotoSense.Android/packages.lock.json', platform: ['dotnet', 'android'] },
+  server: { title: 'Trovolve for Windows and Mac', projects: ['Trovolve.Server', 'Trovolve.Desktop', 'Trovolve.Infrastructure', 'Trovolve.Api'], platform: ['dotnet', 'aspnetcore'] },
+  iphone: { title: 'Trovolve for iPhone and iPad', projects: ['Trovolve.Infrastructure', 'Trovolve.Api'], references: 'Trovolve.iOS/Trovolve.iOS.csproj', platform: ['dotnet', 'ios'] },
+  android: { title: 'Trovolve for Android', projects: ['Trovolve.Infrastructure', 'Trovolve.Api'], locked: 'Trovolve.Android/packages.lock.json', platform: ['dotnet', 'android'] },
 };
 
 const PLATFORM = {
@@ -83,7 +83,7 @@ export function shipsOn(dir, system) {
 
 /**
  * What the page ships: its packages and theirs, but none of the tools that only build it, and the styles Tailwind
- * writes. A package of PhotoSense's own, kept in the page's folder and linked in (stubs/sharp), is no one else's.
+ * writes. A package of Trovolve's own, kept in the page's folder and linked in (stubs/sharp), is no one else's.
  */
 export function pagePackages(lock) {
   return Object.entries(lock.packages)
@@ -117,7 +117,7 @@ export function noticesFor(program, { root, nugetRoot, templates }) {
       if (shipsOn(join(nugetRoot, p.id.toLowerCase(), p.version), platform.at(-1))) packages.set(`${p.id}/${p.version}`.toLowerCase(), p);
     }
   }
-  const reactRoot = join(root, 'PhotoSense.ReactUI');
+  const reactRoot = join(root, 'Trovolve.ReactUI');
   const entries = [
     ...platform.map(key => ({ ...PLATFORM[key], name: PLATFORM[key].name, text: templates[PLATFORM[key].license].replace('{{copyright}}', PLATFORM[key].copyright) })),
     ...[...packages.values()].sort((a, b) => a.id.localeCompare(b.id)).map(p => nugetEntry(p, nugetRoot, templates)),
@@ -139,12 +139,12 @@ export function noticesFor(program, { root, nugetRoot, templates }) {
   return [
     `Third-party notices for ${title}`,
     '',
-    'PhotoSense includes the work of others, listed here with the licence each is used under. Each licence is given in full below.',
+    'Trovolve includes the work of others, listed here with the licence each is used under. Each licence is given in full below.',
     '',
     'PLACE NAMES',
     '',
     'GeoNames (https://www.geonames.org/), under the Creative Commons Attribution 4.0 International licence',
-    '(https://creativecommons.org/licenses/by/4.0/). PhotoSense uses extracts of it, changed by PhotoSense: towns of',
+    '(https://creativecommons.org/licenses/by/4.0/). Trovolve uses extracts of it, changed by Trovolve: towns of',
     '1,000 people or more with the names of their regions, and sights, parks, beaches and districts, each with its position.',
     '',
     'FONTS',

@@ -1,4 +1,4 @@
-// What every test starts from: PhotoSense as one program of its own, on a data folder of its own, and a folder of
+// What every test starts from: Trovolve as one program of its own, on a data folder of its own, and a folder of
 // photos made for that test alone. Tests share nothing, so they run side by side.
 import { test as base, expect, type APIRequestContext, type Page } from '@playwright/test';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -12,7 +12,7 @@ import { movie, picture, png, sidecar, type MovieOptions, type PictureOptions } 
 export { expect };
 
 const here = dirname(fileURLToPath(import.meta.url));
-const program = join(here, '..', '.cache', 'server', 'PhotoSense.Server.dll');
+const program = join(here, '..', '.cache', 'server', 'Trovolve.Server.dll');
 
 /** The program as one test has it. */
 export interface Program {
@@ -36,12 +36,12 @@ async function freePort(): Promise<number> {
 
 async function started(url: string, child: ChildProcess, said: string[]) {
   for (let waited = 0; waited < 300; waited++) {
-    if (child.exitCode !== null) throw new Error(`PhotoSense ended before it answered:\n${said.join('')}`);
+    if (child.exitCode !== null) throw new Error(`Trovolve ended before it answered:\n${said.join('')}`);
     // Each ask is given a second, so that a program taking the connection and never answering still ends the wait.
     try { if ((await fetch(`${url}/api/health`, { signal: AbortSignal.timeout(1000) })).ok) return; } catch { /* not yet listening */ }
     await new Promise(r => setTimeout(r, 100));
   }
-  throw new Error(`PhotoSense did not answer within 30 seconds:\n${said.join('')}`);
+  throw new Error(`Trovolve did not answer within 30 seconds:\n${said.join('')}`);
 }
 
 const removeAll = (path: string) => { try { rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }); } catch { /* a temporary folder left behind */ } };
@@ -83,7 +83,7 @@ export class Photos {
 
   exists(inside: string): boolean { return existsSync(this.path(inside)); }
 
-  /** Takes a file away behind PhotoSense's back, as another program might. */
+  /** Takes a file away behind Trovolve's back, as another program might. */
   remove(inside: string) { rmSync(this.path(inside)); }
 
   /** Every file inside the folder now, by path with / between folders, in order. */
@@ -107,7 +107,7 @@ export class Photos {
 export class Service {
   constructor(private readonly request: APIRequestContext, readonly url: string) {}
 
-  private readonly headers = { 'x-photosense-client': 'e2e' };
+  private readonly headers = { 'x-trovolve-client': 'e2e' };
 
   async get<T>(path: string): Promise<T> {
     const answer = await this.request.get(`${this.url}/api/${path}`, { headers: this.headers });
@@ -128,22 +128,41 @@ export class Service {
   }
 }
 
-export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean }>({
+export const test = base.extend<{ program: Program; photos: Photos; service: Service; noteAccepted: boolean; launch: boolean; continueAnswered: boolean }>({
   // Nearly every test is of what comes after the note asking for a backup; the note's own tests leave it to be asked.
   noteAccepted: [true, { option: true }],
+  // The launch covers the page for minutes when the app first loads; every test but the launch's own starts as a reload
+  // would, with it played already.
+  launch: [false, { option: true }],
+  // Whether to continue where the person left off is asked after the first scan until answered; every test but the
+  // question's own starts with it answered yes, as Trovolve's default is, so that it is not in the way.
+  continueAnswered: [true, { option: true }],
   // Accepted through the program, which keeps it, as the page would.
-  page: async ({ page, noteAccepted, service }, use) => {
+  page: async ({ page, noteAccepted, launch, continueAnswered, service }, use) => {
     if (noteAccepted) await service.post('terms/accept');
+    if (!launch) {
+      await page.addInitScript(() => sessionStorage.setItem('trovolve-launched', 'yes'));
+    }
+    if (continueAnswered) {
+      // Added to the settings as they stand, at every visit, so a setting a test changes is kept.
+      await page.addInitScript(() => {
+        const settings = JSON.parse(localStorage.getItem('trovolve-settings') ?? '{}');
+        if (settings.continueWhereLeftOff === undefined) localStorage.setItem('trovolve-settings', JSON.stringify({ ...settings, continueWhereLeftOff: true }));
+      });
+    }
     await use(page);
+    // A stand-in answer still being fetched as the test ends (the page asking again in the background) is dropped, not
+    // counted as the test failing.
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   },
   program: async ({}, use, testInfo) => {
     const port = await freePort();
-    const data = mkdtempSync(join(tmpdir(), 'photosense-e2e-data-'));
+    const data = mkdtempSync(join(tmpdir(), 'trovolve-e2e-data-'));
     const url = `http://localhost:${port}`;
     const said: string[] = [];
     const child = spawn('dotnet', [program, '--urls', url], {
       cwd: dirname(program),
-      env: { ...process.env, PhotoStorage__DatabasePath: join(data, 'photosense.db'), PhotoStorage__ThumbnailPath: join(data, 'thumbnails'), PhotoStorage__BackupPath: join(data, 'backups'),
+      env: { ...process.env, PhotoStorage__DatabasePath: join(data, 'trovolve.db'), PhotoStorage__ThumbnailPath: join(data, 'thumbnails'), PhotoStorage__BackupPath: join(data, 'backups'),
         // Never into the person's own Recycle Bin: every folder is one with no bin, whose files are erased for good.
         PhotoStorage__UseRecycleBin: 'false', DOTNET_NOLOGO: '1' },
     });
@@ -159,18 +178,18 @@ export const test = base.extend<{ program: Program; photos: Photos; service: Ser
       const stuck = setTimeout(() => child.kill('SIGKILL'), 10_000);
       await ended;
       clearTimeout(stuck);
-      if (testInfo.status !== testInfo.expectedStatus) await testInfo.attach('PhotoSense said', { body: said.join(''), contentType: 'text/plain' });
+      if (testInfo.status !== testInfo.expectedStatus) await testInfo.attach('Trovolve said', { body: said.join(''), contentType: 'text/plain' });
       removeAll(data);
     }
   },
   baseURL: async ({ program }, use) => use(program.url),
   photos: async ({}, use) => {
-    const root = mkdtempSync(join(tmpdir(), 'photosense-e2e-photos-'));
+    const root = mkdtempSync(join(tmpdir(), 'trovolve-e2e-photos-'));
     await use(new Photos(join(root, 'Phone Pictures')));
     removeAll(root);
   },
   service: async ({ request, program }, use) => use(new Service(request, program.url)),
 });
 
-/** The message PhotoSense shows after something is done. */
+/** The message Trovolve shows after something is done. */
 export const message = (page: Page, text: string | RegExp) => page.getByRole('log', { name: 'Messages' }).getByText(text);

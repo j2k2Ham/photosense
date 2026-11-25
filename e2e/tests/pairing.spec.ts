@@ -8,7 +8,7 @@ test.describe('phones and pairing', () => {
     await areas.getByRole('button', { name: /^Phones/ }).click();
     // Asked of the program itself, which keeps the phones' backups.
     const none = page.getByRole('region', { name: 'No phones yet' });
-    await expect(none).toContainText('Pair a phone with PhotoSense on it, and it backs up its photos and videos to this computer over Wi-Fi.');
+    await expect(none).toContainText('Pair a phone with Trovolve on it, and it backs up its photos and videos to this computer over Wi-Fi.');
     await expect(areas.getByRole('img', { name: 'New' })).toBeHidden();
     await none.getByRole('button', { name: 'Pair a phone' }).click();
     const pairing = page.getByRole('dialog', { name: 'Pair a phone' });
@@ -22,9 +22,9 @@ test.describe('phones and pairing', () => {
 
   test('Rename by date shows the first names now and after, and renames a phone\u2019s copies on this computer', async ({ page }) => {
     let phone = {
-      id: 'p', name: "Jamie's iPhone", kind: 'iPhone', folder: "Pictures/PhotoSense/Jamie's iPhone", path: '/Pictures/PhotoSense/Jamie', paused: false,
+      id: 'p', name: "Jamie's iPhone", kind: 'iPhone', folder: "Pictures/Trovolve/Jamie's iPhone", path: '/Pictures/Trovolve/Jamie', paused: false,
       paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 2, heldBytes: 2, safe: 0, safeBytes: 0, tripFolders: 0,
-      tripsFolder: 'Pictures/PhotoSense', tripsPath: '/Pictures/PhotoSense', names: 'asOnPhone', arriving: null, events: [],
+      tripsFolder: 'Pictures/Trovolve', tripsPath: '/Pictures/Trovolve', names: 'asOnPhone', arriving: null, events: [],
     };
     const asked: string[] = [];
     // A paired phone, which only a phone could make, stood in for; renaming answered as the program would.
@@ -49,6 +49,31 @@ test.describe('phones and pairing', () => {
     await expect(message(page, 'Renamed 2 files by date. Recently moved, in Organize, can undo it.')).toBeVisible();
     expect(asked).toEqual(['?style=date', '{"kind":"date"}']);
     await expect(files).toContainText('File namesDate and time');
+  });
+
+  test('Forget this phone asks first, saying its backups stay, and the phone leaves the list', async ({ page }) => {
+    let phones = [{
+      id: 'p', name: "Jamie's iPhone", kind: 'iPhone', folder: "Pictures/Trovolve/Jamie's iPhone", path: '/Pictures/Trovolve/Jamie', paused: false,
+      paired: '2026-11-10T09:00:00Z', lastBackup: null, lastChecked: null, held: 2, heldBytes: 2, safe: 0, safeBytes: 0, tripFolders: 0,
+      tripsFolder: 'Pictures/Trovolve', tripsPath: '/Pictures/Trovolve', names: 'asOnPhone', arriving: null, events: [],
+    }];
+    const forgot: string[] = [];
+    // A paired phone, which only a phone could make, stood in for; forgetting it answered as the program would.
+    await page.route(url => url.pathname.endsWith('/api/backup/phones'), route => route.fulfill({ json: phones }));
+    await page.route(url => url.pathname.endsWith('/api/backup/phones/p/forget'), route => {
+      forgot.push(route.request().method());
+      phones = [];
+      return route.fulfill({ json: phones });
+    });
+    await page.goto('/');
+    await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: /^Phones/ }).click();
+    await page.getByRole('button', { name: 'Forget this phone…' }).click();
+    const asked = page.getByRole('alertdialog', { name: "Forget Jamie's iPhone?" });
+    await expect(asked).toContainText("Its backups stay in Pictures/Trovolve/Jamie's iPhone. Nothing is deleted, here or on the phone.");
+    await asked.getByRole('button', { name: "Forget Jamie's iPhone" }).click();
+    await expect(message(page, "Forgot Jamie's iPhone. Its backups stay in Pictures/Trovolve/Jamie's iPhone.")).toBeVisible();
+    expect(forgot).toEqual(['POST']);
+    await expect(page.getByRole('region', { name: 'No phones yet' })).toBeVisible();
   });
 
   test('Pair a phone says what phones will call this computer, and Rename names it, kept for the next time it opens', async ({ page }) => {

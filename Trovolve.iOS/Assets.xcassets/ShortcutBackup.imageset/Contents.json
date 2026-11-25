@@ -1,0 +1,26 @@
+{
+  "images": [
+    {
+      "filename": "shortcut-backup.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "shortcut-backup@2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    },
+    {
+      "filename": "shortcut-backup@3x.png",
+      "idiom": "universal",
+      "scale": "3x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  },
+  "properties": {
+    "template-rendering-intent": "template"
+  }
+}

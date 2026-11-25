@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 env:
-  BUNDLE: com.j2k2ham.photosense
+  BUNDLE: com.j2k2ham.trovolve
   # Each release of .NET for iOS needs one Xcode, and is installed by its workload set on a matching .NET SDK; the
   # three move together, as each release's notes at https://github.com/dotnet/macios/releases say. GitHub's
   # macos-26 machines have Xcode 26.x only, so the newest workload (for Xcode 27) cannot build there yet.
@@ -48,7 +48,7 @@ jobs:
         with:
           node-version: 26
           cache: 'npm'
-          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+          cache-dependency-path: 'Trovolve.ReactUI/package.json'
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -61,7 +61,7 @@ jobs:
           echo "::notice title=iOS workload::$(dotnet workload list | grep -E '^ios ' | tr -s ' ')"
 
       - name: Build the page for the app
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         env:
           NEXT_PUBLIC_API_BASE: /api
         run: |
@@ -69,7 +69,7 @@ jobs:
           npm run build
 
       - name: Build the app for the simulator
-        run: dotnet build PhotoSense.iOS/PhotoSense.iOS.csproj --configuration Release -r iossimulator-arm64 2>&1 | tee build.log
+        run: dotnet build Trovolve.iOS/Trovolve.iOS.csproj --configuration Release -r iossimulator-arm64 2>&1 | tee build.log
 
       - name: Say what the build warned of
         if: always()
@@ -119,7 +119,7 @@ jobs:
       # fails puts its own last words on the run.
       - name: Install the app
         run: |
-          app=$(find PhotoSense.iOS/bin -name '*.app' -type d -print -quit)
+          app=$(find Trovolve.iOS/bin -name '*.app' -type d -print -quit)
           echo "::notice title=App::${app:-none built}"
           if ! out=$(xcrun simctl install "$UDID" "$app" 2>&1); then
             echo "::error title=simctl install::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
@@ -140,7 +140,7 @@ jobs:
 
       - name: Start it and wait for its report
         run: |
-          if ! out=$(SIMCTL_CHILD_PHOTOSENSE_SELF_CHECK=1 xcrun simctl launch --stdout="$PWD/app-stdout.txt" --stderr="$PWD/app-stderr.txt" "$UDID" "$BUNDLE" 2>&1); then
+          if ! out=$(SIMCTL_CHILD_TROVOLVE_SELF_CHECK=1 xcrun simctl launch --stdout="$PWD/app-stdout.txt" --stderr="$PWD/app-stderr.txt" "$UDID" "$BUNDLE" 2>&1); then
             echo "::error title=simctl launch::$(printf '%s' "$out" | tail -8 | tr '\n' ' ' | cut -c1-900)"; exit 1
           fi
           echo "::notice title=Started::$out"
@@ -149,7 +149,7 @@ jobs:
           for i in $(seq 1 600); do
             grep -q '"finished":true' "$report" 2>/dev/null && break
             # A crash leaves a report on this Mac; there is then nothing to wait for.
-            ls ~/Library/Logs/DiagnosticReports/PhotoSense* >/dev/null 2>&1 && break
+            ls ~/Library/Logs/DiagnosticReports/Trovolve* >/dev/null 2>&1 && break
             sleep 1
           done
           echo "::notice title=Waited::$i seconds"
@@ -172,12 +172,12 @@ jobs:
       - name: See the widgets
         run: |
           # The extension is in the app, iOS took it as a widget, and the app wrote what the widgets show.
-          app=$(find PhotoSense.iOS/bin -name '*.app' -type d -print -quit)
-          if [ ! -f "$app/PlugIns/PhotoSenseWidgets.appex/PhotoSenseWidgets" ]; then echo "::error title=Widgets::no PlugIns/PhotoSenseWidgets.appex in the app"; exit 1; fi
+          app=$(find Trovolve.iOS/bin -name '*.app' -type d -print -quit)
+          if [ ! -f "$app/PlugIns/TrovolveWidgets.appex/TrovolveWidgets" ]; then echo "::error title=Widgets::no PlugIns/TrovolveWidgets.appex in the app"; exit 1; fi
           registered=$(xcrun simctl spawn "$UDID" pluginkit -m -A -p com.apple.widgetkit-extension 2>&1 | grep -c "$BUNDLE.widgets" || true)
           echo "::notice title=Widgets::registered with iOS: $registered"
           if [ "$registered" = "0" ]; then echo "::error title=Widgets::iOS did not register $BUNDLE.widgets"; exit 1; fi
-          group=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" groups 2>&1 | awk '/group.com.j2k2ham.photosense/ {print $2}')
+          group=$(xcrun simctl get_app_container "$UDID" "$BUNDLE" groups 2>&1 | awk '/group.com.j2k2ham.trovolve/ {print $2}')
           if [ -z "$group" ] || [ ! -s "$group/widgets.json" ]; then echo "::error title=Widgets::the app wrote nothing into its App Group (${group:-none})"; exit 1; fi
           echo "::notice title=Widgets show::$(head -c 600 "$group/widgets.json")"
 
@@ -189,14 +189,14 @@ jobs:
           for file in app-stderr.txt app-stdout.txt; do
             [ -s "$file" ] && tail -40 "$file" | while read -r line; do echo "::error title=App said ($file)::${line:0:500}"; done
           done
-          for crash in ~/Library/Logs/DiagnosticReports/PhotoSense*; do
+          for crash in ~/Library/Logs/DiagnosticReports/Trovolve*; do
             [ -f "$crash" ] || continue
             cp "$crash" .
             grep -E '"(exception|termination)"|"type"|"signal"|"reasons"|"indicator"' "$crash" | head -8 | while read -r line; do echo "::error title=Crash report::${line:0:500}"; done
           done
           # Nothing ran when the app was never built, so there is no simulator to ask.
           [ -n "$UDID" ] || exit 0
-          xcrun simctl spawn "$UDID" log show --last 15m --style compact --predicate 'process == "PhotoSense.iOS"' > app.log || true
+          xcrun simctl spawn "$UDID" log show --last 15m --style compact --predicate 'process == "Trovolve.iOS"' > app.log || true
           grep -iE 'exception|error|fault' app.log | tail -8 | while read -r line; do echo "::error title=App log::${line:0:500}"; done
           tail -100 app.log
 
@@ -209,7 +209,7 @@ jobs:
             self-check.json
             app.log
             app-std*.txt
-            PhotoSense*.ips
+            Trovolve*.ips
             build.log
           if-no-files-found: ignore
 
@@ -256,7 +256,7 @@ jobs:
 
       - name: Build the page for the app
         if: env.READY == 'true'
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         env:
           NEXT_PUBLIC_API_BASE: /api
         run: |
@@ -288,7 +288,7 @@ jobs:
       - name: Build the signed app
         if: env.READY == 'true'
         run: >-
-          dotnet publish PhotoSense.iOS/PhotoSense.iOS.csproj --configuration Release -r ios-arm64
+          dotnet publish Trovolve.iOS/Trovolve.iOS.csproj --configuration Release -r ios-arm64
           -p:ArchiveOnBuild=false -p:BuildIpa=true
           -p:CodesignKey="Apple Distribution"
           -p:CodesignProvision="$PROFILE_UUID"
@@ -303,6 +303,6 @@ jobs:
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
           echo "$KEY" > ~/.appstoreconnect/private_keys/AuthKey_"$KEY_ID".p8
-          ipa=$(find publish PhotoSense.iOS/bin -name '*.ipa' | head -1)
+          ipa=$(find publish Trovolve.iOS/bin -name '*.ipa' | head -1)
           xcrun altool --upload-app --type ios --file "$ipa" --apiKey "$KEY_ID" --apiIssuer "$ISSUER_ID"
           echo "::notice title=TestFlight::Version $(node tools/version.mjs --part iphone) sent; it shows in TestFlight once Apple has processed it."

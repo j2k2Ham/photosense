@@ -362,14 +362,14 @@ MigrationBackup/
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
 # Coverage report of the React UI tests
-PhotoSense.ReactUI/coverage/
+Trovolve.ReactUI/coverage/
 
 # Coverage reports of the service tests, whatever their extension
-PhotoSense.Tests/coverage/coverage.opencover*
+Trovolve.Tests/coverage/coverage.opencover*
 # Next.js build and dev-server output: rebuilt on every run (cache packs, fonts, compiled pages)
-PhotoSense.ReactUI/.next/
+Trovolve.ReactUI/.next/
 # The page as built to be handed out by a program (publish.ps1, the iPhone app)
-PhotoSense.ReactUI/out/
+Trovolve.ReactUI/out/
 # The web site as tools/site.mjs writes it from site/pages
 site/out/
 
@@ -381,3 +381,5 @@ CLAUDE.md.bak
 
 # Kept by Jamie only
 docs/registering-cloud-sign-in.md
+Trovolve.Tests/coverage/Trovolve.Tests-windows-net10.0-report.html
+Trovolve.Tests/coverage/Trovolve.Tests-windows-net10.0.tunit-report.json

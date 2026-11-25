@@ -5,7 +5,7 @@ import type { Photos } from './app';
 /** The page, with Organize already knowing which folder to show, as it does once a folder has been chosen there. */
 export async function openOrganize(page: Page, root: string) {
   // Set on the first visit only: a folder chosen later is remembered over it, as it is for a person.
-  await page.addInitScript(folder => { if (!localStorage.getItem('photosense-organize-root')) localStorage.setItem('photosense-organize-root', folder); }, root);
+  await page.addInitScript(folder => { if (!localStorage.getItem('trovolve-organize-root')) localStorage.setItem('trovolve-organize-root', folder); }, root);
   await page.goto('/');
   await page.getByRole('group', { name: 'Area' }).getByRole('button', { name: 'Organize' }).click();
   // Read afresh when no scan has read it: the first time, the program also loads the place names it goes by.
@@ -78,8 +78,8 @@ export async function namesIn(list: Locator): Promise<string[]> {
   return (await list.getByRole('listitem').allInnerTexts()).map(text => text.split('\n').find(line => /\.\w{3,4}$/.test(line.trim()))?.trim() ?? text);
 }
 
-/** What a test's photos folder holds now, but what PhotoSense keeps for itself. */
-export const photoFiles = (photos: Photos) => photos.files().filter(f => !f.includes('_PhotoSense_Removed'));
+/** What a test's photos folder holds now, but what Trovolve keeps for itself. */
+export const photoFiles = (photos: Photos) => photos.files().filter(f => !f.includes('_Trovolve_Removed'));
 
 /** On a narrow screen Organize shows its files or its folders, switched by these buttons; on a wide one it shows both, and this does nothing. */
 export async function pane(page: Page, which: 'Files' | 'Folders') {

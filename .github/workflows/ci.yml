@@ -1,4 +1,4 @@
-name: PhotoSense CI
+name: Trovolve CI
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
         with:
           node-version: 26
           cache: 'npm'
-          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+          cache-dependency-path: 'Trovolve.ReactUI/package.json'
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -46,13 +46,13 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Restore
-        run: dotnet restore PhotoSense.sln
+        run: dotnet restore Trovolve.sln
 
       - name: Build
-        run: dotnet build PhotoSense.sln --configuration Release --no-restore /warnaserror
+        run: dotnet build Trovolve.sln --configuration Release --no-restore /warnaserror
 
       - name: Install React UI deps
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         run: npm ci
 
       # The phone apps cannot be restored on Linux, so the packages only they use are fetched as they are, for their notices:
@@ -60,8 +60,8 @@ jobs:
       - name: Fetch the phone apps' own packages
         run: |
           {
-            grep -o '<PackageReference Include="[^"]*" Version="[^"]*"' PhotoSense.iOS/PhotoSense.iOS.csproj | sed -E 's/.*Include="([^"]+)" Version="([^"]+)"/\1 \2/'
-            jq -r '.dependencies | to_entries[] | select(.key | contains("/") | not) | .value | to_entries[] | select(.value.type != "Project") | "\(.key) \(.value.resolved)"' PhotoSense.Android/packages.lock.json
+            grep -o '<PackageReference Include="[^"]*" Version="[^"]*"' Trovolve.iOS/Trovolve.iOS.csproj | sed -E 's/.*Include="([^"]+)" Version="([^"]+)"/\1 \2/'
+            jq -r '.dependencies | to_entries[] | select(.key | contains("/") | not) | .value | to_entries[] | select(.value.type != "Project") | "\(.key) \(.value.resolved)"' Trovolve.Android/packages.lock.json
           } | sort -u |
             while read -r id version; do
               lower=$(echo "$id" | tr '[:upper:]' '[:lower:]')
@@ -80,29 +80,29 @@ jobs:
           --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 tools/tests/
 
       - name: Lint React UI (the accessibility rules included)
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         run: npm run lint
 
       - name: Test React UI (fails below 100% coverage)
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         run: npm run test:coverage
 
       - name: Build React UI
-        working-directory: PhotoSense.ReactUI
+        working-directory: Trovolve.ReactUI
         run: npm run build
 
       - name: Test with coverage
         # TUnit tests are a program: run it, and hand it its own options after the two dashes.
         run: >-
-          dotnet run --project PhotoSense.Tests/PhotoSense.Tests.csproj
+          dotnet run --project Trovolve.Tests/Trovolve.Tests.csproj
           --configuration Release --no-build
           --
           --coverlet
           --coverlet-output-format opencover
-          --coverlet-include "[PhotoSense.*]*"
-          --coverlet-exclude "[PhotoSense.Tests]*"
+          --coverlet-include "[Trovolve.*]*"
+          --coverlet-exclude "[Trovolve.Tests]*"
           --coverlet-exclude-by-file "**/*.g.cs"
-          --results-directory ${{ github.workspace }}/PhotoSense.Tests/coverage
+          --results-directory ${{ github.workspace }}/Trovolve.Tests/coverage
           --report-trx --report-trx-filename test-results.trx
 
       - name: ReportGenerator (HTML)
@@ -110,7 +110,7 @@ jobs:
         run: |
           dotnet tool restore
           echo "Listing coverage files" && ls -R . | grep coverage || true
-          dotnet tool run reportgenerator "-reports:PhotoSense.Tests/coverage/coverage.opencover*.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
+          dotnet tool run reportgenerator "-reports:Trovolve.Tests/coverage/coverage.opencover*.xml" -targetdir:coverage/report "-reporttypes:HtmlSummary;lcov;XmlSummary" -historydir:coverage/history || echo "Report generation failed (will succeed once coverage file exists)"
         if: always()
 
       - name: Enforce coverage of every line and branch (CLAUDE.md rule 1)
@@ -120,9 +120,9 @@ jobs:
           thresholdLine=1.00
           thresholdBranch=1.00
           # The report's name carries the time it was written.
-          coverageXml=$(ls PhotoSense.Tests/coverage/coverage.opencover*.xml 2>/dev/null | head -1)
+          coverageXml=$(ls Trovolve.Tests/coverage/coverage.opencover*.xml 2>/dev/null | head -1)
           if [ -z "$coverageXml" ]; then
-            echo "Coverage file not found"; ls -R PhotoSense.Tests/coverage || true; exit 1
+            echo "Coverage file not found"; ls -R Trovolve.Tests/coverage || true; exit 1
           fi
           # Extract sequence (line) and branch coverage from OpenCover XML summary attributes
           linePct=$(grep -oP 'sequenceCoverage="\K[0-9.]+' "$coverageXml" | head -1)
@@ -164,7 +164,7 @@ jobs:
         with:
           node-version: 26
           cache: 'npm'
-          cache-dependency-path: 'PhotoSense.ReactUI/package.json'
+          cache-dependency-path: 'Trovolve.ReactUI/package.json'
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -172,10 +172,10 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Build
-        run: dotnet build PhotoSense.sln --configuration Release -warnaserror
+        run: dotnet build Trovolve.sln --configuration Release -warnaserror
 
       - name: Test
-        run: dotnet run --project PhotoSense.Tests/PhotoSense.Tests.csproj --configuration Release --no-build
+        run: dotnet run --project Trovolve.Tests/Trovolve.Tests.csproj --configuration Release --no-build
 
       - name: Publish as one program
         shell: pwsh
@@ -184,9 +184,9 @@ jobs:
       - name: Start it, and ask it for the page and the service
         shell: pwsh
         run: |
-          $program = if ($IsWindows) { 'publish/ci/PhotoSense.Server.exe' } else { 'publish/ci/PhotoSense.Server' }
-          $env:PhotoStorage__DatabasePath = Join-Path $env:RUNNER_TEMP 'photosense/photosense.db'
-          $env:PhotoStorage__ThumbnailPath = Join-Path $env:RUNNER_TEMP 'photosense/thumbnails'
+          $program = if ($IsWindows) { 'publish/ci/Trovolve.Server.exe' } else { 'publish/ci/Trovolve.Server' }
+          $env:PhotoStorage__DatabasePath = Join-Path $env:RUNNER_TEMP 'trovolve/trovolve.db'
+          $env:PhotoStorage__ThumbnailPath = Join-Path $env:RUNNER_TEMP 'trovolve/thumbnails'
           $started = Start-Process $program -PassThru -NoNewWindow
           try {
             $health = $null
@@ -195,8 +195,8 @@ jobs:
             }
             if ($health.status -ne 'ok') { throw 'The service did not answer.' }
             $page = Invoke-WebRequest http://localhost:7071/ -UseBasicParsing
-            if ($page.Content -notmatch '<title>PhotoSense</title>') { throw 'The page was not served.' }
-            Write-Host "PhotoSense ran on $env:RUNNER_OS ($env:RUNNER_ARCH)."
+            if ($page.Content -notmatch '<title>Trovolve</title>') { throw 'The page was not served.' }
+            Write-Host "Trovolve ran on $env:RUNNER_OS ($env:RUNNER_ARCH)."
           } finally {
             Stop-Process -Id $started.Id -Force
           }

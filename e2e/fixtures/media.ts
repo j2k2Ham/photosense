@@ -114,7 +114,7 @@ const u32 = (n: number) => { const b = Buffer.alloc(4); b.writeUInt32BE(n >>> 0)
 const atom = (type: string | Buffer, body: Buffer) => Buffer.concat([u32(8 + body.length), typeof type === 'string' ? Buffer.from(type, 'ascii') : type, body]);
 const iso6709 = (p: Place) => `${p.latitude >= 0 ? '+' : '-'}${Math.abs(p.latitude).toFixed(4).padStart(7, '0')}${p.longitude >= 0 ? '+' : '-'}${Math.abs(p.longitude).toFixed(4).padStart(8, '0')}/`;
 
-/** A QuickTime movie with no picture in it, as PhotoSense reads one: its length and size, and the phone's metadata. */
+/** A QuickTime movie with no picture in it, as Trovolve reads one: its length and size, and the phone's metadata. */
 export function movie(options: MovieOptions = {}): Buffer {
   const { livePhotoId, taken = new Date(2022, 6, 4, 10, 0, 0), at, seconds = 3 } = options;
   const timescale = 600;

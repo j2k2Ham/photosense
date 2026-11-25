@@ -1,6 +1,6 @@
-# PhotoSense — notes for Claude
+# Trovolve — notes for Claude
 
-PhotoSense is a photo and video tidying tool that runs on the machine holding the photos. **Clean up** scans folders, groups exact duplicates and similar shots, keeps the best copy of each and lets the rest be removed after review. **Organize** sorts a folder's files into folders by place and date, with a preview before anything moves. The owner, Jamie, uses it on their own iPhone library (HEIC, JPEG, Live Photo MOVs, `.AAE` sidecars) on Windows. The README describes behaviour in detail; the in-app user guide (`PhotoSense.ReactUI/lib/guide.ts`) describes it for users.
+Trovolve is a photo and video tidying tool that runs on the machine holding the photos. **Clean up** scans folders, groups exact duplicates and similar shots, keeps the best copy of each and lets the rest be removed after review. **Organize** sorts a folder's files into folders by place and date, with a preview before anything moves. The owner, Jamie, uses it on their own iPhone library (HEIC, JPEG, Live Photo MOVs, `.AAE` sidecars) on Windows. The README describes behaviour in detail; the in-app user guide (`Trovolve.ReactUI/lib/guide.ts`) describes it for users.
 
 **What Jamie has asked for and what is left to do** are in `STEPS.md`, imported here so that every session starts from it. Keep it current: tick a step once it is done and verified, add new steps, questions and call-outs as they come up, and move a question into the step it settles once Jamie answers.
 
@@ -12,35 +12,35 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 
 | Skill | For |
 |---|---|
-| `photosense-service` | The C# service and its TUnit tests: where code goes, endpoints, patterns, coverage |
-| `photosense-page` | The React page and its Vitest tests |
-| `photosense-e2e` | The Playwright end-to-end tests in `e2e/` |
-| `photosense-phone-apps` | The iPhone and Android apps, and their GitHub checks |
-| `photosense-verify` | Running it as Jamie does, scratch copies, reproducing a report, Jamie's data, Windows traps |
-| `photosense-build-tools` | Versions, third-party notices, the web site, `product.json`, the icon, adding a package |
-| `photosense-finish` | Before saying work is done, committing or pushing: checks, documents, the report, git |
+| `trovolve-service` | The C# service and its TUnit tests: where code goes, endpoints, patterns, coverage |
+| `trovolve-page` | The React page and its Vitest tests |
+| `trovolve-e2e` | The Playwright end-to-end tests in `e2e/` |
+| `trovolve-phone-apps` | The iPhone and Android apps, and their GitHub checks |
+| `trovolve-verify` | Running it as Jamie does, scratch copies, reproducing a report, Jamie's data, Windows traps |
+| `trovolve-build-tools` | Versions, third-party notices, the web site, `product.json`, the icon, adding a package |
+| `trovolve-finish` | Before saying work is done, committing or pushing: checks, documents, the report, git |
 
 ## Layout
 
 | Folder | What is in it |
 |---|---|
-| `PhotoSense.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions`, and the rules that need nothing else: what counts as the same picture (`Matching/`), file names (`NameRules`, `PhotoNaming`), which files a scan takes in. No packages |
-| `PhotoSense.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`), the hidden vault (`Vault/`), backing up to cloud storage and servers (`Locations/`); registered by `AddPhotoSenseApplication` |
-| `PhotoSense.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`), the cloud services and servers a phone backs up to (`Locations/`); registered by `AddPhotoSenseCore`, with the phones' composition (`AddPhotoSensePhone`, `AddPhotoSenseAndroid`) |
-| `PhotoSense.Desktop` | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` |
-| `PhotoSense.Api` | The endpoints apart from any host, the route table `PhotoSenseRoutes`, `InProcessApi` for the phones |
-| `PhotoSense.Server` | The service as one ASP.NET Core program, serving the page too when built in; `PhotoSenseServer.Build` is its one public entry |
-| `PhotoSense.iOS`, `PhotoSense.Android` | The phone apps: the page in a web view, with the thin layer over each phone's frameworks. Not in `PhotoSense.sln` |
-| `PhotoSense.Contracts` | JSON DTOs sent to the page; `PhotoSense.ReactUI/types.ts` mirrors them by hand |
-| `PhotoSense.ReactUI` | The page: Next.js 16, React 19, SWR, Tailwind 3 |
-| `PhotoSense.Tests`, `e2e`, `PhotoSense.Benchmarks` | TUnit tests of all but the page; Playwright tests of the whole program; BenchmarkDotNet runs of matching |
-| `tools/`, `version.json`, `product.json`, `notices/`, `site/pages/`, `branding/` | Versions, notices, the web site, who makes PhotoSense, the one icon |
+| `Trovolve.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions`, and the rules that need nothing else: what counts as the same picture (`Matching/`), file names (`NameRules`, `PhotoNaming`), which files a scan takes in. No packages |
+| `Trovolve.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`), the hidden vault (`Vault/`), backing up to cloud storage and servers (`Locations/`); registered by `AddTrovolveApplication` |
+| `Trovolve.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`), the cloud services and servers a phone backs up to (`Locations/`); registered by `AddTrovolveCore`, with the phones' composition (`AddTrovolvePhone`, `AddTrovolveAndroid`) |
+| `Trovolve.Desktop` | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` |
+| `Trovolve.Api` | The endpoints apart from any host, the route table `TrovolveRoutes`, `InProcessApi` for the phones |
+| `Trovolve.Server` | The service as one ASP.NET Core program, serving the page too when built in; `TrovolveServer.Build` is its one public entry |
+| `Trovolve.iOS`, `Trovolve.Android` | The phone apps: the page in a web view, with the thin layer over each phone's frameworks. Not in `Trovolve.sln` |
+| `Trovolve.Contracts` | JSON DTOs sent to the page; `Trovolve.ReactUI/types.ts` mirrors them by hand |
+| `Trovolve.ReactUI` | The page: Next.js 16, React 19, SWR, Tailwind 3 |
+| `Trovolve.Tests`, `e2e`, `Trovolve.Benchmarks` | TUnit tests of all but the page; Playwright tests of the whole program; BenchmarkDotNet runs of matching |
+| `tools/`, `version.json`, `product.json`, `notices/`, `site/pages/`, `branding/` | Versions, notices, the web site, who makes Trovolve, the one icon |
 | `docs/` | Jamie's design handoffs (redesign, mobile, growth), tracked and committed (Jamie, 2026-11-20). Change them only when asked. `docs/registering-cloud-sign-in.md` is Jamie's own and ignored by git |
 
 ## Architecture
 
-- **Clean Architecture:** Domain ← Application ← Infrastructure. `PhotoSense.Api` never references Infrastructure or ASP.NET Core, because the phone apps answer the same endpoints in-process. New storage or OS access goes behind an interface in Domain.
-  - Each layer registers its own services: `AddPhotoSenseApplication` (Application), `AddPhotoSenseCore` (Infrastructure), `AddPhotoSenseApi` (Api). Each host calls them all, with what only it has.
+- **Clean Architecture:** Domain ← Application ← Infrastructure. `Trovolve.Api` never references Infrastructure or ASP.NET Core, because the phone apps answer the same endpoints in-process. New storage or OS access goes behind an interface in Domain.
+  - Each layer registers its own services: `AddTrovolveApplication` (Application), `AddTrovolveCore` (Infrastructure), `AddTrovolveApi` (Api). Each host calls them all, with what only it has.
   - Logic that needs no outside world goes in Domain; logic over Domain's interfaces in Application. Infrastructure holds only adapters to LiteDB, MetadataExtractor, the disk, the network and the phones.
 - **Photos go through `IPhotoFileSystem` only:** `DiskFileSystem` on a computer, `PhotoLibraryFileSystem` on an iPhone, `MediaFileSystem` on Android. Domain, Application and Api never use `File`, `Directory`, `FileInfo` or `FileStream` on a photo.
 - **The stack:**
@@ -50,31 +50,31 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Magick.NET on a computer, the phone's own decoder on a phone. Generic .NET advice that assumes another stack does not apply.
 - **Checks on GitHub:**
   - `ci.yml` runs on Ubuntu, Windows and macOS, for `main` and pull requests, and by hand on another branch: `gh workflow run ci.yml --ref feature/growth`. On Ubuntu it fails below 100% of the service's lines and branches.
-  - `iphone.yml`, `android.yml`, `e2e.yml` and `codeql.yml` also run on pushes to `feature/mobile-and-mac`, which is merged into `main` now (2026-11-20); on `feature/growth`, the one branch not merged, they are started by hand (`gh workflow run iphone.yml --ref feature/growth`).
+  - `iphone.yml`, `android.yml`, `e2e.yml` and `codeql.yml` also run on pushes to `feature/mobile-and-mac`, which is merged into `main` now (2026-11-20); `feature/growth` is merged too (2026-11-23). On a branch not merged they are started by hand (`gh workflow run iphone.yml --ref feature/branding`).
   - Every workflow's token may only read the repository (`permissions: contents: read`); a job that needs more asks for it alone, as CodeQL's does to upload what it found.
   - Security (Jamie, 2026-11-11): CodeQL from `codeql.yml` (C#, TypeScript, Python, Actions; weekly too), secret scanning with push protection, and Dependabot's alerts and updates, weekly from `.github/dependabot.yml` into `main`, where every check runs on its pull requests (Jamie, 2026-11-12); an update merged into `main` reaches a branch by merging `main` into it. `dependencies.yml` tells GitHub every NuGet package the solution uses, on a push to any branch, in place of GitHub's automatic submission, which restores the phone apps too and fails on Linux. `dependency-review.yml` (Jamie, 2026-11-17) fails a change that brings in a package under the GPL, LGPL or AGPL, or with a known vulnerability: on every pull request into any branch, and in every run of `ci.yml`, which calls it; its rules, an allow list of every other licence, are in `.github/dependency-review-config.yml`. The dependency graph is on (always, for a public repository) and exports an SBOM (`gh api repos/{owner}/{repo}/dependency-graph/sbom`, or Insights › Dependency graph › Export SBOM). Found problems: `gh api repos/{owner}/{repo}/code-scanning/alerts`, `…/dependabot/alerts`, `…/secret-scanning/alerts`.
 
 ## Rules
 
 1. **100% branch coverage in all three parts.** Every change ships with tests that keep the service, the UI and the build tools (`tools/`) at 100% of branches. Report the measured figures when done, not a guess.
-   - **No test touches the database** (Jamie, 2026-11-10), except the LiteDB stores' own tests, which use LiteDB in memory with no file. Every other test uses the stand-ins in `PhotoSense.Tests/StandInStores.cs`; the program's tests give them to `PhotoSenseServer.Build` or after a phone's setup. Opening the database file (`AddPhotoSenseCore`'s `OpenDatabase`) is left out of coverage; the end-to-end tests run it.
-2. **Nothing is ever replaced, and nothing leaves `_PhotoSense_Removed` except by "Move to Recycle Bin"** (named "Delete permanently" until 2026-11-20).
-   - Removing a file moves it into `_PhotoSense_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
-   - The only code that empties those folders is `RemovedFiles.EraseAsync`. On a computer it sends their files to the Recycle Bin or Trash (`IRecycleBin`, Jamie, 2026-11-20), erasing for good, through `IPhotoFileSystem.Erase`, which nothing else calls, only a folder on a drive with no bin, after a question naming it; on a phone, to its own bin. It only empties folders named `_PhotoSense_Removed`.
-   - The one exception, Jamie's decision of 2026-10-29: on a phone, after sending to a computer, `PhoneSending.DeleteSent` sends to the phone's Recently Deleted or bin (`IPhotoChangesTogether.EraseAll`) the pictures every file of which the computer has confirmed by its SHA-256, once the person confirms or chose Move. Jamie extended it on 2026-11-13 to **Safe to delete**: `PhoneBackup.RemoveAsync` sends to the same place the pictures and videos every file of which the computer confirmed by its SHA-256 at the last backup, less the keep rules, after the system's own question; each counts toward the day's free removals. Jamie extended it again on 2026-11-17 to **Swipe to clean**: what a session marked and the person confirms at its end goes to the same place, after the system's own question, each counting toward the day's free removals. Jamie extended it again the same day to **Clean up's categories and Free up space** on a phone (screenshots, bursts, blurry shots, large videos, messaging apps). Nothing on a computer is erased that way: there the categories remove into `_PhotoSense_Removed`, with Undo.
-   - **The hidden vault (Jamie, 2026-11-18):** hiding sends the originals to the same place, through the system's question, once their sealed copies have been read back and checked, and does **not** count toward the free removals; Delete in the vault puts an item back, then sends it there, counted. The vault's own sealed files (`IVaultFiles`) are PhotoSense's copies, not photos: they are deleted once their item is back in the library, or when hiding did not finish.
-   - **The general rule since 2026-11-17 (Jamie):** on a phone or tablet, every deletion and clean-up sends files to the device's own Recently Deleted or bin, after the system's own question, each counting toward the day's free removals; on a computer, every one moves files into `_PhotoSense_Removed`, with Undo. On a phone `FileChanges` hands a removal to `IPhotoChangesTogether.EraseAll` and writes nothing down: there is no Undo. Nothing new goes into PhotoSense Removed on a phone; what waits there from before is offered once at launch, then from Settings, and goes to the bin without counting (Jamie, 2026-11-20).
+   - **No test touches the database** (Jamie, 2026-11-10), except the LiteDB stores' own tests, which use LiteDB in memory with no file. Every other test uses the stand-ins in `Trovolve.Tests/StandInStores.cs`; the program's tests give them to `TrovolveServer.Build` or after a phone's setup. Opening the database file (`AddTrovolveCore`'s `OpenDatabase`) is left out of coverage; the end-to-end tests run it.
+2. **Nothing is ever replaced, and nothing leaves `_Trovolve_Removed` except by "Move to Recycle Bin"** (named "Delete permanently" until 2026-11-20).
+   - Removing a file moves it into `_Trovolve_Removed` inside the scanned or organized folder, keeping its relative path, and is undoable where the UI offers Undo.
+   - The only code that empties those folders is `RemovedFiles.EraseAsync`. On a computer it sends their files to the Recycle Bin or Trash (`IRecycleBin`, Jamie, 2026-11-20), erasing for good, through `IPhotoFileSystem.Erase`, which nothing else calls, only a folder on a drive with no bin, after a question naming it; on a phone, to its own bin. It only empties folders named `_Trovolve_Removed`.
+   - The one exception, Jamie's decision of 2026-10-29: on a phone, after sending to a computer, `PhoneSending.DeleteSent` sends to the phone's Recently Deleted or bin (`IPhotoChangesTogether.EraseAll`) the pictures every file of which the computer has confirmed by its SHA-256, once the person confirms or chose Move. Jamie extended it on 2026-11-13 to **Safe to delete**: `PhoneBackup.RemoveAsync` sends to the same place the pictures and videos every file of which the computer confirmed by its SHA-256 at the last backup, less the keep rules, after the system's own question; each counts toward the day's free removals. Jamie extended it again on 2026-11-17 to **Swipe to clean**: what a session marked and the person confirms at its end goes to the same place, after the system's own question, each counting toward the day's free removals. Jamie extended it again the same day to **Clean up's categories and Free up space** on a phone (screenshots, bursts, blurry shots, large videos, messaging apps). Nothing on a computer is erased that way: there the categories remove into `_Trovolve_Removed`, with Undo.
+   - **The hidden vault (Jamie, 2026-11-18):** hiding sends the originals to the same place, through the system's question, once their sealed copies have been read back and checked, and does **not** count toward the free removals; Delete in the vault puts an item back, then sends it there, counted. The vault's own sealed files (`IVaultFiles`) are Trovolve's copies, not photos: they are deleted once their item is back in the library, or when hiding did not finish.
+   - **The general rule since 2026-11-17 (Jamie):** on a phone or tablet, every deletion and clean-up sends files to the device's own Recently Deleted or bin, after the system's own question, each counting toward the day's free removals; on a computer, every one moves files into `_Trovolve_Removed`, with Undo. On a phone `FileChanges` hands a removal to `IPhotoChangesTogether.EraseAll` and writes nothing down: there is no Undo. Nothing new goes into Trovolve Removed on a phone; what waits there from before is offered once at launch, then from Settings, and goes to the bin without counting (Jamie, 2026-11-20).
    - A file arriving under a taken name gets a number.
    - The last copy of a picture is never removed as a duplicate.
 3. **Every removal question and message names the file that goes and the file that stays**, by folder when the names are alike. Jamie has twice taken two files for one.
 4. **Jamie's real photos are read-only to us.** `C:\Users\jsham\Phone Pictures` and `F:\PC_backup` may be scanned and read. Never move, delete or organize files there when testing: copy a few files to a scratch folder and test on the copy.
 5. **Leave the running app alone.** Before building, cleaning or deleting anything under `bin`, `obj` or `.next`, check whether Jamie's app is running (`Get-NetTCPConnection -LocalPort 7071,3000`). While it runs:
    - build in Release;
-   - do not run `next build` or a second `next dev` in `PhotoSense.ReactUI`;
+   - do not run `next build` or a second `next dev` in `Trovolve.ReactUI`;
    - never stop Jamie's processes.
 
    "It's locked, so it will refuse" is not a safeguard for a folder: a recursive delete removes everything it can first.
-6. **Never use or commit Jamie's Google Maps key.** It is in `PhotoSense.ReactUI/.env.local`, which git ignores; every build made for testing leaves it out.
+6. **Never use or commit Jamie's Google Maps key.** It is in `Trovolve.ReactUI/.env.local`, which git ignores; every build made for testing leaves it out.
 7. **Git:**
    - Commit or push only when Jamie asks, and ask each time; there is no standing go-ahead.
    - Do not use `git stash`: Jamie keeps uncommitted work of their own in the tree.
@@ -84,7 +84,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
    - Try a command or key press before telling Jamie to use it.
    - Verify end to end with default settings and the same start-up path Jamie uses. An override of the data path once hid a total failure.
    - Try new features on the largest, slowest real case, such as the 48,000-file external disk.
-   - When Jamie reports odd behaviour, reproduce it, or read a copy of the database first (copy `photosense.db` while the service is stopped), before changing code. Say plainly what was and was not verified.
+   - When Jamie reports odd behaviour, reproduce it, or read a copy of the database first (copy `trovolve.db` while the service is stopped), before changing code. Say plainly what was and was not verified.
 9. **Ask before guessing on product decisions that change what gets deleted.** Make a reasonable choice when the request is clear enough, and name any unconfirmed decision in the summary.
 10. **No anti-patterns unless there is no better way, and then only with Jamie's say-so** (Jamie, 2026-11-09).
     - Not used: blocking on a task (`.Result`, `.Wait()`, `GetAwaiter().GetResult()`), `async void`, `new HttpClient()` per call, `DateTime.Now`/`UtcNow` where a `TimeProvider` can be given, an empty `catch`, a catch of every exception, a bare `catch { …; throw; }` (use a `finally` that lets go of what was not handed over).
@@ -107,17 +107,19 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Every public or internal class, record, struct, interface, enum, delegate, method, property, field, constant and event has a `<summary>`, in the plain English of the rest of the code, saying what it is for; a positional record documents each parameter with `<param>`. A member that implements an interface or overrides one says `<inheritdoc />` when that says it all.
   - A private method has one when its purpose or intent is not plain from its name and body.
   - The compiler checks what other projects can see (CS1591, with `GenerateDocumentationFile` in `Directory.Build.props`); internal and private members are kept documented by hand.
-  - In `PhotoSense.Tests`, test methods are exempt, as their names are sentences; every test class, fixture, fake and helper is documented.
+  - In `Trovolve.Tests`, test methods are exempt, as their names are sentences; every test class, fixture, fake and helper is documented.
   - The page's TypeScript follows the same rule with TSDoc (`/** … */`): every exported function, component, hook, type, interface and constant (Jamie, 2026-11-09).
 - **Comments** say *why*, in plain English, usually one line. They never say what the code does or narrate a change. A line that does something easy to misread gets one. Names describe what the user would recognise.
 - **Public is each project's front door; the tests use nothing else** (Jamie, 2026-11-09: no `InternalsVisibleTo`).
-  - Public: what another project uses, Domain's rules and interfaces, Application's services, an adapter a program could put together itself, the sending protocol (the contract between two programs), the HTTP vocabulary (`ApiRequest`, `RequestGuard`, `ByteRange`), and each project's registrations. `PhotoSense.Server` has `PhotoSenseServer.Build` only.
-  - Internal: endpoints, the LiteDB stores (their constructors take LiteDB's own types), mappers and helpers. Tests reach them through the front door: endpoints through the router (`TestApi`), stores through `AddPhotoSenseCore` (`Stores`), the server through `PhotoSenseServer.Build`.
+  - Public: what another project uses, Domain's rules and interfaces, Application's services, an adapter a program could put together itself, the sending protocol (the contract between two programs), the HTTP vocabulary (`ApiRequest`, `RequestGuard`, `ByteRange`), and each project's registrations. `Trovolve.Server` has `TrovolveServer.Build` only.
+  - Internal: endpoints, the LiteDB stores (their constructors take LiteDB's own types), mappers and helpers. Tests reach them through the front door: endpoints through the router (`TestApi`), stores through `AddTrovolveCore` (`Stores`), the server through `TrovolveServer.Build`.
   - When a test seems to need something internal, the structure is usually wrong: move the logic to where it belongs, or give the class a constructor that takes what it asks of the outside world (as `ShellSystemViewer` and `FileSystemFolderBrowser` do).
 - **UI text:**
   - Name what the person sees, in short plain sentences, without jargon or apologies.
   - Buttons say exactly what happens ("Delete 3 files"), and the message after says what happened.
   - Errors say what went wrong and what to do.
-- **The user guide** (`PhotoSense.ReactUI/lib/guide.ts`, shown by Help) covers every feature built, completely and in detail, on each platform in its own words (Jamie, 2026-11-16). Any change that adds, renames, removes or changes what a person sees or does updates the guide in the same piece of work, never later. Each topic and section names the platforms it is for (`only`: `computer`, `ios`, `android`), and Help shows only the device's own; every topic has `keywords`, the words a person might search for it by. `tests/components/HelpWindow.test.tsx` checks each platform's topics, its words, and that search finds each feature.
+  - Every message to the person after something happens is a toast (Jamie, 2026-11-24), never words added inside a screen or window. A line saying what is going on while it happens ("Loading…", "Connecting…") stays where it is. Toasts slide in.
+  - General disclaimers (that nothing is uploaded, where deleted files go and that Undo puts them back, what a kind of file is) go in the FAQ, `site/pages/support.md`, not on a screen (Jamie, 2026-11-24). Instructions stay on screen ("Click to select, Shift-click for a range…"), as do a question's words before something is deleted (rule 3) and a line about one action ("Into Pictures/Butte. Undo puts them back.").
+- **The user guide** (`Trovolve.ReactUI/lib/guide.ts`, shown by Help) covers every feature built, completely and in detail, on each platform in its own words (Jamie, 2026-11-16). Any change that adds, renames, removes or changes what a person sees or does updates the guide in the same piece of work, never later. Each topic and section names the platforms it is for (`only`: `computer`, `ios`, `android`), and Help shows only the device's own; every topic has `keywords`, the words a person might search for it by. `tests/components/HelpWindow.test.tsx` checks each platform's topics, its words, and that search finds each feature.
 - **The README** documents behaviour and the API table. Update it with any endpoint or user-visible change.
 - **Reports to Jamie:** say what changed, what was verified and how, what was not verified, and any decision Jamie has not confirmed. Use they/them for Jamie.

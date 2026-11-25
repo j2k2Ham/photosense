@@ -1,0 +1,1808 @@
+import React from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import HomePage from '../../app/page';
+import { saveLastScan, saveOrganizeRoot } from '../../lib/lastScan';
+import type { EraseRemovedDto, GroupMode, GroupsPageDto, PlanDto, RemovedFilesDto, ScanProgressSnapshotDto, ScanStatusDto } from '../../types';
+import { deferred } from '../deferred';
+import { group, groupsPage, member, photo, plan } from '../fixtures';
+
+const api = vi.hoisted(() => ({
+  openedNotice: vi.fn(async (): Promise<{ opens: string | null }> => ({ opens: null })), useNotices: vi.fn((): { data?: unknown } => ({})), changeNotices: vi.fn(), useCompression: vi.fn(() => ({})),
+  useGroups: vi.fn(), useGroupsThrough: vi.fn(), useScanStatus: vi.fn(), useScanProgress: vi.fn(), connectLogStream: vi.fn(), startScan: vi.fn(), browseFolders: vi.fn(),
+  setKept: vi.fn(), removePhoto: vi.fn(), removeDuplicates: vi.fn(), removeGroups: vi.fn(), prefetchGroups: vi.fn(), openInViewer: vi.fn(), clearResults: vi.fn(), fetchGroupTotals: vi.fn(), retryNow: vi.fn(),
+  fetchRemoved: vi.fn(), eraseRemoved: vi.fn(), undoChange: vi.fn(), stopScan: vi.fn(), libraryRoot: vi.fn(), useRemoved: vi.fn((): { data?: unknown } => ({ data: undefined })),
+  useAbout: vi.fn(() => ({ data: undefined })), useAboutText: vi.fn(() => ({ data: undefined })), usePhotoAccess: vi.fn(() => ({ data: undefined })),
+  usePlan: vi.fn((): { data?: PlanDto } => ({ data: undefined })), chooseTestPlan: vi.fn(),
+  useCategories: vi.fn(() => ({ data: { categories: [{ category: 'duplicates', count: 1, bytes: 0 }], unmeasured: 0, storageTotal: null, storageFree: null } })),
+  useCategoryPhotos: vi.fn(() => ({ data: [] })),
+  // Accepted already, as nearly every test is of what comes after the note; the note's own tests say otherwise.
+  useTerms: vi.fn((): { data?: { accepted: string | null } } => ({ data: { accepted: '2026-11-22' } })), acceptTerms: vi.fn(), termsNow: vi.fn(async () => ({ accepted: '2026-11-22' })),
+}));
+vi.mock('../../lib/apiClient', async importOriginal => ({ ...(await importOriginal<typeof import('../../lib/apiClient')>()), ...api }));
+// The Organize area is tested on its own; here it is a stand-in that says what it was given and can raise a message.
+// It can say it shows a folder's files, and has a filter of its own, which starting it afresh puts back.
+vi.mock('../../components/organize/OrganizeView', async () => {
+  const { useState } = await import('react');
+  return {
+    OrganizeView: ({ startRoot, unit, onShowing, fresh, onRead, notify }: { startRoot?: string; unit: string; onShowing(root?: string): void; fresh?: boolean; onRead(): void; notify(message: string, kind?: 'ok', action?: { label: string; run(): void }): void }) => {
+      const [videos, setVideos] = useState(false);
+      return (
+        <section aria-label="Organize">
+          Organizing {startRoot ?? 'no folder'}{fresh && ', fresh'}
+          <span>Distances in {unit}</span>
+          <button type="button" onClick={onRead}>Read a folder</button>
+          <button type="button" onClick={() => notify('Moved 13 files to Butte', 'ok', { label: 'Undo', run: () => notify('Moved 13 files back', 'ok') })}>Move some</button>
+          <button type="button" onClick={() => onShowing('C:\\Photos\\Butte')}>Show Butte</button>
+          <button type="button" aria-pressed={videos} onClick={() => setVideos(true)}>Videos only</button>
+        </section>
+      );
+    },
+  };
+});
+
+// Pairing a phone is tested on its own; here it can be closed.
+vi.mock('../../components/PairWindow', () => ({
+  PairWindow: ({ onClose }: { onClose(): void }) => <div role="dialog" aria-label="Pair a phone"><button type="button" onClick={onClose}>Close pairing</button></div>,
+}));
+
+// Phones is tested on its own; here it can raise a message and open Pair a phone.
+vi.mock('../../components/PhonesView', () => ({
+  PhonesView: ({ notify, onPair }: { notify(message: string, kind: 'ok'): void; onPair(): void }) => (
+    <section aria-label="Phones">
+      <button type="button" onClick={() => notify("Backups from Alex's iPhone are paused.", 'ok')}>Say something</button>
+      <button type="button" onClick={onPair}>Pair a phone</button>
+    </section>
+  ),
+}));
+
+// Two groups: a picture with two copies, and another with one.
+const copyA1 = member({ id: 'a1', fileName: 'IMG_4198 (1).JPG' }, 'identical', 'Same quality; kept the one with the plainer name');
+const copyA2 = member({ id: 'a2', fileName: 'IMG_4198.HEIC', format: 'HEIC', fileSizeBytes: 3_046_000 }, 'samePicture', 'Opens everywhere: JPEG rather than HEIC');
+const groupA = group({ key: 'gA', keeper: photo({ id: 'a', fileName: 'IMG_4198.JPG' }), members: [copyA1, copyA2], reclaimableBytes: 9_139_000 });
+const groupB = group({ key: 'gB', keeper: photo({ id: 'b', fileName: 'IMG_5000.JPG' }), members: [member({ id: 'b1', fileName: 'IMG_5000 (1).JPG' })], reclaimableBytes: 6_093_000 });
+const burst = group({ key: 'gS', keeper: photo({ id: 's', fileName: 'IMG_7001.JPG' }), members: [member({ id: 's1', fileName: 'IMG_7002.JPG' }, 'similar')], reclaimableBytes: 0 });
+
+type Answer = { data?: GroupsPageDto; error?: Error };
+/** What the service has for each request; a test replaces these, and may change them as it goes on. */
+let groupsFor: (mode: GroupMode, filter: string, page: number, hideKept: boolean) => Answer;
+let statusNow: { data?: ScanStatusDto; error?: Error };
+let progressFor: (instanceId?: string) => { data?: ScanProgressSnapshotDto };
+let emitLog: (line: string) => void;
+const stopLogs = vi.fn();
+const snapshot = (overrides: Partial<ScanProgressSnapshotDto> = {}): ScanProgressSnapshotDto => ({
+  instanceId: 'scan-7', startedUtc: '2026-10-07T12:00:00Z', primaryTotal: 80, primaryProcessed: 34, secondaryTotal: 20, secondaryProcessed: 0,
+  primaryPercent: 42.5, secondaryPercent: 0, overallPercent: 34, ...overrides,
+});
+
+beforeEach(() => {
+  for (const mock of Object.values(api)) mock.mockReset();
+  stopLogs.mockReset();
+  groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([burst], {}, 'similar') : groupsPage([groupA, groupB]) });
+  statusNow = { data: { instanceId: '', totalPhotos: 6941 } };
+  progressFor = () => ({});
+  api.useGroups.mockImplementation((mode, filter, page, hideKept) => groupsFor(mode, filter, page, hideKept));
+  // A phone reads the groups as one list, from the same answers.
+  api.useGroupsThrough.mockImplementation(mode => groupsFor(mode, '', 1, false));
+  api.useScanStatus.mockImplementation(() => statusNow);
+  api.useScanProgress.mockImplementation(id => progressFor(id));
+  api.connectLogStream.mockImplementation(onLine => { emitLog = onLine; return stopLogs; });
+  api.setKept.mockResolvedValue(undefined);
+  api.openInViewer.mockResolvedValue(undefined);
+  api.retryNow.mockResolvedValue(undefined);
+  api.removePhoto.mockResolvedValue({ companions: 0 });
+  api.removeDuplicates.mockResolvedValue({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [] });
+  api.clearResults.mockResolvedValue({ forgotten: 0 });
+  api.startScan.mockResolvedValue({ instanceId: 'scan-7' });
+  api.fetchGroupTotals.mockResolvedValue({ duplicates: 263, similar: 170 });
+  api.browseFolders.mockResolvedValue({ path: null, parent: null, folders: [] });
+});
+
+function open() {
+  const view = render(<HomePage />);
+  // Stands in for the listings being fetched again: the page is drawn afresh from what the service now has.
+  return { ...view, refresh: () => view.rerender(<HomePage />) };
+}
+
+const mainRequest = () => api.useGroups.mock.calls.filter(c => c[0] === currentMode).pop();
+let currentMode: GroupMode = 'duplicates';
+beforeEach(() => { currentMode = 'duplicates'; });
+const button = (name: string | RegExp) => screen.getByRole('button', { name });
+const click = (name: string | RegExp) => userEvent.click(button(name));
+const tab = (name: RegExp) => screen.getByRole('tab', { name });
+const desk = () => screen.getByLabelText('Review');
+const gallery = () => screen.getByLabelText('Groups');
+const tile = (fileName: string) => within(gallery()).getByRole('button', { name: new RegExp(fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) });
+const win = () => screen.getByRole('dialog', { name: /^Compare / });
+const question = () => screen.getByRole('alertdialog');
+const removedNone = (changes: Partial<{ removed: number; bytes: number; skipped: number; companions: number; problems: string[] }> = {}) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], ...changes });
+const toast = (name: string | RegExp) => screen.findByText(name);
+const setupHeading = () => screen.queryByRole('heading', { name: 'Find duplicate photos and videos' });
+const area = (name: string) => within(screen.getByRole('group', { name: 'Area' })).getByRole('button', { name });
+
+describe('on a narrow screen', () => {
+  // The two panes are told apart by their display classes: below the wide breakpoint only one of them shows.
+  const shows = (el: HTMLElement) => !el.classList.contains('hidden');
+
+  it('shows the groups, and a tapped group\'s review in their place, with the way back to the list', async () => {
+    const { refresh } = open();
+    const toolbar = () => tab(/Duplicates/).parentElement!.parentElement!;
+    expect([shows(gallery()), shows(desk()), shows(toolbar())]).toEqual([true, false, true]);
+    // Wide enough, both are there side by side.
+    expect(desk()).toHaveClass('lg:flex');
+
+    await userEvent.click(tile('IMG_5000.JPG'));
+    expect([shows(gallery()), shows(desk()), shows(toolbar())]).toEqual([false, true, false]);
+    expect(gallery()).toHaveClass('lg:flex');
+    expect(within(desk()).getByRole('heading', { level: 2 })).toHaveTextContent('IMG_5000.JPG');
+
+    await click('All groups');
+    expect([shows(gallery()), shows(desk())]).toEqual([true, false]);
+
+    // The other tab starts from its list.
+    await userEvent.click(tile('IMG_4198.JPG'));
+    await userEvent.click(tab(/Similar/));
+    expect(shows(gallery())).toBe(true);
+
+    // A review whose group has gone gives way to the list.
+    await userEvent.click(tab(/Duplicates/));
+    await userEvent.click(tile('IMG_4198.JPG'));
+    groupsFor = mode => ({ data: groupsPage([], {}, mode) });
+    refresh();
+    expect(shows(gallery())).toBe(true);
+  });
+});
+
+describe('which screen is shown', () => {
+  it('is the setup screen when nothing has been scanned yet', () => {
+    statusNow = { data: { instanceId: '', totalPhotos: 0 } };
+    open();
+    expect(setupHeading()).toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Scanned folders')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back to results' })).not.toBeInTheDocument();
+  });
+
+  it('is the results when there are some, with the folders named from the last scan', async () => {
+    saveLastScan({ root: 'C:\\Users\\jamie\\Phone Pictures', second: '', recursive: true });
+    statusNow = { data: { instanceId: 'x', totalPhotos: 6941, completed: '2026-10-07T16:25:00' } };
+    open();
+    expect(setupHeading()).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Scanned folders')).toHaveTextContent(/^Phone Pictures · 6,941 files · scanned /);
+
+    await click('Change or rescan');
+    expect(setupHeading()).toBeInTheDocument();
+    expect(screen.queryByLabelText('Scanned folders')).not.toBeInTheDocument();
+    await click('Back to results');
+    expect(tab(/Duplicates/)).toBeInTheDocument();
+  });
+
+  it('is neither, saying it is loading, until the service has said what it holds, then the scan page when nothing was scanned', () => {
+    statusNow = {};
+    groupsFor = () => ({ data: groupsPage([]) });
+    const { refresh } = open();
+    expect(setupHeading()).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    statusNow = { data: { instanceId: '', totalPhotos: 0 } };
+    refresh();
+    expect(setupHeading()).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    // Nothing was scanned, so no duplicates are said to be waiting, then or after.
+    expect(screen.queryByText('No duplicates waiting to be removed.')).not.toBeInTheDocument();
+  });
+
+  it('is the results, saying they are loading, once the service holds a scan whose groups are still coming', () => {
+    groupsFor = () => ({});
+    open();
+    expect(setupHeading()).not.toBeInTheDocument();
+    expect(gallery()).toHaveTextContent('Loading…');
+    expect(screen.getAllByText('Loading…')).toHaveLength(2);
+    expect(button('Delete all duplicates')).toBeDisabled();
+  });
+});
+
+describe('when the service stops answering', () => {
+  it.each([
+    ['the groups', () => { groupsFor = () => ({ data: groupsPage([groupA]), error: new TypeError('Failed to fetch') }); }],
+    ['what it holds', () => { statusNow = { data: statusNow.data, error: new TypeError('Failed to fetch') }; }],
+  ])('says so across the top when %s cannot be fetched, with a way to try again', async (_what, fail) => {
+    fail();
+    open();
+    expect(screen.getByRole('alert')).toHaveTextContent('The Trovolve service is not answering, so what is shown here may be out of date.');
+    expect(tile('IMG_4198.JPG')).toBeInTheDocument();      // what was on screen stays
+    await click('Retry');
+    expect(api.retryNow).toHaveBeenCalledOnce();
+  });
+});
+
+describe('the results', () => {
+  it('count both kinds of group, sum up what can be removed, and show the first group', () => {
+    const { container } = open();
+    expect(tab(/Duplicates/)).toHaveTextContent('Duplicates2');
+    expect(tab(/Similar/)).toHaveTextContent('Similar1');
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
+    expect(container).toHaveTextContent('3 duplicate files taking 14.5 MB. The best copy of each picture or video is kept.');
+    // Where deleted files go is in the FAQ and the question before deleting, not on the bar.
+    expect(container).not.toHaveTextContent('Deleted files move to _Trovolve_Removed, and Undo puts them back.');
+    expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
+    expect(desk()).toHaveTextContent('IMG_4198.JPG2 duplicates · 8.7 MB to free');
+    expect(api.useGroups.mock.calls[0]).toEqual(['duplicates', '', 1, false]);
+    expect(api.useGroups.mock.calls[1]).toEqual(['similar', '', 1, false]);
+  });
+
+  it('say so when there is one duplicate, and say in a message, once, when there are none', async () => {
+    groupsFor = mode => ({ data: mode === 'similar' ? undefined : groupsPage([groupB]) });
+    const { container, refresh } = open();
+    expect(container).toHaveTextContent('1 duplicate file taking 5.8 MB.');
+    expect(tab(/Similar/)).toHaveTextContent(/^Similar$/);
+    expect(screen.queryByText('No duplicates waiting to be removed.')).not.toBeInTheDocument();
+    groupsFor = () => ({ data: groupsPage([]) });
+    refresh();
+    const log = screen.getByRole('log', { name: 'Messages' });
+    expect(await within(log).findByText('No duplicates waiting to be removed.')).toBeInTheDocument();
+    // In the message, not on the bar.
+    expect(screen.getAllByText('No duplicates waiting to be removed.')).toHaveLength(1);
+    expect(button('Delete all duplicates')).toBeDisabled();
+    // Said once while it stays so; again once duplicates have come and gone.
+    refresh();
+    expect(within(log).getAllByText('No duplicates waiting to be removed.')).toHaveLength(1);
+  });
+
+  it('say nothing of it while another tab shows, and say it on coming back to the duplicates', async () => {
+    groupsFor = mode => ({ data: mode === 'similar' ? undefined : groupsPage([groupB]) });
+    const { refresh } = open();
+    await userEvent.click(tab(/^Categories/));
+    groupsFor = () => ({ data: groupsPage([]) });
+    refresh();
+    expect(screen.queryByText('No duplicates waiting to be removed.')).not.toBeInTheDocument();
+    await userEvent.click(tab(/^Duplicates/));
+    expect(await screen.findByText('No duplicates waiting to be removed.')).toBeInTheDocument();
+  });
+
+  it('play the launch before anything else, before the page knows which program it is', () => {
+    api.useAbout.mockReturnValue({ data: undefined } as never);
+    open();
+    expect(screen.getByRole('img', { name: 'trovolve. Your memories. Evolved.' })).toBeInTheDocument();
+  });
+
+  it('point to the similar shots when no duplicates were found, and back again', async () => {
+    groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([burst], {}, 'similar') : groupsPage([]) });
+    open();
+    expect(gallery()).toHaveTextContent('0 groupsNo duplicates to showShow the 1 similar group');
+    currentMode = 'similar';
+    await userEvent.click(within(gallery()).getByRole('button', { name: 'Show the 1 similar group' }));
+    expect(tab(/Similar/)).toHaveAttribute('aria-selected', 'true');
+    expect(tile('IMG_7001.JPG')).toBeInTheDocument();
+
+    // And the other way about, when it is the similar shots there are none of.
+    groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([], {}, 'similar') : groupsPage([groupA, groupB]) });
+    await userEvent.click(tab(/Duplicates/));
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(within(gallery()).getByRole('button', { name: 'Show the 2 duplicate groups' }));
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('show the group that is picked and its first copy; when it goes, the one that took its place', async () => {
+    const third = group({ key: 'gC', keeper: photo({ id: 'c', fileName: 'IMG_6000.JPG' }) });
+    let listed = [groupA, groupB, third];
+    groupsFor = () => ({ data: groupsPage(listed) });
+    const { refresh } = open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Show IMG_4198.HEIC' }));
+    expect(desk()).toHaveTextContent('Copy 2 of 2 · HEIC');
+
+    await userEvent.click(tile('IMG_5000.JPG'));
+    expect(tile('IMG_5000.JPG')).toHaveAttribute('aria-pressed', 'true');
+    expect(desk()).toHaveTextContent('Copy 1 of 1 · JPEG');
+
+    listed = [groupA, third];
+    refresh();
+    expect(tile('IMG_6000.JPG')).toHaveAttribute('aria-pressed', 'true');
+    listed = [groupA];
+    refresh();
+    expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('are searched, filtered and paged from the first page each time', async () => {
+    groupsFor = (_m, _f, page) => ({ data: groupsPage([groupA], { page, totalPages: 3, total: 120 }) });
+    open();
+    await click('Next');
+    expect(mainRequest()).toEqual(['duplicates', '', 2, false]);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search by file name or folder' }), 'trip');
+    expect(mainRequest()).toEqual(['duplicates', 'trip', 1, false]);
+    await click('Next');
+    await userEvent.click(screen.getByRole('switch', { name: /Hide reviewed/ }));
+    expect(mainRequest()).toEqual(['duplicates', 'trip', 1, true]);
+    await click('Next');
+    await click('Prev');
+    expect(mainRequest()).toEqual(['duplicates', 'trip', 1, true]);
+  });
+
+  it('have the pages either side fetched ahead, so that turning to one is immediate', async () => {
+    // As the real listing does, a page that has not changed is the same answer each time it is read.
+    const pages = [1, 2, 3].map(page => groupsPage([groupA], { page, totalPages: 3, total: 120 }));
+    groupsFor = (_m, _f, page) => ({ data: pages[page - 1] });
+    open();
+    // The first page has no page before it.
+    expect(api.prefetchGroups.mock.calls).toEqual([['duplicates', '', 2, false]]);
+    await click('Next');
+    expect(api.prefetchGroups.mock.calls.slice(1)).toEqual([['duplicates', '', 3, false], ['duplicates', '', 1, false]]);
+    await click('Next');
+    // Nor the last one a page after it.
+    expect(api.prefetchGroups.mock.calls.slice(3)).toEqual([['duplicates', '', 2, false]]);
+  });
+
+  it('step back when the page they were on no longer exists', async () => {
+    let totalPages = 3;
+    groupsFor = (_m, _f, page) => ({ data: groupsPage(page <= totalPages ? [groupA] : [], { page, totalPages }) });
+    const { refresh } = open();
+    await click('Next');
+    await click('Next');
+    totalPages = 2;
+    refresh();
+    await waitFor(() => expect(mainRequest()).toEqual(['duplicates', '', 2, false]));
+    totalPages = 0;
+    refresh();
+    await waitFor(() => expect(mainRequest()).toEqual(['duplicates', '', 1, false]));
+  });
+});
+
+describe('similar shots', () => {
+  it('are a listing of their own, and the one being left is not shown in place of the one being fetched', async () => {
+    let fetched = false;
+    const duplicates = groupsPage([groupA, groupB]);
+    // As the real listing does, the last answer stays until the new one arrives.
+    groupsFor = mode => ({ data: mode === 'similar' && fetched ? groupsPage([burst], {}, 'similar') : duplicates });
+    const { refresh } = open();
+    await userEvent.click(tile('IMG_5000.JPG'));
+
+    currentMode = 'similar';
+    await userEvent.click(tab(/Similar/));
+    expect(mainRequest()).toEqual(['similar', '', 1, false]);
+    expect(tab(/Similar/)).toHaveAttribute('aria-selected', 'true');
+    expect(gallery()).toHaveTextContent('Loading…');
+    expect(tab(/Duplicates/)).toHaveTextContent('Duplicates2');
+    expect(tab(/Similar/)).toHaveTextContent(/^Similar$/);
+    expect(screen.getByText('Similar shots are burst frames or edited versions, not copies. Go through them a group at a time, or tick the groups you have looked at to delete their similar shots together.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete all duplicates' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+
+    fetched = true;
+    refresh();
+    expect(tab(/Similar/)).toHaveTextContent('Similar1');
+    expect(tab(/Duplicates/)).toHaveTextContent('Duplicates2');
+    expect(desk()).toHaveTextContent('IMG_7001.JPG1 similar shot');
+
+    currentMode = 'duplicates';
+    await userEvent.click(tab(/Duplicates/));
+    expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe("Clean up's categories on a computer", () => {
+  it('are a tab of their own, with how many files they hold, in place of the groups and their search', async () => {
+    api.useCategories.mockReturnValue({ data: { categories: [{ category: 'screenshots', count: 3, bytes: 30 }, { category: 'blurry', count: 2, bytes: 20 }, { category: 'duplicates', count: 9, bytes: 90 }],
+      unmeasured: 0, storageTotal: null, storageFree: null } });
+    open();
+    expect(tab(/Categories/)).toHaveTextContent('Categories5');
+    expect(tab(/Categories/)).toHaveAttribute('aria-selected', 'false');
+    await userEvent.click(tab(/Categories/));
+    expect(tab(/Categories/)).toHaveAttribute('aria-selected', 'true');
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'false');
+    expect(screen.getByRole('navigation', { name: 'Categories' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Screenshots' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Groups')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Search by file name or folder' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Large videos, screenshots, bursts, blurry shots and what messaging apps saved\./)).not.toBeInTheDocument();
+    await userEvent.click(tab(/Duplicates/));
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
+    expect(gallery()).toBeInTheDocument();
+  });
+});
+
+describe('scanning', () => {
+  it('shows the scan running, then what it found and the results', async () => {
+    statusNow = { data: { instanceId: '', totalPhotos: 0 } };
+    let done = false;
+    progressFor = id => (id === 'scan-7' ? { data: snapshot(done ? { completedUtc: '2026-10-07T12:01:00Z', overallPercent: 100 } : {}) } : {});
+    const { refresh, unmount } = open();
+    act(() => emitLog('11:59:00 Info left over from before'));
+
+    await userEvent.type(screen.getByLabelText('Base folder'), 'C:\\photos');
+    await click('Scan');
+    expect(await screen.findByLabelText('Scan progress')).toHaveTextContent('34%34 of 100 files');
+    expect(api.useScanProgress).toHaveBeenLastCalledWith('scan-7');
+    act(() => emitLog('12:00:01 Info Scanning 100 files'));
+    expect(within(screen.getByLabelText('Latest log lines')).getAllByRole('listitem').map(l => l.textContent)).toEqual(['12:00:01 Info Scanning 100 files']);
+    act(() => { for (let n = 0; n < 250; n++) emitLog(`line ${n}`); });
+    await click('Show full log');
+    expect(within(screen.getByLabelText('Full log')).getAllByRole('listitem')).toHaveLength(200);
+
+    done = true;
+    statusNow = { data: { instanceId: 'scan-7', totalPhotos: 100 } };
+    refresh();
+    expect(await toast('Scan finished: 263 duplicate groups and 170 similar groups')).toBeInTheDocument();
+    expect(setupHeading()).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Scanned folders')).toHaveTextContent('photos · 100 files');
+    expect(api.retryNow).toHaveBeenCalledOnce();
+    // Said once, however often the page is drawn again.
+    refresh();
+    expect(api.fetchGroupTotals).toHaveBeenCalledOnce();
+
+    expect(stopLogs).not.toHaveBeenCalled();
+    unmount();
+    expect(stopLogs).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [{ duplicates: 1, similar: 1 }, 'Scan finished: 1 duplicate group and 1 similar group'],
+    [undefined, 'Scan finished.'],
+  ])('says what it can when the scan finishes', async (totals, message) => {
+    if (totals) api.fetchGroupTotals.mockResolvedValue(totals); else api.fetchGroupTotals.mockRejectedValue(new Error('gone'));
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await click('Change or rescan');
+    await userEvent.type(screen.getByLabelText('Base folder'), 'C:\\photos');
+    await click('Scan');
+    expect(await toast(message)).toBeInTheDocument();
+  });
+
+  it('follows a scan it did not start, as when the page is loaded again while one is running, and says when that one finishes', async () => {
+    // The service holds a few files already, so without knowing of the scan the page would show results half made.
+    statusNow = { data: { instanceId: 'scan-9', totalPhotos: 40, completed: null } };
+    let done = false;
+    progressFor = id => (id === 'scan-9' ? { data: snapshot({ instanceId: 'scan-9', ...(done ? { completedUtc: '2026-10-07T12:01:00Z', overallPercent: 100 } : {}) }) } : {});
+    const { refresh } = open();
+    expect(await screen.findByLabelText('Scan progress')).toHaveTextContent('34%34 of 100 files');
+    expect(api.useScanProgress).toHaveBeenLastCalledWith('scan-9');
+    expect(button('Scanning…')).toBeDisabled();
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(api.startScan).not.toHaveBeenCalled();
+
+    done = true;
+    statusNow = { data: { instanceId: 'scan-9', totalPhotos: 100, completed: '2026-10-07T12:01:00Z' } };
+    refresh();
+    expect(await toast('Scan finished: 263 duplicate groups and 170 similar groups')).toBeInTheDocument();
+    expect(tab(/Duplicates/)).toBeInTheDocument();
+  });
+
+  it('then asks once whether to continue where the person left off, keeping the answer, which is not asked again', async () => {
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await click('Change or rescan');
+    await userEvent.type(screen.getByLabelText('Base folder'), 'C:\\photos');
+    await click('Scan');
+    const asked = await screen.findByRole('alertdialog', { name: 'Continue where you left off?' });
+    await userEvent.click(within(asked).getByRole('button', { name: 'Start fresh each time' }));
+    expect(await toast('Trovolve will start fresh each time it opens. Change it in Settings.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ continueWhereLeftOff: false });
+    // Answered, it is not asked after a folder is read in Organize either.
+    await userEvent.click(area('Organize'));
+    await click('Read a folder');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('asks too once Organize has read a folder, and asks again next time when put away unanswered', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    await click('Read a folder');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(localStorage.getItem('trovolve-settings')).toBeNull();
+    await click('Read a folder');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Continue where I left off' }));
+    expect(await toast('Trovolve will continue where you left off. Change it in Settings.')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ continueWhereLeftOff: true });
+  });
+
+  it('opens fresh when told to, once: the last results and folders forgotten, the scan screen with no folder chosen, and Organize with none', async () => {
+    localStorage.setItem('trovolve-settings', JSON.stringify({ continueWhereLeftOff: false }));
+    saveLastScan({ root: 'C:\\photos', second: '', recursive: true });
+    saveOrganizeRoot('C:\\photos\\2024');
+    api.clearResults.mockResolvedValue({ forgotten: 12 });
+    const { refresh } = open();
+    // Until the service has forgotten them, the results are not shown.
+    expect(setupHeading()).toBeInTheDocument();
+    expect(screen.getByLabelText('Base folder')).toHaveValue('');
+    expect(await toast('Started fresh: the last results, 12 files, were forgotten. Your photos were not touched.')).toBeInTheDocument();
+    expect(api.clearResults).toHaveBeenCalledOnce();
+    expect(JSON.parse(localStorage.getItem('trovolve-last-scan')!)).toEqual({ root: '', second: '', recursive: true });
+    expect(localStorage.getItem('trovolve-organize-root')).toBe('');
+    await userEvent.click(area('Organize'));
+    expect(screen.getByRole('region', { name: 'Organize' })).toHaveTextContent(/, fresh/);
+    refresh();
+    expect(api.clearResults).toHaveBeenCalledOnce();
+  });
+
+  it('says nothing on opening fresh when there was nothing to forget, and says so when it could not', async () => {
+    localStorage.setItem('trovolve-settings', JSON.stringify({ continueWhereLeftOff: false }));
+    const { unmount } = open();
+    await waitFor(() => expect(api.clearResults).toHaveBeenCalledOnce());
+    expect(screen.queryByText(/^Started fresh/)).not.toBeInTheDocument();
+    unmount();
+    api.clearResults.mockRejectedValue(new Error('Cannot reach the Trovolve server.'));
+    open();
+    expect(await within(screen.getByRole('log', { name: 'Messages' })).findByText('Cannot reach the Trovolve server.')).toBeInTheDocument();
+  });
+
+  it('keeps a failed start as an error, in the toast and in the list', async () => {
+    statusNow = { data: { instanceId: '', totalPhotos: 0 } };
+    open();
+    await click('Scan');
+    expect(await within(screen.getByRole('log', { name: 'Messages' })).findByText('Choose a base folder to scan.')).toBeInTheDocument();
+    expect(screen.getByRole('log', { name: 'Messages' })).toHaveTextContent('Error: Choose a base folder to scan.Kept in Errors');
+    await click('1 error');
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toHaveTextContent('Choose a base folder to scan.');
+  });
+});
+
+describe('the menu and the errors', () => {
+  it('open one at a time, and the menu leads to the theme, the errors, the folders and clearing', async () => {
+    api.openInViewer.mockRejectedValue('No application could be started');
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.JPG' }));
+    await userEvent.click(within(win()).getByRole('button', { name: 'Open in default viewer' }));
+    await toast('No application could be started');
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await click('Menu');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Theme/ }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Light' }));
+    expect(document.documentElement).toHaveClass('light');
+    await userEvent.click(screen.getByRole('menuitemradio', { name: 'Dark' }));
+    await click('1 error');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    const errors = screen.getByRole('dialog', { name: 'Errors' });
+    await userEvent.click(within(errors).getByRole('button', { name: 'Clear' }));
+    expect(errors).toHaveTextContent('No errors.');
+
+    await click('Menu');
+    expect(screen.queryByRole('dialog', { name: 'Errors' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Support/ }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Errors/ }));
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Errors' })).not.toBeInTheDocument();
+
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Change folders or rescan' }));
+    expect(setupHeading()).toBeInTheDocument();
+  });
+
+  it('clears every error at once', async () => {
+    api.setKept.mockRejectedValue(new Error('The database is busy'));
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Keep this copy' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+    await click('1 error');
+    await click('Clear all');
+    expect(screen.queryByRole('button', { name: /error/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('keeping and viewing', () => {
+  it('marks a copy to keep, or stops keeping it, and says which', async () => {
+    let kept = false;
+    groupsFor = () => ({ data: groupsPage([group({ ...groupA, members: [{ ...copyA1, photo: { ...copyA1.photo, kept } }, copyA2] })]) });
+    const { refresh } = open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Keep this copy' }));
+    expect(api.setKept).toHaveBeenLastCalledWith('a1', true);
+    expect(await toast('Keeping IMG_4198 (1).JPG. Bulk deletion will skip it.')).toBeInTheDocument();
+    kept = true;
+    refresh();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Stop keeping this copy' }));
+    expect(api.setKept).toHaveBeenLastCalledWith('a1', false);
+    expect(await toast('Stopped keeping IMG_4198 (1).JPG.')).toBeInTheDocument();
+  });
+
+  it('lets nothing else be started while one change is being made', async () => {
+    const saving = deferred();
+    api.setKept.mockReturnValue(saving.promise);
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Keep this copy' }));
+    expect(button('Delete all duplicates')).toBeDisabled();
+    expect(within(desk()).getByRole('button', { name: /^Delete this copy/ })).toBeDisabled();
+    await act(async () => saving.resolve());
+    expect(button('Delete all duplicates')).toBeEnabled();
+  });
+
+  it('compares the copy beside the original in a window, which closes with its group', async () => {
+    let listed = [groupA, groupB];
+    groupsFor = () => ({ data: groupsPage(listed) });
+    const { refresh } = open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Show IMG_4198.HEIC' }));
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.HEIC' }));
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_4198.HEIC' })).toBeInTheDocument();
+    await userEvent.click(within(win()).getByRole('button', { name: 'Keep this copy too' }));
+    expect(api.setKept).toHaveBeenLastCalledWith('a2', true);
+
+    // With that copy gone the window shows the one that is left.
+    listed = [group({ ...groupA, members: [copyA1] }), groupB];
+    refresh();
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_4198 (1).JPG' })).toBeInTheDocument();
+    listed = [groupB];
+    refresh();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('goes through a group\'s copies in the window, and the desk behind it follows', async () => {
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.JPG' }));
+    expect(win()).toHaveTextContent('Copy 1 of 2');
+    await userEvent.click(within(win()).getByRole('button', { name: 'Next copy' }));
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_4198.HEIC' })).toHaveTextContent('Copy 2 of 2');
+    await userEvent.click(within(win()).getByRole('button', { name: 'Close' }));
+    expect(desk()).toHaveTextContent('Copy 2 of 2 · HEIC');
+  });
+
+  it('keeps its place among a group\'s copies when one is removed, and shows the one that took its place', async () => {
+    const copies = [1, 2, 3].map(n => member({ id: `c${n}`, fileName: `IMG_6000 (${n}).JPG` }));
+    let listed = [group({ key: 'gC', keeper: photo({ id: 'c', fileName: 'IMG_6000.JPG' }), members: copies }), groupB];
+    groupsFor = () => ({ data: groupsPage(listed) });
+    const { refresh } = open();
+    const removeShown = async () => {
+      await userEvent.click(within(win()).getByRole('button', { name: /^Delete this copy ·/ }));
+      await userEvent.click(within(win()).getByRole('button', { name: 'Delete this copy' }));
+    };
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_6000.JPG' }));
+    await userEvent.click(within(win()).getByRole('button', { name: 'Next copy' }));
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_6000 (2).JPG' })).toHaveTextContent('Copy 2 of 3');
+
+    // The middle one of three goes: the third is now the second, and is what the window shows.
+    await removeShown();
+    expect(api.removePhoto).toHaveBeenLastCalledWith('c2');
+    await toast(/^Moved IMG_6000 \(2\)\.JPG/);
+    listed = [group({ ...listed[0], members: [copies[0], copies[2]] }), groupB];
+    refresh();
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_6000 (3).JPG' })).toHaveTextContent('Copy 2 of 2');
+
+    // The last of them goes: the one before it is shown.
+    await removeShown();
+    expect(api.removePhoto).toHaveBeenLastCalledWith('c3');
+    await toast(/^Moved IMG_6000 \(3\)\.JPG/);
+    listed = [group({ ...listed[0], members: [copies[0]] }), groupB];
+    refresh();
+    expect(screen.getByRole('dialog', { name: 'Compare IMG_6000 (1).JPG' })).not.toHaveTextContent(/Copy \d of/);
+
+    // The only one left goes, and its group with it: the window closes and the next group starts at its first copy.
+    await removeShown();
+    await toast(/^Moved IMG_6000 \(1\)\.JPG/);
+    listed = [groupB];
+    refresh();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(desk()).toHaveTextContent('Copy 1 of 1 · JPEG');
+  });
+
+  it('removes a copy from the window after its own second question, and closes on request', async () => {
+    api.removePhoto.mockResolvedValue({ companions: 2 });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.JPG' }));
+    await userEvent.click(within(win()).getByRole('button', { name: /^Delete this copy ·/ }));
+    await userEvent.click(within(win()).getByRole('button', { name: 'Delete this copy' }));
+    expect(api.removePhoto).toHaveBeenCalledExactlyOnceWith('a1');
+    expect(await toast('Moved IMG_4198 (1).JPG and 2 linked files to _Trovolve_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
+    await userEvent.click(within(win()).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('the free plan on a computer', () => {
+  const limited = () => screen.getByRole('alertdialog');
+  const tickOf = (fileName: string) => within(gallery()).getByRole('checkbox', { name: `Select the group of ${fileName}` });
+
+  it('shows the plan beside the menu, with the removals left today, and says them under every question that removes', async () => {
+    api.usePlan.mockReturnValue({ data: plan() });
+    open();
+    expect(screen.getByText('Trovolve Free')).toHaveAttribute('title', '38 of 50 free removals left today');
+    expect(screen.getByText('Trovolve Free')).toHaveTextContent('Trovolve Free · 38 left today');
+    await userEvent.click(button('Delete all duplicates'));
+    expect(question()).toHaveTextContent('Move to Recycle Bin, in the menu, empties it. Free plan: 38 removals left today.');
+  });
+
+  it('shows a plan a phone shared, with no limit', () => {
+    api.usePlan.mockReturnValue({ data: plan({ tier: 'pro', kind: 'lifetime', leftToday: null, sharedBy: "Jamie's iPhone", store: null, offers: [] }) });
+    open();
+    expect(screen.getByText('Trovolve Pro')).toHaveAttribute('title', "Lifetime plan · from Jamie's iPhone");
+    expect(screen.getByText('Trovolve Pro')).not.toHaveTextContent('left today');
+  });
+
+  it('asks before more than are left go: says how to get Pro, and deletes the groups that fit now', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 1 }) });
+    const going = deferred<ReturnType<typeof removedNone>>();
+    api.removeGroups.mockReturnValueOnce(going.promise);
+    open();
+    await userEvent.click(tickOf('IMG_4198.JPG'));
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Selected groups' })).getByRole('button', { name: 'Delete their duplicates' }));
+    expect(limited()).toHaveAccessibleName('1 free removal left today');
+    expect(limited()).toHaveTextContent('You chose 3 duplicates. The free plan deletes 50 items a day, and you have 1 left today.');
+    expect(limited()).toHaveTextContent('Trovolve Pro has no daily limit. Get it in Trovolve on your iPhone or Android phone');
+    await userEvent.click(within(limited()).getByRole('button', { name: 'Delete 1 now' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['gB'], 'duplicates');
+    // While it works the question stays: neither Escape nor a click outside puts it away.
+    expect(within(limited()).getByRole('button', { name: 'Working…' })).toBeDisabled();
+    await userEvent.keyboard('{Escape}');
+    fireEvent.mouseDown(limited().parentElement!);
+    expect(limited()).toBeInTheDocument();
+    going.resolve(removedNone({ removed: 1, bytes: 6_093_000 }));
+    expect(await toast('Moved 1 duplicate (5.8 MB) to _Trovolve_Removed. The original of each group stays where it is.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('offers nothing to delete once none are left, nor when no whole group fits, and Not now, Escape or a click outside puts it away', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 0, removedToday: 50 }) });
+    const { rerender } = open();
+    await userEvent.click(button('Delete all duplicates'));
+    expect(limited()).toHaveAccessibleName('No free removals left today');
+    expect(limited()).toHaveTextContent("You have used today's 50 free removals. More are available tomorrow.");
+    expect(within(limited()).queryByRole('button', { name: /now$/ })).toHaveAccessibleName('Not now');
+    await userEvent.click(within(limited()).getByRole('button', { name: 'Not now' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 1 }) });
+    rerender(<HomePage />);
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete all 2 copies/ }));
+    expect(limited()).toHaveTextContent('You chose 2 duplicates.');
+    expect(within(limited()).getAllByRole('button').map(b => b.textContent)).toEqual(['Not now']);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete all 2 copies/ }));
+    fireEvent.mouseDown(limited().parentElement!);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.removeGroups).not.toHaveBeenCalled();
+  });
+
+  it('says how many are left, and asks before the similar shots of ticked groups go, by the one shot chosen', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 2 }) });
+    const { rerender } = open();
+    await userEvent.click(tickOf('IMG_4198.JPG'));
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Selected groups' })).getByRole('button', { name: 'Delete their duplicates' }));
+    expect(limited()).toHaveAccessibleName('2 free removals left today');
+    expect(within(limited()).getByRole('button', { name: 'Delete 2 now' })).toBeInTheDocument();
+    await userEvent.click(within(limited()).getByRole('button', { name: 'Not now' }));
+
+    currentMode = 'similar';
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 0, removedToday: 50 }) });
+    rerender(<HomePage />);
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(tickOf('IMG_7001.JPG'));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Selected groups' })).getByRole('button', { name: 'Delete their similar shots' }));
+    expect(limited()).toHaveTextContent("You have used today's 50 free removals.");
+  });
+
+  it('asks before one copy goes from the desk or the window once none are left', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ leftToday: 0, removedToday: 50 }) });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy ·/ }));
+    expect(limited()).toHaveAccessibleName('No free removals left today');
+    await userEvent.click(within(limited()).getByRole('button', { name: 'Not now' }));
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.JPG' }));
+    await userEvent.click(within(win()).getByRole('button', { name: /^Delete this copy ·/ }));
+    await userEvent.click(within(win()).getByRole('button', { name: 'Delete this copy' }));
+    expect(limited()).toHaveTextContent('You have used today');
+    expect(api.removePhoto).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting', () => {
+  it('one copy from the desk: asks first, naming the copy and the original that stays', async () => {
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete IMG_4198 (1).JPG?' })).toBeInTheDocument();
+    expect(question()).toHaveTextContent('IMG_4198 (1).JPG (5.8 MB) will be removed.The original, IMG_4198.JPG, stays in C:\\photos\\2024.');
+    expect(question()).toHaveTextContent('Files go to _Trovolve_Removed inside the scanned folder, and Undo puts them back. Move to Recycle Bin, in the menu, empties it.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(api.removePhoto).toHaveBeenCalledExactlyOnceWith('a1');
+    expect(await toast('Moved IMG_4198 (1).JPG to _Trovolve_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('the one duplicate of a picture, in the same folder under another name: says which file goes and which stays, before and after', async () => {
+    // Two files holding the same bytes, side by side in one folder. Only the names tell them apart.
+    const folder = 'C:\\Users\\jamie\\Phone Pictures';
+    const twin = group({
+      key: 'g0377', reclaimableBytes: 15_521_465,
+      keeper: photo({ id: 'k', fileName: 'IMG_0377.JPG', folder, fileSizeBytes: 15_521_465 }),
+      members: [member({ id: 'c', fileName: 'IMG_0648.JPG', folder, fileSizeBytes: 15_521_465 })],
+    });
+    groupsFor = () => ({ data: groupsPage([twin]) });
+    api.removeDuplicates.mockResolvedValue({ removed: 1, bytes: 15_521_465, skipped: 0, companions: 0, problems: [], stays: [] });
+    open();
+    expect(desk().querySelector('[data-file="original"]')).toHaveTextContent(`IMG_0377.JPG${folder}`);
+    expect(desk().querySelector('[data-file="copy"]')).toHaveTextContent('IMG_0648.JPGIn the same folder as the original');
+
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete this duplicate · 14.8 MB' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete IMG_0648.JPG?' })).toBeInTheDocument();
+    expect(question()).toHaveTextContent(`IMG_0648.JPG (14.8 MB) will be removed.The original, IMG_0377.JPG, stays in ${folder}.`);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('g0377', 'duplicates');
+    expect(await toast('Moved IMG_0648.JPG (14.8 MB) to _Trovolve_Removed. IMG_0377.JPG stays where it is.')).toBeInTheDocument();
+  });
+
+  it('all the similar shots of one group: asks first, saying they are not copies, and takes only that group\'s', async () => {
+    const shots = group({
+      key: 'gS', reclaimableBytes: 18_279_000, keeper: photo({ id: 's', fileName: 'IMG_7001.JPG' }),
+      members: [2, 3, 4].map(n => member({ id: `s${n}`, fileName: `IMG_700${n}.JPG` }, 'similar')),
+    });
+    groupsFor = mode => ({ data: mode === 'similar' ? groupsPage([shots], {}, 'similar') : groupsPage([groupA, groupB]) });
+    api.removeDuplicates.mockResolvedValue({ removed: 3, bytes: 18_279_000, skipped: 0, companions: 0, problems: [], stays: [] });
+    open();
+    currentMode = 'similar';
+    await userEvent.click(tab(/Similar/));
+
+    // One shot, or all of them: both are offered, and "this copy" asks about the one beside the best shot only.
+    expect(within(desk()).getByRole('button', { name: 'Delete this copy · 5.8 MB' })).toBeEnabled();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 3 copies · 17.4 MB' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete the 3 shots similar to IMG_7001.JPG?' })).toBeInTheDocument();
+    expect(question()).toHaveTextContent('3 files taking 17.4 MB will be removed: IMG_7002.JPG, IMG_7003.JPG, IMG_7004.JPG.The best shot, IMG_7001.JPG, stays in C:\\photos\\2024.These are different shots or edited versions, not copies of one file.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('gS', 'similar');
+    expect(api.removePhoto).not.toHaveBeenCalled();
+    expect(await toast('Moved 3 similar shots (17.4 MB) to _Trovolve_Removed. IMG_7001.JPG stays where it is.')).toBeInTheDocument();
+  });
+
+  it('a similar shot: says that the best shot stays', async () => {
+    open();
+    currentMode = 'similar';
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    expect(question()).toHaveTextContent('IMG_7002.JPG (5.8 MB) will be removed.The best shot, IMG_7001.JPG, stays in C:\\photos\\2024.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(api.removePhoto).toHaveBeenCalledExactlyOnceWith('s1');
+    expect(await toast('Moved IMG_7002.JPG to _Trovolve_Removed. IMG_7001.JPG stays where it is.')).toBeInTheDocument();
+  });
+
+  it('the duplicates of one group: counts what goes and what is kept', async () => {
+    api.removeDuplicates.mockResolvedValue({ removed: 2, bytes: 9_139_000, skipped: 0, companions: 0, problems: [], stays: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 2 copies · 8.7 MB' }));
+    expect(screen.getByRole('alertdialog', { name: 'Delete the 2 duplicates of IMG_4198.JPG?' })).toBeInTheDocument();
+    expect(question()).toHaveTextContent('2 files taking 8.7 MB will be removed: IMG_4198 (1).JPG, IMG_4198.HEIC.The original, IMG_4198.JPG, stays in C:\\photos\\2024.');
+    expect(question()).not.toHaveTextContent('marked keep');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 2 files' }));
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith('gA', 'duplicates');
+    expect(await toast('Moved 2 duplicates (8.7 MB) to _Trovolve_Removed. IMG_4198.JPG stays where it is.')).toBeInTheDocument();
+  });
+
+  it('the duplicates of one group: names the first few when there are many', async () => {
+    const copies = [1, 2, 3, 4, 5, 6].map(n => member({ id: `a${n}`, fileName: `IMG_4198 (${n}).JPG` }));
+    groupsFor = () => ({ data: groupsPage([group({ ...groupA, members: copies, reclaimableBytes: 36_558_000 })]) });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete all 6 copies/ }));
+    expect(question()).toHaveTextContent('6 files taking 34.9 MB will be removed: IMG_4198 (1).JPG, IMG_4198 (2).JPG, IMG_4198 (3).JPG, IMG_4198 (4).JPG and 2 more.The original');
+  });
+
+  it.each([
+    [1, '1 copy you marked keep is skipped.', 'Delete 2 files'],
+    [2, '2 copies you marked keep are skipped.', 'Delete 1 file'],
+  ])('says how many kept copies a group deletion skips (%d)', async (keptCount, line, label) => {
+    const copies = [copyA1, copyA2, member({ id: 'a3', fileName: 'IMG_4198 (3).JPG' })].map((m, i) => ({ ...m, photo: { ...m.photo, kept: i < keptCount } }));
+    groupsFor = () => ({ data: groupsPage([group({ ...groupA, members: copies })]) });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete (all 2 copies|this duplicate)/ }));
+    expect(question()).toHaveTextContent(line);
+    expect(within(question()).getByRole('button', { name: label })).toBeEnabled();
+    await userEvent.click(within(question()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.removeDuplicates).not.toHaveBeenCalled();
+  });
+
+  it('all duplicates: reports what was moved and what was left alone', async () => {
+    api.removeDuplicates.mockResolvedValue({ removed: 1, bytes: 6_093_000, skipped: 1, companions: 1, problems: ['Changed since the scan, left alone: C:\\photos\\x.jpg'], stays: ['C:\\photos\\Butte\\IMG_1.JPG'] });
+    saveLastScan({ root: 'C:\\photos', second: '', recursive: true });
+    open();
+    await click('Delete all duplicates');
+    expect(screen.getByRole('alertdialog', { name: 'Delete all duplicates?' })).toBeInTheDocument();
+    expect(question()).toHaveTextContent('3 files taking 14.5 MB will be removed.The best copy of each picture or video stays. Copies you marked keep are skipped.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(api.removeDuplicates).toHaveBeenCalledExactlyOnceWith(undefined, 'duplicates');
+    // An original that stays is named, with its folder from the scanned folder (Jamie, 2026-11-20).
+    expect(await toast('Moved 1 duplicate (5.8 MB) and 1 linked file to _Trovolve_Removed. The original stays: IMG_1.JPG in photos › Butte.')).toBeInTheDocument();
+    expect(screen.getByText('1 left alone. Changed since the scan, left alone: C:\\photos\\x.jpg')).toBeInTheDocument();
+  });
+
+  it('all duplicates: says what was left alone even with no reason, and nothing when nothing happened', async () => {
+    api.removeDuplicates.mockResolvedValueOnce({ removed: 0, bytes: 0, skipped: 3, companions: 0, problems: [], stays: [] });
+    open();
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(await toast('3 left alone.')).toBeInTheDocument();
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.queryByText(/^Moved/)).not.toBeInTheDocument();
+  });
+
+  it('leaves the question open, and says why, when the removal failed', async () => {
+    api.removeDuplicates.mockRejectedValue(new Error('The database is busy'));
+    open();
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(await toast('The database is busy')).toBeInTheDocument();
+    expect(within(question()).getByRole('button', { name: 'Delete 3 files' })).toBeEnabled();
+  });
+});
+
+describe('ticking groups', () => {
+  const tickOf = (fileName: string) => within(gallery()).getByRole('checkbox', { name: `Select the group of ${fileName}` });
+  const all = (name = 'Select all') => within(gallery()).getByRole('checkbox', { name }) as HTMLInputElement;
+  const selection = () => screen.getByRole('region', { name: 'Selected groups' });
+  const noSelection = () => expect(screen.queryByRole('region', { name: 'Selected groups' })).not.toBeInTheDocument();
+  const removed = (changes: Partial<{ removed: number; bytes: number; skipped: number; companions: number; problems: string[] }> = {}) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [], ...changes });
+
+  it('selects groups one by one or all at once, says what they come to, and deletes their duplicates together after asking', async () => {
+    api.removeGroups.mockResolvedValue(removed({ removed: 3, bytes: 15_232_000, companions: 1 }));
+    open();
+    noSelection();
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+    expect(selection()).toHaveTextContent('1 group selected · 1 file, 5.8 MB');
+    expect([all().checked, all().indeterminate]).toEqual([false, true]);
+    // The group being looked at is still the first: a tick does not change it.
+    expect(tile('IMG_4198.JPG')).toHaveAttribute('aria-pressed', 'true');
+
+    await userEvent.click(all());
+    expect(selection()).toHaveTextContent('2 groups selected · 3 files, 14.5 MB');
+    expect(all().checked).toBe(true);
+    await userEvent.click(all());
+    noSelection();
+    await userEvent.click(all());
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+    await userEvent.click(tickOf('IMG_5000.JPG'));
+
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Delete their duplicates' }));
+    expect(question()).toHaveAccessibleName('Delete the duplicates of 2 groups?');
+    expect(question()).toHaveTextContent('3 files taking 14.5 MB will be removed.The original of each group stays. Copies you marked keep are skipped.');
+    expect(question()).not.toHaveTextContent('different shots');
+    expect(api.removeGroups).not.toHaveBeenCalled();
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['gA', 'gB'], 'duplicates');
+    expect(await toast('Moved 3 duplicates (14.5 MB) and 1 linked file to _Trovolve_Removed. The original of each group stays where it is.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    noSelection();
+  });
+
+  it('deletes the similar shots of the ticked groups, saying that they are not copies, and what was left alone', async () => {
+    currentMode = 'similar';
+    api.removeGroups.mockResolvedValueOnce(removed({ removed: 1, bytes: 6_093_000, skipped: 2, problems: ['Changed since the scan, left alone: C:\\photos\\IMG_7003.JPG'] })).mockResolvedValueOnce(removed({ skipped: 1 }));
+    open();
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(tickOf('IMG_7001.JPG'));
+    expect(selection()).toHaveTextContent('1 group selected · 1 file');
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Delete their similar shots' }));
+    expect(question()).toHaveAccessibleName('Delete the similar shots of 1 group?');
+    expect(question()).toHaveTextContent('The best shot of each group stays. Copies you marked keep are skipped.These are different shots or edited versions, not copies of one file.');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(api.removeGroups).toHaveBeenCalledExactlyOnceWith(['gS'], 'similar');
+    expect(await toast('Moved 1 similar shot (5.8 MB) to _Trovolve_Removed. The best shot of each group stays where it is.')).toBeInTheDocument();
+    expect(await toast('2 left alone. Changed since the scan, left alone: C:\\photos\\IMG_7003.JPG')).toBeInTheDocument();
+
+    // Nothing moved, and no reason given: only that is said.
+    await userEvent.click(tickOf('IMG_7001.JPG'));
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Delete their similar shots' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    expect(await toast('1 left alone.')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Moved 1 similar shot/)).toHaveLength(1);
+  });
+
+  it('keeps a tick over a turn of the page, lets it all go with Clear or a change of tab, and has nothing to delete where every copy is kept', async () => {
+    const kept = group({ key: 'gK', keeper: photo({ id: 'k', fileName: 'IMG_6000.JPG' }), members: [member({ id: 'k1', fileName: 'IMG_6000 (1).JPG', kept: true })], reclaimableBytes: 0 });
+    groupsFor = (mode, _filter, page) => ({ data: mode === 'similar' ? groupsPage([burst], {}, 'similar') : groupsPage(page === 2 ? [kept] : [groupA, groupB], { total: 3, totalPages: 2, page }) });
+    open();
+    await userEvent.click(all('Select all on this page'));
+    await click('Next');
+    // The two ticked on the first page are still counted; none on this page is ticked.
+    expect(selection()).toHaveTextContent('2 groups selected · 3 files, 14.5 MB');
+    expect([all('Select all on this page').checked, all('Select all on this page').indeterminate]).toEqual([false, false]);
+    await userEvent.click(within(selection()).getByRole('button', { name: 'Clear' }));
+    noSelection();
+
+    await userEvent.click(tickOf('IMG_6000.JPG'));
+    expect(selection()).toHaveTextContent('1 group selected · every copy is marked keep');
+    expect(within(selection()).getByRole('button', { name: 'Delete their duplicates' })).toBeDisabled();
+    currentMode = 'similar';
+    await userEvent.click(tab(/Similar/));
+    noSelection();
+  });
+
+  it('takes the tick off a group whose copies are deleted on their own, and off every group when all duplicates are', async () => {
+    api.removeDuplicates.mockResolvedValue(removed({ removed: 1, bytes: 6_093_000 }));
+    open();
+    await userEvent.click(all());
+    await userEvent.click(tile('IMG_5000.JPG'));
+    await click(/^Delete this duplicate/);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    await waitFor(() => expect(selection()).toHaveTextContent('1 group selected'));
+
+    // One copy of the other group goes on its own: that group is no longer as it was ticked.
+    await userEvent.click(tile('IMG_4198.JPG'));
+    await click(/^Delete this copy/);
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    await waitFor(noSelection);
+
+    await userEvent.click(all());
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: /^Delete \d files$/ }));
+    await waitFor(noSelection);
+  });
+});
+
+describe('undoing a removal', () => {
+  // The Undo on the message that says what went.
+  const undoOn = async (message: string) => within((await toast(message)).parentElement!).getByRole('button', { name: 'Undo' });
+  const removed = (changes: Partial<{ removed: number; bytes: number; batchId: string; stays: string[] }>) => ({ removed: 0, bytes: 0, skipped: 0, companions: 0, problems: [], stays: [], ...changes });
+
+  it('puts a copy deleted on its own back, from the message that says it went', async () => {
+    api.removePhoto.mockResolvedValue({ heldAt: 'C:\\photos\\2024\\_Trovolve_Removed\\IMG_4198 (1).JPG', companions: 0, batchId: 'b1' });
+    api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+
+    await userEvent.click(await undoOn('Moved IMG_4198 (1).JPG to _Trovolve_Removed. IMG_4198.JPG stays where it is.'));
+
+    expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('b1');
+    expect(await toast('Put IMG_4198 (1).JPG back where it was.')).toBeInTheDocument();
+  });
+
+  it('puts back the duplicates of a group, or of every group, as they went', async () => {
+    api.removeDuplicates.mockResolvedValueOnce(removed({ removed: 2, bytes: 9_139_000, batchId: 'b2' })).mockResolvedValueOnce(removed({ removed: 1, bytes: 6_093_000, batchId: 'b3' }));
+    api.undoChange.mockResolvedValueOnce({ restored: 2, skipped: 0, problems: [] }).mockResolvedValueOnce({ restored: 1, skipped: 0, problems: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Delete all 2 copies · 8.7 MB' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 2 files' }));
+    await userEvent.click(await undoOn('Moved 2 duplicates (8.7 MB) to _Trovolve_Removed. IMG_4198.JPG stays where it is.'));
+    expect(await toast('Put the 2 duplicates back where they were.')).toBeInTheDocument();
+
+    await click('Delete all duplicates');
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+    await userEvent.click(await undoOn('Moved 1 duplicate (5.8 MB) to _Trovolve_Removed.'));
+    expect(api.undoChange).toHaveBeenLastCalledWith('b3');
+    expect(await toast('Put the duplicate back where it was.')).toBeInTheDocument();
+  });
+
+  it('puts back the copies of the ticked groups, saying what came back and what could not', async () => {
+    api.removeGroups.mockResolvedValue(removed({ removed: 3, bytes: 15_232_000, batchId: 'b4' }));
+    api.undoChange.mockResolvedValue({ restored: 2, skipped: 1, problems: ['IMG_5000 (1).JPG is no longer where it was put.'] });
+    open();
+    await userEvent.click(within(gallery()).getByRole('checkbox', { name: 'Select all' }));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Selected groups' })).getByRole('button', { name: 'Delete their duplicates' }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 3 files' }));
+
+    await userEvent.click(await undoOn('Moved 3 duplicates (14.5 MB) to _Trovolve_Removed. The original of each group stays where it is.'));
+
+    expect(api.undoChange).toHaveBeenCalledExactlyOnceWith('b4');
+    expect(await toast('Put the 2 duplicates back where they were.')).toBeInTheDocument();
+    expect(await toast('1 could not be put back. IMG_5000 (1).JPG is no longer where it was put.')).toBeInTheDocument();
+  });
+
+  it('says why when nothing could be put back, and offers no Undo for a removal that moved no file', async () => {
+    api.removePhoto.mockResolvedValueOnce({ heldAt: null, companions: 0, batchId: 'b5' }).mockResolvedValueOnce({ heldAt: null, companions: 0, batchId: null });
+    api.undoChange.mockResolvedValue({ restored: 0, skipped: 1, problems: [] });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    const undo = await undoOn('Moved IMG_4198 (1).JPG to _Trovolve_Removed. IMG_4198.JPG stays where it is.');
+    await userEvent.click(undo);
+    expect(await toast('1 could not be put back.')).toBeInTheDocument();
+    expect(screen.queryByText(/^Put /)).not.toBeInTheDocument();
+
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    // The first message went when its Undo was pressed; this one has none.
+    const message = await toast('Moved IMG_4198 (1).JPG to _Trovolve_Removed. IMG_4198.JPG stays where it is.');
+    expect(within(message.parentElement!).queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('names a similar shot put back on its own', async () => {
+    currentMode = 'similar';
+    api.removePhoto.mockResolvedValue({ heldAt: null, companions: 0, batchId: 'b6' });
+    api.undoChange.mockResolvedValue({ restored: 1, skipped: 0, problems: [] });
+    open();
+    await userEvent.click(tab(/Similar/));
+    await userEvent.click(within(desk()).getByRole('button', { name: /^Delete this copy/ }));
+    await userEvent.click(within(question()).getByRole('button', { name: 'Delete 1 file' }));
+    await userEvent.click(await undoOn('Moved IMG_7002.JPG to _Trovolve_Removed. IMG_7001.JPG stays where it is.'));
+    expect(await toast('Put IMG_7002.JPG back where it was.')).toBeInTheDocument();
+  });
+});
+
+describe('about', () => {
+  const about = () => screen.queryByRole('dialog', { name: 'About Trovolve' });
+
+  it('opens About Trovolve from the menu, and closes on Escape', async () => {
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'About Trovolve' }));
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(about()).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(about()).not.toBeInTheDocument();
+  });
+
+  it('opens Support from the menu, and Support gives way to the guide or the errors', async () => {
+    open();
+    const support = () => screen.queryByRole('dialog', { name: 'Support' });
+    const toSupport = async () => {
+      await click('Menu');
+      await userEvent.click(screen.getByRole('menuitem', { name: /^Support/ }));
+      await userEvent.click(screen.getByRole('menuitem', { name: 'Support page' }));
+    };
+    await toSupport();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(support()).toBeInTheDocument();
+    await userEvent.click(within(support()!).getByRole('button', { name: 'Read the guide' }));
+    expect(support()).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Help' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await toSupport();
+    await userEvent.click(within(support()!).getByRole('button', { name: 'See errors' }));
+    expect(support()).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await toSupport();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(support()).not.toBeInTheDocument();
+  });
+});
+
+describe('plans for testing, in a development build', () => {
+  it('are a section of Settings on a computer, each chosen at once and said in a message, or what went wrong', async () => {
+    api.usePlan.mockReturnValue({ data: plan({ testPlan: 'asBought' }) });
+    api.chooseTestPlan.mockResolvedValueOnce(plan({ tier: 'pro', kind: 'yearly', testPlan: 'yearly' })).mockRejectedValueOnce(new Error('The service is not answering.')).mockRejectedValueOnce('No answer came.');
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    const choices = within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('radiogroup', { name: 'Test as' });
+    expect(within(choices).getAllByRole('radio').map(r => r.textContent)).toEqual(['As bought', 'Free', 'Trial', 'Pro monthly', 'Pro yearly', 'Pro, paid once']);
+    expect(within(choices).getByRole('radio', { name: 'As bought' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(choices).getByRole('radio', { name: 'Pro yearly' }));
+    expect(api.chooseTestPlan).toHaveBeenCalledWith('yearly');
+    expect(await toast('Testing as Pro yearly. Only a development build can do this.')).toBeInTheDocument();
+    await userEvent.click(within(choices).getByRole('radio', { name: 'As bought' }));
+    expect(await toast('The service is not answering.')).toBeInTheDocument();
+    await userEvent.click(within(choices).getByRole('radio', { name: 'Free' }));
+    expect(await toast('No answer came.')).toBeInTheDocument();
+  });
+
+  it('are not offered in a build for others', async () => {
+    api.usePlan.mockReturnValue({ data: plan() });
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    expect(within(screen.getByRole('dialog', { name: 'Settings' })).queryByRole('radiogroup', { name: 'Test as' })).not.toBeInTheDocument();
+  });
+});
+
+describe('the note asking for a backup', () => {
+  const NOTE = 'Keep a backup of photos you care about';
+  const note = () => screen.queryByRole('alertdialog', { name: NOTE });
+  /** The day the service says it was accepted, or null; the page is drawn again when it changes, as SWR would. */
+  let accepted: string | null;
+  const hearing = new Set<() => void>();
+  const acceptedOn = (day: string | null) => { accepted = day; act(() => hearing.forEach(l => l())); };
+  beforeEach(() => {
+    accepted = null;
+    api.useTerms.mockImplementation(() => ({ data: { accepted: React.useSyncExternalStore(l => { hearing.add(l); return () => hearing.delete(l); }, () => accepted) } }));
+    api.acceptTerms.mockImplementation(async () => { acceptedOn('2026-11-23'); return { accepted }; });
+  });
+
+  it('waits until the page knows it is on a computer, then reads the terms of use over it and goes only once accepted, for good', async () => {
+    const view = open();
+    // Not yet known to be a computer: a phone says what it is a moment after the page opens.
+    expect(note()).not.toBeInTheDocument();
+    api.useAbout.mockReturnValue({ data: { program: 'server', version: '1.4.0' } } as never);
+    view.refresh();
+    expect(note()).toHaveTextContent('Before you use Trovolve, keep a backup of the photos and videos you care about, and keep it up to date.');
+    // Neither Escape nor a press outside it puts it away.
+    fireEvent.keyDown(window, { key: 'Escape' });
+    fireEvent.mouseDown(note()!.parentElement!);
+    expect(note()).toBeInTheDocument();
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Read the terms of use' }));
+    const about = screen.getByRole('dialog', { name: 'About Trovolve' });
+    expect(within(about).getByRole('button', { name: 'Terms of use' })).toHaveAttribute('aria-current', 'page');
+    expect(note()).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Accept and continue' }));
+    expect(api.acceptTerms).toHaveBeenCalledOnce();
+    expect(note()).not.toBeInTheDocument();
+    view.unmount();
+    open();
+    expect(note()).not.toBeInTheDocument();
+  });
+
+  it('goes once a phone that accepted it pairs, and says so when the answer cannot be kept', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'server', version: '1.4.0' } } as never);
+    api.acceptTerms.mockRejectedValueOnce(new Error('The disk is full.'));
+    open();
+    expect(note()).toHaveTextContent('Accepted it on your phone already? Pair the phone with this computer, and Trovolve does not ask here.');
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Accept and continue' }));
+    expect(await screen.findByText('Trovolve could not keep your answer: The disk is full.')).toBeInTheDocument();
+    expect(note()).toBeInTheDocument();
+
+    await userEvent.click(within(note()!).getByRole('button', { name: 'Pair a phone' }));
+    expect(screen.getByRole('dialog', { name: 'Pair a phone' })).toBeInTheDocument();
+    expect(note()).not.toBeInTheDocument();
+    // The phone says it was accepted there as it pairs.
+    acceptedOn('2026-11-20');
+    await userEvent.click(screen.getByRole('button', { name: 'Close pairing' }));
+    expect(note()).not.toBeInTheDocument();
+  });
+
+  it('is not the computer\'s on a phone, which has its own', () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    open();
+    expect(note()).not.toBeInTheDocument();
+  });
+});
+
+describe('phones', () => {
+  it('opens on a computer from the area switch, its dot going once it has been opened, and pairs a phone from there', async () => {
+    open();
+    const switcher = () => screen.getByRole('group', { name: 'Area' });
+    expect(within(switcher()).getByRole('img', { name: 'New' })).toBeInTheDocument();
+    await userEvent.click(within(switcher()).getByRole('button', { name: /^Phones/ }));
+    expect(within(switcher()).queryByRole('img', { name: 'New' })).not.toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ phonesSeen: true });
+    await userEvent.click(screen.getByRole('button', { name: 'Say something' }));
+    expect(await screen.findByText("Backups from Alex's iPhone are paused.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Pair a phone' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close pairing' }));
+    expect(screen.queryByRole('dialog', { name: 'Pair a phone' })).not.toBeInTheDocument();
+    // Opened again, nothing more is remembered.
+    await userEvent.click(within(switcher()).getByRole('button', { name: 'Clean up' }));
+    await userEvent.click(within(switcher()).getByRole('button', { name: 'Phones' }));
+    expect(screen.getByRole('region', { name: 'Phones' })).toBeInTheDocument();
+  });
+
+  it('is not offered on a phone, which backs up, and whose layout has no menu', () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    open();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Area' })).not.toBeInTheDocument();
+  });
+});
+
+describe('help', () => {  const help = () => screen.queryByRole('dialog', { name: 'Help' });
+  const openHelp = async () => {
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Help' }));
+    return screen.getByRole('dialog', { name: 'Help' });
+  };
+  /** Opens the guide at a topic and presses the button that goes to what the topic describes. */
+  const go = async (topic: RegExp, label: string) => {
+    const guide = await openHelp();
+    await userEvent.click(within(within(guide).getByRole('navigation', { name: 'Topics' })).getByRole('button', { name: topic }));
+    await userEvent.click(within(guide).getByRole('button', { name: label }));
+    expect(help()).not.toBeInTheDocument();
+  };
+
+  it('opens the user guide from the menu, and closes on Escape', async () => {
+    open();
+    const guide = await openHelp();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(within(guide).getByRole('heading', { level: 2 })).toHaveTextContent('Getting started');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(help()).not.toBeInTheDocument();
+  });
+
+  it('goes from a topic to what the topic describes, putting the guide away', async () => {
+    open();
+    await go(/^Similar shots/, 'Show the similar shots');
+    currentMode = 'similar';
+    expect(tab(/Similar/)).toHaveAttribute('aria-selected', 'true');
+    // Already there: it stays there, with what was ticked.
+    await userEvent.click(within(gallery()).getByRole('checkbox', { name: 'Select the group of IMG_7001.JPG' }));
+    await go(/^Similar shots/, 'Show the similar shots');
+    expect(screen.getByRole('region', { name: 'Selected groups' })).toBeInTheDocument();
+    currentMode = 'duplicates';
+    await go(/^Reviewing duplicates/, 'Show the duplicates');
+    expect(tab(/Duplicates/)).toHaveAttribute('aria-selected', 'true');
+
+    await go(/^Scanning for duplicates/, 'Go to the scan screen');
+    expect(setupHeading()).toBeInTheDocument();
+    await go(/^Reviewing duplicates/, 'Show the duplicates');
+    expect(setupHeading()).not.toBeInTheDocument();
+
+    await go(/^Organize: suggested folders/, 'Open Organize');
+    expect(screen.getByRole('region', { name: 'Organize' })).toBeInTheDocument();
+    await go(/^Reviewing duplicates/, 'Show the duplicates');
+    expect(tab(/Duplicates/)).toBeInTheDocument();
+
+    await go(/^Settings, theme, support and About/, 'Open Settings');
+    expect(screen.getByRole('dialog', { name: 'Settings' })).toBeInTheDocument();
+  });
+});
+
+describe('clearing the results', () => {
+  const ask = async () => {
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Clear results' }));
+    return screen.getByRole('alertdialog', { name: 'Clear the scan results?' });
+  };
+
+  it.each([
+    [6941, 'Cleared the results: 6,941 files forgotten. Your photos were not touched.'],
+    [1, 'Cleared the results: 1 file forgotten. Your photos were not touched.'],
+  ])('forgets everything once confirmed, closing whatever was open', async (forgotten, message) => {
+    api.clearResults.mockResolvedValue({ forgotten });
+    open();
+    await userEvent.click(within(desk()).getByRole('button', { name: 'Compare IMG_4198.JPG' }));
+    fireEvent.keyDown(window, { key: 'a' });
+    const dialog = await ask();
+    expect(dialog).toHaveTextContent('Trovolve forgets every file it has scanned');
+    expect(dialog).toHaveTextContent('Your photos stay exactly where they are');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Clear results' }));
+    expect(api.clearResults).toHaveBeenCalledOnce();
+    expect(await toast(message)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('forgets nothing when the question is cancelled', async () => {
+    open();
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
+    expect(api.clearResults).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting permanently', () => {
+  const PHONE = 'C:\\Users\\jamie\\Phone Pictures', HELD = `${PHONE}\\_Trovolve_Removed`;
+  const found = (...folders: [path: string, files: number, bytes: number, recyclable?: boolean][]): RemovedFilesDto => ({
+    folders: folders.map(([path, files, bytes, recyclable = true]) => ({ path, files, bytes, recyclable })), files: folders.reduce((n, f) => n + f[1], 0), bytes: folders.reduce((n, f) => n + f[2], 0),
+  });
+  // What went went to the Recycle Bin unless the test says otherwise.
+  const erased = (changes: Partial<EraseRemovedDto> = {}): EraseRemovedDto => ({ erased: 0, bytes: 0, skipped: 0, problems: [], recycled: changes.erased ?? 0, ...changes });
+  const warning = () => screen.getByRole('alertdialog', { name: 'Move removed files to the Recycle Bin?' });
+  const sure = () => screen.getByRole('alertdialog', { name: 'Are you sure?' });
+  const ask = async () => {
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' }));
+    return warning();
+  };
+  /** Says yes to the warning, once what would be erased has been found. */
+  const confirm = async () => {
+    const go = within(await ask()).getByRole('button', { name: 'Move to Recycle Bin' });
+    await waitFor(() => expect(go).toBeEnabled());
+    await userEvent.click(go);
+  };
+  const askOnce = () => localStorage.setItem('trovolve-settings', JSON.stringify({ eraseAskTwice: false }));
+
+  it('looks for what was removed in the folders this browser knows of, warns, makes sure, and only then erases', async () => {
+    saveLastScan({ root: PHONE, second: 'D:\\Backup', recursive: true });
+    saveOrganizeRoot(PHONE);
+    const looking = deferred<RemovedFilesDto>();
+    api.fetchRemoved.mockReturnValue(looking.promise);
+    api.eraseRemoved.mockResolvedValue(erased({ erased: 1234, bytes: 6_012_954_214 }));
+    open();
+
+    await ask();
+    // A folder that is both scanned and organized is named once.
+    expect(api.fetchRemoved).toHaveBeenCalledExactlyOnceWith([PHONE, 'D:\\Backup']);
+    expect(within(warning()).getByRole('status')).toHaveTextContent('Looking for removed files…');
+    expect(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' })).toBeDisabled();
+    await act(async () => looking.resolve(found([HELD, 1234, 6_012_954_214])));
+    expect(warning()).toHaveTextContent('1,234 files taking 5.60 GB go to the Recycle Bin: everything Clean up and Organize have removed that is still waiting.');
+    expect(within(warning()).getAllByRole('listitem').map(i => i.textContent)).toEqual([`${HELD}1,234 files`]);
+    expect(warning()).toHaveTextContent('You can get them back from the Recycle Bin until it is emptied. Undo in Trovolve can no longer bring them back.');
+
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' }));
+    expect(api.eraseRemoved).not.toHaveBeenCalled();
+    expect(sure()).toHaveClass('w-[400px]');
+    expect(sure()).toHaveTextContent('1,234 files taking 5.60 GB go to the Recycle Bin');
+    expect(within(sure()).getByRole('switch', { name: 'Do not ask me this second time again' })).not.toBeChecked();
+    expect(screen.getAllByRole('alertdialog')).toHaveLength(1);
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Move to Recycle Bin' }));
+    expect(api.eraseRemoved).toHaveBeenCalledExactlyOnceWith([HELD]);
+    expect(await toast('Moved 1,234 files (5.60 GB) to the Recycle Bin.')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // Nothing was said about not asking again, so the next time it is asked twice again; and no at the second question erases nothing.
+    await confirm();
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(api.eraseRemoved).toHaveBeenCalledOnce();
+  });
+
+  it('stops asking a second time when told so at the second question, until that is turned back on in the settings', async () => {
+    api.fetchRemoved.mockResolvedValue(found([HELD, 2, 2048]));
+    api.eraseRemoved.mockResolvedValue(erased({ erased: 2, bytes: 2048 }));
+    open();
+    await confirm();
+    await userEvent.click(within(sure()).getByRole('switch', { name: 'Do not ask me this second time again' }));
+    expect(sure()).toHaveTextContent('It can be turned back on under Settings in the menu.');
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Move to Recycle Bin' }));
+    expect(await toast('Moved 2 files (2 KB) to the Recycle Bin.')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toEqual({ eraseAskTwice: false, distanceUnit: 'miles', phonesSeen: false, removeLocationWhenSharing: true });
+
+    // Now the warning is all there is.
+    await confirm();
+    await waitFor(() => expect(api.eraseRemoved).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Settings' });
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    expect(within(settings).getByRole('switch', { name: /^Ask a second time/ })).not.toBeChecked();
+    await userEvent.click(within(settings).getByRole('switch', { name: /^Ask a second time/ }));
+    expect(within(settings).getByRole('switch', { name: /^Ask a second time/ })).toBeChecked();
+    await userEvent.click(within(settings).getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument();
+
+    await confirm();
+    expect(sure()).toBeInTheDocument();
+    expect(within(sure()).getByRole('switch')).not.toBeChecked();
+    expect(api.eraseRemoved).toHaveBeenCalledTimes(2);
+  });
+
+  it('names a folder on a drive with no Recycle Bin, whose files are erased for good, in both questions', async () => {
+    api.fetchRemoved.mockResolvedValue(found([HELD, 3, 3072], ['E:\\DCIM\\_Trovolve_Removed', 2, 2048, false]));
+    open();
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('3 files go to the Recycle Bin, and 2 files are erased for good.'));
+    expect(warning()).toHaveTextContent('This folder is on a drive with no Recycle Bin: E:\\DCIM\\_Trovolve_Removed. Its files are erased for good, and cannot be got back.');
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' }));
+    expect(sure()).toHaveTextContent('3 files go to the Recycle Bin, and 2 files are erased for good.');
+    await userEvent.click(within(sure()).getByRole('button', { name: 'Cancel' }));
+    // Every folder on such drives: all of it is erased.
+    api.fetchRemoved.mockResolvedValue(found(['E:\\DCIM\\_Trovolve_Removed', 2, 2048, false], ['F:\\_Trovolve_Removed', 1, 1024, false]));
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('3 files taking 3 KB are erased for good.'));
+    expect(warning()).toHaveTextContent('These folders are on a drive with no Recycle Bin: E:\\DCIM\\_Trovolve_Removed, F:\\_Trovolve_Removed.');
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
+    // One of each, said of one.
+    api.fetchRemoved.mockResolvedValue(found([HELD, 1, 1024], ['F:\\_Trovolve_Removed', 1, 1024, false]));
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('1 file goes to the Recycle Bin, and 1 file is erased for good.'));
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
+    api.fetchRemoved.mockResolvedValue(found([HELD, 1, 1024]));
+    await ask();
+    await waitFor(() => expect(warning()).toHaveTextContent('1 file taking 1 KB goes to the Recycle Bin'));
+  });
+
+  it('names the first few of the folders when there are many', async () => {
+    api.fetchRemoved.mockResolvedValue(found(...[1, 2, 3, 4, 5, 6].map((n): [string, number, number] => [`D:\\Trip ${n}\\_Trovolve_Removed`, n, 1024 * n])));
+    open();
+    await ask();
+    expect(await within(warning()).findAllByRole('listitem')).toHaveLength(4);
+    expect(warning()).toHaveTextContent('21 files taking 21 KB go to the Recycle Bin: everything Clean up and Organize have removed that is still waiting.');
+    expect(within(warning()).getAllByRole('listitem')[0]).toHaveTextContent('D:\\Trip 1\\_Trovolve_Removed1 file');
+    expect(warning()).toHaveTextContent('and 2 more');
+  });
+
+  it('has nothing to confirm when no removed files are found', async () => {
+    api.fetchRemoved.mockResolvedValue(found());
+    open();
+    await ask();
+    expect(await within(warning()).findByText(/^There is nothing to move/)).toHaveTextContent('There is nothing to move: no _Trovolve_Removed folder holds any files.');
+    expect(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' })).toBeDisabled();
+    // This browser knew of no folder, so the service had only what is on record to go by.
+    expect(api.fetchRemoved).toHaveBeenCalledExactlyOnceWith([]);
+    await userEvent.click(within(warning()).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [erased({ erased: 3, bytes: 3072, skipped: 2, problems: ['IMG_1.JPG: The file is in use.'] }), ['Moved 3 files (3 KB) to the Recycle Bin.', '2 files could not be moved. IMG_1.JPG: The file is in use.']],
+    [erased({ erased: 3, recycled: 2, bytes: 3072 }), ['Moved 2 files to the Recycle Bin.', 'Erased 1 file for good, as their drive has no Recycle Bin.']],
+    [erased({ erased: 1, recycled: 0, bytes: 1024 }), ['Erased 1 file for good, as their drive has no Recycle Bin.']],
+    [erased({ skipped: 1 }), ['1 file could not be moved.']],
+    [erased(), ['There was nothing left to move.']],
+  ])('says what went to the Recycle Bin, what was erased for good, and what could not go: %#', async (result, messages) => {
+    askOnce();
+    api.fetchRemoved.mockResolvedValue(found([HELD, 5, 5120]));
+    api.eraseRemoved.mockResolvedValue(result);
+    open();
+    await confirm();
+    for (const message of messages) expect(await toast(message)).toBeInTheDocument();
+    expect([...screen.getByRole('log', { name: 'Messages' }).children].filter(e => /Moved|Erased|could not|nothing left/.test(e.textContent!))).toHaveLength(messages.length);
+  });
+
+  it('says why when the removed files cannot be looked for, or cannot be erased', async () => {
+    askOnce();
+    api.fetchRemoved.mockRejectedValueOnce(new Error('The service is busy'));
+    open();
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move to Recycle Bin…' }));
+    expect(await toast('The service is busy')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // The answer is of no more use once the question was put away: it is said, and nothing else on screen is touched.
+    const looking = deferred<RemovedFilesDto>();
+    api.fetchRemoved.mockReturnValueOnce(looking.promise);
+    await userEvent.click(within(await ask()).getByRole('button', { name: 'Cancel' }));
+    await act(async () => looking.reject(new Error('The service has stopped')));
+    expect(await toast('The service has stopped')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    // The warning stays up when erasing failed, so that it can be tried again.
+    api.fetchRemoved.mockResolvedValue(found([HELD, 2, 2048]));
+    api.eraseRemoved.mockRejectedValue(new Error('Not a folder of removed files: C:\\photos'));
+    await confirm();
+    expect(await toast('Not a folder of removed files: C:\\photos')).toBeInTheDocument();
+    expect(within(warning()).getByRole('button', { name: 'Move to Recycle Bin' })).toBeEnabled();
+  });
+});
+
+describe('the two areas', () => {
+  const organize = () => screen.queryByRole('region', { name: 'Organize', hidden: true });
+
+  it('are switched between in the header; Organize starts with the folder last scanned and is kept once opened', async () => {
+    saveLastScan({ root: 'C:\Users\jamie\Phone Pictures', second: '', recursive: true });
+    open();
+    expect(area('Clean up')).toHaveAttribute('aria-pressed', 'true');
+    expect(organize()).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Scanned folders')).toBeInTheDocument();
+
+    await userEvent.click(area('Organize'));
+    expect(organize()).toHaveTextContent('Organizing C:\Users\jamie\Phone Pictures');
+    expect(organize()!.parentElement).toHaveClass('flex', 'flex-1');
+    // Nothing of Clean up is on the page meanwhile: not its results, and not the chip that names what was scanned.
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Scanned folders')).not.toBeInTheDocument();
+
+    await userEvent.click(area('Clean up'));
+    expect(tab(/Duplicates/)).toBeInTheDocument();
+    expect(organize()).toBeInTheDocument();
+    expect(organize()!.parentElement).toHaveClass('hidden');
+  });
+
+  it('share the messages: what Organize says shows as a toast, with whatever it offers to do', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    expect(organize()).toHaveTextContent('Organizing no folder');
+    await userEvent.click(screen.getByRole('button', { name: 'Move some' }));
+    const moved = await toast('Moved 13 files to Butte');
+    await userEvent.click(within(moved.parentElement!).getByRole('button', { name: 'Undo' }));
+    expect(await toast('Moved 13 files back')).toBeInTheDocument();
+    expect(screen.queryByText('Moved 13 files to Butte')).not.toBeInTheDocument();
+  });
+
+  it('say distances in miles until kilometers are chosen in Settings, which is remembered', async () => {
+    open();
+    await userEvent.click(area('Organize'));
+    expect(organize()).toHaveTextContent('Distances in miles');
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Settings' }));
+    await userEvent.click(within(screen.getByRole('group', { name: 'Distances' })).getByRole('button', { name: 'Kilometers' }));
+    expect(organize()).toHaveTextContent('Distances in km');
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ distanceUnit: 'km' });
+  });
+
+  it('offer changing the folders and clearing the results only while Clean up shows a scan’s results', async () => {
+    const offered = () => ['Change folders or rescan', 'Clear results'].filter(name => screen.queryByRole('menuitem', { name }));
+    open();
+    await click('Menu');
+    expect(offered()).toEqual(['Change folders or rescan', 'Clear results']);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await userEvent.click(area('Organize'));
+    await click('Menu');
+    expect(offered()).toEqual([]);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await userEvent.click(area('Clean up'));
+    await click('Menu');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Change folders or rescan' }));
+    expect(setupHeading()).toBeInTheDocument();
+    // Not on the scan screen.
+    await click('Menu');
+    expect(offered()).toEqual([]);
+  });
+
+  it('offer clearing Organize\u2019s results once it shows a folder\u2019s files, which starts Organize afresh, its filters too, with no folder', async () => {
+    const offered = () => ['Change folders or rescan', 'Clear results'].filter(name => screen.queryByRole('menuitem', { name }));
+    open();
+    await userEvent.click(area('Organize'));
+    await userEvent.click(screen.getByRole('button', { name: 'Show Butte' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Videos only' }));
+    await click('Menu');
+    expect(offered()).toEqual(['Clear results']);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Clear results' }));
+    await toast("Cleared Organize's results for Butte. Your photos were not touched.");
+    expect(localStorage.getItem('trovolve-organize-root')).toBe('');
+    expect(screen.getByRole('button', { name: 'Videos only' })).toHaveAttribute('aria-pressed', 'false');
+    await click('Menu');
+    expect(offered()).toEqual([]);
+  });
+});
+
+describe('on a phone or tablet', () => {
+  const tabs = () => screen.getByRole('navigation', { name: 'Tabs' });
+  const settings = async () => {
+    await userEvent.click(screen.getAllByRole('button', { name: 'Settings' })[0]);
+    return screen.getByRole('dialog', { name: 'Settings' });
+  };
+  afterEach(() => { document.documentElement.classList.remove('light'); delete document.documentElement.dataset.skin; });
+  // Past the first run: the phone lets Trovolve see everything, and its library is the one folder it has.
+  beforeEach(() => {
+    localStorage.setItem('trovolve-first-run', 'done');
+    api.usePhotoAccess.mockReturnValue({ data: { access: 'everything' } } as never);
+    api.libraryRoot.mockResolvedValue('/Photo Library');
+    api.stopScan.mockResolvedValue(undefined);
+  });
+  const messages = () => screen.getByRole('log', { name: 'Messages' });
+  const scanAgain = async () => userEvent.click(within(await settings()).getByRole('button', { name: 'Scan again' }));
+
+  it('is laid out as the phone\'s own apps are: tabs, a header for each, and no bar or menu of the computer\'s', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    open();
+    expect(screen.queryByRole('button', { name: 'Menu' })).not.toBeInTheDocument();
+    expect(within(tabs()).getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+    expect(screen.getByText('Daily swipes, duplicates and similar shots')).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Organize' }));
+    expect(screen.getByText('Sort Photo Library into albums by place and date')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Organize' })).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Library' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Library' })).toBeInTheDocument();
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
+    await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Similar shots/ }));
+    expect(screen.getByText('Shots that look alike')).toBeInTheDocument();
+    // Back, as the phone's own, goes back to Clean up's first screen; tapping the tab already showing keeps it there.
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument());
+    await userEvent.click(within(tabs()).getByRole('button', { name: 'Clean up' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Clean up' })).toBeInTheDocument();
+  });
+
+  it('wears its own platform\'s skin, in Auto until another theme is chosen in Settings; a computer wears none', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'android' } } as never);
+    const page = open();
+    expect(document.documentElement.dataset.skin).toBe('and-native-dark');
+    const sheet = await settings();
+    expect(within(sheet).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(sheet).getByRole('radio', { name: 'Light' }));
+    expect(document.documentElement.dataset.skin).toBe('and-native-light');
+
+    api.useAbout.mockReturnValue({ data: { program: 'server' } } as never);
+    page.refresh();
+    expect(document.documentElement).not.toHaveAttribute('data-skin');
+  });
+
+  it('says distances in the unit chosen in Settings, the same setting a computer has', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    open();
+    const units = within(await settings()).getByRole('radiogroup', { name: 'Distances' });
+    expect(within(units).getByRole('radio', { name: 'Miles' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(within(units).getByRole('radio', { name: 'Kilometers' }));
+    expect(within(units).getByRole('radio', { name: 'Kilometers' })).toHaveAttribute('aria-checked', 'true');
+    expect(JSON.parse(localStorage.getItem('trovolve-settings')!)).toMatchObject({ distanceUnit: 'km' });
+  });
+
+  it('reviews a group on a screen of its own, which Back, on the phone or on the screen, takes back to the list', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    open();
+    await userEvent.click(within(screen.getByRole('region', { name: 'Find' })).getByRole('button', { name: /^Duplicates/ }));
+    const row = () => within(screen.getByRole('list', { name: 'Groups' })).getAllByRole('button')[0];
+    await userEvent.click(row());
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Duplicates' })).not.toBeInTheDocument();
+    act(() => history.back());
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument());
+
+    await userEvent.click(row());
+    expect(screen.queryByRole('navigation', { name: 'Tabs' })).not.toBeInTheDocument();
+    await click('Back');
+    expect(screen.getByRole('heading', { level: 1, name: 'Duplicates' })).toBeInTheDocument();
+  });
+
+  it('has plans for testing in Settings in a development build, said in a message once chosen, or what went wrong', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    api.usePlan.mockReturnValue({ data: plan({ testPlan: 'free' }) });
+    api.chooseTestPlan.mockResolvedValueOnce(plan({ tier: 'trial', testPlan: 'trial' })).mockRejectedValueOnce(new Error('The service is not answering.'));
+    open();
+    const group = within(await settings()).getByRole('region', { name: 'For testing' });
+    expect(within(group).getByRole('button', { name: 'Free, chosen' })).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Trial' }));
+    expect(api.chooseTestPlan).toHaveBeenCalledWith('trial');
+    expect(await toast('Testing as Trial. Only a development build can do this.')).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Pro monthly' }));
+    expect(await toast('The service is not answering.')).toBeInTheDocument();
+  });
+
+  it('leads from Settings to the errors, Support, help, About and the privacy policy, and shows no Trovolve Removed while nothing waits', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone', version: '1.4.0' } } as never);
+    // Nothing left to clean up: an iPad's sidebar has no count to show beside Clean up.
+    groupsFor = mode => ({ data: groupsPage([], {}, mode) });
+    api.useRemoved.mockReturnValue({ data: { files: 0, bytes: 0, folders: [] } });
+    api.useAboutText.mockReturnValue({ data: 'About text' } as never);
+    open();
+    expect(within(await settings()).queryByText('Trovolve Removed')).not.toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Settings' })).getByRole('button', { name: 'Privacy policy' }));
+    expect(within(screen.getByRole('navigation', { name: 'About' })).getByRole('button', { name: 'Privacy policy' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Errors None' }));
+    expect(screen.getByRole('dialog', { name: 'Errors' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Support' }));
+    expect(screen.getByRole('dialog', { name: 'Support' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'Help' }));
+    expect(screen.getByRole('dialog', { name: 'Help' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(within(await settings()).getByRole('button', { name: 'About Trovolve 1.4.0' }));
+    expect(screen.getByRole('dialog', { name: /About/ })).toBeInTheDocument();
+  });
+
+  it.each([
+    [{ duplicates: 120, similar: 178, copies: 264 }, 'Found 264 duplicates and 178 groups of similar shots.'],
+    [{ duplicates: 1, similar: 1, copies: 1 }, 'Found 1 duplicate and 1 group of similar shots.'],
+    [{ duplicates: 0, similar: 2, copies: 0 }, 'Found no duplicates and 2 groups of similar shots.'],
+    [{ duplicates: 3, similar: 0, copies: 4 }, 'Found 4 duplicates and no similar shots.'],
+  ])('scans its whole library again from Settings, then shows the library, says what was found, and Review leads to it', async (totals, said) => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    api.fetchGroupTotals.mockResolvedValue(totals);
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await scanAgain();
+    expect(api.startScan).toHaveBeenCalledWith({ primaryLocation: '/Photo Library', recursive: true });
+    expect(await within(messages()).findByText(said)).toBeInTheDocument();
+    expect(within(tabs()).getByRole('button', { name: 'Library' })).toHaveAttribute('aria-current', 'page');
+    await userEvent.click(within(messages()).getByRole('button', { name: 'Review' }));
+    expect(within(tabs()).getByRole('button', { name: 'Clean up' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('says plainly when a scan found nothing, with nothing to review', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'android' } } as never);
+    api.fetchGroupTotals.mockResolvedValue({ duplicates: 0, similar: 0, copies: 0 });
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await scanAgain();
+    expect(await within(messages()).findByText('Found no duplicates or similar shots.')).toBeInTheDocument();
+    expect(within(messages()).queryByRole('button', { name: 'Review' })).not.toBeInTheDocument();
+  });
+
+  it('says nothing of a scan that ends while first launch shows what it found on a screen of its own', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    api.fetchGroupTotals.mockResolvedValue({ duplicates: 1, similar: 0, copies: 1 });
+    localStorage.setItem('trovolve-first-run', 'pair');
+    progressFor = id => (id ? { data: snapshot({ completedUtc: '2026-10-07T12:01:00Z' }) } : {});
+    open();
+    await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    expect(await screen.findByRole('region', { name: 'Scan complete' })).toBeInTheDocument();
+    await vi.waitFor(() => expect(api.fetchGroupTotals).toHaveBeenCalled());
+    expect(within(messages()).queryByText('Found 1 duplicate and no similar shots.')).not.toBeInTheDocument();
+  });
+
+  it('covers the tabs while it scans; Stop says what was kept, and the scan is not said to have finished', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    let done = false;
+    progressFor = id => (id ? { data: snapshot(done ? { completedUtc: '2026-10-07T12:01:00Z' } : {}) } : {});
+    const page = open();
+    await scanAgain();
+    const scanning = screen.getByRole('region', { name: 'Scanning' });
+    expect(scanning).toHaveTextContent('Scanning your library34of 100 photos and videos');
+    await userEvent.click(within(scanning).getByRole('button', { name: 'Stop' }));
+    expect(api.stopScan).toHaveBeenCalledWith('scan-7');
+    expect(within(messages()).getByText('Scan stopped. What was read so far is kept, and the next scan carries on from there.')).toBeInTheDocument();
+    done = true;
+    page.refresh();
+    expect(screen.queryByRole('region', { name: 'Scanning' })).not.toBeInTheDocument();
+    expect(api.fetchGroupTotals).not.toHaveBeenCalled();
+  });
+
+  it('says why a scan could not be stopped', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'iphone' } } as never);
+    api.stopScan.mockRejectedValue(new Error('That scan is not running.'));
+    progressFor = id => (id ? { data: snapshot() } : {});
+    open();
+    await scanAgain();
+    await click('Stop');
+    expect(within(messages()).getByText('That scan is not running.')).toBeInTheDocument();
+  });
+
+  it('says its messages in the phone\'s own way, and the service not answering above every screen', async () => {
+    api.useAbout.mockReturnValue({ data: { program: 'android' } } as never);
+    statusNow = { error: new Error('down') };
+    open();
+    expect(screen.getByRole('alert')).toHaveTextContent('The Trovolve service is not answering');
+    api.startScan.mockRejectedValue(new Error('There is no room.'));
+    await scanAgain();
+    expect(within(messages()).getByText('The scan could not start: There is no room.')).toBeInTheDocument();
+  });
+});

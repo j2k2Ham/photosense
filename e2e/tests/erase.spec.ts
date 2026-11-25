@@ -10,7 +10,7 @@ async function oneRemoved(photos: Photos, service: Service, page: Page) {
   await page.getByRole('button', { name: 'Delete all duplicates' }).click();
   await question(page).getByRole('button', { name: 'Delete 1 file' }).click();
   await expect(message(page, /^Moved 1 duplicate/)).toBeVisible();
-  expect(photos.files('_PhotoSense_Removed')).toHaveLength(1);
+  expect(photos.files('_Trovolve_Removed')).toHaveLength(1);
 }
 
 test.describe('Move to Recycle Bin', () => {
@@ -18,7 +18,7 @@ test.describe('Move to Recycle Bin', () => {
     await oneRemoved(photos, service, page);
     await menu(page, 'Move to Recycle Bin…');
     const warning = page.getByRole('alertdialog', { name: 'Move removed files to the Recycle Bin?' });
-    await expect(warning).toContainText(photos.path('_PhotoSense_Removed'));
+    await expect(warning).toContainText(photos.path('_Trovolve_Removed'));
     await expect(warning).toContainText('1 file');
     // The program is run here with no Recycle Bin, so the question says the file is erased for good, naming the folder.
     await expect(warning).toContainText(/1 file taking \d+ KB is erased for good\./);
@@ -27,10 +27,10 @@ test.describe('Move to Recycle Bin', () => {
 
     const sure = page.getByRole('alertdialog', { name: 'Are you sure?' });
     await expect(sure).toBeVisible();
-    expect(photos.files('_PhotoSense_Removed')).toHaveLength(1);
+    expect(photos.files('_Trovolve_Removed')).toHaveLength(1);
     await sure.getByRole('button', { name: 'Move to Recycle Bin' }).click();
     await expect(message(page, 'Erased 1 file for good, as their drive has no Recycle Bin.')).toBeVisible();
-    expect(photos.files('_PhotoSense_Removed')).toEqual([]);
+    expect(photos.files('_Trovolve_Removed')).toEqual([]);
     expect(photos.files()).toHaveLength(1);
   });
 
@@ -79,7 +79,7 @@ test.describe('Move to Recycle Bin', () => {
       await sure.getByRole('button', { name: 'Cancel' }).click();
       await expect(sure).toBeHidden();
     }
-    expect(photos.files('_PhotoSense_Removed')).toHaveLength(1);
+    expect(photos.files('_Trovolve_Removed')).toHaveLength(1);
   });
 
   test('with nothing removed, nothing can be deleted', async ({ page, photos, service }) => {

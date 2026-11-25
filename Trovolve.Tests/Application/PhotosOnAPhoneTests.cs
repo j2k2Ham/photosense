@@ -1,0 +1,183 @@
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Trovolve.Domain.Configuration;
+using Microsoft.Extensions.Options;
+using Trovolve.Api;
+using Trovolve.Api.About;
+using Trovolve.Api.Hosting;
+using Trovolve.Api.Http;
+using Trovolve.Desktop.Imaging;
+using Trovolve.Infrastructure.Library;
+using Trovolve.Infrastructure.Transfer;
+
+namespace Trovolve.Tests.Application;
+
+/// <summary>
+/// Trovolve as the phone app runs it, all but the phone's own photo framework and picture decoder: the page's
+/// requests answered inside the app, on a photo library that is on no disk.
+/// </summary>
+public sealed class PhotosOnAPhoneTests : IDisposable
+{
+    private readonly DirectoryInfo _data = Directory.CreateTempSubdirectory("trovolve-phone-");
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "trovolve-phone-library-" + Guid.NewGuid().ToString("N"), "Photo Library");
+    private readonly FakePhotoLibrary _library = new();
+    private readonly FakePhotoAccess _access = new() { Current = Trovolve.Domain.Services.PhotoAccess.Selected };
+    private readonly ServiceProvider _services;
+    /// <summary>What the phone tells the network.</summary>
+    internal FakeAdvertiser Advertiser { get; } = new();
+    /// <summary>The phone's store.</summary>
+    internal FakeAppStore App { get; } = new();
+    private readonly ApiRouter _router;
+
+    public PhotosOnAPhoneTests()
+    {
+        // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
+        _services = new ServiceCollection()
+            .AddTrovolvePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, App, new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddTrovolveApi()
+            .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for Trovolve for iPhone and iPad"))
+            .AddStandInStores()
+            .BuildServiceProvider();
+        _router = _services.GetRequiredService<TrovolveRoutes>().Router;
+    }
+
+    [Test]
+    public async Task About_Says_It_Is_The_Phone_App_And_Gives_Its_Documents(CancellationToken ct)
+    {
+        var about = await JsonAsync("GET", "about", ct);
+        await Assert.That(about.GetProperty("program").GetString()).IsEqualTo("iphone");
+        await Assert.That(about.GetProperty("version").GetString()).IsEqualTo("1.2.0.57");
+        await Assert.That((await AskAsync("GET", "about/privacy", ct)).Text).StartsWith("# Privacy Policy");
+        await Assert.That((await AskAsync("GET", "about/notices", ct)).Text).StartsWith("Third-party notices for Trovolve for iPhone and iPad");
+        await Assert.That((await JsonAsync("GET", "library/access", ct)).GetProperty("access").GetString()).IsEqualTo("selected");
+        await Assert.That((await JsonAsync("POST", "library/choose-more", ct)).GetProperty("access").GetString()).IsEqualTo("everything");
+        await Assert.That(_access.PickersShown).IsEqualTo(1);
+        var icon = await _router.AnswerAsync("GET", new Uri("app://trovolve/api/about/icon"), [], null, ct);
+        await Assert.That(icon.Headers["Content-Type"]).IsEqualTo("image/png");
+    }
+
+    [Test]
+    public async Task Organize_Puts_Pictures_In_An_Album_Inside_A_Folder_And_Takes_Them_Out_Again_On_Undo(CancellationToken ct)
+    {
+        _library.Add("AAAAAAAA-1", (LibraryFileKind.Photo, "IMG_0001.JPG", MediaSamples.Picture("BUTTE-1")), (LibraryFileKind.PairedVideo, "IMG_0001.MOV", MediaSamples.Movie("BUTTE-1")));
+        _library.Add("BBBBBBBB-2", (LibraryFileKind.Photo, "IMG_0002.JPG", MediaSamples.Picture("BUTTE-2")));
+        var listed = await JsonAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}", ct);
+        var picture = listed.GetProperty("files").EnumerateArray().Single(f => f.GetProperty("name").GetString() == "IMG_0001.JPG").GetProperty("id").GetString();
+
+        var moved = await JsonAsync("POST", "organize/apply", ct, new
+        {
+            basePath = _root, folderName = "Butte\\2022", direct = false, mode = "move", companions = true, label = "Butte\\2022",
+            files = new[] { new { id = picture, name = "IMG_0001.JPG" } },
+        });
+        await Assert.That((moved.GetProperty("done").GetInt32(), moved.GetProperty("companions").GetInt32())).IsEqualTo((1, 1));
+        await Assert.That(_library.InAlbums()["Butte/2022"]).IsEquivalentTo(["AAAAAAAA-1"], CollectionOrdering.Matching);
+        var photos = _services.GetRequiredService<PhotoLibraryFileSystem>();
+        await Assert.That(photos.FilesIn(Path.Combine(_root, "Butte", "2022")).Count).IsEqualTo(2);
+
+        // A copy is not something a phone's library has: it is refused, and says why.
+        var copied = await JsonAsync("POST", "organize/apply", ct, new
+        {
+            basePath = _root, folderName = "Elsewhere", direct = false, mode = "copy", companions = false, label = "Elsewhere",
+            files = new[] { new { id = listed.GetProperty("files").EnumerateArray().Single(f => f.GetProperty("name").GetString() == "IMG_0002.JPG").GetProperty("id").GetString(), name = "IMG_0002.JPG" } },
+        });
+        await Assert.That(copied.GetRawText()).Contains("it can be moved there, not copied.");
+
+        await JsonAsync("POST", $"organize/undo/{moved.GetProperty("batchId").GetString()}", ct);
+        // The album stays, empty: the phone would ask before an app took it away.
+        await Assert.That((photos.FilesIn(_root).Count, _library.InAlbums()["Butte/2022"].Length)).IsEqualTo((3, 0));
+    }
+
+    [Test]
+    public async Task Delete_Permanently_Sends_The_Removed_Pictures_To_Recently_Deleted_After_One_Question_And_Says_So_When_Refused(CancellationToken ct)
+    {
+        var picture = MediaSamples.Picture("TWICE-1");
+        _library.Add("AAAAAAAA-1", (LibraryFileKind.Photo, "IMG_0001.JPG", picture));
+        _library.Add("BBBBBBBB-2", (LibraryFileKind.Photo, "IMG_0001.JPG", picture));
+        _library.Album([PhotoLibraryFileSystem.RemovedAlbum], "BBBBBBBB-2");
+        var removedFolder = Path.Combine(_root, "_Trovolve_Removed");
+
+        var waiting = await JsonAsync("GET", $"removed?root={Uri.EscapeDataString(_root)}", ct);
+        await Assert.That((waiting.GetProperty("files").GetInt32(), waiting.GetProperty("folders")[0].GetProperty("path").GetString())).IsEqualTo((1, removedFolder));
+
+        _library.Refuse = "You chose not to delete these photos.";
+        var refused = await JsonAsync("POST", "removed/erase", ct, new { folders = new[] { removedFolder } });
+        await Assert.That((refused.GetProperty("erased").GetInt32(), refused.GetProperty("skipped").GetInt32(), refused.GetProperty("problems")[0].GetString())).IsEqualTo((0, 1, "You chose not to delete these photos."));
+
+        var erased = await JsonAsync("POST", "removed/erase", ct, new { folders = new[] { removedFolder } });
+        await Assert.That((erased.GetProperty("erased").GetInt32(), _library.RecentlyDeleted.Single(), _library.InAlbums()[PhotoLibraryFileSystem.RemovedAlbum].Length)).IsEqualTo((1, "BBBBBBBB-2", 0));
+    }
+
+    public void Dispose()
+    {
+        _services.Dispose();
+        TestFiles.Remove(_data);
+    }
+
+    private string In(string folder) => Path.Combine(_data.FullName, folder);
+
+    private async Task<(int Status, string Text)> AskAsync(string method, string pathAndQuery, CancellationToken ct, object? body = null)
+    {
+        var answer = await _router.AnswerAsync(method, new Uri("app://trovolve/api/" + pathAndQuery), [new("x-trovolve-client", "phone")],
+            body is null ? null : JsonSerializer.SerializeToUtf8Bytes(body), ct);
+        return (answer.Status, Encoding.UTF8.GetString(answer.Body));
+    }
+
+    private async Task<JsonElement> JsonAsync(string method, string pathAndQuery, CancellationToken ct, object? body = null)
+    {
+        var (status, text) = await AskAsync(method, pathAndQuery, ct, body);
+        await Assert.That(status / 100).IsEqualTo(2).Because(text);
+        return JsonDocument.Parse(text).RootElement;
+    }
+
+    [Test]
+    public async Task The_Page_Scans_The_Phones_Library_Removes_A_Copy_Into_An_Album_Of_Its_Own_And_Takes_That_Back(CancellationToken ct)
+    {
+        // A Live Photo, and a copy of it saved again under the same name.
+        var picture = MediaSamples.Picture("LIVE-1");
+        var video = MediaSamples.Movie("LIVE-1");
+        _library.Add("AAAAAAAA-1", (LibraryFileKind.Photo, "IMG_0001.JPG", picture), (LibraryFileKind.PairedVideo, "IMG_0001.MOV", video));
+        _library.Add("BBBBBBBB-2", (LibraryFileKind.Photo, "IMG_0001.JPG", picture), (LibraryFileKind.PairedVideo, "IMG_0001.MOV", video));
+
+        // The library is the one folder offered.
+        var places = await JsonAsync("GET", "folders", ct);
+        await Assert.That(places.GetProperty("folders").EnumerateArray().Single().GetProperty("path").GetString()).IsEqualTo(_root);
+
+        await JsonAsync("POST", "scan/start", ct, new { primaryLocation = _root, recursive = true });
+        for (var waited = 0; (await JsonAsync("GET", "scan/status", ct)).GetProperty("completed").ValueKind == JsonValueKind.Null; waited++)
+        {
+            if (waited == 600) throw new TimeoutException("The scan did not finish.");
+            await Task.Delay(50, ct);
+        }
+        var status = await JsonAsync("GET", "scan/status", ct);
+        await Assert.That(status.GetProperty("totalPhotos").GetInt32()).IsEqualTo(4);
+
+        var groups = await JsonAsync("GET", "scan/groups?mode=duplicates&page=1&pageSize=50", ct);
+        await Assert.That(groups.GetRawText()).Contains("IMG_0001 (AAAAAAAA)").And.Contains("IMG_0001 (BBBBBBBB)");
+
+        var listed = await JsonAsync("GET", $"organize/files?root={Uri.EscapeDataString(_root)}", ct);
+        await Assert.That(listed.GetProperty("files").GetArrayLength()).IsEqualTo(4);
+
+        // Refused at iOS's question, nothing goes and nothing is counted.
+        var photos = _services.GetRequiredService<PhotoLibraryFileSystem>();
+        _library.Refuse = "You chose not to delete these photos.";
+        var (asked, refused) = await AskAsync("POST", "photos/bulk/remove-duplicates", ct);
+        await Assert.That((asked, photos.FilesIn(_root).Count, _library.RecentlyDeleted.Count)).IsEqualTo((200, 4, 0));
+        await Assert.That(refused).Contains("You chose not to delete these photos. Nothing was deleted.");
+
+        // Said yes, the copy goes, with its Live Photo video, to Recently Deleted in one change (Jamie, 2026-11-17): no
+        // album of removed pictures, nothing to undo, one counted toward the day, and the photo kept named.
+        var removed = await JsonAsync("POST", "photos/bulk/remove-duplicates", ct);
+        await Assert.That((removed.GetProperty("removed").GetInt32(), removed.GetProperty("companions").GetInt32(), removed.GetProperty("batchId").ValueKind)).IsEqualTo((1, 1, JsonValueKind.Null));
+        await Assert.That((_library.Changes.Count, _library.RecentlyDeleted.Count, _library.InAlbums().ContainsKey(PhotoLibraryFileSystem.RemovedAlbum))).IsEqualTo((2, 1, false));
+        var stays = removed.GetProperty("stays").EnumerateArray().Single().GetString()!;
+        // Named as the review showed it, among two of one name; alone now, the library calls it IMG_0001.JPG.
+        await Assert.That(photos.FilesIn(_root).Count).IsEqualTo(2);
+        await Assert.That(Path.GetFileName(stays)).StartsWith("IMG_0001 (").And.EndsWith(").JPG");
+        await Assert.That((await JsonAsync("GET", "plan", ct)).GetProperty("leftToday").GetInt32()).IsEqualTo(49);
+
+        // What Trovolve records is kept where the phone keeps an app's own files, and the previews where it may clear them.
+        await Assert.That((_services.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.ResolveDatabasePath() == Path.Combine(In("Documents"), "trovolve.db"), Directory.EnumerateFiles(Path.Combine(In("Caches"), "thumbnails"), "*", SearchOption.AllDirectories).Any()))
+            .IsEqualTo((true, true));
+    }
+}

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Trovolve mark, in one color for themed icons (Android 13+), on the adaptive icon's 108dp canvas: the gem sits inside the 72dp a launcher shows. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+  <group android:translateX="18" android:translateY="18" android:scaleX="0.72" android:scaleY="0.72">
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineJoin="round" android:pathData="M35,23L28.32,30.52L71.68,30.52L65,23Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineJoin="round" android:pathData="M24.23,35.12L19,41L20.34,42.64L79.66,42.64L81,41L75.77,35.12Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineJoin="round" android:pathData="M24.09,47.24L30.23,54.76L69.77,54.76L75.91,47.24Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineJoin="round" android:pathData="M33.98,59.36L40.11,66.88L59.89,66.88L66.02,59.36Z" />
+    <path android:fillColor="#FFFFFFFF" android:strokeColor="#FFFFFFFF" android:strokeWidth="2.2" android:strokeLineJoin="round" android:pathData="M43.87,71.48L50,79L56.13,71.48Z" />
+  </group>
+</vector>

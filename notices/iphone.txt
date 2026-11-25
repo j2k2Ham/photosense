@@ -1,11 +1,11 @@
-Third-party notices for PhotoSense for iPhone and iPad
+Third-party notices for Trovolve for iPhone and iPad
 
-PhotoSense includes the work of others, listed here with the licence each is used under. Each licence is given in full below.
+Trovolve includes the work of others, listed here with the licence each is used under. Each licence is given in full below.
 
 PLACE NAMES
 
 GeoNames (https://www.geonames.org/), under the Creative Commons Attribution 4.0 International licence
-(https://creativecommons.org/licenses/by/4.0/). PhotoSense uses extracts of it, changed by PhotoSense: towns of
+(https://creativecommons.org/licenses/by/4.0/). Trovolve uses extracts of it, changed by Trovolve: towns of
 1,000 people or more with the names of their regions, and sights, parks, beaches and districts, each with its position.
 
 FONTS
