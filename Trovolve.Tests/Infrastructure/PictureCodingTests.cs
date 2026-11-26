@@ -134,7 +134,7 @@ public class PictureCodingTests
     /// <summary>A decoder that must never be asked: what the analyzer refuses, it refuses first.</summary>
     private sealed class NeverAsked : IPictureDecoder
     {
-        public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, int maxEdge, CancellationToken ct) => throw new InvalidOperationException("The decoder was asked.");
+        public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, CancellationToken ct) => throw new InvalidOperationException("The decoder was asked.");
     }
 
     [Test]
@@ -157,9 +157,9 @@ public class PictureCodingTests
     [Test]
     public async Task A_Computer_With_No_Decoder_Trovolve_Uses_Says_So_For_Every_Picture(CancellationToken ct)
     {
-        var refused = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => new UnavailablePictureDecoder().DecodeAsync([0xFF, 0xD8, 0xFF], PictureFormat.Jpeg, 512, ct));
+        var refused = await Assert.ThrowsExactlyAsync<UnreadableImageException>(() => new UnavailablePictureDecoder().DecodeAsync([0xFF, 0xD8, 0xFF], PictureFormat.Jpeg, ct));
         await Assert.That(refused!.Message).IsEqualTo("Trovolve reads pictures on Windows and on a Mac, with the system's own decoder; this computer has none it can use.");
-        await Assert.ThrowsAsync<OperationCanceledException>(() => new UnavailablePictureDecoder().DecodeAsync([], PictureFormat.Jpeg, 512, new CancellationToken(canceled: true)));
+        await Assert.ThrowsAsync<OperationCanceledException>(() => new UnavailablePictureDecoder().DecodeAsync([], PictureFormat.Jpeg, new CancellationToken(canceled: true)));
     }
 
     [Test]

@@ -163,6 +163,16 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
     - The web site's Windows requirements and the FAQ name the extension. The FAQ also gives the iPhone's *Transfer to Mac or PC: Automatic* as the free way round.
     - The GPU route is out of scope.
     - Still to check (issue 56): Arm, N editions, HDR HEIC, the free edition on new installs, the new Photos app.
+  - **One way of reducing pictures** (issue 53, 2026-11-26; in the tree, not committed):
+    - Every computer decoder (WIC, ImageIO, and Magick.NET in the tests) hands back the picture whole, and `PictureAnalyzer` reduces it with `Pixels`. WIC's scaler and Magick.NET's reduced JPEG decoding are gone.
+    - WIC takes EXIF's uncalibrated colour space (65535, an iPhone panorama's) as standard colours.
+    - Measured on the ground truth's 257 HEIC/JPEG twins:
+      - the 9 panorama pairs through WIC are 0.58–0.68 apart (from 3.4–10.4), WIC's own colour bias like the rest;
+      - the same file, Magick.NET against WIC, is median 0.51 apart (from 2.89);
+      - sharpness through the two agrees within 5%.
+    - A JPEG now decodes whole: about 1.2 s against 0.8 s through WIC, six at a time on this laptop.
+    - Checked: built with `-warnaserror`; service 1,285 tests at 100% (8,708 lines, 4,782 branches).
+    - Not checked: ImageIO (only GitHub's Macs). The phones' own analyzers still reduce inside their decoders.
   - **What counts as a duplicate** (Jamie, 2026-11-26): only one capture saved more than once, in any format, size or quality. An edited version (cropped or adjusted) and its original are similar shots, where the person chooses. So are two shots taken a moment apart that look identical. Burst frames are similar shots too, as Jamie's review showed.
   - Not checked: ImageIO (only GitHub's Mac machines, where Apple's own decoder should render a HEIC as the iPhone did); Windows without the extensions (the words are tested, the detection is Windows' own); the 48,000-file disk.
 - [x] **JSON a phone's trimmed app keeps** (Jamie, 2026-11-25, on branch `feature/os-decoders` from `main`): the iPhone's build warned (IL2026) that JSON written by reflection can break once an app is trimmed. The hidden vault's record of each item (`VaultJson`, in `VaultBox`) and both phones' location keys (`LocationSecretsFormat` in Infrastructure, which the iPhone's Keychain and Android's Keystore-sealed files now share) are written by source-generated code, in the very format written before, so what was kept still opens. Left as they are, still by reflection, as only these two were asked for: both phones' widget files (`IosWidgets`, `AndroidWidgets`) and the service's requests and answers (`ApiRequest`), which a phone's partial trimming keeps, as it trims the system's libraries only. Checked: service 1,259 tests at 100% (8,513 lines, 4,662 branches), among them the secrets written byte for byte as before and read back; the Android app builds here with no warning. Not checked: the iPhone app (only `iphone.yml`).

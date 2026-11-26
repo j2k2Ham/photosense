@@ -21,15 +21,16 @@ public sealed class PictureAnalyzer(IPictureDecoder decoder) : IImageAnalyzer
     public async Task<ImageAnalysis> AnalyzeAsync(Stream imageStream, CancellationToken ct)
     {
         var (bytes, format) = await ReadAsync(imageStream, ct);
-        // Decoded once, at the size sharpness is measured at (ImageFingerprint.SharpnessEdge is WorkEdge); the preview and
+        var picture = await decoder.DecodeAsync(bytes, format, ct);
+        // Reduced once, at the size sharpness is measured at (ImageFingerprint.SharpnessEdge is WorkEdge); the preview and
         // the signature are made from it.
-        var work = await decoder.DecodeAsync(bytes, format, ImageFingerprint.WorkEdge, ct);
+        var work = Reduced(picture, ImageFingerprint.WorkEdge);
         var (across, down) = DecodedPicture.Fit(work.Width, work.Height, ImageFingerprint.ThumbnailEdge);
         var thumbnail = JpegWriter.Write(Pixels.Resize(work.Rgb, work.Width, work.Height, across, down), across, down, PreviewQuality);
         var sharpness = ImageFingerprint.Sharpness(work.Rgb, work.Width, work.Height);
         // Stretched to a square on purpose: aspect ratio is checked separately, and a fixed grid lets two signatures be compared cell by cell.
         var signature = Pixels.Resize(work.Rgb, work.Width, work.Height, ImageFingerprint.SignatureEdge, ImageFingerprint.SignatureEdge);
-        return new ImageAnalysis(work.FullWidth, work.FullHeight, format.ToString().ToUpperInvariant(), format == PictureFormat.Jpeg ? JpegQuality.Estimate(bytes) : null,
+        return new ImageAnalysis(picture.Width, picture.Height, format.ToString().ToUpperInvariant(), format == PictureFormat.Jpeg ? JpegQuality.Estimate(bytes) : null,
             ImageFingerprint.PerceptualHash(signature), signature, thumbnail, sharpness);
     }
 
@@ -37,8 +38,18 @@ public sealed class PictureAnalyzer(IPictureDecoder decoder) : IImageAnalyzer
     public async Task<byte[]> RenderJpegAsync(Stream imageStream, int maxEdge, CancellationToken ct)
     {
         var (bytes, format) = await ReadAsync(imageStream, ct);
-        var picture = await decoder.DecodeAsync(bytes, format, maxEdge, ct);
+        var picture = Reduced(await decoder.DecodeAsync(bytes, format, ct), maxEdge);
         return JpegWriter.Write(picture.Rgb, picture.Width, picture.Height, ViewQuality);
+    }
+
+    // The picture no larger than maxEdge on its long side, reduced here rather than by the decoder: one way for every
+    // system, as a decoder's own reduction (WIC's scaler, a JPEG decoded at a fraction of its size) gives a picture its own
+    // pixels, and the same picture decoded elsewhere would no longer measure alike.
+    private static DecodedPicture Reduced(DecodedPicture picture, int maxEdge)
+    {
+        if (Math.Max(picture.Width, picture.Height) <= maxEdge) return picture;
+        var (across, down) = DecodedPicture.Fit(picture.Width, picture.Height, maxEdge);
+        return new DecodedPicture(across, down, Pixels.Resize(picture.Rgb, picture.Width, picture.Height, across, down));
     }
 
     // The picture's bytes, and what its first bytes say it is: it is decoded as that and nothing else, so that a script,

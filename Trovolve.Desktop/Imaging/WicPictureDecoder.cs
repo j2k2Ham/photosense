@@ -22,18 +22,17 @@ public sealed class WicPictureDecoder : IPictureDecoder
     private static readonly Guid Video = new("73646976-0000-0010-8000-00aa00389b71");
     private static readonly Guid Hevc = new("43564548-0000-0010-8000-00aa00389b71");
     private const int ComponentNotFound = unchecked((int)0x88982F50);
-    private const int ExifColorSpace = 2, Srgb = 1;
-    private const int Fant = 3;
+    private const int ExifColorSpace = 2, Srgb = 1, AdobeRgb = 2;
     private const short UnsignedShort = 18;
 
     // Whether HEVC Video Extensions are installed, asked of Media Foundation once, when a HEIC first fails.
     private static readonly Lazy<bool> HevcInstalled = new(AskForHevc);
 
     /// <inheritdoc />
-    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, int maxEdge, CancellationToken ct)
-        => Task.Run(() => Decode(picture, format, maxEdge), ct);
+    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, CancellationToken ct)
+        => Task.Run(() => Decode(picture, format), ct);
 
-    private static DecodedPicture Decode(byte[] picture, PictureFormat format, int maxEdge)
+    private static DecodedPicture Decode(byte[] picture, PictureFormat format)
     {
         // Every object Windows made, let go of in the end whatever happens.
         var made = new List<object>();
@@ -70,8 +69,7 @@ public sealed class WicPictureDecoder : IPictureDecoder
 
             var orientation = Orientation(frame, Keep);
             var sideways = orientation >= 5;
-            var (fullWidth, fullHeight) = sideways ? (height, width) : (width, height);
-            var (across, down) = DecodedPicture.Fit(fullWidth, fullHeight, maxEdge);
+            var (across, down) = sideways ? (height, width) : (width, height);
 
             IWICBitmapSource Converted(IWICBitmapSource from, Guid format)
             {
@@ -82,9 +80,10 @@ public sealed class WicPictureDecoder : IPictureDecoder
             }
 
             var source = (IWICBitmapSource)frame;
-            // A picture in colours of its own is turned to standard ones first, sixteen bits a channel (the one deep format its transform takes), so that rounding
-            // twice does not set it apart from a standard copy of itself. One without is reduced as it is decoded, which
-            // is what makes a JPEG quick.
+            // Decoded whole and never reduced here: WIC's scaler, and a JPEG decoded at a fraction of its size, would give
+            // the picture pixels of their own (PictureAnalyzer reduces every picture one way). A picture in colours of its
+            // own is turned to standard ones at sixteen bits a channel (the one deep format the transform takes), so that
+            // rounding twice does not set it apart from a standard copy of itself.
             if (Profile(factory, frame, Keep) is var (carried, standard))
             {
                 source = Converted(source, Rgba64);
@@ -93,13 +92,6 @@ public sealed class WicPictureDecoder : IPictureDecoder
                 var rgba64 = Rgba64;
                 // A profile that cannot be used leaves the picture's colours as they are.
                 if (transform.Initialize(source, carried, standard, ref rgba64) >= 0) source = (IWICBitmapSource)transform;
-            }
-            if ((across, down) != (fullWidth, fullHeight))
-            {
-                Check(factory.CreateBitmapScaler(out var scaler));
-                Keep(scaler);
-                Check(scaler.Initialize(source, sideways ? down : across, sideways ? across : down, Fant));
-                source = (IWICBitmapSource)scaler;
             }
             source = Converted(source, Bgr24);
             if (orientation != 1)
@@ -116,7 +108,7 @@ public sealed class WicPictureDecoder : IPictureDecoder
             finally { pixels.Free(); }
             // Windows hands back blue, green, red.
             for (var i = 0; i < rgb.Length; i += 3) (rgb[i], rgb[i + 2]) = (rgb[i + 2], rgb[i]);
-            return new DecodedPicture(across, down, rgb, fullWidth, fullHeight);
+            return new DecodedPicture(across, down, rgb);
         }
         finally
         {
@@ -166,9 +158,10 @@ public sealed class WicPictureDecoder : IPictureDecoder
             contexts[i] = (IWICColorContext)keep(context);
         }
         if (frame.GetColorContexts(count, contexts, out _) < 0) return null;
-        // A profile of its own, if it has one; otherwise what the camera said of its colours.
+        // A profile of its own, if it has one; otherwise what the camera said of its colours. Of those only Adobe RGB is
+        // a profile: "uncalibrated" (65535, which an iPhone's panorama says) names no colours, and is taken as standard.
         var carried = contexts.FirstOrDefault(c => c.GetContextType(out var type) >= 0 && type != ExifColorSpace) ?? contexts[0];
-        if (carried.GetContextType(out var kind) >= 0 && kind == ExifColorSpace && carried.GetExifColorSpace(out var space) >= 0 && space == Srgb) return null;
+        if (carried.GetContextType(out var kind) >= 0 && kind == ExifColorSpace && (carried.GetExifColorSpace(out var space) < 0 || space != AdobeRgb)) return null;
         if (factory.CreateColorContext(out var standard) < 0 || standard.InitializeFromExifColorSpace(Srgb) < 0) return null;
         keep(standard);
         return (carried, standard);

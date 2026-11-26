@@ -10,7 +10,7 @@ namespace Trovolve.Desktop.Imaging;
 public sealed class UnavailablePictureDecoder : IPictureDecoder
 {
     /// <inheritdoc />
-    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, int maxEdge, CancellationToken ct)
+    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         throw new UnreadableImageException("Trovolve reads pictures on Windows and on a Mac, with the system's own decoder; this computer has none it can use.");

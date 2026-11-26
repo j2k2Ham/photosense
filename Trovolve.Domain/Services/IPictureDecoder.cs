@@ -3,23 +3,21 @@ using Trovolve.Domain.ValueObjects;
 namespace Trovolve.Domain.Services;
 
 /// <summary>
-/// A picture as a decoder hands it back: the right way up, in standard colours (sRGB), three bytes a pixel (red, green,
-/// blue), row by row from the top, at the size it was asked for.
+/// A picture as a decoder hands it back: at full size, the right way up, in standard colours (sRGB), three bytes a pixel
+/// (red, green, blue), row by row from the top.
 /// </summary>
-/// <param name="Width">Its width as decoded, in pixels.</param>
-/// <param name="Height">Its height as decoded.</param>
+/// <param name="Width">Its width, the right way up, in pixels.</param>
+/// <param name="Height">Its height, the right way up.</param>
 /// <param name="Rgb">Its pixels: <paramref name="Width"/> × <paramref name="Height"/> × 3 bytes.</param>
-/// <param name="FullWidth">Its width at full size, the right way up.</param>
-/// <param name="FullHeight">Its height at full size, the right way up.</param>
-public sealed record DecodedPicture(int Width, int Height, byte[] Rgb, int FullWidth, int FullHeight)
+public sealed record DecodedPicture(int Width, int Height, byte[] Rgb)
 {
     /// <summary>The widest or tallest picture decoded, in pixels: wider than any phone's panorama. A larger one is unreadable.</summary>
     public const int MaxEdge = 32_768;
 
     /// <summary>
-    /// The size every decoder decodes a picture of <paramref name="width"/> × <paramref name="height"/> at, asked for no more
-    /// than <paramref name="maxEdge"/> on its long side: that long side, or the picture's own when smaller, and the short
-    /// side in proportion, at least one pixel. Every decoder uses this one rule, so that they all measure the same pixels.
+    /// The size a picture of <paramref name="width"/> × <paramref name="height"/> is reduced to, asked for no more than
+    /// <paramref name="maxEdge"/> on its long side: that long side, or the picture's own when smaller, and the short side
+    /// in proportion, at least one pixel.
     /// </summary>
     public static (int Width, int Height) Fit(int width, int height, int maxEdge)
     {
@@ -34,22 +32,21 @@ public sealed record DecodedPicture(int Width, int Height, byte[] Rgb, int FullW
 
 /// <summary>
 /// Decodes pictures with what the system itself has: Windows Imaging Component on Windows, ImageIO on a Mac. A decoder
-/// only turns a picture's bytes into pixels; measuring them, and writing previews, is the same for every decoder
-/// (<c>PictureAnalyzer</c>), so that every computer measures a picture alike.
+/// only turns a picture's bytes into pixels, at full size; reducing them, measuring them and writing previews is the same
+/// for every decoder (<c>PictureAnalyzer</c>), so that every computer measures a picture alike. A decoder that reduced a
+/// picture itself would set it apart from the same picture decoded elsewhere.
 /// </summary>
 public interface IPictureDecoder
 {
     /// <summary>
-    /// Decodes a picture the right way up, in standard colours, at <see cref="DecodedPicture.Fit"/> for
-    /// <paramref name="maxEdge"/>.
+    /// Decodes a picture at full size, the right way up, in standard colours.
     /// </summary>
     /// <param name="picture">The picture's bytes.</param>
     /// <param name="format">What its first bytes say it is (<see cref="PictureSignature"/>); it is read as that and nothing else.</param>
-    /// <param name="maxEdge">The longest side wanted, in pixels.</param>
     /// <param name="ct">Stops it before it starts.</param>
     /// <exception cref="UnreadableImageException">
     /// The picture could not be decoded, is larger than <see cref="DecodedPicture.MaxEdge"/>, or the system lacks what
     /// it needs to read that format, which the message says how to get.
     /// </exception>
-    Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, int maxEdge, CancellationToken ct);
+    Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, CancellationToken ct);
 }

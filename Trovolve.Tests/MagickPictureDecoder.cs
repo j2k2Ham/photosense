@@ -25,21 +25,15 @@ internal sealed class MagickPictureDecoder : IPictureDecoder
     public static PictureAnalyzer Analyzer { get; } = new(new MagickPictureDecoder());
 
     /// <inheritdoc />
-    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, int maxEdge, CancellationToken ct) => Task.Run(() =>
+    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, CancellationToken ct) => Task.Run(() =>
     {
         try
         {
             var settings = new MagickReadSettings { FrameIndex = 0, FrameCount = 1, Format = Enum.Parse<MagickFormat>(format.ToString()) };
-            // Lets the JPEG decoder skip detail it would throw away; it picks the nearest reduction, so ask for double.
-            settings.SetDefine(MagickFormat.Jpeg, "size", $"{maxEdge * 2}x{maxEdge * 2}");
             using var image = new MagickImage(picture, settings);
-            var sideways = image.Orientation is Orientation.LeftTop or Orientation.RightTop or Orientation.RightBottom or Orientation.LeftBottom;
-            int fullWidth = (int)(sideways ? image.BaseHeight : image.BaseWidth), fullHeight = (int)(sideways ? image.BaseWidth : image.BaseHeight);
             image.AutoOrient();
             _ = TryStandardize(image);
-            var (across, down) = DecodedPicture.Fit(fullWidth, fullHeight, maxEdge);
-            image.Resize(new MagickGeometry((uint)across, (uint)down) { IgnoreAspectRatio = true });
-            return new DecodedPicture(across, down, image.GetPixels().ToByteArray(PixelMapping.RGB)!, fullWidth, fullHeight);
+            return new DecodedPicture((int)image.Width, (int)image.Height, image.GetPixels().ToByteArray(PixelMapping.RGB)!);
         }
         catch (MagickException ex) { throw new UnreadableImageException(ex.Message, ex); }
     }, ct);

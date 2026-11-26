@@ -23,10 +23,10 @@ public sealed class ImageIOPictureDecoder : IPictureDecoder
     private static readonly Lazy<Keys> Names = new(() => new Keys());
 
     /// <inheritdoc />
-    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, int maxEdge, CancellationToken ct)
-        => Task.Run(() => Decode(picture, format, maxEdge), ct);
+    public Task<DecodedPicture> DecodeAsync(byte[] picture, PictureFormat format, CancellationToken ct)
+        => Task.Run(() => Decode(picture, format), ct);
 
-    private static DecodedPicture Decode(byte[] picture, PictureFormat format, int maxEdge)
+    private static DecodedPicture Decode(byte[] picture, PictureFormat format)
     {
         var keys = Names.Value;
         // Every object made, let go of in the end whatever happens.
@@ -49,17 +49,17 @@ public sealed class ImageIOPictureDecoder : IPictureDecoder
             if (width > DecodedPicture.MaxEdge || height > DecodedPicture.MaxEdge)
                 throw new UnreadableImageException($"The picture says it is {width:N0} × {height:N0} pixels, larger than any Trovolve reads.");
             var sideways = orientation >= 5;
-            var (fullWidth, fullHeight) = sideways ? (height, width) : (width, height);
-            var (across, down) = DecodedPicture.Fit(fullWidth, fullHeight, maxEdge);
+            var (across, down) = sideways ? (height, width) : (width, height);
 
-            // Turned the right way up and decoded no larger than needed, which is what makes it quick.
+            // Turned the right way up and decoded whole: a reduction of ImageIO's own would give the picture pixels of its
+            // own (PictureAnalyzer reduces every picture one way).
             var size = Keep(Integer(Math.Max(across, down)));
             var options = Keep(Dictionary(keys, (keys.FromImageAlways, keys.True), (keys.WithTransform, keys.True), (keys.MaxPixelSize, size)));
             var image = CGImageSourceCreateThumbnailAtIndex(source, 0, options);
             if (image == IntPtr.Zero) throw new UnreadableImageException("The picture could not be decoded.");
             try
             {
-                return new DecodedPicture(across, down, Drawn(image, across, down, keys), fullWidth, fullHeight);
+                return new DecodedPicture(across, down, Drawn(image, across, down, keys));
             }
             finally
             {
