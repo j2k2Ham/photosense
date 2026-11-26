@@ -27,7 +27,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 | `Trovolve.Domain` | Entities, value objects, store and service interfaces (`IPhotoFileSystem`), `PhotoStorageOptions`, and the rules that need nothing else: what counts as the same picture (`Matching/`), file names (`NameRules`, `PhotoNaming`), which files a scan takes in. No packages |
 | `Trovolve.Application` | Scanning and grouping (`Scanning/`), Organize (`Organizing/`), changes made and undone whole (`Changes/`), removing and erasing (`Removal/`), sending from a phone to a computer and its protocol (`Transfer/`), the hidden vault (`Vault/`), backing up to cloud storage and servers (`Locations/`); registered by `AddTrovolveApplication` |
 | `Trovolve.Infrastructure` | What every host runs: LiteDB stores, hashing, metadata, place names, the computer's disks, a phone's photos as folders (`Library/`), finding phones (`Transfer/`), the cloud services and servers a phone backs up to (`Locations/`); registered by `AddTrovolveCore`, with the phones' composition (`AddTrovolvePhone`, `AddTrovolveAndroid`) |
-| `Trovolve.Desktop` | What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` |
+| `Trovolve.Desktop` | What only a computer has: Windows' own picture decoder (`WicPictureDecoder`), the folder browser, `ShellSystemViewer`, the Recycle Bin |
 | `Trovolve.Api` | The endpoints apart from any host, the route table `TrovolveRoutes`, `InProcessApi` for the phones |
 | `Trovolve.Server` | The service as one ASP.NET Core program, serving the page too when built in; `TrovolveServer.Build` is its one public entry |
 | `Trovolve.iOS`, `Trovolve.Android` | The phone apps: the page in a web view, with the thin layer over each phone's frameworks. Not in `Trovolve.sln` |
@@ -50,7 +50,7 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
   - Usage metrics (`UsageMetrics`, `UsageMetricsOptions`) are built and **off** (Jamie, 2026-11-25) until Jamie sets up the server; turning them on needs the privacy policy and FAQ to say what is sent first.
   - LiteDB in one file: no EF Core and no migrations. No auth: `RequestGuard` is the only gate.
   - TUnit with Moq and coverlet: no xUnit, FluentAssertions or Testcontainers.
-  - Magick.NET on a computer, the phone's own decoder on a phone. Generic .NET advice that assumes another stack does not apply.
+  - Pictures are decoded by the system's own decoder (Jamie, 2026-11-25): WIC on Windows, ImageIO on a Mac (`ImageIOPictureDecoder`, in Infrastructure so the iPhone can share it), the phone's own on a phone; measured, resized and written as JPEG in shared code (`PictureAnalyzer`). Magick.NET is in the tests only, as the decoder where a system has none (Linux) and the yardstick the others are held to: no program ships it. Generic .NET advice that assumes another stack does not apply.
 - **Checks on GitHub:**
   - `ci.yml` runs on Ubuntu, Windows and macOS, for `main` and pull requests, and by hand on another branch: `gh workflow run ci.yml --ref feature/growth`. On Ubuntu it fails below 100% of the service's lines and branches.
   - `iphone.yml`, `android.yml`, `e2e.yml` and `codeql.yml` also run on pushes to `feature/mobile-and-mac`, which is merged into `main` now (2026-11-20); `feature/growth` is merged too (2026-11-23). On a branch not merged they are started by hand (`gh workflow run iphone.yml --ref feature/branding`).

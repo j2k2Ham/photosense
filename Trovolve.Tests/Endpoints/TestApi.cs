@@ -5,7 +5,7 @@ using Trovolve.Api;
 using Trovolve.Api.About;
 using Trovolve.Api.Http;
 using Trovolve.Application;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Configuration;
 using Trovolve.Domain.Services;
 using Trovolve.Infrastructure;
@@ -30,7 +30,7 @@ internal sealed class TestApi
             .AddSingleton(Options.Create(new PhotoStorageOptions()))
             .AddSingleton<TimeProvider>(new TestClock())
             .AddSingleton<IPhotoFileSystem>(TestFiles.Disk)
-            .AddSingleton<IImageAnalyzer>(new MagickImageAnalyzer())
+            .AddSingleton<IImageAnalyzer>(MagickPictureDecoder.Analyzer)
             .AddSingleton(Mock.Of<ISystemViewer>())
             .AddSingleton(Mock.Of<IFolderBrowser>())
             .AddSingleton<IPhotoAccess>(new FolderAccess())

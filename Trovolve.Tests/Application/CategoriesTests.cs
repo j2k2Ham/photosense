@@ -6,7 +6,7 @@ using Trovolve.Api;
 using Trovolve.Api.About;
 using Trovolve.Api.Hosting;
 using Trovolve.Api.Http;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Repositories;
 using Trovolve.Infrastructure.Library;
@@ -30,7 +30,7 @@ public sealed class CategoriesOnAPhoneTests : IDisposable
     public CategoriesOnAPhoneTests()
     {
         _phone = new ServiceCollection()
-            .AddTrovolvePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(),
+            .AddTrovolvePhone(_library, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, In("Documents"), In("Caches"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(),
                 new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddTrovolveApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))

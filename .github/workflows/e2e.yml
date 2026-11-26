@@ -11,13 +11,18 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    # Git's bash, which GitHub's Windows machines have: the steps read as they did on Linux.
+    shell: bash
+
 jobs:
   browsers:
     # Trovolve as one program, its page in Chrome at a computer's size and in WebKit at a phone's, on photos each
-    # test makes for itself (e2e/README.md). Ubuntu 24.04, as Playwright 1.56 has no browsers for the 26.04 that
-    # ubuntu-latest now is.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # test makes for itself (e2e/README.md). On Windows, where Jamie runs it, as the program reads pictures with the
+    # system's own decoder, which Windows has and Linux does not (2026-11-25).
+    runs-on: windows-latest
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -41,16 +46,10 @@ jobs:
 
       - name: Install the tests and their browsers
         working-directory: e2e
-        # The browsers' system packages are installed once, with no time limit of ours: a limit killed only the command
-        # that started apt, which went on holding its lock, so every later try failed on the lock. The machine may still
-        # be installing packages of its own, or briefly unable to reach Ubuntu's servers: apt waits for its locks and
-        # retries a download. A browser's own download now and then stops short and never ends, so that alone is given
-        # five minutes, three times, with half a minute's pause after a failed try.
+        # Windows needs no system packages for the browsers. A browser's own download now and then stops short and never
+        # ends, so it is given five minutes, three times, with half a minute's pause after a failed try.
         run: |
           npm ci
-          echo 'DPkg::Lock::Timeout "600"; Acquire::Retries "5";' | sudo tee /etc/apt/apt.conf.d/90trovolve-wait
-          timeout 600 bash -c 'while pgrep -x "apt|apt-get|dpkg|unattended-upgr" > /dev/null; do sleep 5; done' || true
-          npx playwright install-deps chromium webkit
           for try in 1 2 3; do
             timeout 300 npx playwright install chromium webkit && exit 0
             sleep 30
@@ -87,7 +86,7 @@ jobs:
           done
           echo "::error::Trovolve did not answer within a minute."
           echo "It said:"; cat "$RUNNER_TEMP/said.txt"
-          dotnet tool install --global dotnet-stack > /dev/null && "$HOME/.dotnet/tools/dotnet-stack" report --process-id $program || true
+          dotnet tool install --global dotnet-stack > /dev/null && "$HOME/.dotnet/tools/dotnet-stack" report --process-id "$(cat /proc/$program/winpid)" || true
           kill -9 $program
           exit 1
 

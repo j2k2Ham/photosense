@@ -32,6 +32,10 @@ No. {{name}} runs on your own device, and nothing is uploaded: your photos, and 
 
 When {{name}} first asked to see your photos, you may have chosen to allow only some. The scan screen then says so: **Choose more photos** opens the phone's own picker, and **Open Settings** goes to where all of them can be allowed, under Privacy & Security, then Photos, then {{name}}.
 
+### Why can {{name}} not read the photos from my iPhone on Windows?
+
+iPhones save photos as HEIC. Windows reads HEIC once two free extensions from the Microsoft Store are installed: HEIF Image Extensions and HEVC Video Extensions. {{name}} uses Windows' own decoder, so it reads them as soon as Windows can; the scan's log says which extension is missing. A Mac reads HEIC as it is.
+
 ### What is the difference between duplicates and similar shots?
 
 Duplicates are copies of the same file. Similar shots are different pictures that look alike, such as a burst taken a moment apart. {{name}} suggests the best of each set to keep, and you decide.

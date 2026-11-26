@@ -7,7 +7,7 @@ using Trovolve.Api;
 using Trovolve.Api.About;
 using Trovolve.Api.Hosting;
 using Trovolve.Api.Http;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Infrastructure.Library;
 using Trovolve.Infrastructure.Transfer;
 
@@ -34,7 +34,7 @@ public sealed class PhotosOnAPhoneTests : IDisposable
     {
         // Magick.NET stands in for the phone's own decoder, which measures pictures the same way.
         _services = new ServiceCollection()
-            .AddTrovolvePhone(_library, _access, new MagickImageAnalyzer(), In("Documents"), In("Caches"), Advertiser, App, new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddTrovolvePhone(_library, _access, MagickPictureDecoder.Analyzer, In("Documents"), In("Caches"), Advertiser, App, new FakeCodeScanner(), new FakeComputerFinder(), new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddTrovolveApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "Third-party notices for Trovolve for iPhone and iPad"))
             .AddStandInStores()

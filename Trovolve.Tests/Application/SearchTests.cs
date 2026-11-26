@@ -9,7 +9,7 @@ using Trovolve.Api.About;
 using Trovolve.Api.Hosting;
 using Trovolve.Api.Http;
 using Trovolve.Application.Organizing;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Matching;
 using Trovolve.Domain.Repositories;
@@ -290,7 +290,7 @@ public sealed class ViewerOnAPhoneTests : IDisposable
 /// <summary>A phone's decoder, Magick.NET standing in for it, that labels each picture as the test says by the SHA-256 of its bytes.</summary>
 internal sealed class LabellingAnalyzer : IImageAnalyzer
 {
-    private readonly MagickImageAnalyzer _decoder = new();
+    private readonly IImageAnalyzer _decoder = MagickPictureDecoder.Analyzer;
 
     /// <summary>The labels of each picture, by the hex SHA-256 of its bytes; one not named has none.</summary>
     public Dictionary<string, string[]> Labels { get; } = [];

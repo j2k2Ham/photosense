@@ -40,6 +40,7 @@
 | `InMemoryPhotoRepository`, `InMemoryThumbnailStore` | `Tests/` | Scans' records and previews in memory |
 | `FailingDisk` | `Tests/Application/ChangesTesting.cs` | The real `DiskFileSystem`, except that "move", "copy", "make", "remove folder", "delete", "erase", "read" or "create" fail for the paths named, on any OS |
 | `InMemoryFileSystem` | `Tests/InMemoryFileSystem.cs` | Photos in memory only; `PhotosNotOnDiskTests` runs Clean up and Organize on it end to end |
+| `MagickPictureDecoder` | `Tests/MagickPictureDecoder.cs` | Magick.NET as a picture decoder, in the tests only: `Analyzer` is the program's `PictureAnalyzer` with it, what every test measures pictures with |
 | `FakePhotoLibrary` | `Tests/FakePhotoLibrary.cs` | An iPhone's library in memory, `Fetching` standing in for iCloud; `PhotosOnAPhoneTests` runs the iPhone stack through `InProcessApi`, with Magick.NET standing in for ImageIO |
 | `FakeMediaStore` | `Tests/FakeMediaStore.cs` | An Android phone's media store in memory; `PhotosOnAndroidTests` runs the Android stack |
 | `MediaSamples` | `Tests/MediaSamples.cs` | A JPEG with an Apple maker note, and a QuickTime movie with the phone's metadata |

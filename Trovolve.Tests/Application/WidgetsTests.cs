@@ -4,7 +4,7 @@ using Trovolve.Api.About;
 using Trovolve.Application.Organizing;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Transfer;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
 using Trovolve.Infrastructure.Library;
@@ -28,7 +28,7 @@ public sealed class WidgetsTests : IDisposable
     public WidgetsTests()
     {
         _phone = new ServiceCollection()
-            .AddTrovolvePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(),
+            .AddTrovolvePhone(_library, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, In("Documents"), In("Caches"), new FakeAdvertiser(), new FakeAppStore(), new FakeCodeScanner(),
                 _computers, _device, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), _widgets, new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", In("Photo Library"), new TcpTransferListener(0))
             .AddTrovolveApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))

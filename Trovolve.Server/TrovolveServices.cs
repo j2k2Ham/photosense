@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Trovolve.Api.About;
@@ -10,6 +11,7 @@ using Trovolve.Domain.Entities;
 using Trovolve.Domain.Services;
 using Trovolve.Infrastructure;
 using Trovolve.Infrastructure.Files;
+using Trovolve.Infrastructure.Imaging;
 using Trovolve.Infrastructure.Transfer;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Plans;
@@ -40,7 +42,9 @@ internal static class TrovolveServices
 #endif
         // Where the photos are: this computer's disks. On a phone it is the phone's photo library.
         s.AddSingleton<IPhotoFileSystem, DiskFileSystem>();
-        s.AddSingleton<IImageAnalyzer, MagickImageAnalyzer>();
+        // Pictures are decoded by the system's own decoder, and measured alike whichever it is.
+        s.AddSingleton(_ => ThisComputersDecoder());
+        s.AddSingleton<IImageAnalyzer>(sp => new PictureAnalyzer(sp.GetRequiredService<IPictureDecoder>()));
         s.AddSingleton<ISystemViewer, ShellSystemViewer>();
         // The computer's Recycle Bin or Trash; turned off, as by the end-to-end tests, none at all.
         s.AddSingleton<IRecycleBin>(sp => sp.GetRequiredService<IOptions<PhotoStorageOptions>>().Value.UseRecycleBin
@@ -70,4 +74,9 @@ internal static class TrovolveServices
         s.Configure<HostOptions>(o => o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
         return s.AddTrovolveApplication().AddTrovolveCore();
     }
+
+    // Windows Imaging Component on Windows, ImageIO on a Mac; anywhere else, where only the checks run, none.
+    [ExcludeFromCodeCoverage(Justification = "Chooses the decoder of the system the program runs on; each choice is reached only on that system, where the picture decoders' tests run it.")]
+    private static IPictureDecoder ThisComputersDecoder()
+        => OperatingSystem.IsWindows() ? new WicPictureDecoder() : OperatingSystem.IsMacOS() ? new ImageIOPictureDecoder() : new UnavailablePictureDecoder();
 }

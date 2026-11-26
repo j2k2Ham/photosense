@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <!-- What only a computer has: Magick.NET to decode pictures, its own programs to open a file in, its
-       disks to browse. A phone has its own ways of doing these, and none of this goes into its app. -->
+  <!-- What only a computer has: Windows' own picture decoder, its own programs to open a file in, its disks to
+       browse, its Recycle Bin. A phone has its own ways of doing these, and none of this goes into its app. -->
   <PropertyGroup>
     <TargetFramework>$(TrovolveTarget)</TargetFramework>
     <Nullable>enable</Nullable>
@@ -8,8 +8,5 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Trovolve.Domain\Trovolve.Domain.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
   </ItemGroup>
 </Project>

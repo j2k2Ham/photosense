@@ -11,7 +11,7 @@ using Trovolve.Application.Locations;
 using Trovolve.Application.Organizing;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Transfer;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Entities;
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
@@ -43,7 +43,7 @@ public sealed class LocationsTests : IDisposable
     public LocationsTests()
     {
         _phone = new ServiceCollection()
-            .AddTrovolvePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(),
+            .AddTrovolvePhone(_library, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(),
                 new FakeComputerFinder(), _device, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), _secrets, _signIn,
                 "Jamie's iPhone", In("Photo Library"), new TcpTransferListener(0), network: new FakeNetwork())
             .AddTrovolveApi()

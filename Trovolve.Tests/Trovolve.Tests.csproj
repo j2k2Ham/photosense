@@ -17,6 +17,9 @@
     <PackageReference Include="coverlet.MTP" Version="10.1.0" />
     <PackageReference Include="Moq" Version="4.21.0" />
     <PackageReference Include="Castle.Core" Version="5.2.1" />
+    <!-- The decoder that stands in for the system's where it has none, as on Linux, where the checks measure coverage.
+         Only the tests use it: no program ships it, so its LGPL parts (libheif, libde265) never reach anyone. -->
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.1.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Trovolve.Domain\Trovolve.Domain.csproj" />

@@ -14,7 +14,7 @@ using Trovolve.Domain.ValueObjects;
 using Trovolve.Domain.Entities;
 using Trovolve.Application.Changes;
 using Trovolve.Application.Transfer;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
 using Trovolve.Infrastructure.Files;
@@ -50,7 +50,7 @@ public sealed class TransferTests : IDisposable
     public TransferTests()
     {
         _phone = new ServiceCollection()
-            .AddTrovolvePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), _advertiser, _app, _scanner, _computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
+            .AddTrovolvePhone(_library, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, In("Documents"), In("Caches"), _advertiser, _app, _scanner, _computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddTrovolveApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
             .AddStandInStores()

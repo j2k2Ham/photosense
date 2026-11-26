@@ -506,8 +506,15 @@ export const GUIDE: GuideTopic[] = [
     only: COMPUTER,
     title: 'If something looks wrong',
     summary: 'What the commonest puzzles mean, and what to do about them.',
-    keywords: ['problem', 'error', 'not working', 'stuck', 'help', 'fix', 'broken', 'missing'],
+    keywords: ['problem', 'error', 'not working', 'stuck', 'help', 'fix', 'broken', 'missing', 'heic', 'iphone photos', 'extension', 'microsoft store', 'unreadable'],
     sections: [
+      {
+        heading: 'Photos from an iPhone cannot be read on Windows',
+        text: [
+          'iPhones save photos as HEIC, which Windows reads with two free extensions from the Microsoft Store: **HEIF Image Extensions** and **HEVC Video Extensions**. Without them each HEIC photo is unreadable, and the scan’s log says which to install. Install them, then scan again: the photos are read at once. A Mac reads HEIC as it is.',
+          'WebP and AVIF pictures need extensions of their own, **Webp Image Extensions** and **AV1 Video Extension**, which the log names the same way.',
+        ],
+      },
       {
         heading: 'A red bar says the Trovolve service is not answering',
         text: [

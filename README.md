@@ -9,7 +9,7 @@ Cross-platform photo duplicate & near-duplicate detection.
 | `Trovolve.Domain` | Core entities, value objects & services abstractions |
 | `Trovolve.Application` | Application use-cases / orchestration (scanning, grouping) |
 | `Trovolve.Infrastructure` | What both programs run: persistence, hashing, metadata, place names, the computer's disks (`DiskFileSystem`), a phone's photo library as a folder (`Library/`), and the services wired together (`AddTrovolveCore`) |
-| `Trovolve.Desktop` | What only a computer has: Magick.NET to decode pictures, the folder browser, opening a file in another program |
+| `Trovolve.Desktop` | What only a computer has: Windows' own picture decoder (WIC), the folder browser, opening a file in another program, the Recycle Bin |
 | `Trovolve.Api` | The service's endpoints, apart from any one program that serves them, and what a program without a web server needs to answer the page (`Hosting/`) |
 | `Trovolve.Server` | The service as one program for a Windows or Mac computer (ASP.NET Core) |
 | `Trovolve.iOS` | The app for an iPhone or iPad, built on GitHub's Macs; not part of `Trovolve.sln` |
@@ -355,7 +355,11 @@ Trovolve is free, with one limit: the free plan removes **50 photos and videos a
 
 ### Decoding pictures safely
 
-On a computer Magick.NET decodes every picture a scan reads. Each is read as the one format its first bytes say (`PictureSignature`: JPEG, PNG, GIF, BMP, TIFF, WebP, HEIC/HEIF, AVIF), never a format Magick guesses, so a file named .jpg that holds SVG, PostScript or ImageMagick's own scripts is refused before Magick sees it, and counted as unreadable. A picture wider or taller than 32,768 pixels, of more than 16 frames, or needing more than 2 GB of disk is refused too. On a phone the system's own decoder reads them.
+Every picture is decoded by the system's own decoder (Jamie, 2026-11-25): Windows Imaging Component on Windows (`WicPictureDecoder`), ImageIO on a Mac (`ImageIOPictureDecoder`), and on a phone its own. No decoder of anyone else's ships with Trovolve, so nothing under the LGPL does, and the licensing of HEVC, which HEIC pictures need, stays with Microsoft and Apple. Each picture is read as the one format its first bytes say (`PictureSignature`: JPEG, PNG, GIF, BMP, TIFF, WebP, HEIC/HEIF, AVIF), so a file named .jpg that holds SVG, PostScript or a script is refused before any decoder sees it, and counted as unreadable. A picture wider or taller than 32,768 pixels is refused too.
+
+A decoder only turns a picture into pixels, the right way up and in standard colours (sRGB), at the size asked (`IPictureDecoder`, `DecodedPicture.Fit`). Everything after is the same on every computer (`PictureAnalyzer`): reducing it (`Pixels`, each pixel the average of what it covers), its measures (`ImageFingerprint`), its previews and the pictures a browser cannot show, written as baseline JPEG by Trovolve itself (`JpegWriter`), and a JPEG's quality, read from its table (`JpegQuality`). The same tests hold each decoder to the same measures (`PictureDecodersTests`): Magick.NET, which the tests alone use, on any system, and the system's own on Windows and a Mac.
+
+**HEIC on Windows** needs two free extensions from the Microsoft Store: **HEIF Image Extensions**, which reads the file, and **HEVC Video Extensions**, which decodes the picture inside. Without them each HEIC picture is unreadable, and the scan's log says which to install ("Install HEVC Video Extensions from the Microsoft Store to read photos from an iPhone."); WebP and AVIF have extensions of their own, said the same way. A Mac reads them all as it is. Elsewhere (Linux, where only the checks run) the program has no decoder, and says so for every picture.
 
 ### Move to Recycle Bin
 
@@ -418,7 +422,7 @@ Organize also names the landmark or area a picture was taken at, when the positi
 
 Where a picture was taken is shown as the nearest town ("Buxton, North Carolina, US", or "Near Anaconda, Montana, US" when the town is more than 3 km away; nothing beyond 80 km). The lookup uses a list bundled with the application, so positions are never sent anywhere. The list is an extract of [GeoNames](https://www.geonames.org/) data, licensed CC BY 4.0; see `Trovolve.Infrastructure/Places/README.md`.
 
-Decoding is done with Magick.NET. iPhone HEIC files decode slowly (about a second each), so a first scan of a few thousand photos takes several minutes.
+iPhone HEIC files decode slowly on Windows (about a second each, full size), so a first scan of a few thousand photos takes several minutes; a JPEG is reduced as it is decoded, and is quicker.
 
 ## Adding New API Fields
 

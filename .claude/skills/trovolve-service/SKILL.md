@@ -14,7 +14,7 @@ The generic .NET skills of installed plugins (minimal APIs, EF Core, xUnit, Flue
 | An entity, value object, an interface to storage or the OS, or a rule that needs nothing else (matching, file names) | `Trovolve.Domain` |
 | What Trovolve decides: scanning, grouping, removal, Organize, erasing, sending | `Trovolve.Application` (`Scanning/`, `Organizing/`, `Changes/`, `Removal/`, `Transfer/`), registered in `AddTrovolveApplication` |
 | An adapter both hosts run: LiteDB stores, hashing, metadata, place names, disks, a phone's library as folders, finding phones | `Trovolve.Infrastructure`, registered in `AddTrovolveCore` |
-| What only a computer has: Magick.NET, the folder browser, `ShellSystemViewer` | `Trovolve.Desktop`, registered in `AddTrovolveComputer` (`Trovolve.Server/TrovolveServices.cs`) |
+| What only a computer has: Windows' own picture decoder, the folder browser, `ShellSystemViewer` | `Trovolve.Desktop`, registered in `AddTrovolveComputer` (`Trovolve.Server/TrovolveServices.cs`) |
 | An endpoint | `Trovolve.Api/Endpoints`, registered in `AddTrovolveApi`, its address in `TrovolveRoutes` |
 | What the page is sent | `Trovolve.Contracts`, mirrored by hand in `Trovolve.ReactUI/types.ts` |
 

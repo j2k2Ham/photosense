@@ -13,7 +13,7 @@ using Trovolve.Application.Organizing;
 using Trovolve.Application.Plans;
 using Trovolve.Application.Transfer;
 using Trovolve.Application.Vault;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
 using Trovolve.Domain.ValueObjects;
@@ -77,7 +77,7 @@ public sealed class VaultTests : IDisposable
         {
             Root = Path.Combine(data, "Photo Library");
             Services = new ServiceCollection()
-                .AddTrovolvePhone(Library, new FakePhotoAccess(), new MagickImageAnalyzer(), Path.Combine(data, "Documents"), Path.Combine(data, "Caches"), new FakeAdvertiser(), App,
+                .AddTrovolvePhone(Library, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, Path.Combine(data, "Documents"), Path.Combine(data, "Caches"), new FakeAdvertiser(), App,
                     new FakeCodeScanner(), Computers, new FakeDevice(), new FakeNotifier(), new FakeShareSheet(), Keys, Unlocker, Widgets, new MemoryLocationSecrets(), new FakeWebSignIn(), name, Root, new TcpTransferListener(0))
                 .AddTrovolveApi()
                 .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
@@ -547,7 +547,7 @@ public sealed class VaultTests : IDisposable
         var app = new FakeAppStore();
         var root = Path.Combine(In("Pixel"), "Phone");
         using var services = new ServiceCollection()
-            .AddTrovolveAndroid(store, new FakePhotoAccess(), new MagickImageAnalyzer(), In("files"), In("cache"), new FakeAdvertiser(), app, new FakeCodeScanner(), new FakeComputerFinder(),
+            .AddTrovolveAndroid(store, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, In("files"), In("cache"), new FakeAdvertiser(), app, new FakeCodeScanner(), new FakeComputerFinder(),
                 new FakeDevice { Kind = "Android phone" }, new FakeNotifier(), new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Pixel 8", root, new TcpTransferListener(0), vaultFolder: In("nobackup"))
             .AddTrovolveApi()
             .AddSingleton(new ProgramInfo("android", "1.2.0.57", () => "notices"))
@@ -658,7 +658,7 @@ public sealed class VaultTests : IDisposable
         var vaultFiles = new MemoryVaultFiles();
         var s = _phone.Services;
         var files = s.GetRequiredService<PhotoLibraryFileSystem>();
-        var vault = new HiddenVault(_phone.Keys, _phone.Unlocker, vaultFiles, files, files, files, s.GetRequiredService<OrganizeLibrary>(), new MagickImageAnalyzer(),
+        var vault = new HiddenVault(_phone.Keys, _phone.Unlocker, vaultFiles, files, files, files, s.GetRequiredService<OrganizeLibrary>(), MagickPictureDecoder.Analyzer,
             s.GetRequiredService<IPhotoRepository>(), s.GetRequiredService<IThumbnailStore>(), s.GetRequiredService<Subscription>(), s.GetRequiredService<DailyRemovals>(),
             s.GetRequiredService<PhoneBackup>(), _phone.Root, new TestClock());
         await vault.UnlockAsync(ct);

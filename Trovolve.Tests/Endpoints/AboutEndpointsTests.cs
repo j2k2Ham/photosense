@@ -122,7 +122,9 @@ public class AboutEndpointsTests
         await Assert.That(program.Version).Matches(@"^\d+\.\d+\.\d+(\.\d+)?$");
         var notices = program.Notices();
         await Assert.That(notices).StartsWith("Third-party notices for Trovolve for Windows and Mac");
-        await Assert.That(notices).Contains("Magick.NET");
+        await Assert.That(notices).Contains("LiteDB");
+        // Pictures are decoded by the system's own decoder: no decoder of anyone else's ships with the program.
+        await Assert.That(notices).DoesNotContain("Magick.NET");
         await Assert.That(notices).Contains("GeoNames");
     }
 

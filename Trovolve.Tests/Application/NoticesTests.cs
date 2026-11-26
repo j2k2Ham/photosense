@@ -7,7 +7,7 @@ using Trovolve.Api.About;
 using Trovolve.Api.Hosting;
 using Trovolve.Api.Http;
 using Trovolve.Application.Plans;
-using Trovolve.Desktop.Imaging;
+
 using Trovolve.Domain.Repositories;
 using Trovolve.Domain.Services;
 using Trovolve.Domain.ValueObjects;
@@ -36,7 +36,7 @@ public sealed class NoticesTests : IDisposable
     public NoticesTests()
     {
         _phone = new ServiceCollection()
-            .AddTrovolvePhone(_library, new FakePhotoAccess(), new MagickImageAnalyzer(), In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(),
+            .AddTrovolvePhone(_library, new FakePhotoAccess(), MagickPictureDecoder.Analyzer, In("Documents"), In("Caches"), new FakeAdvertiser(), _app, new FakeCodeScanner(),
                 new FakeComputerFinder(), _device, _notifier, new FakeShareSheet(), new FakeVaultKeys(), new FakeUnlocker(), new FakeWidgets(), new MemoryLocationSecrets(), new FakeWebSignIn(), "Jamie's iPhone", _root, new TcpTransferListener(0))
             .AddTrovolveApi()
             .AddSingleton(new ProgramInfo("iphone", "1.2.0.57", () => "notices"))
