@@ -207,6 +207,12 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
     - An iPhone's HEIC and JPEG are paired by metadata only where a HEIC cannot be decoded; through corrected WIC the pixels pair all 257.
     - Which copy Clean up keeps is unchanged.
     - Through corrected WIC: 356 of 361 duplicates found; 2 of 993 similar pairs called duplicates, both re-saves with unchanged pixels and so duplicates now; 1 of 20,000 random pairs matched as a duplicate, at 0.20 with one capture time.
+  - **Measuring the Mac, iPhone and Android decoders** (issue 57, decided by Jamie 2026-11-27):
+    - The ground truth stays on this PC. ImageIO (GitHub's Mac and the iPhone simulator) and Android's decoder (GitHub's emulator) are measured on a **stand-in set** instead: about 60 photos Jamie takes on purpose, of nothing private, location off, kept openly on `research/decoder-stand-in-set`. Corrected WIC and Magick.NET run on it too. When the decoders are built it moves into `Trovolve.Tests` as the lasting decoder check.
+    - Each decoder must give corrected WIC's verdict on every pair, keep every same-capture pair within 0.35, show the nclx files no further from corrected WIC than ordinary files (on ImageIO, confirming Display P3 with the sRGB curve), and read sharpness within 10% of Magick.NET.
+    - Not "each file measured as WIC measures it": the same file through Magick.NET and corrected WIC is a median of 0.22 apart, 0.52 at the 90th percentile, so matching holds only with both files of a pair through one decoder (noted on issue 59).
+    - A real iPhone once TestFlight works, and a real Android phone with the device trials below.
+    - Waiting on Jamie: shooting the set (issue 60, its checklist in the issue). Then scoring it (issue 61).
   - Two measuring runs left 3,760 Magick.NET cache files (156 GB) in the temporary folder and filled the C: drive (2026-11-26). They were deleted at Jamie's word; the cause was not found.
   - **What counts as a duplicate** (Jamie, 2026-11-26): only one capture saved more than once, in any format, size or quality. An edited version (cropped or adjusted) and its original are similar shots, where the person chooses. So are two shots taken a moment apart that look identical. Burst frames are similar shots too, as Jamie's review showed.
   - Not checked: ImageIO (only GitHub's Mac machines, where Apple's own decoder should render a HEIC as the iPhone did); Windows without the extensions (the words are tested, the detection is Windows' own); the 48,000-file disk.
