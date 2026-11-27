@@ -210,7 +210,7 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
   - **Measuring the Mac, iPhone and Android decoders** (issue 57, decided by Jamie 2026-11-27):
     - The ground truth stays on this PC. ImageIO (GitHub's Mac and the iPhone simulator) and Android's decoder (GitHub's emulator) are measured on a **stand-in set** instead: about 60 photos Jamie takes on purpose, of nothing private, location off, kept openly on `research/decoder-stand-in-set`. Corrected WIC and Magick.NET run on it too. When the decoders are built it moves into `Trovolve.Tests` as the lasting decoder check.
     - Each decoder must give corrected WIC's verdict on every pair, keep every same-capture pair within 0.35, show the nclx files no further from corrected WIC than ordinary files (on ImageIO, confirming Display P3 with the sRGB curve), and read sharpness within 10% of Magick.NET.
-    - Not "each file measured as WIC measures it": the same file through Magick.NET and corrected WIC is a median of 0.22 apart, 0.52 at the 90th percentile, so matching holds only with both files of a pair through one decoder (noted on issue 59).
+    - Not "each file measured as WIC measures it": the same file through Magick.NET and corrected WIC is a median of 0.22 apart, 0.52 at the 90th percentile, so matching holds only with both files of a pair through one decoder (settled by issue 59, below).
     - A real iPhone once TestFlight works, and a real Android phone with the device trials below.
     - Waiting on Jamie: shooting the set (issue 60, its checklist in the issue). Then scoring it (issue 61).
   - **A first scan of the 48,000-file disk** (issue 58, 2026-11-27; 47,980 files, 42,189 JPEG, no HEIC, over USB, each build alone on a scratch data folder):
@@ -223,6 +223,12 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
     - The budget: a first scan on this laptop takes at most 1.5 times `main`'s on the same library (about 20 minutes for Phone Pictures, 75 for the backup disk), timed again once the two speed-ups are built.
     - The speed-ups: a file whose SHA-256 matches one already analysed takes its measures without decoding again; `Pixels` made faster with SIMD, at the same ground-truth scores.
     - Pictures stay decoded whole; WIC's own shrinking (70 ms against 94) is looked at again only if the budget is missed.
+  - **Reading an existing library again under the new measures** (issue 59, decided by Jamie 2026-11-27; ADR 0002):
+    - Each record names the decoder and measures version that made it ("WIC, measures 4"); two pictures are compared by their pixels only when both were made the same way, otherwise only by SHA-256 and the iPhone's metadata pairing. A library may hold a mix.
+    - After the update Clean up shows the old results until the person scans again; that scan reads every picture again on the scan screen, with time left counting the records out of date. A toast when the updated app first opens says the next scan reads every picture again and takes longer.
+    - A re-read stopped part way leaves a line in Clean up's results ("1,240 pictures still to be read again. Scan again to finish.") while any record is out of date.
+    - On a PC without the HEVC extension, HEIC files Magick.NET measured before wait like any HEIC Windows cannot read, until the extension and **Read them now**.
+    - If WIC's start-up check finds its bias changed, that PC decodes no HEIC until Trovolve is updated: Clean up says so, the error is logged, and the records already made stay and are still compared among themselves.
   - Two measuring runs left 3,760 Magick.NET cache files (156 GB) in the temporary folder and filled the C: drive (2026-11-26). They were deleted at Jamie's word; the cause was not found.
   - **What counts as a duplicate** (Jamie, 2026-11-26): only one capture saved more than once, in any format, size or quality. An edited version (cropped or adjusted) and its original are similar shots, where the person chooses. So are two shots taken a moment apart that look identical. Burst frames are similar shots too, as Jamie's review showed.
   - Not checked: ImageIO (only GitHub's Mac machines, where Apple's own decoder should render a HEIC as the iPhone did); Windows without the extensions (the words are tested, the detection is Windows' own); the 48,000-file disk.

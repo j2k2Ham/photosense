@@ -33,4 +33,5 @@ Each platform decodes pictures with the system's own decoder (WIC, ImageIO, Andr
 - Cropped edits are not matched: a crop fails the shape check. Matching them needs a comparison of its own, a later effort.
 - Which copy Clean up keeps is unchanged: a re-save whose details were corrected can lose to its original on file size or folder. Preferring the corrected copy is left for later.
 - Changing the measures means every library reads each picture again (`AnalysisVersion`).
+- The same file through two decoders is too far apart to compare (a median of 0.22, 1.30 at the 99th percentile), so each record names the decoder and measures that made it, and two pictures are compared by their pixels only when both were made the same way; otherwise only by checksum and metadata. A re-read left unfinished therefore misses duplicates across the line until it is finished, and Clean up says how many pictures are still to be read again (decided by Jamie, 2026-11-27).
 - ImageIO and Android's decoder are still to be measured on the set: the rendering chosen for nclx files is to be confirmed against ImageIO on a Mac.
