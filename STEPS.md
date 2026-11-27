@@ -173,6 +173,19 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
     - A JPEG now decodes whole: about 1.2 s against 0.8 s through WIC, six at a time on this laptop.
     - Checked: built with `-warnaserror`; service 1,285 tests at 100% (8,708 lines, 4,782 branches).
     - Not checked: ImageIO (only GitHub's Macs). The phones' own analyzers still reduce inside their decoders.
+  - **Scored on the ground truth** (issue 47, 2026-11-26), with today's matching and one way of reducing:
+    - Duplicates found: Magick.NET 348 of 361, WIC 56. WIC's colour bias puts its iPhone HEIC/JPEG pairs 0.66 apart, over the 0.5 limit.
+    - Similar shots wrongly called duplicates: 2 of 993 through either decoder, both pixel-identical "edits", and at most 1 in 20,000 random pairs.
+    - Most edited versions are not shown as similar shots at all, as a crop fails the shape check.
+    - Blurry: 42 of 59 caught and 21 of 38 sharp ones flagged, the same through both decoders.
+    - The scoring tool (`tools/score`) is in the ground-truth folder, outside the repository.
+  - **WIC's HEIC corrected after decoding** (issue 54, 2026-11-26, prototyped in the ground-truth folder, not built yet):
+    - WIC's fixed bias added back, and its own conversion of nclx files undone: 12/1/6 by the BT.709 curve and P3 to sRGB, 2/2/6 by the curve alone.
+    - Corrected WIC finds 345 of 361 duplicates (Magick.NET 348), with the same false matches. Its HEIC/JPEG pairs are up to 0.49 apart, against the 0.5 limit.
+    - Decided by Jamie (2026-11-26):
+      - Trovolve corrects WIC's HEIC itself: the bias is added before the colour transform, and a start-up check on a HEIC of known values confirms the bias still holds.
+      - Every platform renders nclx 12/1/6 as Display P3 with the sRGB curve, converted to sRGB. This brings 282 of 554 edited versions into similar shots, against 151 through Magick.NET. It is to be confirmed against ImageIO on a Mac.
+      - nclx 2/2/6 is shown with its values as they are.
   - **What counts as a duplicate** (Jamie, 2026-11-26): only one capture saved more than once, in any format, size or quality. An edited version (cropped or adjusted) and its original are similar shots, where the person chooses. So are two shots taken a moment apart that look identical. Burst frames are similar shots too, as Jamie's review showed.
   - Not checked: ImageIO (only GitHub's Mac machines, where Apple's own decoder should render a HEIC as the iPhone did); Windows without the extensions (the words are tested, the detection is Windows' own); the 48,000-file disk.
 - [x] **JSON a phone's trimmed app keeps** (Jamie, 2026-11-25, on branch `feature/os-decoders` from `main`): the iPhone's build warned (IL2026) that JSON written by reflection can break once an app is trimmed. The hidden vault's record of each item (`VaultJson`, in `VaultBox`) and both phones' location keys (`LocationSecretsFormat` in Infrastructure, which the iPhone's Keychain and Android's Keystore-sealed files now share) are written by source-generated code, in the very format written before, so what was kept still opens. Left as they are, still by reflection, as only these two were asked for: both phones' widget files (`IosWidgets`, `AndroidWidgets`) and the service's requests and answers (`ApiRequest`), which a phone's partial trimming keeps, as it trims the system's libraries only. Checked: service 1,259 tests at 100% (8,513 lines, 4,662 branches), among them the secrets written byte for byte as before and read back; the Android app builds here with no warning. Not checked: the iPhone app (only `iphone.yml`).
