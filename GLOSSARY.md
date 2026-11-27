@@ -17,7 +17,7 @@ Files of different **Captures**, or a **Capture** and its **Edited version**, al
 _Avoid_: Near-duplicates, look-alikes
 
 **Edited version**:
-A **Capture** saved again after cropping, trimming or adjusting it. It and its original are **Similar shots**, not **Duplicates**.
+A **Capture** saved again with the picture itself changed: cropped, trimmed or adjusted. It and its original are **Similar shots**, not **Duplicates**. A file saved again with only its details changed (date, place, Live Photo settings) and every pixel as it was is a **Duplicate**.
 _Avoid_: Edit copy, render
 
 **Burst**:

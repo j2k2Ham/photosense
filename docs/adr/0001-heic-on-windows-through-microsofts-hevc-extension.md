@@ -19,4 +19,4 @@ On Windows, Trovolve reads HEIC photos only through Windows' own codecs (WIC, wi
 - Clean up says how many HEIC files wait, links to the Store and reads them once the extension is installed. On a Windows N edition, it says to add the Media Feature Pack first.
 - The web site's Windows requirements and the FAQ name the extension and its price. The FAQ also gives the iPhone's own JPEG setting (*Transfer to Mac or PC: Automatic*) as the free way round.
 - The same extension lets Media Foundation decode HEVC video, which the effort to find duplicate videos builds on.
-- Still to confirm: Arm PCs, HDR HEIC and whether new Windows installs carry the free edition (issue 56). A lawyer should confirm that this leaves Trovolve no HEVC licence to take.
+- Checked (issue 56): the extensions and WIC's HEIC decoding work on Arm PCs; current Windows 11 media carries the free edition, so buying is mainly for older installs, Windows 10, Server and N editions; HDR HEIC decode as their standard picture. Not yet checked: an N edition, the paid edition, the Store link opened. A lawyer should confirm that this leaves Trovolve no HEVC licence to take.
