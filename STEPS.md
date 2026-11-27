@@ -217,7 +217,12 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
     - `main` (Magick.NET) 50.0 minutes, 65.6 minutes of processor time; this branch (WIC, every picture whole) 63.9 minutes, 282.5 minutes of processor time.
     - The USB disk hides most of the cost: decoding whole pictures takes 4.3 times the processor time. On a fast internal disk it could be several times slower; not measured.
     - `main` left 8,524 Magick.NET temporary files (2 GB) in the temporary folder, all in one 10-minute stretch: the same leak that filled C: during the measuring. Deleted at Jamie's word. Magick.NET leaves the program on this branch, and the leak with it.
-    - Next: what a first scan may cost, and whether to speed up `Pixels` or allow a decoder's reduced decoding (issue 62).
+  - **What a first scan may cost** (issue 62, decided by Jamie 2026-11-27):
+    - Phone Pictures (6,940 files, 2,782 HEIC, internal disk): `main` 13.3 minutes (136.6 of processor time), this branch 22.4 (197.1), 1.68 times; the processor is the limit there.
+    - A JPEG's analysis on this branch takes about 140 ms: WIC's whole decode 94, `Pixels` 35, the rest 11.
+    - The budget: a first scan on this laptop takes at most 1.5 times `main`'s on the same library (about 20 minutes for Phone Pictures, 75 for the backup disk), timed again once the two speed-ups are built.
+    - The speed-ups: a file whose SHA-256 matches one already analysed takes its measures without decoding again; `Pixels` made faster with SIMD, at the same ground-truth scores.
+    - Pictures stay decoded whole; WIC's own shrinking (70 ms against 94) is looked at again only if the budget is missed.
   - Two measuring runs left 3,760 Magick.NET cache files (156 GB) in the temporary folder and filled the C: drive (2026-11-26). They were deleted at Jamie's word; the cause was not found.
   - **What counts as a duplicate** (Jamie, 2026-11-26): only one capture saved more than once, in any format, size or quality. An edited version (cropped or adjusted) and its original are similar shots, where the person chooses. So are two shots taken a moment apart that look identical. Burst frames are similar shots too, as Jamie's review showed.
   - Not checked: ImageIO (only GitHub's Mac machines, where Apple's own decoder should render a HEIC as the iPhone did); Windows without the extensions (the words are tested, the detection is Windows' own); the 48,000-file disk.
