@@ -1,0 +1,34 @@
+# Research for the decoder map (never merged): what a Windows machine with neither HEVC edition offers for HEIC,
+# on x64 and Arm, before and after the Store's free extensions are asked for through winget.
+name: Research - Windows extension route
+on:
+  push:
+    branches: [research/windows-extension-route]
+permissions:
+  contents: read
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+      - name: A sample HEIC (libheif's example, a test picture)
+        run: Invoke-WebRequest https://raw.githubusercontent.com/strukturag/libheif/master/examples/example.heic -OutFile $env:RUNNER_TEMP\example.heic
+      - name: As the machine comes
+        run: research/windows-extension-route/probe.ps1 -Picture $env:RUNNER_TEMP\example.heic -Stage start
+      - name: HEIF Image Extension from the Store
+        continue-on-error: true
+        run: winget install --id 9PMMSR1CGPWG --source msstore --accept-package-agreements --accept-source-agreements --disable-interactivity; "exit $LASTEXITCODE"
+      - name: After HEIF
+        run: research/windows-extension-route/probe.ps1 -Picture $env:RUNNER_TEMP\example.heic -Stage heif
+      - name: HEVC Video Extensions from Device Manufacturer (free) from the Store
+        continue-on-error: true
+        run: winget install --id 9N4WGH0Z6VHQ --source msstore --accept-package-agreements --accept-source-agreements --disable-interactivity; "exit $LASTEXITCODE"
+      - name: After the free HEVC
+        run: research/windows-extension-route/probe.ps1 -Picture $env:RUNNER_TEMP\example.heic -Stage free-hevc
