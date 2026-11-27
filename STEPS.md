@@ -213,6 +213,11 @@ On 2026-10-28 Jamie asked for it to be **ready to sell**: on the App Store, and 
     - Not "each file measured as WIC measures it": the same file through Magick.NET and corrected WIC is a median of 0.22 apart, 0.52 at the 90th percentile, so matching holds only with both files of a pair through one decoder (noted on issue 59).
     - A real iPhone once TestFlight works, and a real Android phone with the device trials below.
     - Waiting on Jamie: shooting the set (issue 60, its checklist in the issue). Then scoring it (issue 61).
+  - **A first scan of the 48,000-file disk** (issue 58, 2026-11-27; 47,980 files, 42,189 JPEG, no HEIC, over USB, each build alone on a scratch data folder):
+    - `main` (Magick.NET) 50.0 minutes, 65.6 minutes of processor time; this branch (WIC, every picture whole) 63.9 minutes, 282.5 minutes of processor time.
+    - The USB disk hides most of the cost: decoding whole pictures takes 4.3 times the processor time. On a fast internal disk it could be several times slower; not measured.
+    - `main` left 8,524 Magick.NET temporary files (2 GB) in the temporary folder, all in one 10-minute stretch: the same leak that filled C: during the measuring. Deleted at Jamie's word. Magick.NET leaves the program on this branch, and the leak with it.
+    - Next: what a first scan may cost, and whether to speed up `Pixels` or allow a decoder's reduced decoding (issue 62).
   - Two measuring runs left 3,760 Magick.NET cache files (156 GB) in the temporary folder and filled the C: drive (2026-11-26). They were deleted at Jamie's word; the cause was not found.
   - **What counts as a duplicate** (Jamie, 2026-11-26): only one capture saved more than once, in any format, size or quality. An edited version (cropped or adjusted) and its original are similar shots, where the person chooses. So are two shots taken a moment apart that look identical. Burst frames are similar shots too, as Jamie's review showed.
   - Not checked: ImageIO (only GitHub's Mac machines, where Apple's own decoder should render a HEIC as the iPhone did); Windows without the extensions (the words are tested, the detection is Windows' own); the 48,000-file disk.
