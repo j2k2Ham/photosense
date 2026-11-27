@@ -20,6 +20,16 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 | `trovolve-build-tools` | Versions, third-party notices, the web site, `product.json`, the icon, adding a package |
 | `trovolve-finish` | Before saying work is done, committing or pushing: checks, documents, the report, git |
 
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues for `j2k2Ham/trovolve`, through the `gh` CLI; `STEPS.md` stays the record of what Jamie has asked for. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root, made when first needed. See `docs/agents/domain.md`.
+
 ## Layout
 
 | Folder | What is in it |
@@ -80,6 +90,8 @@ Each kind of work has a skill in `.claude/skills`. Load it before starting; its 
 6. **Never use or commit Jamie's Google Maps key.** It is in `Trovolve.ReactUI/.env.local`, which git ignores; every build made for testing leaves it out.
 7. **Git:**
    - Commit or push only when Jamie asks, and ask each time; there is no standing go-ahead.
+   - The one exception (Jamie, 2026-11-27): a `research/<name>` branch, or any other branch made for a wayfinder map, may be committed and pushed without asking. It is never merged into `main`, and no pull request is opened for it; Jamie asks for one when it is needed.
+   - A commit Jamie asked for may be pushed with its branch (Jamie, 2026-11-27). Still no pull request unless Jamie asks.
    - Do not use `git stash`: Jamie keeps uncommitted work of their own in the tree.
    - Do not stage deletions with `git rm`: a partial commit once captured only the deletions.
    - Leave build output and coverage reports out of commits.
